@@ -10,7 +10,6 @@ interface KanbanState {
   lists: KanbanList[];
   cards: Card[];
   labels: Label[];
-  // theme
   isDark: boolean;
   toggleTheme: () => void;
   // folders
@@ -40,9 +39,12 @@ interface KanbanState {
   addComment: (cardId: string, text: string) => void;
   // labels
   addLabel: (name: string, color: string) => void;
+  updateLabel: (id: string, data: Partial<Label>) => void;
+  deleteLabel: (id: string) => void;
   // time tracking
   startTimer: (cardId: string) => void;
   stopTimer: (cardId: string) => void;
+  resetTimer: (cardId: string) => void;
 }
 
 export const useKanbanStore = create<KanbanState>()(
@@ -120,7 +122,7 @@ export const useKanbanStore = create<KanbanState>()(
         const maxPos = Math.max(0, ...s.cards.filter(c => c.listId === listId).map(c => c.position));
         return {
           cards: [...s.cards, {
-            id: uid(), listId, title, description: '', position: maxPos + 1,
+            id: uid(), listId, title, summary: '', description: '', position: maxPos + 1,
             labels: [], checklist: [], comments: [], completed: false,
             attachments: [], timeEntries: [], createdAt: new Date().toISOString(),
           }]
@@ -169,6 +171,13 @@ export const useKanbanStore = create<KanbanState>()(
       addLabel: (name, color) => set(s => ({
         labels: [...s.labels, { id: uid(), name, color }]
       })),
+      updateLabel: (id, data) => set(s => ({
+        labels: s.labels.map(l => l.id === id ? { ...l, ...data } : l)
+      })),
+      deleteLabel: (id) => set(s => ({
+        labels: s.labels.filter(l => l.id !== id),
+        cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
+      })),
 
       // Time tracking
       startTimer: (cardId) => set(s => ({
@@ -187,6 +196,9 @@ export const useKanbanStore = create<KanbanState>()(
           }
           return { ...c, timeEntries: entries };
         })
+      })),
+      resetTimer: (cardId) => set(s => ({
+        cards: s.cards.map(c => c.id === cardId ? { ...c, timeEntries: [] } : c)
       })),
     }),
     { name: 'jj-kanban-store' }
