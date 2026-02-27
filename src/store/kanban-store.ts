@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment } from '@/types/kanban';
+import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment } from '@/types/kanban';
 
 const uid = () => crypto.randomUUID();
 
@@ -124,7 +124,9 @@ export const useKanbanStore = create<KanbanState>()(
           cards: [...s.cards, {
             id: uid(), listId, title, summary: '', description: '', position: maxPos + 1,
             labels: [], checklist: [], comments: [], completed: false,
+            archived: false, trashed: false,
             attachments: [], timeEntries: [], createdAt: new Date().toISOString(),
+            sectionOrder: ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'checklist', 'timer', 'comments'],
           }]
         };
       }),
