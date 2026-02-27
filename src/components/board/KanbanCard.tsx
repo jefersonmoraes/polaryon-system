@@ -1,17 +1,6 @@
 import { Card } from '@/types/kanban';
 import { useKanbanStore } from '@/store/kanban-store';
-import { CheckSquare, Calendar, MessageSquare, Paperclip, Clock } from 'lucide-react';
-
-const LABEL_COLOR_MAP: Record<string, string> = {
-  green: 'bg-label-green',
-  yellow: 'bg-label-yellow',
-  orange: 'bg-label-orange',
-  red: 'bg-label-red',
-  purple: 'bg-label-purple',
-  blue: 'bg-label-blue',
-  teal: 'bg-label-teal',
-  pink: 'bg-label-pink',
-};
+import { CheckSquare, Calendar, MessageSquare, Paperclip, Clock, User } from 'lucide-react';
 
 interface Props {
   card: Card;
@@ -27,14 +16,14 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
 
   return (
     <div className="kanban-card" onClick={onClick}>
-      {/* Labels */}
+      {/* Labels with names */}
       {cardLabels.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {cardLabels.map(label => (
             <span
               key={label.id}
-              className={`label-dot text-[9px] font-medium px-1.5 py-0.5 rounded-sm ${LABEL_COLOR_MAP[label.color] || 'bg-primary'}`}
-              style={{ color: '#fff', minWidth: 'auto' }}
+              className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm text-white"
+              style={{ backgroundColor: label.color }}
             >
               {label.name}
             </span>
@@ -44,10 +33,21 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
 
       {/* Title */}
       <p className="text-xs font-medium leading-snug">{card.title}</p>
+      
+      {/* Summary preview */}
+      {card.summary && (
+        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{card.summary}</p>
+      )}
 
-      {/* Metadata */}
-      {(card.dueDate || checkTotal > 0 || card.comments.length > 0 || card.attachments.length > 0 || card.timeEntries.length > 0) && (
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
+      {/* Dates */}
+      {(card.startDate || card.dueDate) && (
+        <div className="flex items-center gap-2 mt-1.5">
+          {card.startDate && (
+            <span className="text-[10px] text-muted-foreground">
+              {new Date(card.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+            </span>
+          )}
+          {card.startDate && card.dueDate && <span className="text-[10px] text-muted-foreground">→</span>}
           {card.dueDate && (
             <span className={`flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded ${
               card.completed ? 'bg-label-green/20 text-label-green' : isOverdue ? 'bg-label-red/20 text-label-red' : 'text-muted-foreground'
@@ -56,6 +56,12 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
               {new Date(card.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Metadata */}
+      {(checkTotal > 0 || card.comments.length > 0 || card.attachments.length > 0 || card.timeEntries.length > 0 || card.assignee) && (
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {checkTotal > 0 && (
             <span className={`flex items-center gap-0.5 text-[10px] ${checkDone === checkTotal ? 'text-label-green' : 'text-muted-foreground'}`}>
               <CheckSquare className="h-2.5 w-2.5" />
@@ -78,6 +84,12 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
               <Clock className="h-2.5 w-2.5" />
               {Math.round(card.timeEntries.reduce((t, e) => t + e.duration, 0) / 60)}m
+            </span>
+          )}
+          {card.assignee && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground ml-auto" title={card.assignee}>
+              <User className="h-2.5 w-2.5" />
+              {card.assignee.split('@')[0]}
             </span>
           )}
         </div>
