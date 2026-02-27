@@ -13,6 +13,7 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
   const checkDone = card.checklist.filter(i => i.completed).length;
   const checkTotal = card.checklist.length;
   const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && !card.completed;
+  if (card.archived || card.trashed) return null;
 
   return (
     <div className="kanban-card" onClick={onClick}>

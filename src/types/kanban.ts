@@ -20,6 +20,13 @@ export interface KanbanList {
   boardId: string;
   title: string;
   position: number;
+  color?: string;
+  icon?: string;
+  // Automation: when a card is dropped here, auto-move to another board/list, archive, or trash
+  automation?: {
+    type: 'move-to-board' | 'archive' | 'trash';
+    targetBoardId?: string;
+  };
 }
 
 export interface Label {
@@ -48,6 +55,14 @@ export interface TimeEntry {
   duration: number; // seconds
 }
 
+export interface Attachment {
+  id: string;
+  name: string;
+  url: string; // data URL for local storage
+  type: string; // mime type
+  addedAt: string;
+}
+
 export interface Card {
   id: string;
   listId: string;
@@ -61,10 +76,13 @@ export interface Card {
   dueDate?: string;
   startDate?: string;
   completed: boolean;
+  archived: boolean;
+  trashed: boolean;
   assignee?: string;
-  attachments: string[];
+  attachments: Attachment[];
   timeEntries: TimeEntry[];
   estimatedTime?: number; // minutes
+  sectionOrder?: string[]; // modular section ordering
   createdAt: string;
 }
 
