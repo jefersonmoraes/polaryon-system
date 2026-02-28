@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment } from '@/types/kanban';
+import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember } from '@/types/kanban';
 
 const uid = () => crypto.randomUUID();
 
@@ -10,6 +10,11 @@ interface KanbanState {
   lists: KanbanList[];
   cards: Card[];
   labels: Label[];
+  members: WorkspaceMember[];
+  undoAction: { cardId: string; previousListId: string; previousPosition: number; message: string; type: 'archived' | 'trashed' | 'moved' } | null;
+  setUndoAction: (action: KanbanState['undoAction']) => void;
+  executeUndo: () => void;
+  clearUndoAction: () => void;
   isDark: boolean;
   globalSectionOrder: string[];
   setGlobalSectionOrder: (order: string[]) => void;
@@ -57,10 +62,31 @@ export const useKanbanStore = create<KanbanState>()(
       lists: [],
       cards: [],
       labels: [...DEFAULT_LABELS],
+      members: [
+        { id: 'm1', name: 'João Silva', email: 'joao@jjcorp.com', avatar: 'https://i.pravatar.cc/150?u=joao' },
+        { id: 'm2', name: 'Maria Souza', email: 'maria@jjcorp.com', avatar: 'https://i.pravatar.cc/150?u=maria' },
+        { id: 'm3', name: 'Carlos Santos', email: 'carlos@jjcorp.com', avatar: 'https://i.pravatar.cc/150?u=carlos' },
+      ],
+      undoAction: null,
       isDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
       globalSectionOrder: ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'checklist', 'timer', 'comments'],
 
       setGlobalSectionOrder: (order) => set({ globalSectionOrder: order }),
+
+      setUndoAction: (action) => set({ undoAction: action }),
+      clearUndoAction: () => set({ undoAction: null }),
+      executeUndo: () => {
+        const state = get();
+        if (!state.undoAction) return;
+        const { cardId, previousListId, previousPosition, type } = state.undoAction;
+
+        if (type === 'archived' || type === 'trashed') {
+          state.updateCard(cardId, { archived: false, trashed: false });
+        }
+
+        state.moveCard(cardId, previousListId, previousPosition);
+        set({ undoAction: null });
+      },
 
       toggleTheme: () => set(s => {
         const next = !s.isDark;

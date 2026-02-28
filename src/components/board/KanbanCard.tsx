@@ -8,8 +8,9 @@ interface Props {
 }
 
 const KanbanCardComponent = ({ card, onClick }: Props) => {
-  const { labels } = useKanbanStore();
+  const { labels, members } = useKanbanStore();
   const cardLabels = labels.filter(l => card.labels.includes(l.id));
+  const assignedMember = members.find(m => m.id === card.assignee);
   const checkDone = card.checklist.filter(i => i.completed).length;
   const checkTotal = card.checklist.length;
   const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && !card.completed;
@@ -23,9 +24,10 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
           {cardLabels.map(label => (
             <span
               key={label.id}
-              className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm text-white"
+              className="flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-sm text-white"
               style={{ backgroundColor: label.color }}
             >
+              {label.icon && <span>{label.icon}</span>}
               {label.name}
             </span>
           ))}
@@ -34,7 +36,7 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
 
       {/* Title */}
       <p className="text-xs font-medium leading-snug">{card.title}</p>
-      
+
       {/* Summary preview */}
       {card.summary && (
         <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{card.summary}</p>
@@ -50,9 +52,8 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
           )}
           {card.startDate && card.dueDate && <span className="text-[10px] text-muted-foreground">→</span>}
           {card.dueDate && (
-            <span className={`flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded ${
-              card.completed ? 'bg-label-green/20 text-label-green' : isOverdue ? 'bg-label-red/20 text-label-red' : 'text-muted-foreground'
-            }`}>
+            <span className={`flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded ${card.completed ? 'bg-label-green/20 text-label-green' : isOverdue ? 'bg-label-red/20 text-label-red' : 'text-muted-foreground'
+              }`}>
               <Calendar className="h-2.5 w-2.5" />
               {new Date(card.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </span>
@@ -87,11 +88,10 @@ const KanbanCardComponent = ({ card, onClick }: Props) => {
               {Math.round(card.timeEntries.reduce((t, e) => t + e.duration, 0) / 60)}m
             </span>
           )}
-          {card.assignee && (
-            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground ml-auto" title={card.assignee}>
-              <User className="h-2.5 w-2.5" />
-              {card.assignee.split('@')[0]}
-            </span>
+          {assignedMember && (
+            <div className="ml-auto" title={assignedMember.name}>
+              <img src={assignedMember.avatar} alt={assignedMember.name} className="w-5 h-5 rounded-full object-cover border border-border" />
+            </div>
           )}
         </div>
       )}

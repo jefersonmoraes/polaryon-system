@@ -1,22 +1,19 @@
 import { useParams, Link } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Plus, ArrowLeft, Undo2 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { Plus, ArrowLeft, Undo2, Archive as ArchiveIcon, Trash2, Clock, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import KanbanListComponent from '@/components/board/KanbanList';
 import CardDetailPanel from '@/components/board/CardDetailPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface UndoAction {
-  cardId: string;
-  previousListId: string;
-  previousPosition: number;
-  message: string;
-}
-
 const BoardPage = () => {
   const { boardId } = useParams<{ boardId: string }>();
-  const { boards, lists, folders, cards, addList, reorderLists, moveCard, reorderCards, updateCard } = useKanbanStore();
+  const {
+    boards, lists, folders, cards, members,
+    addList, reorderLists, moveCard, reorderCards, updateCard, deleteCard,
+    undoAction, setUndoAction, executeUndo, clearUndoAction
+  } = useKanbanStore();
   const board = boards.find(b => b.id === boardId);
   const folder = board ? folders.find(f => f.id === board.folderId) : null;
   const boardLists = lists
@@ -26,14 +23,14 @@ const BoardPage = () => {
   const [addingList, setAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+  const [showArchiveViewer, setShowArchiveViewer] = useState<'archived' | 'trashed' | null>(null);
 
   // Auto-dismiss undo after 5 seconds
   useEffect(() => {
     if (!undoAction) return;
-    const t = window.setTimeout(() => setUndoAction(null), 5000);
+    const t = window.setTimeout(() => clearUndoAction(), 5000);
     return () => clearTimeout(t);
-  }, [undoAction]);
+  }, [undoAction, clearUndoAction]);
 
   if (!board) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Board não encontrado</div>;
 
@@ -45,13 +42,7 @@ const BoardPage = () => {
   };
 
   const handleUndo = () => {
-    if (!undoAction) return;
-    const card = cards.find(c => c.id === undoAction.cardId);
-    if (card) {
-      updateCard(undoAction.cardId, { archived: false, trashed: false });
-      moveCard(undoAction.cardId, undoAction.previousListId, undoAction.previousPosition);
-    }
-    setUndoAction(null);
+    executeUndo();
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -104,11 +95,11 @@ const BoardPage = () => {
       switch (destList.automation.type) {
         case 'archive':
           updateCard(cardId, { archived: true });
-          setUndoAction({ ...undoBase, message: `"${card.title}" foi arquivado` });
+          setUndoAction({ ...undoBase, message: `"${card.title}" foi arquivado`, type: 'archived' });
           break;
         case 'trash':
           updateCard(cardId, { trashed: true });
-          setUndoAction({ ...undoBase, message: `"${card.title}" foi enviado para lixeira` });
+          setUndoAction({ ...undoBase, message: `"${card.title}" foi enviado para lixeira`, type: 'trashed' });
           break;
         case 'move-to-board':
           if (destList.automation.targetBoardId) {
@@ -116,7 +107,7 @@ const BoardPage = () => {
             if (targetBoardLists.length > 0) {
               moveCard(cardId, targetBoardLists[0].id, 0);
               const targetBoard = boards.find(b => b.id === destList.automation!.targetBoardId);
-              setUndoAction({ ...undoBase, message: `"${card.title}" movido para ${targetBoard?.name || 'outro board'}` });
+              setUndoAction({ ...undoBase, message: `"${card.title}" movido para ${targetBoard?.name || 'outro board'}`, type: 'moved' });
             }
           }
           break;
@@ -136,6 +127,19 @@ const BoardPage = () => {
         <h2 className="font-bold text-sm" style={{ color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
           {board.name}
         </h2>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setShowArchiveViewer('archived')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition-colors text-white text-xs font-medium">
+            <ArchiveIcon className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Arquivados</span>
+          </button>
+          <button onClick={() => setShowArchiveViewer('trashed')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition-colors text-white text-xs font-medium">
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Lixeira</span>
+          </button>
+        </div>
       </div>
 
       {/* Lists */}
@@ -202,6 +206,80 @@ const BoardPage = () => {
       {selectedCardId && (
         <CardDetailPanel cardId={selectedCardId} onClose={() => setSelectedCardId(null)} />
       )}
+
+      {/* Archive / Trash Viewer Modal */}
+      <AnimatePresence>
+        {showArchiveViewer && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowArchiveViewer(null)} />
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="relative bg-card w-full max-w-2xl rounded-xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
+                <div className="flex items-center gap-2 text-foreground font-semibold">
+                  {showArchiveViewer === 'archived' ? <ArchiveIcon className="h-5 w-5 text-accent" /> : <Trash2 className="h-5 w-5 text-destructive" />}
+                  {showArchiveViewer === 'archived' ? 'Cartões Arquivados' : 'Lixeira'}
+                </div>
+                <button onClick={() => setShowArchiveViewer(null)} className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground transition-colors">✕</button>
+              </div>
+
+              <div className="p-4 overflow-y-auto custom-scrollbar flex-1 bg-background/50">
+                {(() => {
+                  const filteredCards = cards.filter(c =>
+                    boardLists.some(l => l.id === c.listId) &&
+                    (showArchiveViewer === 'archived' ? c.archived && !c.trashed : c.trashed)
+                  );
+
+                  if (filteredCards.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                        {showArchiveViewer === 'archived' ? <ArchiveIcon className="h-12 w-12 mb-3 opacity-20" /> : <Trash2 className="h-12 w-12 mb-3 opacity-20" />}
+                        <p className="text-sm font-medium">Nenhum cartão encontrado.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {filteredCards.map(card => {
+                        const originalList = lists.find(l => l.id === card.listId);
+                        const assignee = members.find(m => m.id === card.assignee);
+                        return (
+                          <div key={card.id} className="flex flex-col sm:flex-row gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors group">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium truncate mb-1">{card.title}</h4>
+                              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(card.createdAt).toLocaleDateString('pt-BR')}</span>
+                                {originalList && <span>em <strong>{originalList.title}</strong></span>}
+                                {assignee && (
+                                  <span className="flex items-center gap-1 ml-1" title={assignee.name}>
+                                    <img src={assignee.avatar} alt={assignee.name} className="w-4 h-4 rounded-full object-cover" />
+                                    {assignee.name.split(' ')[0]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button onClick={() => updateCard(card.id, { archived: false, trashed: false })}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary hover:bg-primary hover:text-primary-foreground text-xs font-medium transition-colors">
+                                <Undo2 className="h-3.5 w-3.5" /> Restaurar
+                              </button>
+                              {showArchiveViewer === 'trashed' && (
+                                <button onClick={() => deleteCard(card.id)}
+                                  className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

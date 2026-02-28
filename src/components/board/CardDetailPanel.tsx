@@ -31,11 +31,11 @@ const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> =
 
 const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const {
-    cards, labels, lists, boards, updateCard, deleteCard,
+    cards, labels, members, lists, boards, updateCard, deleteCard,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem,
     addComment, startTimer, stopTimer, resetTimer,
     addLabel, updateLabel, deleteLabel,
-    globalSectionOrder, setGlobalSectionOrder,
+    globalSectionOrder, setGlobalSectionOrder, setUndoAction,
   } = useKanbanStore();
   const card = cards.find(c => c.id === cardId);
   const list = card ? lists.find(l => l.id === card.listId) : null;
@@ -56,7 +56,19 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [labelName, setLabelName] = useState('');
   const [labelColor, setLabelColor] = useState('#3b82f6');
   const [labelHex, setLabelHex] = useState('#3b82f6');
+  const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
+
+  // Constants
+  const ICONS = [
+    '📋', '📝', '✅', '☑️', '✔️', '❌', '🚫', '⚠️', '❗', '❓',
+    '🔄', '🔁', '🚀', '🛸', '⭐', '🌟', '✨', '🔥', '💥', '💡',
+    '🎯', '📌', '📍', '🏷️', '🔖', '🛠️', '🔧', '🔨', '⚙️', '📊',
+    '📈', '📉', '📅', '📆', '⏳', '⌛', '⏰', '⏱️', '📦', '📫',
+    '📥', '📤', '✉️', '📱', '💻', '🖥️', '🔍', '🔎', '🗑️', '📁',
+    '📂', '🗂️', '📄', '📑', '🔐', '🔓', '🔑', '🔗', '📎', '💼',
+    '🏆', '🥇', '🎉', '🎈', '🎁', '🏃', '🚶', '🛑', '🚧'
+  ];
 
   // Rich text toolbar
   const descRef = useRef<HTMLDivElement>(null);
@@ -112,13 +124,13 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
   const handleSaveLabel = () => {
     if (!labelName.trim()) return;
-    if (editLabelId) updateLabel(editLabelId, { name: labelName.trim(), color: labelColor });
+    if (editLabelId) updateLabel(editLabelId, { name: labelName.trim(), color: labelColor, icon: labelIcon });
     else addLabel(labelName.trim(), labelColor);
-    setLabelName(''); setLabelColor('#3b82f6'); setLabelHex('#3b82f6');
+    setLabelName(''); setLabelColor('#3b82f6'); setLabelHex('#3b82f6'); setLabelIcon(undefined);
     setEditingLabel(false); setEditLabelId(null);
   };
-  const handleEditLabel = (label: { id: string; name: string; color: string }) => {
-    setEditLabelId(label.id); setLabelName(label.name); setLabelColor(label.color); setLabelHex(label.color); setEditingLabel(true);
+  const handleEditLabel = (label: { id: string; name: string; color: string; icon?: string }) => {
+    setEditLabelId(label.id); setLabelName(label.name); setLabelColor(label.color); setLabelHex(label.color); setLabelIcon(label.icon); setEditingLabel(true);
   };
   const handleColorHexChange = (hex: string) => {
     setLabelHex(hex);
@@ -178,7 +190,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             {card.labels.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
                 {labels.filter(l => card.labels.includes(l.id)).map(label => (
-                  <span key={label.id} className="text-[10px] font-medium px-2 py-0.5 rounded text-white" style={{ backgroundColor: label.color }}>{label.name}</span>
+                  <span key={label.id} className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded text-white" style={{ backgroundColor: label.color }}>
+                    {label.icon && <span>{label.icon}</span>}
+                    {label.name}
+                  </span>
                 ))}
               </div>
             )}
@@ -188,8 +203,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   {labels.map(label => (
                     <div key={label.id} className="flex items-center gap-1">
                       <button onClick={() => handleToggleLabel(label.id)}
-                        className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all ${card.labels.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
-                        style={{ backgroundColor: label.color }}>{label.name}</button>
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all ${card.labels.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
+                        style={{ backgroundColor: label.color }}>
+                        {label.icon && <span>{label.icon}</span>}
+                        {label.name}
+                      </button>
                       <button onClick={() => handleEditLabel(label)} className="p-1 rounded hover:bg-background/50 text-muted-foreground">
                         <FileText className="h-3 w-3" />
                       </button>
@@ -209,12 +227,24 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                           style={{ backgroundColor: c }} />
                       ))}
                     </div>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-2 items-center mb-2">
                       <label className="text-[10px] text-muted-foreground">HEX:</label>
                       <input value={labelHex} onChange={e => handleColorHexChange(e.target.value)} maxLength={7}
                         className="w-20 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border font-mono" />
-                      <div className="w-6 h-6 rounded border border-border" style={{ backgroundColor: labelColor }} />
+                      <div className="w-6 h-6 rounded border border-border flex items-center justify-center text-xs" style={{ backgroundColor: labelColor }}>
+                        {labelIcon}
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-8 gap-1 mb-2 max-h-[120px] overflow-y-auto p-1 custom-scrollbar bg-background rounded border border-border">
+                      <button onClick={() => setLabelIcon(undefined)} className="w-6 h-6 rounded flex items-center justify-center text-[10px] text-muted-foreground hover:bg-secondary border border-dashed border-muted-foreground/30">✕</button>
+                      {ICONS.map(icon => (
+                        <button key={icon} onClick={() => setLabelIcon(icon)} className={`w-6 h-6 rounded flex items-center justify-center text-[12px] hover:bg-secondary ${labelIcon === icon ? 'ring-1 ring-primary' : ''}`}>
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="flex gap-2">
                       <button onClick={handleSaveLabel} className="px-3 py-1 rounded bg-primary text-primary-foreground text-xs font-medium">{editLabelId ? 'Salvar' : 'Criar'}</button>
                       <button onClick={() => setEditingLabel(false)} className="text-xs text-muted-foreground">Cancelar</button>
@@ -229,14 +259,27 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           </div>
         );
       case 'assignee':
+        const assignedMember = members.find(m => m.id === assignee);
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <User className="h-3.5 w-3.5" /> Responsável
             </label>
-            <input value={assignee} onChange={e => setAssignee(e.target.value)} onBlur={() => handleSetAssignee(assignee)}
-              placeholder="Email do responsável..."
-              className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary" />
+            <div className="flex items-center gap-2">
+              {assignedMember && (
+                <img src={assignedMember.avatar} alt={assignedMember.name} className="w-8 h-8 rounded-full border border-border object-cover" />
+              )}
+              <select
+                value={assignee}
+                onChange={e => handleSetAssignee(e.target.value)}
+                className="flex-1 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary"
+              >
+                <option value="">Sem responsável</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         );
       case 'dates':
@@ -519,18 +562,28 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
             {/* Actions */}
             <div className="pt-4 border-t border-border flex flex-wrap gap-2">
-              <button onClick={() => { updateCard(cardId, { archived: true }); onClose(); }}
+              <button onClick={() => {
+                updateCard(cardId, { archived: true });
+                if (list) setUndoAction({ cardId, previousListId: list.id, previousPosition: card.position, message: `"${card.title}" foi arquivado`, type: 'archived' });
+                onClose();
+              }}
                 className="flex items-center gap-2 text-xs text-muted-foreground hover:bg-secondary px-3 py-2 rounded transition-colors">
                 <Archive className="h-3.5 w-3.5" /> Arquivar
               </button>
-              <button onClick={() => { updateCard(cardId, { trashed: true }); onClose(); }}
+              <button onClick={() => {
+                updateCard(cardId, { trashed: true });
+                if (list) setUndoAction({ cardId, previousListId: list.id, previousPosition: card.position, message: `"${card.title}" foi enviado para lixeira`, type: 'trashed' });
+                onClose();
+              }}
                 className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors">
                 <Trash2 className="h-3.5 w-3.5" /> Lixeira
               </button>
-              <button onClick={() => { deleteCard(cardId); onClose(); }}
-                className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors ml-auto">
-                <Trash2 className="h-3.5 w-3.5" /> Excluir permanentemente
-              </button>
+              {card.trashed && (
+                <button onClick={() => { deleteCard(cardId); onClose(); }}
+                  className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors ml-auto">
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir permanentemente
+                </button>
+              )}
             </div>
           </div>
         </motion.div>

@@ -33,6 +33,14 @@ export interface Label {
   id: string;
   name: string;
   color: string; // now stores hex color like '#ff0000'
+  icon?: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
 }
 
 export interface ChecklistItem {

@@ -28,7 +28,15 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   const [colorHex, setColorHex] = useState(list.color || '');
   const [showIconPicker, setShowIconPicker] = useState(false);
 
-  const ICONS = ['📋', '✅', '🔄', '🚀', '⏳', '📦', '🗑️', '📁', '⭐', '🔥', '💡', '🎯', '📌', '🏷️', '🛠️', '📊'];
+  const ICONS = [
+    '📋', '📝', '✅', '☑️', '✔️', '❌', '🚫', '⚠️', '❗', '❓',
+    '🔄', '🔁', '🚀', '🛸', '⭐', '🌟', '✨', '🔥', '💥', '💡',
+    '🎯', '📌', '📍', '🏷️', '🔖', '🛠️', '🔧', '🔨', '⚙️', '📊',
+    '📈', '📉', '📅', '📆', '⏳', '⌛', '⏰', '⏱️', '📦', '📫',
+    '📥', '📤', '✉️', '📱', '💻', '🖥️', '🔍', '🔎', '🗑️', '📁',
+    '📂', '🗂️', '📄', '📑', '🔐', '🔓', '🔑', '🔗', '📎', '💼',
+    '🏆', '🥇', '🎉', '🎈', '🎁', '🚀', '🏃', '🚶', '🛑', '🚧'
+  ];
 
   const handleAdd = () => {
     if (newTitle.trim()) {
@@ -148,17 +156,17 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
       {showIconPicker && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShowIconPicker(false)} />
-          <div className="relative z-20 bg-popover border border-border rounded-lg shadow-lg p-3 mb-2">
+          <div className="relative z-20 bg-popover border border-border rounded-lg shadow-lg p-3 mb-2 w-[240px]">
             <p className="text-[10px] text-muted-foreground mb-2 font-semibold">Ícone da Lista</p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid grid-cols-6 gap-1.5 max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
+              <button onClick={() => { updateList(list.id, { icon: undefined }); setShowIconPicker(false); }}
+                className="w-7 h-7 rounded hover:bg-secondary text-[10px] text-muted-foreground border border-dashed border-muted-foreground/30 flex items-center justify-center" title="Remover ícone">✕</button>
               {ICONS.map(icon => (
                 <button key={icon} onClick={() => { updateList(list.id, { icon }); setShowIconPicker(false); }}
                   className={`w-7 h-7 rounded hover:bg-secondary text-sm flex items-center justify-center ${list.icon === icon ? 'ring-2 ring-primary' : ''}`}>
                   {icon}
                 </button>
               ))}
-              <button onClick={() => { updateList(list.id, { icon: undefined }); setShowIconPicker(false); }}
-                className="w-7 h-7 rounded hover:bg-secondary text-[10px] text-muted-foreground border border-dashed border-muted-foreground/30 flex items-center justify-center">✕</button>
             </div>
           </div>
         </>
