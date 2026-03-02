@@ -38,6 +38,9 @@ interface KanbanState {
   // companies
   addCompany: (companyData: Omit<Company, 'id' | 'createdAt'>) => void;
   removeCompany: (id: string) => void;
+  updateCompany: (id: string, data: Partial<Company>) => void;
+  restoreCompany: (id: string) => void;
+  permanentlyDeleteCompany: (id: string) => void;
   // folders
   addFolder: (name: string, color?: string, sideImage?: string) => void;
   updateFolder: (id: string, data: Partial<Folder>) => void;
@@ -153,6 +156,15 @@ export const useKanbanStore = create<KanbanState>()(
         companies: [{ ...companyData, id: uid(), createdAt: new Date().toISOString() }, ...s.companies]
       })),
       removeCompany: (id) => set(s => ({
+        companies: s.companies.filter(c => c.id !== id)
+      })),
+      updateCompany: (id, data) => set(s => ({
+        companies: s.companies.map(c => c.id === id ? { ...c, ...data } : c)
+      })),
+      restoreCompany: (id) => set(s => ({
+        companies: s.companies.map(c => c.id === id ? { ...c, trashed: false, trashedAt: undefined } : c)
+      })),
+      permanentlyDeleteCompany: (id) => set(s => ({
         companies: s.companies.filter(c => c.id !== id)
       })),
 
@@ -295,6 +307,10 @@ export const useKanbanStore = create<KanbanState>()(
           folders: s.folders.filter(f => {
             if (!f.trashed || !f.trashedAt) return true;
             return new Date(f.trashedAt) >= threshold;
+          }),
+          companies: s.companies.filter(c => {
+            if (!c.trashed || !c.trashedAt) return true;
+            return new Date(c.trashedAt) >= threshold;
           })
         };
       }),

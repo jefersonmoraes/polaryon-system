@@ -28,6 +28,11 @@ export interface Company {
   ddd_telefone_1: string;
   ddd_telefone_2: string;
   email: string;
+  customLink?: string;
+  rating?: number;
+  isFavorite?: boolean;
+  trashed?: boolean;
+  trashedAt?: string;
   createdAt: string;
 }
 

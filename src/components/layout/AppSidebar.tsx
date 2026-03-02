@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { FolderOpen, Plus, ChevronRight, LayoutGrid, Calendar, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase } from 'lucide-react';
 import { useState } from 'react';
 
 const AppSidebar = () => {
@@ -18,7 +18,11 @@ const AppSidebar = () => {
   const toggleFolder = (id: string) => {
     setExpandedFolders(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -32,31 +36,48 @@ const AppSidebar = () => {
     }
   };
 
+  const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
+
   return (
     <aside className={`${isCollapsed ? 'w-16' : 'w-56'} shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-y-auto scrollbar-hide transition-all duration-300 relative group`}>
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute top-3 right-[-14px] bg-primary border-2 border-background rounded-full p-1 shadow-md transition-transform hover:scale-110 z-10 text-primary-foreground"
+        className="absolute top-1/2 -translate-y-1/2 right-[-14px] bg-primary border-2 border-background rounded-full p-1 shadow-md transition-transform hover:scale-110 z-10 text-primary-foreground flex items-center justify-center"
         title={isCollapsed ? "Expandir menu" : "Recolher menu"}
       >
-        {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
 
-      {location.pathname === '/suppliers' ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-4">
+      {isCompanyModule ? (
+        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             {!isCollapsed && <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2">Módulo Simplificado</span>}
-            <div className="px-2 py-3 bg-primary/10 rounded-lg border border-primary/20 flex flex-col gap-2 text-center items-center justify-center">
+            <div className="px-2 py-3 bg-primary/10 rounded-lg border border-primary/20 flex flex-col gap-2 text-center items-center justify-center mb-2">
               {!isCollapsed ? (
                 <>
-                  <span className="text-xl">🏢</span>
+                  <Building2 className="h-6 w-6 text-primary" />
                   <p className="text-xs text-sidebar-foreground font-medium">Gestão de Empresas</p>
                   <p className="text-[10px] text-muted-foreground">O menu completo fica oculto nesta tela para foco.</p>
                 </>
               ) : (
-                <span className="text-xl" title="Gestão de Empresas">🏢</span>
+                <span title="Gestão de Empresas">
+                  <Building2 className="h-6 w-6 text-primary" />
+                </span>
               )}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
+            <Link to="/suppliers" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Pesquisa CNPJ">
+              <Building2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa CNPJ</span>}
+            </Link>
+            <Link to="/suppliers-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Fornecedores">
+              <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fornecedores</span>}
+            </Link>
+            <Link to="/transporters-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Transportadoras">
+              <Truck className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Transportadoras</span>}
+            </Link>
           </div>
         </div>
       ) : (

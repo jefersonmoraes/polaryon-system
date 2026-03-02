@@ -19,7 +19,7 @@ export default function GlobalCalendarPage() {
         return new Date(d.setDate(diff));
     };
 
-    let days: (Date | null)[] = [];
+    const days: (Date | null)[] = [];
     if (viewType === 'month') {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();

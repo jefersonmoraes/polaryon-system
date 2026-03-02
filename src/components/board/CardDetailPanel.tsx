@@ -312,7 +312,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
-      case 'assignee':
+      case 'assignee': {
         const assignedMember = members.find(m => m.id === assignee);
         return (
           <div key={section}>
@@ -336,6 +336,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             </div>
           </div>
         );
+      }
       case 'dates':
         return (
           <div key={section}>

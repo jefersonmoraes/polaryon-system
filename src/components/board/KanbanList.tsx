@@ -1,6 +1,6 @@
 import { Droppable, Draggable, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useKanbanStore } from '@/store/kanban-store';
-import { KanbanList } from '@/types/kanban';
+import { KanbanList, Card } from '@/types/kanban';
 import { MoreHorizontal, Plus, Trash2, GripVertical, Palette, Zap, ArrowRight, Archive, SmilePlus, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
 import KanbanCardComponent from './KanbanCard';
@@ -33,7 +33,7 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
         return a.assignee.localeCompare(b.assignee);
       }
       if (prefs.sortBy === 'priority') {
-        const getPrio = (card: any) => {
+        const getPrio = (card: Card) => {
           const cardLabels = labels.filter(l => card.labels.includes(l.id));
           if (cardLabels.some(l => l.name.toLowerCase().includes('urgent') || l.color === '#ef4444')) return 1; // Urgente
           if (cardLabels.some(l => l.name.toLowerCase().includes('important') || l.color === '#f97316')) return 2; // Importante

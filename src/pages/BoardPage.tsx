@@ -199,7 +199,7 @@ const BoardPage = () => {
 
           <select
             value={prefs.sortBy}
-            onChange={(e) => setBoardPreference(board.id, { sortBy: e.target.value as any })}
+            onChange={(e) => setBoardPreference(board.id, { sortBy: e.target.value as 'default' | 'priority' | 'assignee' | 'dueDate' })}
             className="bg-white/10 text-white text-xs rounded px-2 py-1.5 outline-none border-none cursor-pointer shrink-0 appearance-none"
           >
             <option value="default" className="text-black">Ordenar: Padrão</option>
