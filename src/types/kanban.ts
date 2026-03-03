@@ -20,7 +20,7 @@ export interface Route {
 export type BudgetType = 'Produto' | 'Serviço' | 'Frete';
 export type BudgetStatus = 'Aguardando' | 'Cotado' | 'Aprovado' | 'Recusado';
 
-export interface BudgetItem {
+export interface QuotationSubItem {
   id: string;
   description: string;
   quantity: number;
@@ -28,18 +28,51 @@ export interface BudgetItem {
   totalPrice: number;
 }
 
+export interface BudgetItem {
+  id: string;
+  companyId?: string; // Linked company (supplier) specific to this quote
+  transporterId?: string; // Linked company (transporter) specific to this quote
+  validity?: string; // e.g. "15 dias"
+  notes?: string;
+
+  // Fase 3: Favoritos e Avaliações de Empresas
+  isFavorite?: boolean;
+  supplierRating?: number; // 0 to 5 estrelas
+  transporterRating?: number; // 0 to 5 estrelas
+
+  // Novos Campos da Negociação (Escopo Global da Cotação)
+  freightValue?: number; // CIF = valor do frete q soma com total
+  hasInvoiceTriangulation?: boolean; // Triangulação de NF na Transportadora
+  warrantyDays?: string; // Quantidade de dias da garantia fornecida
+  hasInsurance?: boolean; // Seguro de carga ativado/desativado
+  deliveryTime?: string; // MANTIDO POR RETROCOMPATIBILIDADE (Prazo de entrega string - ex: "5 dias úteis")
+  deliveryDate?: string; // NOVO: Data de entrega (input date YYYY-MM-DD)
+  hasServiceContract?: boolean; // Contrato de prestação de serviços (sim/não)
+
+  paymentTerms?: 'À vista' | 'Boleto' | 'PIX' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Transferência Bancária' | string; // Condições de Pagamento
+  hasCashDiscount?: boolean; // TOGGLE: Aplicar Desconto
+  cashDiscount?: number; // Valor numerico do desconto do Toggle
+  installmentsCount?: number; // Qtd de vezes do Parcelamento
+  installmentInterest?: number; // % do Juros mensal sobre o parcelamento
+
+  invoicedSales?: boolean; // Vende Faturado
+  invoiceTerm?: string; // Prazo de Faturamento
+
+  items: QuotationSubItem[]; // The products/services inside this quote
+  totalPrice: number; // Sum of all inner items + freightValue - cashDiscount + Installments
+}
+
 export interface Budget {
   id: string;
   title: string;
   type: BudgetType;
   status: BudgetStatus;
-  companyId?: string; // Linked company (supplier/transporter)
-  items: BudgetItem[];
+  cardId?: string; // Linked kanban card
+  items: BudgetItem[]; // Now called "Cotações"
   totalValue: number;
-  validity?: string; // e.g. "15 dias"
-  notes?: string;
   trashed?: boolean;
   trashedAt?: string;
+  archived?: boolean;
   createdAt: string;
 }
 
@@ -85,6 +118,7 @@ export interface Company {
   frete?: 'CIF' | 'FOB' | '';
   mantemOferta?: string;
   areasAtuacao?: string[];
+  lastCnpjCheck?: string; // ISODateString of the last check via BrasilAPI
 
   // Transporter specific
   seguroCarga?: boolean;
@@ -104,6 +138,45 @@ export interface Notification {
   read: boolean;
   createdAt: string;
   link?: string;
+}
+
+export interface MainCompanyProfile {
+  razaoSocial: string;
+  nomeFantasia: string;
+  cnpj: string;
+  state: string; // UF
+  porte: string; // e.g. 'MEI', 'ME', 'EPP'
+  lastSynced?: string; // ISO String indicating the last time it was fetched via API
+
+  // Accounting & Corporate fields
+  naturezaJuridica: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  municipio: string;
+  telefone: string;
+  email: string;
+  cnaes: { code: string; description: string }[];
+
+  taxRegime: 'Simples Nacional' | 'Lucro Presumido' | 'Lucro Real' | '';
+  simplesAnnexes: string[]; // e.g., 'Anexo I', 'Anexo II', etc.
+
+  // Tax aliquots (percentages)
+  pis: number;
+  cofins: number;
+  csll: number;
+  irpj: number;
+  cpp: number;
+  iss: number;
+  icms: number;
+  ipi: number;
+
+  // Custom overrides per annex for Simples Nacional
+  annexRates?: Record<string, {
+    pis: number; cofins: number; csll: number; irpj: number; cpp: number; iss: number; icms: number; ipi: number;
+  }>;
 }
 
 export interface Board {

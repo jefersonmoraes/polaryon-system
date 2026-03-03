@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember, Notification, Company, Route, Budget } from '@/types/kanban';
+import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember, Notification, Company, Route, Budget, MainCompanyProfile } from '@/types/kanban';
 
 const uid = () => crypto.randomUUID();
 
 interface KanbanState {
+  mainCompany: MainCompanyProfile | null;
+  setMainCompany: (data: Partial<MainCompanyProfile>) => void;
   folders: Folder[];
   boards: Board[];
   lists: KanbanList[];
@@ -94,6 +96,7 @@ interface KanbanState {
 export const useKanbanStore = create<KanbanState>()(
   persist(
     (set, get) => ({
+      mainCompany: null,
       folders: [],
       boards: [],
       lists: [],
@@ -121,6 +124,14 @@ export const useKanbanStore = create<KanbanState>()(
           ...s.boardPreferences,
           [boardId]: { ...s.boardPreferences[boardId] || { viewMode: 'kanban', sortBy: 'default' }, ...prefs }
         }
+      })),
+
+      setMainCompany: (data) => set(s => ({
+        mainCompany: s.mainCompany ? { ...s.mainCompany, ...data } : {
+          razaoSocial: '', nomeFantasia: '', cnpj: '', state: '', porte: '', taxRegime: '', simplesAnnexes: [],
+          naturezaJuridica: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', municipio: '', telefone: '', email: '', cnaes: [],
+          pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, annexRates: {}, ...data
+        } as MainCompanyProfile
       })),
 
       setUiZoom: (zoom) => set({ uiZoom: zoom }),
@@ -314,20 +325,41 @@ export const useKanbanStore = create<KanbanState>()(
           }]
         };
       }),
-      updateCard: (id, data) => set(s => ({
-        cards: s.cards.map(c => {
-          if (c.id === id) {
-            const isTrashing = data.trashed === true && !c.trashed;
-            return {
-              ...c,
-              ...data,
-              trashedAt: isTrashing ? new Date().toISOString() : (data.trashed === false ? undefined : c.trashedAt)
-            };
-          }
-          return c;
-        })
+      updateCard: (id, data) => set(s => {
+        let updatedBudgets = s.budgets;
+
+        if (data.trashed !== undefined || data.archived !== undefined) {
+          updatedBudgets = s.budgets.map(b => {
+            if (b.cardId === id) {
+              return {
+                ...b,
+                ...(data.trashed !== undefined ? { trashed: data.trashed, trashedAt: data.trashed ? new Date().toISOString() : undefined } : {}),
+                ...(data.archived !== undefined ? { archived: data.archived } : {}),
+              };
+            }
+            return b;
+          });
+        }
+
+        return {
+          cards: s.cards.map(c => {
+            if (c.id === id) {
+              const isTrashing = data.trashed === true && !c.trashed;
+              return {
+                ...c,
+                ...data,
+                trashedAt: isTrashing ? new Date().toISOString() : (data.trashed === false ? undefined : c.trashedAt)
+              };
+            }
+            return c;
+          }),
+          budgets: updatedBudgets
+        };
+      }),
+      deleteCard: (id) => set(s => ({
+        cards: s.cards.filter(c => c.id !== id),
+        budgets: s.budgets.filter(b => b.cardId !== id)
       })),
-      deleteCard: (id) => set(s => ({ cards: s.cards.filter(c => c.id !== id) })),
       moveCard: (cardId, toListId, newPosition) => set(s => ({
         cards: s.cards.map(c => c.id === cardId ? { ...c, listId: toListId, position: newPosition } : c)
       })),

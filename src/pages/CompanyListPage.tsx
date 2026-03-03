@@ -8,7 +8,7 @@ interface CompanyListPageProps {
 }
 
 const CompanyListPage = ({ type }: CompanyListPageProps) => {
-    const { companies, removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute, uiZoom } = useKanbanStore();
+    const { companies, budgets = [], removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute, uiZoom } = useKanbanStore();
     const [searchParams, setSearchParams] = useSearchParams();
     const urlId = searchParams.get('id');
     const tabOption = searchParams.get('tab');
@@ -77,13 +77,43 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
         return Array.from(states).sort();
     }, [companies, type]);
 
+    // Calculate dynamic ratings from budgets
+    const companyRatings = useMemo(() => {
+        const ratingsMap: Record<string, { total: number; count: number }> = {};
+
+        budgets.forEach(b => {
+            b.items?.forEach(item => {
+                // Fornecedor Rating
+                if (item.companyId && item.supplierRating) {
+                    if (!ratingsMap[item.companyId]) ratingsMap[item.companyId] = { total: 0, count: 0 };
+                    ratingsMap[item.companyId].total += item.supplierRating;
+                    ratingsMap[item.companyId].count++;
+                }
+                // Transportadora Rating
+                if (item.transporterId && item.transporterRating) {
+                    if (!ratingsMap[item.transporterId]) ratingsMap[item.transporterId] = { total: 0, count: 0 };
+                    ratingsMap[item.transporterId].total += item.transporterRating;
+                    ratingsMap[item.transporterId].count++;
+                }
+            });
+        });
+
+        const finalRatings: Record<string, number> = {};
+        Object.keys(ratingsMap).forEach(key => {
+            finalRatings[key] = Math.round(ratingsMap[key].total / ratingsMap[key].count);
+        });
+
+        return finalRatings;
+    }, [budgets]);
+
     const filteredCompanies = useMemo(() => {
         const list = companies.filter(c => {
             if (c.type !== type || c.trashed) return false;
 
             // Advanced Filters
+            const compRating = companyRatings[c.id] || 0;
             if (filterFavorite && !c.isFavorite) return false;
-            if (filterMinRating > 0 && (c.rating || 0) < filterMinRating) return false;
+            if (filterMinRating > 0 && compRating < filterMinRating) return false;
             if (filterState && c.uf !== filterState) return false;
             if (filterArea && c.type === 'Fornecedor' && !(c.areasAtuacao || []).includes(filterArea)) return false;
 
@@ -102,12 +132,12 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
             if (a.isFavorite && !b.isFavorite) return -1;
             if (!a.isFavorite && b.isFavorite) return 1;
 
-            const ratingA = a.rating || 0;
-            const ratingB = b.rating || 0;
+            const ratingA = companyRatings[a.id] || 0;
+            const ratingB = companyRatings[b.id] || 0;
             if (ratingB !== ratingA) return ratingB - ratingA;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
-    }, [companies, type, searchTerm, filterFavorite, filterMinRating, filterState, filterArea]);
+    }, [companies, type, searchTerm, filterFavorite, filterMinRating, filterState, filterArea, companyRatings]);
 
     const selectedCompany = useMemo(() => {
         return companies.find(c => c.id === selectedCompanyId);
@@ -420,10 +450,10 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                 {company.isFavorite && <Heart className={`h-3.5 w-3.5 shrink-0 ${selectedCompanyId === company.id ? 'fill-primary-foreground text-primary-foreground' : 'fill-red-500 text-red-500'}`} />}
                                                 <p className="font-bold text-sm line-clamp-1">{company.nome_fantasia || company.razao_social}</p>
                                             </div>
-                                            {company.rating ? (
-                                                <div className="flex items-center shrink-0">
+                                            {companyRatings[company.id] ? (
+                                                <div className="flex items-center shrink-0" title={`Média das cotações (${companyRatings[company.id]} estrelas)`}>
                                                     <Star className={`h-3 w-3 ${selectedCompanyId === company.id ? 'fill-yellow-400 text-yellow-400' : 'fill-yellow-500 text-yellow-500'}`} />
-                                                    <span className={`text-[10px] font-bold ml-0.5 ${selectedCompanyId === company.id ? 'text-primary-foreground' : 'text-foreground'}`}>{company.rating}</span>
+                                                    <span className={`text-[10px] font-bold ml-0.5 ${selectedCompanyId === company.id ? 'text-primary-foreground' : 'text-foreground'}`}>{companyRatings[company.id]}</span>
                                                 </div>
                                             ) : null}
                                         </div>
@@ -581,20 +611,21 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                             <Calendar className="h-3 w-3" />
                                             Adicionado em {new Date(selectedCompany.createdAt).toLocaleDateString()}
                                         </span>
-                                        <div className="flex items-center gap-1 border-l pl-4 border-border">
+                                        <div className="flex items-center gap-1 border-l pl-4 border-border" title="Avaliação Média nas Cotações">
                                             {[1, 2, 3, 4, 5].map((star) => (
-                                                <button
+                                                <div
                                                     key={star}
-                                                    onClick={() => updateCompany(selectedCompany.id, { rating: star })}
-                                                    className={`p-0.5 transition-colors ${(selectedCompany.rating || 0) >= star
-                                                        ? "text-yellow-400 hover:text-yellow-500"
-                                                        : "text-muted-foreground/30 hover:text-yellow-400/50"
+                                                    className={`p-0.5 transition-colors cursor-default ${(companyRatings[selectedCompany.id] || 0) >= star
+                                                        ? "text-yellow-400 drop-shadow-sm"
+                                                        : "text-muted-foreground/20"
                                                         }`}
-                                                    title={`Avaliar com ${star} estrela${star > 1 ? 's' : ''}`}
                                                 >
-                                                    <Star className="h-5 w-5 fill-current" />
-                                                </button>
+                                                    <Star className="h-4 w-4 fill-current" />
+                                                </div>
                                             ))}
+                                            <span className="text-[10px] text-muted-foreground ml-1">
+                                                (Avaliações de Cotações)
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

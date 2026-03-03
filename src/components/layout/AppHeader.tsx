@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2 } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import logo from '@/assets/logo.png';
 import { useState } from 'react';
@@ -8,7 +8,7 @@ import CompanyArchiveViewer from './CompanyArchiveViewer';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
-  const { isDark, toggleTheme, uiZoom, setUiZoom, folders, boards, lists, cards, companies, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications } = useKanbanStore();
+  const { isDark, toggleTheme, uiZoom, setUiZoom, folders, boards, lists, cards, companies, budgets, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications } = useKanbanStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -18,6 +18,7 @@ const AppHeader = () => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
+  const isBudgetModule = location.pathname.startsWith('/budgets');
 
   const searchResults = searchQuery.trim() ? (isCompanyModule ? {
     companies: companies.filter(c => !c.trashed && (
@@ -25,9 +26,17 @@ const AppHeader = () => {
       (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(searchQuery.toLowerCase())) ||
       c.cnpj.includes(searchQuery)
     )).slice(0, 8),
-    cards: [], boards: [], folders: [], lists: []
+    cards: [], boards: [], folders: [], lists: [], budgets: []
+  } : isBudgetModule ? {
+    budgets: budgets.filter(b => !b.trashed && (
+      b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      companies.find(c => c.id === (b as any).companyId)?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      companies.find(c => c.id === (b as any).companyId)?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase())
+    )).slice(0, 8),
+    cards: [], boards: [], folders: [], lists: [], companies: []
   } : {
     companies: [],
+    budgets: [],
     cards: cards.filter(c => !c.archived && !c.trashed && (c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.description?.toLowerCase().includes(searchQuery.toLowerCase()))).slice(0, 5),
     boards: boards.filter(b => !b.archived && !b.trashed && b.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 3),
     folders: folders.filter(f => !f.archived && !f.trashed && f.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 3),
@@ -69,6 +78,15 @@ const AppHeader = () => {
           <span className="uppercase tracking-wider hidden sm:inline">Orçamentos</span>
           <span className="uppercase tracking-wider sm:hidden">Orçamentos</span>
         </Link>
+        <Link
+          to="/company"
+          className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname.startsWith('/company') ? 'bg-primary/20 text-accent font-bold' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+            }`}
+        >
+          <Building2 className="h-3.5 w-3.5 inline mr-1" />
+          <span className="uppercase tracking-wider hidden sm:inline">Empresa</span>
+          <span className="uppercase tracking-wider sm:hidden">Empresa</span>
+        </Link>
       </nav>
 
       <div className="flex-1" />
@@ -86,7 +104,7 @@ const AppHeader = () => {
             />
             {searchResults && (
               <div className="absolute top-full mt-2 left-0 right-0 max-h-[80vh] overflow-y-auto bg-popover border border-border shadow-lg rounded-md p-2 z-50 text-foreground custom-scrollbar">
-                {searchResults.cards.length === 0 && searchResults.boards.length === 0 && searchResults.folders.length === 0 && searchResults.lists.length === 0 && searchResults.companies.length === 0 ? (
+                {searchResults.cards.length === 0 && searchResults.boards.length === 0 && searchResults.folders.length === 0 && searchResults.lists.length === 0 && searchResults.companies.length === 0 && searchResults.budgets.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhum resultado encontrado.</p>
                 ) : (
                   <>
@@ -140,6 +158,22 @@ const AppHeader = () => {
                         ))}
                       </div>
                     )}
+                    {searchResults.budgets && searchResults.budgets.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase px-2 mb-1">Orçamentos</p>
+                        {searchResults.budgets.map(b => (
+                          <button key={b.id} onClick={() => navigate('/budgets')} className="w-full text-left px-2 py-2 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
+                            <div className="shrink-0 p-1.5 bg-primary/10 rounded flex items-center justify-center text-primary">
+                              <Calculator className="h-3 w-3" />
+                            </div>
+                            <div className="flex flex-col gap-0.5 overflow-hidden">
+                              <span className="font-bold truncate">{b.title}</span>
+                              <span className="text-[10px] text-muted-foreground truncate">{companies.find(c => c.id === (b as any).companyId)?.nome_fantasia || 'Sem fornecedor'}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {searchResults.cards && searchResults.cards.length > 0 && (
                       <div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase px-2 mb-1">Cartões</p>
@@ -169,7 +203,7 @@ const AppHeader = () => {
 
       <div className="flex items-center gap-1.5 mr-2 border-r border-border/50 pr-2">
         {!isCompanyModule && (
-          <button onClick={() => setShowGlobalArchiveViewer('archived')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-accent" title="Pastas e Boards Arquivados">
+          <button onClick={() => setShowGlobalArchiveViewer('archived')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-accent" title="Pastas, Boards e Orçamentos Arquivados">
             <Archive className="h-4 w-4" />
           </button>
         )}
@@ -248,6 +282,12 @@ const AppHeader = () => {
         {showGlobalArchiveViewer && (
           isCompanyModule ? (
             <CompanyArchiveViewer onClose={() => setShowGlobalArchiveViewer(null)} />
+          ) : isBudgetModule ? (
+            <GlobalArchiveViewer
+              type={showGlobalArchiveViewer}
+              onClose={() => setShowGlobalArchiveViewer(null)}
+              initialTab="budgets"
+            />
           ) : (
             <GlobalArchiveViewer
               type={showGlobalArchiveViewer}

@@ -4,17 +4,27 @@ import {
   X, Calendar, Tag, CheckSquare, MessageSquare, Clock, Trash2, Plus,
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
-  Archive, Undo2, Image
+  Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import BudgetModal from '../budgets/BudgetModal';
+import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
+
+const statusStyles: Record<BudgetStatus, string> = {
+  Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
+  Cotado: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  Aprovado: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
+  Recusado: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+};
 
 interface Props {
   cardId: string;
   onClose: () => void;
 }
 
-const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'checklist', 'timer', 'comments'];
+const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'budgets', 'checklist', 'timer', 'comments'];
 
 const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> = {
   summary: { icon: <FileText className="h-3.5 w-3.5" />, label: 'Resumo' },
@@ -24,6 +34,7 @@ const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> =
   estimated: { icon: <Timer className="h-3.5 w-3.5" />, label: 'Estimativa' },
   description: { icon: <AlignLeft className="h-3.5 w-3.5" />, label: 'Descrição' },
   attachments: { icon: <Paperclip className="h-3.5 w-3.5" />, label: 'Anexos' },
+  budgets: { icon: <Calculator className="h-3.5 w-3.5" />, label: 'Orçamentos' },
   checklist: { icon: <CheckSquare className="h-3.5 w-3.5" />, label: 'Checklist' },
   timer: { icon: <Clock className="h-3.5 w-3.5" />, label: 'Rastreador' },
   comments: { icon: <MessageSquare className="h-3.5 w-3.5" />, label: 'Comentários' },
@@ -36,10 +47,17 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     addComment, startTimer, stopTimer, resetTimer,
     addLabel, updateLabel, deleteLabel,
     globalSectionOrder, setGlobalSectionOrder, setUndoAction,
-    recentMilestoneTitles, addRecentMilestoneTitle,
+    recentMilestoneTitles, addRecentMilestoneTitle, budgets, companies
   } = useKanbanStore();
   const card = cards.find(c => c.id === cardId);
   const list = card ? lists.find(l => l.id === card.listId) : null;
+  const navigate = useNavigate();
+
+  const getCompanyName = (id?: string) => {
+    if (!id) return '';
+    const c = companies.find(c => c.id === id);
+    return c ? (c.nome_fantasia || c.razao_social) : 'Empresa Indisponível';
+  };
 
   const [title, setTitle] = useState(card?.title || '');
   const [summary, setSummary] = useState(card?.summary || '');
@@ -51,6 +69,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [startDate, setStartDate] = useState(card?.startDate || '');
   const [assignee, setAssignee] = useState(card?.assignee || '');
   const [estimatedTime, setEstimatedTime] = useState(card?.estimatedTime?.toString() || '');
+
+  // Budget editing state
+  const [selectedBudgetToEdit, setSelectedBudgetToEdit] = useState<Budget | undefined>();
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
   // Label editor
   const [editingLabel, setEditingLabel] = useState(false);
@@ -491,6 +513,85 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
+      case 'budgets':
+        const linkedBudgets = budgets.filter(b => b.cardId === cardId && !b.trashed);
+        if (linkedBudgets.length === 0) return null;
+
+        return (
+          <div key={section}>
+            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+              <Calculator className="h-3.5 w-3.5" /> Orçamentos Vinculados
+            </label>
+            <div className="space-y-2">
+              {linkedBudgets.map(budget => {
+                const isApproved = budget.status === 'Aprovado';
+                return (
+                  <div
+                    key={budget.id}
+                    onClick={() => {
+                      setSelectedBudgetToEdit(budget);
+                      setIsBudgetModalOpen(true);
+                    }}
+                    className="bg-secondary/50 rounded-lg p-3 border border-border group hover:border-primary/50 transition-colors flex flex-col gap-2 cursor-pointer"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{budget.title}</h4>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${statusStyles[budget.status]}`}>
+                              {budget.status}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-3">
+                            {(() => {
+                              const suppliers = Array.from(new Set(budget.items?.filter(i => i.companyId).map(i => i.companyId) || []));
+                              const transporters = Array.from(new Set(budget.items?.filter(i => i.transporterId).map(i => i.transporterId) || []));
+                              return (
+                                <>
+                                  <div className="flex items-center gap-1 min-w-0 truncate" title={suppliers.map(getCompanyName).join(', ')}>
+                                    <Building2 className="h-3 w-3 shrink-0" />
+                                    {suppliers.length > 0 ? (
+                                      <span className="truncate">{suppliers.length} Fornecedor{suppliers.length > 1 ? 'es' : ''}</span>
+                                    ) : 'Sem Fornecedor'}
+                                  </div>
+                                  {transporters.length > 0 && (
+                                    <div className="flex items-center gap-1 shrink-0 text-primary/80" title={transporters.map(getCompanyName).join(', ')}>
+                                      <Truck className="h-3 w-3" /> {transporters.length} Transportadora{transporters.length > 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </>
+                              )
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">Melhor Preço</span>
+                        {(() => {
+                          if (!budget.items || budget.items.length === 0) {
+                            return <span className="text-xs font-bold text-muted-foreground">R$ 0,00</span>;
+                          }
+                          const winningQuotation = [...budget.items].sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0))[0];
+                          return (
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                                {(winningQuotation.totalPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                              <span className="text-[9px] text-muted-foreground max-w-[120px] truncate" title={getCompanyName(winningQuotation.companyId)}>
+                                {getCompanyName(winningQuotation.companyId)}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
       case 'checklist':
         return (
           <div key={section}>
@@ -615,7 +716,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               )}
 
               {/* Modular sections - reorderable */}
-              <Reorder.Group axis="y" values={globalSectionOrder.filter(s => s !== 'comments')} onReorder={(newOrder) => setGlobalSectionOrder([...newOrder, 'comments'])} className="space-y-5">
+              <Reorder.Group axis="y" values={globalSectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} onReorder={(newOrder) => setGlobalSectionOrder([...newOrder, 'budgets', 'comments'])} className="space-y-5">
                 {globalSectionOrder.filter(s => s !== 'comments').map(section => (
                   <Reorder.Item key={section} value={section} className="relative group">
                     <div className="absolute -left-5 top-1 opacity-0 group-hover:opacity-50 cursor-grab">
@@ -706,6 +807,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           )}
         </motion.div>
       </motion.div>
+      {isBudgetModalOpen && (
+        <BudgetModal
+          budget={selectedBudgetToEdit}
+          onClose={() => {
+            setIsBudgetModalOpen(false);
+            setSelectedBudgetToEdit(undefined);
+          }}
+        />
+      )}
     </AnimatePresence>
   );
 };

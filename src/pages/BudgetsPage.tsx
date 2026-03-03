@@ -3,8 +3,8 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
-    Trash2, Edit, Building2, Calendar, FileText,
-    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown
+    Trash2, Edit, Building2, Calendar, FileText, FolderOpen,
+    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -30,7 +30,7 @@ const typeStyles: Record<BudgetType, string> = {
 };
 
 const BudgetsPage = () => {
-    const { budgets, companies, deleteBudget } = useKanbanStore();
+    const { budgets, companies, cards, lists, boards, folders, deleteBudget, updateBudget } = useKanbanStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState<BudgetType | 'Todos'>('Todos');
     const [statusFilter, setStatusFilter] = useState<BudgetStatus | 'Todos'>('Todos');
@@ -40,12 +40,12 @@ const BudgetsPage = () => {
 
     const filteredBudgets = useMemo(() => {
         return budgets
-            .filter(b => !b.trashed)
+            .filter(b => !b.trashed && !b.archived)
             .filter(b => typeFilter === 'Todos' || b.type === typeFilter)
             .filter(b => statusFilter === 'Todos' || b.status === statusFilter)
             .filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                companies.find(c => c.id === b.companyId)?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                companies.find(c => c.id === b.companyId)?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase()))
+                b.items?.some(i => companies.find(c => c.id === i.companyId)?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    companies.find(c => c.id === i.companyId)?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase())))
             .sort((a, b) => {
                 const dateA = new Date(a.createdAt).getTime();
                 const dateB = new Date(b.createdAt).getTime();
@@ -168,7 +168,11 @@ const BudgetsPage = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredBudgets.map(budget => (
-                            <div key={budget.id} className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all group flex flex-col relative overflow-hidden">
+                            <div
+                                key={budget.id}
+                                onClick={() => handleEdit(budget)}
+                                className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all group flex flex-col relative overflow-hidden cursor-pointer"
+                            >
                                 {/* Status Indicator Bar */}
                                 <div className={`absolute top-0 left-0 w-full h-1 ${statusStyles[budget.status].split(' ')[0]} border-none opacity-50`} />
 
@@ -185,15 +189,21 @@ const BudgetsPage = () => {
 
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                            <button className="p-1 -mr-1 text-muted-foreground hover:bg-secondary rounded transition-colors opacity-0 group-hover:opacity-100">
+                                            <button
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="p-1 -mr-1 text-muted-foreground hover:bg-secondary rounded transition-colors opacity-0 group-hover:opacity-100"
+                                            >
                                                 <MoreVertical className="h-4 w-4" />
                                             </button>
                                         </PopoverTrigger>
                                         <PopoverContent align="end" className="w-40 p-1">
-                                            <button onClick={() => handleEdit(budget)} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(budget); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
                                                 <Edit className="h-3.5 w-3.5" /> Editar
                                             </button>
-                                            <button onClick={() => deleteBudget(budget.id)} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-destructive/10 text-destructive transition-colors flex items-center gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); updateBudget(budget.id, { archived: true }); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-muted-foreground transition-colors flex items-center gap-2">
+                                                <Archive className="h-3.5 w-3.5" /> Arquivar
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); deleteBudget(budget.id); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-destructive/10 text-destructive transition-colors flex items-center gap-2">
                                                 <Trash2 className="h-3.5 w-3.5" /> Excluir
                                             </button>
                                         </PopoverContent>
@@ -204,27 +214,94 @@ const BudgetsPage = () => {
                                     {budget.title}
                                 </h3>
 
-                                <div className="text-xs text-muted-foreground flex items-center gap-1 mb-4 line-clamp-1" title={getCompanyName(budget.companyId)}>
-                                    <Building2 className="h-3.5 w-3.5 shrink-0" />
-                                    {getCompanyName(budget.companyId)}
+                                <div className="text-xs text-muted-foreground flex flex-col gap-1 mb-4">
+                                    {(() => {
+                                        // Pega fornecedores únicos dentre as cotações
+                                        const suppliers = Array.from(new Set(budget.items?.filter(i => i.companyId).map(i => i.companyId) || []));
+                                        const transporters = Array.from(new Set(budget.items?.filter(i => i.transporterId).map(i => i.transporterId) || []));
+
+                                        return (
+                                            <>
+                                                <div className="flex items-center gap-1 line-clamp-1" title={suppliers.map(getCompanyName).join(', ')}>
+                                                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                                                    {suppliers.length > 0 ? (
+                                                        <span>{suppliers.length} Fornecedor{suppliers.length > 1 ? 'es' : ''} ({suppliers.slice(0, 2).map(getCompanyName).join(', ')}{suppliers.length > 2 ? '...' : ''})</span>
+                                                    ) : 'Sem Fornecedores'}
+                                                </div>
+                                                {transporters.length > 0 && (
+                                                    <div className="flex items-center gap-1 line-clamp-1 text-primary/80" title={transporters.map(getCompanyName).join(', ')}>
+                                                        <Truck className="h-3.5 w-3.5 shrink-0" />
+                                                        {transporters.length} Transportadora{transporters.length > 1 ? 's' : ''}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
+                                {budget.cardId && (() => {
+                                    const linkedCard = cards.find(c => c.id === budget.cardId);
+                                    const linkedList = linkedCard ? lists.find(l => l.id === linkedCard.listId) : null;
+                                    const linkedBoard = linkedList ? boards.find(b => b.id === linkedList.boardId) : null;
+                                    const linkedFolder = linkedBoard ? folders.find(f => f.id === linkedBoard.folderId) : null;
+
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                                            <div className="text-[10px] text-primary/80 bg-primary/10 px-2 py-1 rounded w-fit flex items-center gap-1 line-clamp-1 border border-primary/20" title={`Cartão: ${linkedCard?.title || 'não encontrado'}`}>
+                                                <LinkIcon className="h-3 w-3 shrink-0" />
+                                                {linkedCard?.title || 'Cartão não encontrado'}
+                                            </div>
+                                            {linkedList && (
+                                                <div
+                                                    className="text-[10px] font-bold px-2 py-1 rounded text-white shadow-sm flex items-center gap-1 border border-black/10"
+                                                    style={{ background: `linear-gradient(135deg, ${linkedList.color || '#8b5cf6'}cc, ${linkedList.color || '#8b5cf6'})` }}
+                                                    title={`Lista: ${linkedList.title}`}
+                                                >
+                                                    Lista: {linkedList.title}
+                                                </div>
+                                            )}
+                                            {linkedFolder && (
+                                                <div className="text-[10px] text-muted-foreground bg-secondary px-2 py-1 rounded flex items-center gap-1 border border-border" title={`Pasta: ${linkedFolder.name}`}>
+                                                    <span className="opacity-70">Folder:</span> {linkedFolder.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className="mt-auto pt-4 border-t border-border flex justify-between items-end">
                                     <div className="space-y-1 text-xs text-muted-foreground">
                                         <div className="flex items-center gap-1">
-                                            <FileText className="h-3.5 w-3.5" /> {budget.items?.length || 0} itens
+                                            <FileText className="h-3.5 w-3.5" /> {budget.items?.length || 0} cotações
                                         </div>
-                                        {budget.validity && (
-                                            <div className="flex items-center gap-1" title="Validade">
-                                                <Calendar className="h-3.5 w-3.5 text-primary/70" /> {budget.validity}
-                                            </div>
-                                        )}
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Total</p>
-                                        <p className="font-bold text-primary text-lg leading-none tracking-tight">
-                                            {formatCurrency(budget.totalValue)}
-                                        </p>
+                                    <div className="text-right flex flex-col items-end">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Melhor Cotação</p>
+                                        {(() => {
+                                            if (!budget.items || budget.items.length === 0) {
+                                                return <p className="font-bold text-muted-foreground text-sm leading-none tracking-tight">R$ 0,00</p>;
+                                            }
+                                            const winningQuotation = [...budget.items].sort((a, b) => {
+                                                if (a.isFavorite && !b.isFavorite) return -1;
+                                                if (!a.isFavorite && b.isFavorite) return 1;
+                                                return (a.totalPrice || 0) - (b.totalPrice || 0);
+                                            })[0];
+
+                                            return (
+                                                <div className="flex flex-col items-end">
+                                                    {winningQuotation.isFavorite && (
+                                                        <span className="text-[9px] text-yellow-600 dark:text-yellow-500 font-bold bg-yellow-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5 mb-1" title="Cotação Favorita">
+                                                            ★ Favorita
+                                                        </span>
+                                                    )}
+                                                    <p className="font-bold text-green-600 dark:text-green-400 text-lg leading-none tracking-tight">
+                                                        {formatCurrency(winningQuotation.totalPrice || 0)}
+                                                    </p>
+                                                    <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-[120px]" title={getCompanyName(winningQuotation.companyId)}>
+                                                        {getCompanyName(winningQuotation.companyId)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             </div>

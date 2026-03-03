@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator } from 'lucide-react';
 import { useState } from 'react';
 
 const AppSidebar = () => {
@@ -37,16 +37,19 @@ const AppSidebar = () => {
   };
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
+  const isBudgetModule = location.pathname.startsWith('/budgets');
 
   return (
     <aside className={`${isCollapsed ? 'w-16' : 'w-56'} shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-y-auto scrollbar-hide transition-all duration-300 relative group`}>
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute top-1/2 -translate-y-1/2 right-[-14px] bg-primary border-2 border-background rounded-full p-1 shadow-md transition-transform hover:scale-110 z-10 text-primary-foreground flex items-center justify-center"
-        title={isCollapsed ? "Expandir menu" : "Recolher menu"}
-      >
-        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </button>
+      <div className="h-16 shrink-0 flex items-center justify-center border-b border-sidebar-border/50">
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border border-sidebar-border rounded-lg p-1.5 shadow-sm transition-all text-sidebar-foreground flex items-center justify-center"
+          title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+      </div>
 
       {isCompanyModule ? (
         <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
@@ -63,6 +66,15 @@ const AppSidebar = () => {
             </Link>
             <Link to="/transporters-list?tab=routes" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Rotas de Atuação">
               <MapPin className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Rotas de Atuação</span>}
+            </Link>
+          </div>
+        </div>
+      ) : isBudgetModule ? (
+        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Finanças</span>}
+            <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
+              <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
             </Link>
           </div>
         </div>

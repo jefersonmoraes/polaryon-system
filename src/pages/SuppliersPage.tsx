@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Check, ExternalLink, Star, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
@@ -33,7 +33,34 @@ const SuppliersPage = () => {
     const [expandedSuppliers, setExpandedSuppliers] = useState(false);
     const [expandedTransporters, setExpandedTransporters] = useState(false);
 
-    const { addCompany, companies, uiZoom } = useKanbanStore();
+    const { addCompany, companies, budgets = [], uiZoom } = useKanbanStore();
+
+    // Calculate dynamic ratings from budgets
+    const companyRatings = useMemo(() => {
+        const ratingsMap: Record<string, { total: number; count: number }> = {};
+
+        budgets.forEach(b => {
+            b.items?.forEach(item => {
+                if (item.companyId && item.supplierRating) {
+                    if (!ratingsMap[item.companyId]) ratingsMap[item.companyId] = { total: 0, count: 0 };
+                    ratingsMap[item.companyId].total += item.supplierRating;
+                    ratingsMap[item.companyId].count++;
+                }
+                if (item.transporterId && item.transporterRating) {
+                    if (!ratingsMap[item.transporterId]) ratingsMap[item.transporterId] = { total: 0, count: 0 };
+                    ratingsMap[item.transporterId].total += item.transporterRating;
+                    ratingsMap[item.transporterId].count++;
+                }
+            });
+        });
+
+        const finalRatings: Record<string, number> = {};
+        Object.keys(ratingsMap).forEach(key => {
+            finalRatings[key] = Math.round(ratingsMap[key].total / ratingsMap[key].count);
+        });
+
+        return finalRatings;
+    }, [budgets]);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -63,6 +90,20 @@ const SuppliersPage = () => {
     const handleSave = (type: 'Fornecedor' | 'Transportadora') => {
         if (!result) return;
 
+        // Check for Duplicates
+        const isDuplicate = companies.some(c => c.cnpj === result.cnpj);
+        if (isDuplicate) {
+            toast.error('Empresa já está cadastrada no sistema!');
+            return;
+        }
+
+        // Check for Invalid Status
+        const invalidStatuses = ['BAIXADA', 'INAPTA', 'SUSPENSA', 'NULA'];
+        if (invalidStatuses.includes(result.descricao_situacao_cadastral.toUpperCase())) {
+            toast.error(`Não é possível salvar. CNPJ consta como: ${result.descricao_situacao_cadastral}`);
+            return;
+        }
+
         addCompany({
             type,
             cnpj: result.cnpj,
@@ -87,7 +128,8 @@ const SuppliersPage = () => {
             amostra: false,
             frete: '',
             mantemOferta: '',
-            areasAtuacao: []
+            areasAtuacao: [],
+            lastCnpjCheck: new Date().toISOString()
         });
 
         toast.success(`Salvo como ${type} com sucesso!`);
@@ -229,9 +271,9 @@ const SuppliersPage = () => {
                                                                     </div>
 
                                                                     <div className="mt-auto pt-3 border-t border-border/50 flex items-center justify-between">
-                                                                        <div className="flex text-yellow-500">
+                                                                        <div className="flex text-yellow-500" title={`Média das cotações (${companyRatings[company.id] || 0} estrelas)`}>
                                                                             {[1, 2, 3, 4, 5].map((star) => (
-                                                                                <Star key={star} className={`h-3 w-3 ${star <= (company.rating || 0) ? 'fill-current' : 'text-muted-foreground/20'}`} />
+                                                                                <Star key={star} className={`h-3 w-3 ${star <= (companyRatings[company.id] || 0) ? 'fill-current' : 'text-muted-foreground/20'}`} />
                                                                             ))}
                                                                         </div>
                                                                         <span className="text-[10px] bg-background px-2 py-0.5 rounded text-muted-foreground font-medium border border-border/50 truncate max-w-[100px]" title={company.areasAtuacao?.join(', ') || 'Geral'}>
@@ -296,9 +338,9 @@ const SuppliersPage = () => {
                                                                     </div>
 
                                                                     <div className="mt-auto pt-3 border-t border-border/50 flex items-center justify-between">
-                                                                        <div className="flex text-yellow-500">
+                                                                        <div className="flex text-yellow-500" title={`Média das cotações (${companyRatings[company.id] || 0} estrelas)`}>
                                                                             {[1, 2, 3, 4, 5].map((star) => (
-                                                                                <Star key={star} className={`h-3 w-3 ${star <= (company.rating || 0) ? 'fill-current' : 'text-muted-foreground/20'}`} />
+                                                                                <Star key={star} className={`h-3 w-3 ${star <= (companyRatings[company.id] || 0) ? 'fill-current' : 'text-muted-foreground/20'}`} />
                                                                             ))}
                                                                         </div>
                                                                         <span className="text-[10px] bg-background px-2 py-0.5 rounded text-muted-foreground font-medium border border-border/50">
