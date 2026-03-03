@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import logo from '@/assets/logo.png';
 import { useState } from 'react';
@@ -59,6 +59,15 @@ const AppHeader = () => {
           <Briefcase className="h-3.5 w-3.5 inline mr-1" />
           <span className="uppercase tracking-wider hidden sm:inline">Fornecedores e Transportadoras</span>
           <span className="uppercase tracking-wider sm:hidden">Empresas</span>
+        </Link>
+        <Link
+          to="/budgets"
+          className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname.startsWith('/budgets') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+            }`}
+        >
+          <Calculator className="h-3.5 w-3.5 inline mr-1" />
+          <span className="uppercase tracking-wider hidden sm:inline">Orçamentos</span>
+          <span className="uppercase tracking-wider sm:hidden">Orçamentos</span>
         </Link>
       </nav>
 

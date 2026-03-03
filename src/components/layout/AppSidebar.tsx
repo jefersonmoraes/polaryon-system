@@ -10,7 +10,7 @@ const AppSidebar = () => {
   const [newName, setNewName] = useState('');
   const [newSideImage, setNewSideImage] = useState<string | undefined>();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   const activeFolders = folders.filter(f => !f.archived && !f.trashed);
   const activeBoards = boards.filter(b => !b.archived && !b.trashed);

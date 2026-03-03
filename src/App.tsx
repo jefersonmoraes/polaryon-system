@@ -14,6 +14,7 @@ import GlobalCalendarPage from "./pages/GlobalCalendarPage";
 import TeamWorkloadPage from "./pages/TeamWorkloadPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import CompanyListPage from "./pages/CompanyListPage";
+import BudgetsPage from "./pages/BudgetsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const AppContent = () => {
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/suppliers-list" element={<CompanyListPage type="Fornecedor" />} />
           <Route path="/transporters-list" element={<CompanyListPage type="Transportadora" />} />
+          <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

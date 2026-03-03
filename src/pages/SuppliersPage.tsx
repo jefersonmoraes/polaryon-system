@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Check, ExternalLink, Star, Heart } from 'lucide-react';
+import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Check, ExternalLink, Star, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
@@ -30,6 +30,8 @@ const SuppliersPage = () => {
 
     const [filterRegiao, setFilterRegiao] = useState('');
     const [filterArea, setFilterArea] = useState('');
+    const [expandedSuppliers, setExpandedSuppliers] = useState(false);
+    const [expandedTransporters, setExpandedTransporters] = useState(false);
 
     const { addCompany, companies, uiZoom } = useKanbanStore();
 
@@ -179,6 +181,10 @@ const SuppliersPage = () => {
                                         const favoriteSuppliers = companies.filter(c => !c.trashed && c.isFavorite && c.type === 'Fornecedor' && (filterArea ? c.areasAtuacao?.includes(filterArea) : true));
                                         const favoriteTransporters = companies.filter(c => !c.trashed && c.isFavorite && c.type === 'Transportadora' && (filterRegiao ? c.uf === filterRegiao : true));
 
+                                        const INITIAL_COUNT = 4;
+                                        const visibleSuppliers = expandedSuppliers ? favoriteSuppliers : favoriteSuppliers.slice(0, INITIAL_COUNT);
+                                        const visibleTransporters = expandedTransporters ? favoriteTransporters : favoriteTransporters.slice(0, INITIAL_COUNT);
+
                                         const availableStates = Array.from(new Set(companies.map(c => c.uf).filter(Boolean))).sort();
                                         const availableAreas = Array.from(new Set(companies.filter(c => c.type === 'Fornecedor').flatMap(c => c.areasAtuacao || []))).sort();
 
@@ -207,7 +213,7 @@ const SuppliersPage = () => {
                                                         <p className="text-xs text-muted-foreground italic bg-muted/20 p-4 border border-dashed rounded-xl text-center">Nenhum fornecedor favoritado ou encontrado neste filtro.</p>
                                                     ) : (
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                            {favoriteSuppliers.map(company => (
+                                                            {visibleSuppliers.map(company => (
                                                                 <Link to={`/suppliers-list?id=${company.id}`} key={company.id} className="group p-4 bg-muted/30 border border-border/50 rounded-xl hover:bg-accent/50 hover:border-border transition-all flex flex-col relative overflow-hidden">
                                                                     <div className="flex items-start justify-between mb-3">
                                                                         <div className="flex items-center gap-2">
@@ -236,6 +242,19 @@ const SuppliersPage = () => {
                                                             ))}
                                                         </div>
                                                     )}
+
+                                                    {favoriteSuppliers.length > INITIAL_COUNT && (
+                                                        <button
+                                                            onClick={() => setExpandedSuppliers(!expandedSuppliers)}
+                                                            className="w-full mt-4 py-2 flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg transition-colors border border-dashed border-border/50"
+                                                        >
+                                                            {expandedSuppliers ? (
+                                                                <><ChevronUp className="h-4 w-4" /> Mostrar menos</>
+                                                            ) : (
+                                                                <><ChevronDown className="h-4 w-4" /> Mostrar todos ({favoriteSuppliers.length})</>
+                                                            )}
+                                                        </button>
+                                                    )}
                                                 </div>
 
                                                 {/* Transportadoras em Destaque */}
@@ -261,7 +280,7 @@ const SuppliersPage = () => {
                                                         <p className="text-xs text-muted-foreground italic bg-muted/20 p-4 border border-dashed rounded-xl text-center">Nenhuma transportadora favoritada ou encontrada neste filtro.</p>
                                                     ) : (
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                            {favoriteTransporters.map(company => (
+                                                            {visibleTransporters.map(company => (
                                                                 <Link to={`/transporters-list?id=${company.id}`} key={company.id} className="group p-4 bg-muted/30 border border-border/50 rounded-xl hover:bg-accent/50 hover:border-border transition-all flex flex-col relative overflow-hidden">
                                                                     <div className="flex items-start justify-between mb-3">
                                                                         <div className="flex items-center gap-2">
@@ -289,6 +308,19 @@ const SuppliersPage = () => {
                                                                 </Link>
                                                             ))}
                                                         </div>
+                                                    )}
+
+                                                    {favoriteTransporters.length > INITIAL_COUNT && (
+                                                        <button
+                                                            onClick={() => setExpandedTransporters(!expandedTransporters)}
+                                                            className="w-full mt-4 py-2 flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg transition-colors border border-dashed border-border/50"
+                                                        >
+                                                            {expandedTransporters ? (
+                                                                <><ChevronUp className="h-4 w-4" /> Mostrar menos</>
+                                                            ) : (
+                                                                <><ChevronDown className="h-4 w-4" /> Mostrar todas ({favoriteTransporters.length})</>
+                                                            )}
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>

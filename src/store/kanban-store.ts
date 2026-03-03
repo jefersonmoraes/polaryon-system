@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember, Notification, Company, Route } from '@/types/kanban';
+import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember, Notification, Company, Route, Budget } from '@/types/kanban';
 
 const uid = () => crypto.randomUUID();
 
@@ -13,6 +13,7 @@ interface KanbanState {
   members: WorkspaceMember[];
   companies: Company[];
   routes: Route[];
+  budgets: Budget[];
 
   undoAction: { cardId: string; previousListId: string; previousPosition: number; message: string; type: 'archived' | 'trashed' | 'moved' } | null;
   setUndoAction: (action: KanbanState['undoAction']) => void;
@@ -48,6 +49,12 @@ interface KanbanState {
   deleteRoute: (id: string) => void; // Soft delete
   restoreRoute: (id: string) => void;
   permanentlyDeleteRoute: (id: string) => void;
+  // budgets
+  addBudget: (budgetData: Omit<Budget, 'id' | 'createdAt'>) => void;
+  updateBudget: (id: string, data: Partial<Budget>) => void;
+  deleteBudget: (id: string) => void; // Soft delete
+  restoreBudget: (id: string) => void;
+  permanentlyDeleteBudget: (id: string) => void;
   // folders
   addFolder: (name: string, color?: string, sideImage?: string) => void;
   updateFolder: (id: string, data: Partial<Folder>) => void;
@@ -100,6 +107,7 @@ export const useKanbanStore = create<KanbanState>()(
       ],
       companies: [],
       routes: [],
+      budgets: [],
       undoAction: null,
       isDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
       uiZoom: 1,
@@ -191,6 +199,23 @@ export const useKanbanStore = create<KanbanState>()(
       })),
       permanentlyDeleteRoute: (id) => set(s => ({
         routes: s.routes.filter(r => r.id !== id)
+      })),
+
+      // Budgets
+      addBudget: (budgetData) => set(s => ({
+        budgets: [{ ...budgetData, id: uid(), createdAt: new Date().toISOString() }, ...s.budgets]
+      })),
+      updateBudget: (id, data) => set(s => ({
+        budgets: s.budgets.map(b => b.id === id ? { ...b, ...data } : b)
+      })),
+      deleteBudget: (id) => set(s => ({
+        budgets: s.budgets.map(b => b.id === id ? { ...b, trashed: true, trashedAt: new Date().toISOString() } : b)
+      })),
+      restoreBudget: (id) => set(s => ({
+        budgets: s.budgets.map(b => b.id === id ? { ...b, trashed: false, trashedAt: undefined } : b)
+      })),
+      permanentlyDeleteBudget: (id) => set(s => ({
+        budgets: s.budgets.filter(b => b.id !== id)
       })),
 
       // Folders
@@ -336,6 +361,10 @@ export const useKanbanStore = create<KanbanState>()(
           companies: s.companies.filter(c => {
             if (!c.trashed || !c.trashedAt) return true;
             return new Date(c.trashedAt) >= threshold;
+          }),
+          budgets: s.budgets.filter(b => {
+            if (!b.trashed || !b.trashedAt) return true;
+            return new Date(b.trashedAt) >= threshold;
           })
         };
       }),

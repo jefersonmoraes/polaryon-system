@@ -17,6 +17,32 @@ export interface Route {
   createdAt: string;
 }
 
+export type BudgetType = 'Produto' | 'Serviço' | 'Frete';
+export type BudgetStatus = 'Aguardando' | 'Cotado' | 'Aprovado' | 'Recusado';
+
+export interface BudgetItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface Budget {
+  id: string;
+  title: string;
+  type: BudgetType;
+  status: BudgetStatus;
+  companyId?: string; // Linked company (supplier/transporter)
+  items: BudgetItem[];
+  totalValue: number;
+  validity?: string; // e.g. "15 dias"
+  notes?: string;
+  trashed?: boolean;
+  trashedAt?: string;
+  createdAt: string;
+}
+
 export interface Folder {
   id: string;
   name: string;
