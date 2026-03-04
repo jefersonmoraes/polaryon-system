@@ -9,6 +9,7 @@ import { BoardListView } from '@/components/board/BoardListView';
 import { BoardCalendarView } from '@/components/board/BoardCalendarView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
+import ReactDOM from 'react-dom';
 
 const BoardPage = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -68,23 +69,36 @@ const BoardPage = () => {
     // Card move
     const cardId = result.draggableId;
     const store = useKanbanStore.getState();
-    const sourceCards = store.cards
-      .filter(c => c.listId === source.droppableId && !c.archived && !c.trashed)
-      .sort((a, b) => a.position - b.position);
-    const destCards = source.droppableId === destination.droppableId
-      ? sourceCards
-      : store.cards.filter(c => c.listId === destination.droppableId && !c.archived && !c.trashed).sort((a, b) => a.position - b.position);
 
-    if (source.droppableId === destination.droppableId) {
-      const newOrder = sourceCards.map(c => c.id);
-      const [moved] = newOrder.splice(source.index, 1);
-      newOrder.splice(destination.index, 0, moved);
-      reorderCards(source.droppableId, newOrder);
+    // If board is sorted by anything other than default, we only allow moving between lists.
+    // Reordering within the same list is meaningless because visual order is strictly sorted.
+    if (prefs.sortBy !== 'default') {
+      if (source.droppableId === destination.droppableId) return;
+
+      const destCards = store.cards
+        .filter(c => c.listId === destination.droppableId && !c.archived && !c.trashed);
+      const maxPos = Math.max(0, ...destCards.map(c => c.position));
+
+      moveCard(cardId, destination.droppableId, maxPos + 1);
     } else {
-      moveCard(cardId, destination.droppableId, destination.index);
-      const newDestCards = [...destCards.map(c => c.id)];
-      newDestCards.splice(destination.index, 0, cardId);
-      reorderCards(destination.droppableId, newDestCards);
+      const sourceCards = store.cards
+        .filter(c => c.listId === source.droppableId && !c.archived && !c.trashed)
+        .sort((a, b) => a.position - b.position);
+      const destCards = source.droppableId === destination.droppableId
+        ? sourceCards
+        : store.cards.filter(c => c.listId === destination.droppableId && !c.archived && !c.trashed).sort((a, b) => a.position - b.position);
+
+      if (source.droppableId === destination.droppableId) {
+        const newOrder = sourceCards.map(c => c.id);
+        const [moved] = newOrder.splice(source.index, 1);
+        newOrder.splice(destination.index, 0, moved);
+        reorderCards(source.droppableId, newOrder);
+      } else {
+        moveCard(cardId, destination.droppableId, destination.index);
+        const newDestCards = [...destCards.map(c => c.id)];
+        newDestCards.splice(destination.index, 0, cardId);
+        reorderCards(destination.droppableId, newDestCards);
+      }
     }
 
     // Check automations on destination list
@@ -228,15 +242,28 @@ const BoardPage = () => {
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps}
                 className="flex-1 flex gap-3 overflow-auto p-3 items-start custom-scrollbar h-full min-h-0"
-                style={{ zoom: uiZoom } as React.CSSProperties}>
+                style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
                 {boardLists.map((list, index) => (
                   <Draggable key={list.id} draggableId={list.id} index={index}>
-                    {(provided, snapshot) => (
-                      <div ref={provided.innerRef} {...provided.draggableProps}
-                        className={`shrink-0 transition-shadow max-h-full flex flex-col ${snapshot.isDragging ? 'shadow-xl rotate-2' : ''}`}>
-                        <KanbanListComponent list={list} dragHandleProps={provided.dragHandleProps} onCardClick={setSelectedCardId} />
-                      </div>
-                    )}
+                    {(provided, snapshot) => {
+                      const child = (
+                        <div ref={provided.innerRef} {...provided.draggableProps}
+                          className={`shrink-0 transition-shadow max-h-full flex flex-col ${snapshot.isDragging ? 'shadow-xl rotate-2' : ''}`}
+                          style={{
+                            ...provided.draggableProps.style,
+                            ...((snapshot.isDragging || snapshot.isDropAnimating) && uiZoom !== 1 ? { transform: `${provided.draggableProps.style?.transform} scale(${uiZoom})`, transformOrigin: 'top left' } : {}),
+                            ...((snapshot.isDragging || snapshot.isDropAnimating) ? { transitionDuration: '0.001s' } : {})
+                          }}
+                        >
+                          <KanbanListComponent list={list} dragHandleProps={provided.dragHandleProps} onCardClick={setSelectedCardId} />
+                        </div>
+                      );
+
+                      if (snapshot.isDragging || snapshot.isDropAnimating) {
+                        return ReactDOM.createPortal(child, document.body);
+                      }
+                      return child;
+                    }}
                   </Draggable>
                 ))}
                 {provided.placeholder}
@@ -269,13 +296,13 @@ const BoardPage = () => {
       )}
 
       {prefs.viewMode === 'list' && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ zoom: uiZoom } as React.CSSProperties}>
+        <div className="flex-1 overflow-hidden flex flex-col" style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
           <BoardListView boardId={board.id} onCardClick={setSelectedCardId} sortBy={prefs.sortBy as 'default' | 'priority' | 'assignee' | 'dueDate'} />
         </div>
       )}
 
       {prefs.viewMode === 'calendar' && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ zoom: uiZoom } as React.CSSProperties}>
+        <div className="flex-1 overflow-hidden flex flex-col" style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
           <BoardCalendarView boardId={board.id} onCardClick={setSelectedCardId} />
         </div>
       )}

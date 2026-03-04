@@ -3,6 +3,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { KanbanList, Card } from '@/types/kanban';
 import { MoreHorizontal, Plus, Trash2, GripVertical, Palette, Zap, ArrowRight, Archive, SmilePlus, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
+import ReactDOM from 'react-dom';
 import KanbanCardComponent from './KanbanCard';
 import { BOARD_COLORS } from '@/types/kanban';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
@@ -14,7 +15,7 @@ interface Props {
 }
 
 const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
-  const { cards, boards, addCard, deleteList, updateList, boardPreferences, labels, isDark } = useKanbanStore();
+  const { cards, boards, addCard, deleteList, updateList, boardPreferences, labels, isDark, uiZoom } = useKanbanStore();
   const prefs = boardPreferences[list.boardId] || { viewMode: 'kanban', sortBy: 'default' };
 
   const listCards = cards
@@ -49,8 +50,6 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
       }
       return a.position - b.position;
     });
-
-  const isDragDisabled = prefs.sortBy !== 'default';
 
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -312,21 +311,33 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
               className={`flex-1 min-h-[100px] h-full p-1.5 rounded-md flex flex-col gap-2 transition-colors duration-200 ${snapshot.isDraggingOver ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
             >
               {listCards.map((card, index) => (
-                <Draggable key={card.id} draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      {...provided.dragHandleProps}
-                      className={snapshot.isDragging ? 'shadow-2xl ring-2 ring-primary/50 relative z-50 rounded-md cursor-grabbing bg-card' : 'transition-[box-shadow] hover:shadow-md'}
-                      style={{
-                        ...provided.draggableProps.style,
-                        ...(snapshot.isDropAnimating && !snapshot.draggingOver ? { transitionDuration: '0.001s' } : {})
-                      }}
-                    >
-                      <KanbanCardComponent card={card} listColor={list.color} onClick={() => onCardClick(card.id)} />
-                    </div>
-                  )}
+                <Draggable key={card.id} draggableId={card.id} index={index}>
+                  {(provided, snapshot) => {
+                    const child = (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={snapshot.isDragging ? 'shadow-2xl ring-2 ring-primary/50 relative z-50 rounded-md cursor-grabbing bg-card' : 'transition-[box-shadow] hover:shadow-md'}
+                        style={{
+                          ...provided.draggableProps.style,
+                          // If dragging or dropping, scale back down by uiZoom so it visually matches the board zoom,
+                          // since portaling to document.body means it loses the ancestor scale
+                          ...((snapshot.isDragging || snapshot.isDropAnimating) && uiZoom !== 1 ? { transform: `${provided.draggableProps.style?.transform} scale(${uiZoom})`, transformOrigin: 'top left' } : {}),
+                          // Disable the drop animation jump when portaling back into a scaled container
+                          ...((snapshot.isDropAnimating || snapshot.isDragging) ? { transitionDuration: '0.001s' } : {})
+                        }}
+                      >
+                        <KanbanCardComponent card={card} listColor={list.color} onClick={() => onCardClick(card.id)} />
+                      </div>
+                    );
+
+                    // Keep it in the portal even during drop animation to avoid it jumping back to the scaled DOM unscaled
+                    if (snapshot.isDragging || snapshot.isDropAnimating) {
+                      return ReactDOM.createPortal(child, document.body);
+                    }
+                    return child;
+                  }}
                 </Draggable>
               ))}
               {provided.placeholder}

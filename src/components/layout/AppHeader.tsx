@@ -19,6 +19,7 @@ const AppHeader = () => {
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
+  const isAdminModule = location.pathname.startsWith('/company');
 
   const searchResults = searchQuery.trim() ? (isCompanyModule ? {
     companies: companies.filter(c => !c.trashed && (
@@ -26,15 +27,23 @@ const AppHeader = () => {
       (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(searchQuery.toLowerCase())) ||
       c.cnpj.includes(searchQuery)
     )).slice(0, 8),
-    cards: [], boards: [], folders: [], lists: [], budgets: []
+    mainCompanies: [], cards: [], boards: [], folders: [], lists: [], budgets: []
   } : isBudgetModule ? {
     budgets: budgets.filter(b => !b.trashed && (
       b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       companies.find(c => c.id === (b as any).companyId)?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
       companies.find(c => c.id === (b as any).companyId)?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase())
     )).slice(0, 8),
-    cards: [], boards: [], folders: [], lists: [], companies: []
+    mainCompanies: [], cards: [], boards: [], folders: [], lists: [], companies: []
+  } : isAdminModule ? {
+    mainCompanies: useKanbanStore.getState().mainCompanies.filter(c =>
+      c.razaoSocial.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      c.cnpj.includes(searchQuery)
+    ).slice(0, 8),
+    companies: [], cards: [], boards: [], folders: [], lists: [], budgets: []
   } : {
+    mainCompanies: [],
     companies: [],
     budgets: [],
     cards: cards.filter(c => !c.archived && !c.trashed && (c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.description?.toLowerCase().includes(searchQuery.toLowerCase()))).slice(0, 5),
@@ -99,15 +108,31 @@ const AppHeader = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onBlur={() => setTimeout(() => { setSearchOpen(false); setSearchQuery(''); }, 200)}
-              placeholder={isCompanyModule ? "Buscar empresas por nome ou CNPJ..." : "Buscar quadros, pastas, cartões..."}
+              placeholder={isCompanyModule ? "Buscar empresas por nome ou CNPJ..." : isBudgetModule ? "Buscar orçamentos..." : isAdminModule ? "Buscar administradoras..." : "Buscar quadros, pastas, cartões..."}
               className="w-full bg-primary/10 border-none rounded px-3 py-1.5 text-xs outline-none placeholder:text-kanban-header-foreground/50"
             />
             {searchResults && (
               <div className="absolute top-full mt-2 left-0 right-0 max-h-[80vh] overflow-y-auto bg-popover border border-border shadow-lg rounded-md p-2 z-50 text-foreground custom-scrollbar">
-                {searchResults.cards.length === 0 && searchResults.boards.length === 0 && searchResults.folders.length === 0 && searchResults.lists.length === 0 && searchResults.companies.length === 0 && searchResults.budgets.length === 0 ? (
+                {searchResults.cards.length === 0 && searchResults.boards.length === 0 && searchResults.folders.length === 0 && searchResults.lists.length === 0 && searchResults.companies.length === 0 && searchResults.budgets.length === 0 && searchResults.mainCompanies?.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhum resultado encontrado.</p>
                 ) : (
                   <>
+                    {searchResults.mainCompanies && searchResults.mainCompanies.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase px-2 mb-1">Administradoras</p>
+                        {searchResults.mainCompanies.map(c => (
+                          <button key={c.id} onClick={() => navigate(`/company?id=${c.id}`)} className="w-full text-left px-2 py-2 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
+                            <div className="shrink-0 p-1.5 bg-primary/10 rounded flex items-center justify-center text-primary">
+                              <Building2 className="h-3 w-3" />
+                            </div>
+                            <div className="flex flex-col gap-0.5 overflow-hidden">
+                              <span className="font-bold truncate">{c.nomeFantasia || c.razaoSocial} {c.isDefault && '(Padrão)'}</span>
+                              <span className="text-[10px] text-muted-foreground truncate">{c.cnpj}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {searchResults.folders.length > 0 && (
                       <div className="mb-2">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase px-2 mb-1">Pastas</p>
@@ -202,14 +227,16 @@ const AppHeader = () => {
       </div>
 
       <div className="flex items-center gap-1.5 mr-2 border-r border-border/50 pr-2">
-        {!isCompanyModule && (
+        {!isCompanyModule && !isAdminModule && (
           <button onClick={() => setShowGlobalArchiveViewer('archived')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-accent" title="Pastas, Boards e Orçamentos Arquivados">
             <Archive className="h-4 w-4" />
           </button>
         )}
-        <button onClick={() => setShowGlobalArchiveViewer('trashed')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-destructive" title="Lixeira">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {!isAdminModule && (
+          <button onClick={() => setShowGlobalArchiveViewer('trashed')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-destructive" title="Lixeira">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="relative">

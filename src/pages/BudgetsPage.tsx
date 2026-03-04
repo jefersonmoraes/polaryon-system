@@ -4,7 +4,7 @@ import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
     Trash2, Edit, Building2, Calendar, FileText, FolderOpen,
-    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck
+    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,7 +26,6 @@ const statusIcons: Record<BudgetStatus, React.ReactNode> = {
 const typeStyles: Record<BudgetType, string> = {
     Produto: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
     Serviço: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-    Frete: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
 };
 
 const BudgetsPage = () => {
@@ -111,7 +110,7 @@ const BudgetsPage = () => {
 
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar shrink-0">
                         <div className="flex bg-background border border-border rounded-lg p-1">
-                            {(['Todos', 'Produto', 'Serviço', 'Frete'] as const).map(type => (
+                            {(['Todos', 'Produto', 'Serviço'] as const).map(type => (
                                 <button
                                     key={type}
                                     onClick={() => setTypeFilter(type)}
@@ -275,7 +274,7 @@ const BudgetsPage = () => {
                                         </div>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Melhor Cotação</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5 mt-2">Melhor Cotação</p>
                                         {(() => {
                                             if (!budget.items || budget.items.length === 0) {
                                                 return <p className="font-bold text-muted-foreground text-sm leading-none tracking-tight">R$ 0,00</p>;
@@ -283,21 +282,26 @@ const BudgetsPage = () => {
                                             const winningQuotation = [...budget.items].sort((a, b) => {
                                                 if (a.isFavorite && !b.isFavorite) return -1;
                                                 if (!a.isFavorite && b.isFavorite) return 1;
-                                                return (a.totalPrice || 0) - (b.totalPrice || 0);
+                                                const aPrice = a.finalSellingPrice || a.totalPrice || 0;
+                                                const bPrice = b.finalSellingPrice || b.totalPrice || 0;
+                                                return aPrice - bPrice;
                                             })[0];
+
+                                            const bestProfit = (winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0) - (winningQuotation.totalPrice || 0) - (winningQuotation.taxValue || 0) - (winningQuotation.difalValue || 0);
 
                                             return (
                                                 <div className="flex flex-col items-end">
-                                                    {winningQuotation.isFavorite && (
-                                                        <span className="text-[9px] text-yellow-600 dark:text-yellow-500 font-bold bg-yellow-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5 mb-1" title="Cotação Favorita">
-                                                            ★ Favorita
+                                                    {(bestProfit > 0) && (
+                                                        <span className="text-[10px] uppercase font-bold text-green-600 bg-green-500/10 px-2 rounded mb-1 border border-green-500/20" title="Lucro Bruto da Empresa nesta cotação">
+                                                            LUCRO EMPRESA: {formatCurrency(bestProfit)}
                                                         </span>
                                                     )}
-                                                    <p className="font-bold text-green-600 dark:text-green-400 text-lg leading-none tracking-tight">
-                                                        {formatCurrency(winningQuotation.totalPrice || 0)}
+                                                    <p className="font-bold text-primary flex items-center gap-1 text-base leading-none tracking-tight">
+                                                        <DollarSign className="h-4 w-4" />
+                                                        {formatCurrency(winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0)}
                                                     </p>
-                                                    <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-[120px]" title={getCompanyName(winningQuotation.companyId)}>
-                                                        {getCompanyName(winningQuotation.companyId)}
+                                                    <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5">
+                                                        {companies.find(c => c.id === winningQuotation.companyId)?.nome_fantasia || winningQuotation.companyId || 'Sem Empresa'}
                                                     </span>
                                                 </div>
                                             );
@@ -310,13 +314,15 @@ const BudgetsPage = () => {
                 )}
             </div>
 
-            {isModalOpen && (
-                <BudgetModal
-                    budget={selectedBudget}
-                    onClose={() => setIsModalOpen(false)}
-                />
-            )}
-        </div>
+            {
+                isModalOpen && (
+                    <BudgetModal
+                        budget={selectedBudget}
+                        onClose={() => setIsModalOpen(false)}
+                    />
+                )
+            }
+        </div >
     );
 };
 

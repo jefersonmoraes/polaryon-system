@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem } from '@/types/kanban';
+import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company, MainCompanyProfile } from '@/types/kanban';
 import {
     X, Plus, Calculator, Trash2, Building2, Calendar, FileText,
-    CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp
+    CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp, MapPin, DollarSign, Percent, Star, AlertTriangle
 } from 'lucide-react';
+import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 
 interface BudgetModalProps {
     budget?: Budget;
@@ -26,41 +27,141 @@ const statusIcons: Record<BudgetStatus, React.ReactNode> = {
 };
 
 interface QuotationItemCardProps {
-    item: any;
-    idx: number;
-    updateItem: (id: string, field: string, value: any) => void;
+    item: BudgetItem;
+    budgetType: 'Produto' | 'Serviço' | 'Frete'; // Passed from parent
+    totalQuotes: number;
+    highestCost: number;
+    lowestCost: number;
+    companies: Company[];
+    mainCompanies: MainCompanyProfile[];
+    updateItem: (id: string, field: keyof BudgetItem, value: any) => void;
     removeItem: (id: string) => void;
     cloneItem: (id: string) => void;
     formatCurrency: (val: number) => string;
-    companies: any[];
 }
 
-const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, formatCurrency, companies }: QuotationItemCardProps) => {
+const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency }) => {
+    const { routes } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
+    const [selectedSupplierArea, setSelectedSupplierArea] = useState<string | null>(null);
+    const [selectedTransporterRoute, setSelectedTransporterRoute] = useState<string | null>(null);
     const [isSupplierOpen, setIsSupplierOpen] = useState(false);
     const [isTransporterOpen, setIsTransporterOpen] = useState(false);
+    const [isAdminOpen, setIsAdminOpen] = useState(false);
+    const [isUfOpen, setIsUfOpen] = useState(false);
+    const [isTaxTooltipOpen, setIsTaxTooltipOpen] = useState(false); // Novo state para o balão de impostos
+    const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
 
     // Inicia recolhido como padrão
     const [isExpanded, setIsExpanded] = useState(false);
 
     const supRef = useRef<HTMLDivElement>(null);
     const transRef = useRef<HTMLDivElement>(null);
+    const adminRef = useRef<HTMLDivElement>(null);
+    const ufRef = useRef<HTMLDivElement>(null);
+    const taxRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
+    const difalRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (supRef.current && !supRef.current.contains(event.target as Node)) setIsSupplierOpen(false);
             if (transRef.current && !transRef.current.contains(event.target as Node)) setIsTransporterOpen(false);
+            if (adminRef.current && !adminRef.current.contains(event.target as Node)) setIsAdminOpen(false);
+            if (ufRef.current && !ufRef.current.contains(event.target as Node)) setIsUfOpen(false);
+            if (taxRef.current && !taxRef.current.contains(event.target as Node)) setIsTaxTooltipOpen(false);
+            if (difalRef.current && !difalRef.current.contains(event.target as Node)) setIsDifalTooltipOpen(false);
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const filteredSuppliers = companies.filter(c => !c.trashed && c.type === 'Fornecedor' &&
-        (c.nome_fantasia?.toLowerCase().includes(supplierSearch.toLowerCase()) || c.razao_social.toLowerCase().includes(supplierSearch.toLowerCase())));
+    const filteredSuppliers = companies
+        .filter(c => {
+            if (c.trashed || c.type !== 'Fornecedor') return false;
+            if (selectedSupplierArea && !(c.areasAtuacao || []).includes(selectedSupplierArea)) return false;
+            if (!supplierSearch) return true;
 
-    const filteredTransporters = companies.filter(c => !c.trashed && c.type === 'Transportadora' &&
-        (c.nome_fantasia?.toLowerCase().includes(transporterSearch.toLowerCase()) || c.razao_social.toLowerCase().includes(transporterSearch.toLowerCase())));
+            const term = supplierSearch.toLowerCase();
+            const matchesText = c.nome_fantasia?.toLowerCase().includes(term) ||
+                c.razao_social.toLowerCase().includes(term) ||
+                c.cnpj?.includes(supplierSearch.replace(/\D/g, '')) ||
+                c.municipio?.toLowerCase().includes(term) ||
+                c.uf?.toLowerCase().includes(term);
+
+            const matchesAreas = c.areasAtuacao?.some(area => area.toLowerCase().includes(term)) || false;
+
+            return matchesText || matchesAreas;
+        })
+        .sort((a, b) => {
+            // 1. Favorites first
+            if (a.isFavorite && !b.isFavorite) return -1;
+            if (!a.isFavorite && b.isFavorite) return 1;
+
+            // 2. Highest Rating second
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            if (ratingA !== ratingB) return ratingB - ratingA;
+
+            // 3. Alphabetical order last
+            const nameA = a.nome_fantasia || a.razao_social;
+            const nameB = b.nome_fantasia || b.razao_social;
+            return nameA.localeCompare(nameB);
+        });
+
+    const filteredTransporters = companies
+        .filter(c => {
+            if (c.trashed || c.type !== 'Transportadora') return false;
+
+            if (selectedTransporterRoute) {
+                const routeObj = routes.find(r => r.name === selectedTransporterRoute);
+                if (!routeObj || !routeObj.transporterIds.includes(c.id)) return false;
+            }
+
+            if (!transporterSearch) return true;
+
+            const term = transporterSearch.toLowerCase();
+            const matchesText = c.nome_fantasia?.toLowerCase().includes(term) ||
+                c.razao_social.toLowerCase().includes(term) ||
+                c.cnpj?.includes(transporterSearch.replace(/\D/g, '')) ||
+                c.municipio?.toLowerCase().includes(term) ||
+                c.uf?.toLowerCase().includes(term);
+
+            const transporterRoutes = routes.filter(r => r.transporterIds.includes(c.id)).map(r => r.name);
+            const matchesRoutes = transporterRoutes.some(area => area.toLowerCase().includes(term));
+
+            return matchesText || matchesRoutes;
+        })
+        .sort((a, b) => {
+            // 1. Favorites first
+            if (a.isFavorite && !b.isFavorite) return -1;
+            if (!a.isFavorite && b.isFavorite) return 1;
+
+            // 2. Highest Rating second
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            if (ratingA !== ratingB) return ratingB - ratingA;
+
+            // 3. Alphabetical order last
+            const nameA = a.nome_fantasia || a.razao_social;
+            const nameB = b.nome_fantasia || b.razao_social;
+            return nameA.localeCompare(nameB);
+        });
+
+    // Get Active Admin companies
+    const adminCompanies = mainCompanies;
+    const defaultAdmin = adminCompanies.find(c => c.isDefault) || adminCompanies[0];
+    const selectedAdmin = adminCompanies.find(c => c.id === item.mainCompanyId);
+    const adminLabel = selectedAdmin
+        ? `${selectedAdmin.nomeFantasia || selectedAdmin.razaoSocial} ${selectedAdmin.isDefault ? '(Padrão)' : ''}`
+        : "Selecione Administradora...";
+
+    // Auto-select Admin if missing (Defaults to the Default Admin Company)
+    useEffect(() => {
+        if (!item.mainCompanyId && defaultAdmin) {
+            updateItem(item.id, 'mainCompanyId', defaultAdmin.id);
+        }
+    }, [item.mainCompanyId, defaultAdmin, item.id, updateItem]);
 
     const supplierParams = companies.find(c => c.id === item.companyId);
     const supplierName = supplierParams ? (supplierParams.nome_fantasia || supplierParams.razao_social) : "Sem fornecedor";
@@ -77,7 +178,16 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
         updateItem(item.id, 'items', newItems);
     };
 
-    const recalculateTotal = (currentItems: QuotationSubItem[], freight: number, discountPercent: number, isDiscountActive: boolean) => {
+    const recalculateTotal = useCallback((
+        currentItems: QuotationSubItem[],
+        freight: number,
+        discountPercent: number,
+        isDiscountActive: boolean,
+        adminId?: string,
+        destState?: string,
+        marginPercent?: number,
+        installmentsCost: number = 0 // Stubbing backwards compatibility
+    ) => {
         const productsTotal = currentItems.reduce((sum: number, sub: any) => sum + (sub.totalPrice || 0), 0);
         let baseTotal = productsTotal + freight;
 
@@ -85,9 +195,140 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
             baseTotal -= baseTotal * (discountPercent / 100);
         }
 
-        // Corrige bugs de Float Javascript impedindo ficar negativo
-        return Math.max(0, baseTotal);
-    };
+        // 1. Calculate Base Cost before taxes
+        let cost = Math.max(0, baseTotal);
+
+        // 2. Identify Admin Company and Calculate Taxes
+        let difalPercent = 0;
+        let taxRate = 0;
+        let adminP = { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0 };
+        let breakdown = { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, total: 0 };
+        let difalBreakdown = null;
+
+        const adminCompany = mainCompanies.find(c => c.id === adminId);
+
+        if (adminCompany) {
+            // DIFAL (only for Products logically, but system allows configuration)
+            // Reativado para Simples Nacional/MEI conforme pedido do usuário (ignorando ADI 5464 por opção estratégica/conservadora).
+            const isSimplesOrMei = adminCompany.porte === 'MEI' || adminCompany.taxRegime === 'Simples Nacional';
+            if (budgetType === 'Produto' && adminCompany.state && destState && adminCompany.state !== destState) {
+                const difalDetails = calculateDifalDetailed(adminCompany.state, destState);
+                if (difalDetails && difalDetails.percent > 0) {
+                    difalPercent = difalDetails.percent;
+                    difalBreakdown = difalDetails;
+                }
+            }
+
+            // Normal Taxes if NOT MEI
+            if (adminCompany.porte !== 'MEI') {
+                // Apply specific rule: Services pay ISS, Products pay ICMS and IPI
+                const isService = budgetType === 'Serviço';
+
+                adminP.pis = adminCompany.pis || 0;
+                adminP.cofins = adminCompany.cofins || 0;
+                adminP.csll = adminCompany.csll || 0;
+                adminP.irpj = adminCompany.irpj || 0;
+                adminP.cpp = adminCompany.cpp || 0;
+
+                adminP.iss = isService ? (adminCompany.iss || 0) : 0;
+                adminP.icms = !isService ? (adminCompany.icms || 0) : 0;
+                adminP.ipi = !isService ? (adminCompany.ipi || 0) : 0;
+
+                taxRate = adminP.pis + adminP.cofins + adminP.csll + adminP.irpj + adminP.cpp + adminP.iss + adminP.icms + adminP.ipi;
+            }
+        }
+
+        // Custo Efetivo de Aquisição/Transferência: (DIFAL is now treated as sales tax out of Gross Revenue)
+        const effectiveCost = cost;
+
+        // 3. Aplicação do Markup Divisor Contábil Real (Preço de Venda)
+        // O imposto no Brasil (Simples/Presumido e DIFAL EC 87/15) recai sobre o RECEITA BRUTA (Preço Final), não sobre Custo.
+        // Formula: Preço = Custo / (1 - (AlíquotaImposto% + AliquotaDIFAL% + MargemLucro%) / 100)
+
+        let finalPrice = effectiveCost;
+        // The fixed cost allocation is a vital metric; if not provided, assume 0 for exact cost mode.
+        const fixedCostsRate = 0; // In future updates, we can let user input this. For now, it secures the parameter.
+        const totalDeductionPercent = taxRate + difalPercent + fixedCostsRate + (marginPercent || 0);
+
+        if (totalDeductionPercent > 0 && totalDeductionPercent < 100) {
+            finalPrice = effectiveCost / (1 - (totalDeductionPercent / 100));
+        } else if (totalDeductionPercent >= 100) {
+            // Safety against division by zero or negative pricing
+            finalPrice = effectiveCost; // Fallback
+        }
+
+        // 4. Agora calculamos o valor Nominal dos impostos a partir do Preço Final
+        let taxNominal = 0;
+        let difalNominal = 0;
+
+        if (difalPercent > 0) {
+            difalNominal = finalPrice * (difalPercent / 100);
+        }
+
+        if (taxRate > 0) {
+            taxNominal = finalPrice * (taxRate / 100);
+
+            breakdown = {
+                pis: finalPrice * (adminP.pis / 100),
+                cofins: finalPrice * (adminP.cofins / 100),
+                csll: finalPrice * (adminP.csll / 100),
+                irpj: finalPrice * (adminP.irpj / 100),
+                cpp: finalPrice * (adminP.cpp / 100),
+                iss: finalPrice * (adminP.iss / 100),
+                icms: finalPrice * (adminP.icms / 100),
+                ipi: finalPrice * (adminP.ipi / 100),
+                total: taxNominal
+            };
+        }
+
+        return { cost: effectiveCost, taxNominal, difalNominal, finalPrice, breakdown, difalBreakdown };
+    }, [budgetType, mainCompanies]);
+
+    const flushRecalculation = useCallback((
+        subItems: QuotationSubItem[],
+        freight: number,
+        discountOpt: boolean,
+        discountValue: number,
+        adminId: string | undefined,
+        destState: string | undefined,
+        margin: number | undefined
+    ) => {
+        const result = recalculateTotal(
+            subItems, freight, discountValue, discountOpt, adminId, destState, margin
+        );
+
+        // Use setTimeout to avoid state update batching issues if called rapidly
+        setTimeout(() => {
+            updateItem(item.id, 'totalPrice', result.cost); // The historical "totalPrice" now maps to Base Cost
+            updateItem(item.id, 'taxValue', result.taxNominal);
+            updateItem(item.id, 'difalValue', result.difalNominal);
+            updateItem(item.id, 'taxesBreakdown', result.breakdown);
+            updateItem(item.id, 'finalSellingPrice', result.finalPrice);
+            updateItem(item.id, 'difalBreakdown', result.difalBreakdown || undefined);
+        }, 0);
+    }, [item.id, updateItem, recalculateTotal]);
+
+    // Effect to trigger recalculation when relevant item properties change
+    useEffect(() => {
+        flushRecalculation(
+            item.items || [],
+            Number(item.freightValue || 0),
+            !!item.hasCashDiscount,
+            Number(item.cashDiscount || 0),
+            item.mainCompanyId,
+            item.destinationState,
+            item.profitMargin
+        );
+    }, [
+        item.items,
+        item.freightValue,
+        item.hasCashDiscount,
+        item.cashDiscount,
+        item.mainCompanyId,
+        item.destinationState,
+        item.profitMargin,
+        flushRecalculation
+    ]);
 
     const updateSubItem = (subId: string, field: string, value: any) => {
         const newItems = (item.items || []).map((sub: any) => {
@@ -102,69 +343,35 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
         });
 
         updateItem(item.id, 'items', newItems);
-
-        const newTotal = recalculateTotal(
-            newItems,
-            Number(item.freightValue || 0),
-            Number(item.cashDiscount || 0),
-            !!item.hasCashDiscount
-        );
-        setTimeout(() => { updateItem(item.id, 'totalPrice', newTotal); }, 0);
+        // flushRecalculation will be triggered by the useEffect above
     };
 
     const handleFreightChange = (newFreightValue: string) => {
         const numericFreight = Number(newFreightValue);
         updateItem(item.id, 'freightValue', numericFreight);
-
-        const newTotal = recalculateTotal(
-            item.items || [],
-            numericFreight,
-            Number(item.cashDiscount || 0),
-            !!item.hasCashDiscount
-        );
-        setTimeout(() => updateItem(item.id, 'totalPrice', newTotal), 0);
+        // flushRecalculation will be triggered by the useEffect above
     };
 
     const removeSubItem = (subId: string) => {
         const newItems = (item.items || []).filter((sub: any) => sub.id !== subId);
         updateItem(item.id, 'items', newItems);
-
-        const newTotal = recalculateTotal(
-            newItems,
-            Number(item.freightValue || 0),
-            Number(item.cashDiscount || 0),
-            !!item.hasCashDiscount
-        );
-        setTimeout(() => { updateItem(item.id, 'totalPrice', newTotal); }, 0);
+        // flushRecalculation will be triggered by the useEffect above
     };
 
     // Helper to generic field update that impacts Total
     const handleFieldChangeImpactingTotal = (field: keyof BudgetItem, value: any) => {
         updateItem(item.id, field, value);
-
-        // Crie um clone virtual da proposta simulando o campo atualizado para injetar no recalculo
-        const virtualItem = { ...item, [field]: value };
-
-        const newTotal = recalculateTotal(
-            virtualItem.items || [],
-            Number(virtualItem.freightValue || 0),
-            Number(virtualItem.cashDiscount || 0),
-            !!virtualItem.hasCashDiscount
-        );
-        setTimeout(() => { updateItem(item.id, 'totalPrice', newTotal); }, 0);
+        // flushRecalculation will be triggered by the useEffect above
     }
 
     return (
-        <div className="bg-secondary/30 rounded-xl border border-border group relative flex flex-col transition-all overflow-hidden">
+        <div className="bg-secondary/30 rounded-xl border border-border group relative flex flex-col transition-all">
             {/* ... Header and Toggle are unchanged ... */}
             <div
                 className={`p-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between cursor-pointer hover:bg-secondary/50 transition-colors ${isExpanded ? 'border-b border-border/50 bg-secondary/20' : ''}`}
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-muted-foreground bg-secondary px-2 py-1 rounded">
-                        #{String(idx + 1).padStart(2, '0')}
-                    </span>
                     <div>
                         <h4 className="text-sm font-semibold flex items-center gap-2">
                             <button
@@ -189,9 +396,66 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                     </div>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-border/50 sm:border-0">
-                    <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground block">Total Fornecedor</span>
-                        <span className="text-sm font-mono font-bold text-primary">{formatCurrency(item.totalPrice || 0)}</span>
+                    <div className="text-right flex flex-col items-end mr-4 border-r border-border/50 pr-4">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground block">Custo Fornecedor</span>
+                        <span className="text-sm font-mono font-medium text-muted-foreground">{formatCurrency(item.totalPrice || 0)}</span>
+                        {(() => {
+                            const cost = item.totalPrice || 0;
+                            const sell = item.finalSellingPrice || cost;
+                            if (cost > 0) {
+                                const markup = ((sell / cost) - 1) * 100;
+                                // Se a empresa tem muitos impostos, um markup baixo vai gerar lucro negativo. 
+                                // O limiar conservador é de 30% para revenda com NF, mas deixamos 20% de base.
+                                const isBad = markup < 20;
+                                return (
+                                    <div className="flex items-center gap-1 mt-0.5" title={isBad ? "Atenção: Mark-up muito baixo (abaixo de 20%)! O Risco de Prejuízo devido a impostos é alto." : "Mark-up aplicado sobre o Custo Efetivo"}>
+                                        <span className="text-[8px] uppercase font-bold text-muted-foreground mt-0.5">Mark-Up:</span>
+                                        <span className={`text-[10px] font-mono font-bold flex items-center gap-0.5 ${isBad ? 'text-red-500' : 'text-green-600'}`}>
+                                            {markup.toFixed(1)}%
+                                            {isBad && <AlertTriangle className="h-2.5 w-2.5" />}
+                                        </span>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
+                    <div className="text-right flex flex-col items-end">
+                        <span className="text-[11px] uppercase font-bold text-primary block">Preço Final (Venda)</span>
+                        <div className="flex items-center gap-2">
+                            {(() => {
+                                // FIXED BUG: item.totalPrice already includes DIFAL as part of the Effective Cost.
+                                // Subtracting it again would lead to double deduction.
+                                // NOTE: In the latest accounting fix, DIFAL was moved out of effective cost and calculated over the final sale price.
+                                const sell = item.finalSellingPrice || item.totalPrice || 0;
+                                const cost = item.totalPrice || 0;
+                                const itemProfit = sell - cost - (item.taxValue || 0) - (item.difalValue || 0);
+
+                                if (sell > 0) {
+                                    const netMargin = (itemProfit / sell) * 100;
+                                    const isLoss = itemProfit < 0;
+                                    const isLowMargin = netMargin < 10 && !isLoss;
+
+                                    let colorClass = 'text-green-600 bg-green-500/10 border-green-500/20';
+                                    if (isLoss) colorClass = 'text-red-600 bg-red-500/10 border-red-500/20';
+                                    else if (isLowMargin) colorClass = 'text-orange-600 bg-orange-500/10 border-orange-500/20';
+
+                                    return (
+                                        <div
+                                            className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${colorClass}`}
+                                            title={isLoss ? "PREJUÍZO TRIBUTÁRIO DETECTADO!" : "Margem de Lucro Líquida Real (Após Impostos)"}
+                                        >
+                                            {isLoss ? <AlertTriangle className="h-3 w-3" /> : null}
+                                            <span>
+                                                {isLoss ? 'PREJUÍZO: ' : 'LUCRO: '} {formatCurrency(itemProfit)} ({netMargin.toFixed(1)}%)
+                                            </span>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            <span className="text-base font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">{formatCurrency(item.finalSellingPrice || item.totalPrice || 0)}</span>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         {item.isFavorite && (
@@ -211,13 +475,181 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                 <div className="p-4 flex flex-col gap-5 animate-in fade-in slide-in-from-top-2 duration-200">
 
                     {/* Basic Companies Link */}
+
+                    {/* --- PARAMS BOX: ADMIN, STATE AND MARGIN --- */}
+                    <div className="bg-card border border-border/60 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end shadow-sm mb-2">
+
+                        <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[60]" ref={adminRef}>
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-muted-foreground">
+                                <Building2 className="h-3 w-3" /> Administradora Local
+                            </label>
+                            <button
+                                onClick={() => setIsAdminOpen(!isAdminOpen)}
+                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground"
+                            >
+                                <span className="truncate">
+                                    {adminLabel}
+                                </span>
+                                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+                            {isAdminOpen && (
+                                <div className="absolute z-[100] top-[calc(100%+4px)] left-0 w-full min-w-[200px] bg-popover border border-border rounded-lg shadow-lg">
+                                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                        {adminCompanies.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma encontrada</div>}
+                                        {adminCompanies.map(c => (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => { handleFieldChangeImpactingTotal('mainCompanyId', c.id); setIsAdminOpen(false); }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors hover:bg-secondary truncate ${item.mainCompanyId === c.id ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                                            >
+                                                {c.nomeFantasia || c.razaoSocial} {c.isDefault ? '(Padrão)' : ''}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[60]" ref={ufRef}>
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-muted-foreground">
+                                <MapPin className="h-3 w-3" /> UF Destino (DIFAL)
+                            </label>
+                            <button
+                                onClick={() => setIsUfOpen(!isUfOpen)}
+                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground"
+                            >
+                                <span className="truncate">
+                                    {item.destinationState
+                                        ? STATES.find(s => s.short === item.destinationState)?.name
+                                        : "Sem Destino (Isento)"}
+                                </span>
+                                <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+                            </button>
+
+                            {isUfOpen && (
+                                <div className="absolute z-[100] top-[calc(100%+4px)] left-0 w-full min-w-[200px] bg-popover border border-border rounded-lg shadow-lg">
+                                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                        <button
+                                            onClick={() => { handleFieldChangeImpactingTotal('destinationState', undefined); setIsUfOpen(false); }}
+                                            className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors hover:bg-secondary truncate ${!item.destinationState ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                                        >
+                                            Sem Destino (Isento)
+                                        </button>
+                                        {STATES.map(st => (
+                                            <button
+                                                key={st.short}
+                                                onClick={() => { handleFieldChangeImpactingTotal('destinationState', st.short); setIsUfOpen(false); }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors hover:bg-secondary truncate ${item.destinationState === st.short ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                                            >
+                                                {st.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5 flex flex-col justify-end h-full relative">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-primary">
+                                <Percent className="h-3 w-3" /> MARGEM DE LUCRO
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="99.9"
+                                    step="0.1"
+                                    value={item.profitMargin || ''}
+                                    onChange={e => {
+                                        let val = Number(e.target.value);
+                                        if (val >= 100) val = 99.9; // Prevent division by zero
+                                        if (val < 0) val = 0;
+                                        handleFieldChangeImpactingTotal('profitMargin', val);
+                                    }}
+                                    className="w-full bg-primary/10 border-primary/30 text-primary font-bold rounded text-xs pr-6 pl-2 py-1.5 focus:ring-1 focus:ring-primary/50 outline-none"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">%</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-end justify-center h-full gap-0.5 mt-2 sm:mt-0 z-0 relative">
+                            {(item.difalValue || 0) > 0 && (
+                                <div className="w-full relative" ref={difalRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsDifalTooltipOpen(!isDifalTooltipOpen)}
+                                        className="text-[10px] font-bold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded w-full text-right cursor-pointer hover:bg-orange-500/20 transition-colors"
+                                        title="Clique para ver Detalhes do DIFAL Aplicado"
+                                    >
+                                        + DIFAL: {formatCurrency(item.difalValue || 0)}
+                                    </button>
+
+                                    {/* DIFAL Tooltip Click Breakdown */}
+                                    <div className={`absolute right-0 bottom-full mb-1 w-48 bg-popover border border-border rounded-lg shadow-xl p-2 text-[10px] space-y-1 transition-opacity z-50 ${isDifalTooltipOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                                        <div className="font-bold text-muted-foreground pb-1 border-b border-border mb-1">Cálculo DIFAL</div>
+                                        {item.difalBreakdown && (
+                                            <>
+                                                <div className="flex justify-between"><span>Origem ({item.difalBreakdown.origin})</span> <span>{item.difalBreakdown.interstate.toFixed(1)}%</span></div>
+                                                <div className="flex justify-between"><span>Destino ({item.difalBreakdown.destination})</span> <span>{item.difalBreakdown.internal.toFixed(1)}%</span></div>
+                                                <div className="flex justify-between font-bold pt-1 mt-1 border-t border-border/50 text-orange-500">
+                                                    <span>Diferença Aplicada</span> <span>{item.difalBreakdown.percent.toFixed(1)}%</span>
+                                                </div>
+                                                <div className="flex justify-between text-muted-foreground text-[9px] pt-1">
+                                                    <span>Sobre Custo Base</span> <span>{formatCurrency(item.difalValue / (item.difalBreakdown.percent / 100))}</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {(item.taxValue || 0) > 0 && (
+                                <div className="w-full relative" ref={taxRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsTaxTooltipOpen(!isTaxTooltipOpen)}
+                                        className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded w-full text-right cursor-pointer hover:bg-red-500/20 transition-colors"
+                                        title="Clique para ver Detalhes dos Impostos sobre Venda"
+                                    >
+                                        + NFs/Imposto: {formatCurrency(item.taxValue || 0)}
+                                    </button>
+
+                                    {/* Tooltip Click Breakdown */}
+                                    <div className={`absolute right-0 bottom-full mb-1 w-48 bg-popover border border-border rounded-lg shadow-xl p-2 text-[10px] space-y-1 transition-opacity z-50 ${isTaxTooltipOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                                        <div className="font-bold text-muted-foreground pb-1 border-b border-border mb-1">Detalhamento de Impostos</div>
+                                        {item.taxesBreakdown?.pis > 0 && <div className="flex justify-between"><span>PIS</span> <span>{formatCurrency(item.taxesBreakdown.pis)}</span></div>}
+                                        {item.taxesBreakdown?.cofins > 0 && <div className="flex justify-between"><span>COFINS</span> <span>{formatCurrency(item.taxesBreakdown.cofins)}</span></div>}
+                                        {item.taxesBreakdown?.csll > 0 && <div className="flex justify-between"><span>CSLL</span> <span>{formatCurrency(item.taxesBreakdown.csll)}</span></div>}
+                                        {item.taxesBreakdown?.irpj > 0 && <div className="flex justify-between"><span>IRPJ</span> <span>{formatCurrency(item.taxesBreakdown.irpj)}</span></div>}
+                                        {item.taxesBreakdown?.cpp > 0 && <div className="flex justify-between"><span>CPP</span> <span>{formatCurrency(item.taxesBreakdown.cpp)}</span></div>}
+                                        {item.taxesBreakdown?.iss > 0 && <div className="flex justify-between"><span>ISS</span> <span>{formatCurrency(item.taxesBreakdown.iss)}</span></div>}
+                                        {item.taxesBreakdown?.icms > 0 && <div className="flex justify-between"><span>ICMS</span> <span>{formatCurrency(item.taxesBreakdown.icms)}</span></div>}
+                                        {item.taxesBreakdown?.ipi > 0 && <div className="flex justify-between"><span>IPI</span> <span>{formatCurrency(item.taxesBreakdown.ipi)}</span></div>}
+                                        <div className="flex justify-between font-bold pt-1 mt-1 border-t border-border/50 text-red-500">
+                                            <span>TOTAL</span> <span>{formatCurrency(item.taxesBreakdown?.total || 0)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {(!item.taxValue && !item.difalValue) && (
+                                <p className="text-[10px] font-medium text-muted-foreground italic w-full text-right py-0.5">Sem encargos extras</p>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2 relative" ref={supRef}>
-                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-muted-foreground">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-muted-foreground mb-1">
                                 <span>Fornecedor</span>
-                                <div className="flex items-center gap-0.5" title="Avaliação da Empresa">
+                                <div className="flex items-center gap-1.5 bg-background/50 px-2 py-0.5 rounded-full border border-border/40" title="Avaliação da Empresa">
                                     {[1, 2, 3, 4, 5].map(star => (
-                                        <button key={star} onClick={() => updateItem(item.id, 'supplierRating', star)} className={`text-sm outline-none transition-colors hover:scale-110 ${item.supplierRating && item.supplierRating >= star ? 'text-yellow-500' : 'text-muted-foreground/30 hover:text-yellow-500/50'}`}>★</button>
+                                        <button
+                                            key={star}
+                                            onClick={() => updateItem(item.id, 'supplierRating', star)}
+                                            className={`outline-none transition-all p-0.5 hover:scale-125 ${item.supplierRating && item.supplierRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
+                                            title={`${star} Estrela${star > 1 ? 's' : ''}`}
+                                        >
+                                            <Star className="h-3.5 w-3.5 fill-current" />
+                                        </button>
                                     ))}
                                 </div>
                             </label>
@@ -229,29 +661,119 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                                 <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
                             </button>
                             {isSupplierOpen && (
-                                <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
-                                    <div className="p-2 border-b border-border flex items-center gap-2">
-                                        <Search className="h-4 w-4 text-muted-foreground opacity-50 shrink-0" />
-                                        <input autoFocus value={supplierSearch} onChange={e => setSupplierSearch(e.target.value)} placeholder="Buscar fornecedor..." className="w-full bg-transparent text-sm outline-none" />
-                                    </div>
-                                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                                        <button onClick={() => { updateItem(item.id, 'companyId', undefined); setIsSupplierOpen(false); }} className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary">Nenhum</button>
-                                        {filteredSuppliers.map(c => (
-                                            <button key={c.id} onClick={() => { updateItem(item.id, 'companyId', c.id); setIsSupplierOpen(false); }} className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary truncate">
-                                                {c.nome_fantasia || c.razao_social}
+                                <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden flex flex-col">
+                                    <div className="p-2.5 border-b border-border flex items-center gap-2 bg-muted/30">
+                                        <Search className="h-4 w-4 text-muted-foreground opacity-70 shrink-0" />
+                                        <input
+                                            autoFocus
+                                            value={supplierSearch}
+                                            onChange={e => setSupplierSearch(e.target.value)}
+                                            placeholder="Buscar por nome ou CNPJ..."
+                                            className="w-full bg-transparent text-sm placeholder:text-muted-foreground/60 outline-none"
+                                        />
+                                        {supplierSearch && (
+                                            <button onClick={() => setSupplierSearch('')} className="p-1 hover:bg-black/10 rounded-full transition-colors text-muted-foreground">
+                                                <X className="h-3 w-3" />
                                             </button>
-                                        ))}
+                                        )}
+                                    </div>
+                                    <div className="px-2.5 py-1.5 border-b border-border bg-muted/10 overflow-x-auto custom-scrollbar flex gap-1.5">
+                                        {Array.from(new Set(companies.filter(c => c.type === 'Fornecedor' && !c.trashed).flatMap(c => c.areasAtuacao || []))).sort().map(area => {
+                                            const isSelected = selectedSupplierArea === area;
+                                            return (
+                                                <button
+                                                    key={area}
+                                                    onClick={(e) => { e.preventDefault(); setSelectedSupplierArea(isSelected ? null : area); }}
+                                                    className={`shrink-0 text-[10px] px-2 py-1 rounded-full border transition-colors ${isSelected
+                                                        ? 'bg-primary text-primary-foreground border-primary'
+                                                        : 'bg-background hover:bg-secondary border-border/60 text-muted-foreground'}`}
+                                                >
+                                                    {area}
+                                                </button>
+                                            )
+                                        })}
+                                        {Array.from(new Set(companies.filter(c => c.type === 'Fornecedor' && !c.trashed).flatMap(c => c.areasAtuacao || []))).length === 0 && (
+                                            <span className="text-[10px] text-muted-foreground/50 italic py-1">Nenhuma área cadastrada</span>
+                                        )}
+                                    </div>
+                                    <div className="max-h-56 overflow-y-auto custom-scrollbar p-1.5 space-y-0.5">
+                                        <button
+                                            onClick={() => { updateItem(item.id, 'companyId', undefined); setIsSupplierOpen(false); }}
+                                            className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary/80 text-muted-foreground font-medium flex items-center gap-2"
+                                        >
+                                            <XCircle className="h-3.5 w-3.5 opacity-70" /> Nenhum Fornecedor
+                                        </button>
+
+                                        {filteredSuppliers.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhum fornecedor encontrado.</div>
+                                        ) : (
+                                            filteredSuppliers.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => { updateItem(item.id, 'companyId', c.id); setIsSupplierOpen(false); }}
+                                                    className={`w-full text-left px-3 py-2 rounded-md transition-all hover:bg-primary/5 border border-transparent hover:border-primary/20 flex flex-col gap-0.5 group ${c.isFavorite ? 'bg-primary/5 border-primary/10' : ''}`}
+                                                >
+                                                    <div className="flex justify-between items-start w-full gap-2">
+                                                        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                                            {c.nome_fantasia || c.razao_social}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {c.isFavorite && <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Destaque</span>}
+                                                            {c.rating ? (
+                                                                <div className="flex items-center gap-0.5 text-yellow-500">
+                                                                    <span className="text-xs font-bold leading-none">{c.rating}</span>
+                                                                    <Star className="h-2.5 w-2.5 fill-current" />
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5 w-full">
+                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground w-full">
+                                                            {c.cnpj && <span className="font-mono truncate">{c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}</span>}
+                                                            {(c.cnpj && c.municipio) && <span>•</span>}
+                                                            {c.municipio && <span className="truncate">{c.municipio} - {c.uf}</span>}
+                                                        </div>
+                                                        {c.areasAtuacao && c.areasAtuacao.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                {c.areasAtuacao.slice(0, 3).map((area, idx) => (
+                                                                    <span
+                                                                        key={idx}
+                                                                        onClick={(e) => { e.stopPropagation(); setSelectedSupplierArea(area); }}
+                                                                        className="text-[9px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded border border-border/50 hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer"
+                                                                        title="Filtrar por esta área"
+                                                                    >
+                                                                        {area}
+                                                                    </span>
+                                                                ))}
+                                                                {c.areasAtuacao.length > 3 && (
+                                                                    <span className="text-[9px] bg-secondary/50 text-muted-foreground px-1 py-0.5 rounded">
+                                                                        +{c.areasAtuacao.length - 3}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         <div className="space-y-2 relative" ref={transRef}>
-                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-muted-foreground">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-muted-foreground mb-1">
                                 <span>Transportadora</span>
-                                <div className="flex items-center gap-0.5" title="Avaliação da Transportadora">
+                                <div className="flex items-center gap-1.5 bg-background/50 px-2 py-0.5 rounded-full border border-border/40" title="Avaliação da Transportadora">
                                     {[1, 2, 3, 4, 5].map(star => (
-                                        <button key={star} onClick={() => updateItem(item.id, 'transporterRating', star)} className={`text-sm outline-none transition-colors hover:scale-110 ${item.transporterRating && item.transporterRating >= star ? 'text-yellow-500' : 'text-muted-foreground/30 hover:text-yellow-500/50'}`}>★</button>
+                                        <button
+                                            key={star}
+                                            onClick={() => updateItem(item.id, 'transporterRating', star)}
+                                            className={`outline-none transition-all p-0.5 hover:scale-125 ${item.transporterRating && item.transporterRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
+                                            title={`${star} Estrela${star > 1 ? 's' : ''}`}
+                                        >
+                                            <Star className="h-3.5 w-3.5 fill-current" />
+                                        </button>
                                     ))}
                                 </div>
                             </label>
@@ -267,18 +789,105 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                                 <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
                             </button>
                             {isTransporterOpen && (
-                                <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
-                                    <div className="p-2 border-b border-border flex items-center gap-2">
-                                        <Search className="h-4 w-4 text-muted-foreground opacity-50 shrink-0" />
-                                        <input autoFocus value={transporterSearch} onChange={e => setTransporterSearch(e.target.value)} placeholder="Buscar transportadora..." className="w-full bg-transparent text-sm outline-none" />
-                                    </div>
-                                    <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                                        <button onClick={() => { updateItem(item.id, 'transporterId', undefined); setIsTransporterOpen(false); }} className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary">Nenhuma</button>
-                                        {filteredTransporters.map(c => (
-                                            <button key={c.id} onClick={() => { updateItem(item.id, 'transporterId', c.id); setIsTransporterOpen(false); }} className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary truncate">
-                                                {c.nome_fantasia || c.razao_social}
+                                <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden flex flex-col">
+                                    <div className="p-2.5 border-b border-border flex items-center gap-2 bg-muted/30">
+                                        <Search className="h-4 w-4 text-muted-foreground opacity-70 shrink-0" />
+                                        <input
+                                            autoFocus
+                                            value={transporterSearch}
+                                            onChange={e => setTransporterSearch(e.target.value)}
+                                            placeholder="Buscar por nome ou CNPJ..."
+                                            className="w-full bg-transparent text-sm placeholder:text-muted-foreground/60 outline-none"
+                                        />
+                                        {transporterSearch && (
+                                            <button onClick={() => setTransporterSearch('')} className="p-1 hover:bg-black/10 rounded-full transition-colors text-muted-foreground">
+                                                <X className="h-3 w-3" />
                                             </button>
-                                        ))}
+                                        )}
+                                    </div>
+                                    <div className="px-2.5 py-1.5 border-b border-border bg-muted/10 overflow-x-auto custom-scrollbar flex gap-1.5">
+                                        {Array.from(new Set(routes.filter(r => !r.trashed).map(r => r.name))).sort().map(area => {
+                                            const isSelected = selectedTransporterRoute === area;
+                                            return (
+                                                <button
+                                                    key={area}
+                                                    onClick={(e) => { e.preventDefault(); setSelectedTransporterRoute(isSelected ? null : area); }}
+                                                    className={`shrink-0 text-[10px] px-2 py-1 rounded-full border transition-colors flex items-center gap-1 ${isSelected
+                                                        ? 'bg-primary text-primary-foreground border-primary'
+                                                        : 'bg-background hover:bg-secondary border-border/60 text-muted-foreground'}`}
+                                                >
+                                                    <MapPin className="h-2.5 w-2.5" /> {area}
+                                                </button>
+                                            )
+                                        })}
+                                        {Array.from(new Set(routes.filter(r => !r.trashed).map(r => r.name))).length === 0 && (
+                                            <span className="text-[10px] text-muted-foreground/50 italic py-1">Nenhuma rota cadastrada</span>
+                                        )}
+                                    </div>
+                                    <div className="max-h-56 overflow-y-auto custom-scrollbar p-1.5 space-y-0.5">
+                                        <button
+                                            onClick={() => { updateItem(item.id, 'transporterId', undefined); setIsTransporterOpen(false); }}
+                                            className="w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary/80 text-muted-foreground font-medium flex items-center gap-2"
+                                        >
+                                            <Truck className="h-3.5 w-3.5 opacity-70" /> Nenhuma (Incluso / FOB)
+                                        </button>
+
+                                        {filteredTransporters.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhuma transportadora encontrada.</div>
+                                        ) : (
+                                            filteredTransporters.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => { updateItem(item.id, 'transporterId', c.id); setIsTransporterOpen(false); }}
+                                                    className={`w-full text-left px-3 py-2 rounded-md transition-all hover:bg-primary/5 border border-transparent hover:border-primary/20 flex flex-col gap-0.5 group ${c.isFavorite ? 'bg-primary/5 border-primary/10' : ''}`}
+                                                >
+                                                    <div className="flex justify-between items-start w-full gap-2">
+                                                        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                                            {c.nome_fantasia || c.razao_social}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {c.isFavorite && <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Destaque</span>}
+                                                            {c.rating ? (
+                                                                <div className="flex items-center gap-0.5 text-yellow-500">
+                                                                    <span className="text-xs font-bold leading-none">{c.rating}</span>
+                                                                    <Star className="h-2.5 w-2.5 fill-current" />
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5 w-full">
+                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground w-full">
+                                                            {c.cnpj && <span className="font-mono truncate">{c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}</span>}
+                                                            {(c.cnpj && c.municipio) && <span>•</span>}
+                                                            {c.municipio && <span className="truncate">{c.municipio} - {c.uf}</span>}
+                                                        </div>
+                                                        {(() => {
+                                                            const transpRoutes = routes.filter(r => r.transporterIds.includes(c.id) && !r.trashed).map(r => r.name);
+                                                            if (transpRoutes.length === 0) return null;
+                                                            return (
+                                                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                    {transpRoutes.slice(0, 3).map((area, idx) => (
+                                                                        <span
+                                                                            key={idx}
+                                                                            onClick={(e) => { e.stopPropagation(); setSelectedTransporterRoute(area); }}
+                                                                            className="text-[9px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded border border-border/50 hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer flex items-center gap-0.5"
+                                                                            title="Filtrar por esta rota"
+                                                                        >
+                                                                            <MapPin className="h-2 w-2" /> {area}
+                                                                        </span>
+                                                                    ))}
+                                                                    {transpRoutes.length > 3 && (
+                                                                        <span className="text-[9px] bg-secondary/50 text-muted-foreground px-1 py-0.5 rounded">
+                                                                            +{transpRoutes.length - 3}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </button>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -482,6 +1091,21 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                                     </div>
                                     <span className="text-xs text-muted-foreground font-medium select-none">Fornece Contrato Serviço</span>
                                 </label>
+
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <div className="relative flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!item.emitsResaleInvoice}
+                                            onChange={e => updateItem(item.id, 'emitsResaleInvoice', e.target.checked)}
+                                            className="peer sr-only"
+                                        />
+                                        <div className="h-4 w-4 border border-input rounded-sm bg-transparent peer-checked:bg-primary peer-checked:border-primary peer-focus:ring-2 disabled:cursor-not-allowed transition-all flex items-center justify-center">
+                                            {item.emitsResaleInvoice && <svg width="10" height="10" viewBox="0 0 15 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-primary-foreground"><path d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L6.28284 12.8222C6.10444 13.0959 5.75163 13.2307 5.43825 13.1444C5.12487 13.058 4.90806 12.7846 4.86981 12.46L4.01529 5.33534C3.96203 4.89133 4.41727 4.56702 4.82512 4.69749L10.7428 6.58988C11.0772 6.69679 11.4582 6.5501 11.6214 6.24227L11.4669 3.72684Z" fill="currentColor" /></svg>}
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground font-medium select-none">Emite NF de Revenda?</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -514,7 +1138,7 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                                 {item.items.map((sub: any, subIdx: number) => (
                                     <div key={sub.id} className="grid grid-cols-12 gap-2 items-center bg-secondary/50 p-2 rounded-lg border border-border group/sub">
                                         <div className="col-span-1 text-[10px] text-muted-foreground text-center font-medium border-r border-border/50">
-                                            {String(subIdx + 1).padStart(2, '0')}
+                                            {subIdx + 1}
                                         </div>
                                         <div className="col-span-5 relative">
                                             <input
@@ -545,10 +1169,13 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                                             />
                                         </div>
                                         <div className="col-span-2 text-right text-xs font-mono font-bold text-primary flex justify-between items-center pl-1">
-                                            <span className="truncate">{formatCurrency(sub.totalPrice || 0)}</span>
+                                            <span className="truncate flex items-center gap-1 justify-end w-full">
+                                                <DollarSign className="h-3 w-3 inline text-muted-foreground mr-1" />
+                                                {formatCurrency(sub.totalPrice || 0)}
+                                            </span>
                                             <button
                                                 onClick={() => removeSubItem(sub.id)}
-                                                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100"
+                                                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
                                                 title="Remover Item"
                                             >
                                                 <X className="h-3.5 w-3.5" />
@@ -592,13 +1219,14 @@ const QuotationItemCard = ({ item, idx, updateItem, removeItem, cloneItem, forma
                         </button>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 
 const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
-    const { addBudget, updateBudget, companies } = useKanbanStore();
+    const { addBudget, updateBudget, companies, mainCompanies } = useKanbanStore();
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
@@ -641,10 +1269,19 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 items: formData.items || [],
                 totalValue: formData.totalValue || 0,
             };
-            addBudget({ ...initialData, id: newId } as unknown as Omit<Budget, 'id' | 'createdAt'>);
+            addBudget({ ...initialData, id: newId } as unknown as Budget);
             setActiveBudgetId(newId);
         }
     }, [budget, activeBudgetId, addBudget, formData]);
+
+    // Fast-Save wrapper to ensure fields like Title, Type, Status get pushed to Zustand instantly
+    const handleUpdateField = (field: keyof Budget, value: any) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+
+        if (activeBudgetId) {
+            updateBudget(activeBudgetId, { [field]: value });
+        }
+    };
 
 
     // Auto-Save Effect (Debounce)
@@ -661,6 +1298,20 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         return () => clearTimeout(timeoutId);
     }, [formData, activeBudgetId, updateBudget]);
 
+    // Force strict save on Unmount to prevent data loss on sudden closes
+    const formDataRef = useRef(formData);
+    useEffect(() => {
+        formDataRef.current = formData;
+    }, [formData]);
+
+    useEffect(() => {
+        return () => {
+            if (activeBudgetId && formDataRef.current) {
+                updateBudget(activeBudgetId, formDataRef.current);
+            }
+        };
+    }, [activeBudgetId, updateBudget]);
+
 
     // Combobox states
     const [cardSearch, setCardSearch] = useState('');
@@ -671,8 +1322,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     // Refs for clicking outside
     const cardDropdownRef = useRef<HTMLDivElement>(null);
-    const supplierDropdownRef = useRef<HTMLDivElement>(null);
-    const transporterDropdownRef = useRef<HTMLDivElement>(null);
+    const supplierDropdownRef = useRef<HTMLDivElement>(null); // Not used in BudgetModal directly, but kept for consistency if needed
+    const transporterDropdownRef = useRef<HTMLDivElement>(null); // Not used in BudgetModal directly, but kept for consistency if needed
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -684,35 +1335,42 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const calculateTotal = (items: any[]) => {
+    const calculateTotal = (items: BudgetItem[]) => {
         return items.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
     };
 
     const addItem = () => {
-        const newGroup = {
+        const newGroup: BudgetItem = {
             id: crypto.randomUUID(),
             companyId: undefined,
             transporterId: undefined,
             validity: '',
             notes: '',
             items: [],
-            totalPrice: 0
+            totalPrice: 0,
+            taxValue: 0,
+            difalValue: 0,
+            finalSellingPrice: 0,
+            taxesBreakdown: { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, total: 0 }
         };
-        const newItems = [...(formData.items || []), newGroup];
-        setFormData(prev => ({
-            ...prev,
-            items: newItems,
-            totalValue: calculateTotal(newItems)
-        }));
+        setFormData(prev => {
+            const newItems = [...(prev.items || []), newGroup];
+            return {
+                ...prev,
+                items: newItems,
+                totalValue: calculateTotal(newItems)
+            };
+        });
     };
 
-    const updateItem = (id: string, field: string, value: any) => {
+    const updateItemField = (id: string, field: keyof BudgetItem, value: any) => {
         setFormData(prev => {
             const newItems = (prev.items || []).map(group => {
                 if (group.id === id) {
                     const updated = { ...group, [field]: value };
+                    // If 'items' (sub-items) are updated, recalculate totalPrice for the group
                     if (field === 'items') {
-                        updated.totalPrice = (value as any[]).reduce((sum, sub) => sum + (sub.totalPrice || 0), 0);
+                        updated.totalPrice = (value as QuotationSubItem[]).reduce((sum, sub) => sum + (sub.totalPrice || 0), 0);
                     }
                     return updated;
                 }
@@ -760,7 +1418,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             return {
                 ...prev,
                 items: newItems,
-                // The total value of the general budget doesn't change by just having a copy of a quote. 
+                // The total value of the general budget doesn't change by just having a copy of a quote.
                 // Only the "cheapest" quote counts for the outer view, so saving the cloned card is enough.
                 totalValue: calculateTotal(newItems)
             };
@@ -771,6 +1429,16 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     };
 
+    // Math for budget mini component:
+    const activeQuotes = formData.items?.length || 0;
+    const isBudgetEmpty = activeQuotes === 0;
+
+    // Highest / Lowest
+    // Change logic: Using `finalSellingPrice` as the main best quote marker instead of cost
+    const prices = (formData.items || []).map(i => i.finalSellingPrice || i.totalPrice || 0).filter(v => v > 0);
+    const lowestCost = prices.length > 0 ? Math.min(...prices) : 0;
+    const highestCost = prices.length > 0 ? Math.max(...prices) : 0;
+    const savings = highestCost - lowestCost;
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
             <div className="bg-background w-full max-w-7xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] border border-border overflow-hidden">
@@ -833,7 +1501,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                             <div className="max-h-56 overflow-y-auto custom-scrollbar p-1">
                                                 <button
                                                     onClick={() => {
-                                                        setFormData({ ...formData, cardId: undefined });
+                                                        handleUpdateField('cardId', undefined);
                                                         setIsCardDropdownOpen(false);
                                                     }}
                                                     className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary ${!formData.cardId ? 'bg-primary/10 text-primary font-medium' : ''}`}
@@ -850,7 +1518,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                             <button
                                                                 key={c.id}
                                                                 onClick={() => {
-                                                                    setFormData({ ...formData, cardId: c.id, title: c.title });
+                                                                    handleUpdateField('cardId', c.id);
+                                                                    handleUpdateField('title', c.title);
                                                                     setIsCardDropdownOpen(false);
                                                                 }}
                                                                 className={`w-full text-left flex flex-col px-3 py-2 rounded-md transition-colors hover:bg-secondary ${formData.cardId === c.id ? 'bg-primary/10 text-primary font-medium' : 'text-sm'}`}
@@ -869,7 +1538,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Título do Orçamento</label>
                                     <input
                                         value={formData.title}
-                                        onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                        onChange={e => handleUpdateField('title', e.target.value)}
                                         placeholder="Ex: Aquisição de Computadores Desktop"
                                         className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                                     />
@@ -880,19 +1549,18 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tipo</label>
                                         <select
                                             value={formData.type}
-                                            onChange={e => setFormData({ ...formData, type: e.target.value as BudgetType })}
+                                            onChange={e => handleUpdateField('type', e.target.value as BudgetType)}
                                             className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                                         >
                                             <option value="Produto">Produto</option>
                                             <option value="Serviço">Serviço</option>
-                                            <option value="Frete">Frete</option>
                                         </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
                                         <select
                                             value={formData.status}
-                                            onChange={e => setFormData({ ...formData, status: e.target.value as BudgetStatus })}
+                                            onChange={e => handleUpdateField('status', e.target.value as BudgetStatus)}
                                             className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                                         >
                                             <option value="Aguardando">Aguardando</option>
@@ -932,12 +1600,16 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                             <QuotationItemCard
                                                 key={item.id}
                                                 item={item}
-                                                idx={idx}
-                                                updateItem={updateItem}
+                                                budgetType={formData.type as BudgetType}
+                                                totalQuotes={formData.items?.length || 0}
+                                                highestCost={highestCost}
+                                                lowestCost={lowestCost}
+                                                companies={companies}
+                                                mainCompanies={mainCompanies}
+                                                updateItem={updateItemField}
                                                 removeItem={removeItem}
                                                 cloneItem={cloneItem}
                                                 formatCurrency={formatCurrency}
-                                                companies={companies}
                                             />
                                         ))}
 

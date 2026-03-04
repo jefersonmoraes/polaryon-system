@@ -4,7 +4,7 @@ import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, User
 import { useState } from 'react';
 
 const AppSidebar = () => {
-  const { folders, boards, addFolder } = useKanbanStore();
+  const { folders, boards, addFolder, mainCompanies } = useKanbanStore();
   const location = useLocation();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -38,6 +38,7 @@ const AppSidebar = () => {
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
+  const isAdminModule = location.pathname.startsWith('/company');
 
   return (
     <aside className={`${isCollapsed ? 'w-16' : 'w-56'} shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-y-auto scrollbar-hide transition-all duration-300 relative group`}>
@@ -76,6 +77,41 @@ const AppSidebar = () => {
             <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
               <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
             </Link>
+          </div>
+        </div>
+      ) : isAdminModule ? (
+        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+          <div className="flex flex-col gap-1 text-sidebar-foreground/80">
+            {!isCollapsed && (
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
+              </div>
+            )}
+
+            <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
+              <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
+            </Link>
+
+            {mainCompanies.map(company => (
+              <Link
+                key={company.id}
+                to={`/company?id=${company.id}`}
+                className={`flex items-center justify-between gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/company' && location.search.includes(`id=${company.id}`) ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
+                  {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
+                </div>
+                {!isCollapsed && company.isDefault && (
+                  <span className="text-[8px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/20 shrink-0">Padrão</span>
+                )}
+              </Link>
+            ))}
+
+            {mainCompanies.length === 0 && !isCollapsed && (
+              <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
+            )}
           </div>
         </div>
       ) : (

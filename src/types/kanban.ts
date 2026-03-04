@@ -17,7 +17,7 @@ export interface Route {
   createdAt: string;
 }
 
-export type BudgetType = 'Produto' | 'Serviço' | 'Frete';
+export type BudgetType = 'Produto' | 'Serviço';
 export type BudgetStatus = 'Aguardando' | 'Cotado' | 'Aprovado' | 'Recusado';
 
 export interface QuotationSubItem {
@@ -48,6 +48,7 @@ export interface BudgetItem {
   deliveryTime?: string; // MANTIDO POR RETROCOMPATIBILIDADE (Prazo de entrega string - ex: "5 dias úteis")
   deliveryDate?: string; // NOVO: Data de entrega (input date YYYY-MM-DD)
   hasServiceContract?: boolean; // Contrato de prestação de serviços (sim/não)
+  emitsResaleInvoice?: boolean; // Emite NF de revenda? (sim/não)
 
   paymentTerms?: 'À vista' | 'Boleto' | 'PIX' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Transferência Bancária' | string; // Condições de Pagamento
   hasCashDiscount?: boolean; // TOGGLE: Aplicar Desconto
@@ -58,8 +59,38 @@ export interface BudgetItem {
   invoicedSales?: boolean; // Vende Faturado
   invoiceTerm?: string; // Prazo de Faturamento
 
+  // Price Calculation & Taxes Base
+  mainCompanyId?: string; // ID da Administradora Padrão Selecionada
+  destinationState?: string; // Estado de Destino
+  profitMargin?: number; // Margem de Lucro percentual desejada (Markup divisor)
+  difalValue?: number; // Valor nominal somado de DIFAL
+  taxValue?: number; // Valor nominal somado TOTAL de impostos (para legados)
+
+  // Tax Detalhamento Individual (Fase 4 Pricing)
+  taxesBreakdown?: {
+    pis: number;
+    cofins: number;
+    csll: number;
+    irpj: number;
+    cpp: number;
+    iss: number;
+    icms: number;
+    ipi: number;
+    total: number;
+  };
+
+  difalBreakdown?: {
+    origin: string;
+    destination: string;
+    internal: number;
+    interstate: number;
+    percent: number;
+  };
+
+  finalSellingPrice?: number; // Preço Final do Fornecedor baseado no Custo + Margem
+
   items: QuotationSubItem[]; // The products/services inside this quote
-  totalPrice: number; // Sum of all inner items + freightValue - cashDiscount + Installments
+  totalPrice: number; // Sum of all inner items + freightValue - cashDiscount + Installments (CUSTO INICIAL)
 }
 
 export interface Budget {
@@ -141,12 +172,15 @@ export interface Notification {
 }
 
 export interface MainCompanyProfile {
+  id: string;
+  isDefault?: boolean;
   razaoSocial: string;
   nomeFantasia: string;
   cnpj: string;
   state: string; // UF
   porte: string; // e.g. 'MEI', 'ME', 'EPP'
   lastSynced?: string; // ISO String indicating the last time it was fetched via API
+  dataSource?: string; // e.g. 'Brasil API', 'Receita Federal', etc.
 
   // Accounting & Corporate fields
   naturezaJuridica: string;

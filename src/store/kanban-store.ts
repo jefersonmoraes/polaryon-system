@@ -5,8 +5,11 @@ import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, 
 const uid = () => crypto.randomUUID();
 
 interface KanbanState {
-  mainCompany: MainCompanyProfile | null;
-  setMainCompany: (data: Partial<MainCompanyProfile>) => void;
+  mainCompanies: MainCompanyProfile[];
+  addMainCompany: (data: Omit<MainCompanyProfile, 'id'>) => string;
+  updateMainCompany: (id: string, data: Partial<MainCompanyProfile>) => void;
+  deleteMainCompany: (id: string) => void;
+  setDefaultMainCompany: (id: string) => void;
   folders: Folder[];
   boards: Board[];
   lists: KanbanList[];
@@ -96,7 +99,7 @@ interface KanbanState {
 export const useKanbanStore = create<KanbanState>()(
   persist(
     (set, get) => ({
-      mainCompany: null,
+      mainCompanies: [],
       folders: [],
       boards: [],
       lists: [],
@@ -126,12 +129,27 @@ export const useKanbanStore = create<KanbanState>()(
         }
       })),
 
-      setMainCompany: (data) => set(s => ({
-        mainCompany: s.mainCompany ? { ...s.mainCompany, ...data } : {
-          razaoSocial: '', nomeFantasia: '', cnpj: '', state: '', porte: '', taxRegime: '', simplesAnnexes: [],
-          naturezaJuridica: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', municipio: '', telefone: '', email: '', cnaes: [],
-          pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, annexRates: {}, ...data
-        } as MainCompanyProfile
+      addMainCompany: (data) => {
+        const newId = uid();
+        set(s => {
+          const isFirst = s.mainCompanies.length === 0;
+          return {
+            mainCompanies: [...s.mainCompanies, { ...data, id: newId, isDefault: isFirst }]
+          };
+        });
+        return newId;
+      },
+      updateMainCompany: (id, data) => set(s => ({
+        mainCompanies: s.mainCompanies.map(c => c.id === id ? { ...c, ...data } : c)
+      })),
+      deleteMainCompany: (id) => set(s => ({
+        mainCompanies: s.mainCompanies.filter(c => c.id !== id)
+      })),
+      setDefaultMainCompany: (id) => set(s => ({
+        mainCompanies: s.mainCompanies.map(c => ({
+          ...c,
+          isDefault: c.id === id
+        }))
       })),
 
       setUiZoom: (zoom) => set({ uiZoom: zoom }),

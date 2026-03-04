@@ -3,52 +3,52 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { Building2, Save, Calculator, MapPin, Percent, Search } from 'lucide-react';
 import { STATES, calculateDifal, SIMPLES_NACIONAL_RATES, PRESUMIDO_RATES, REAL_RATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { toast } from 'sonner';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+
+const initialFormData = {
+    razaoSocial: '',
+    nomeFantasia: '',
+    cnpj: '',
+    state: '',
+    porte: '',
+    taxRegime: '' as any,
+    simplesAnnexes: [] as string[],
+    pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0,
+    naturezaJuridica: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', municipio: '', telefone: '', email: '',
+    cnaes: [] as { code: string; description: string }[],
+    annexRates: {} as Record<string, { pis: number; cofins: number; csll: number; irpj: number; cpp: number; iss: number; icms: number; ipi: number; }>,
+    lastSynced: '',
+    dataSource: '',
+};
 
 export default function CompanyProfilePage() {
-    const { mainCompany, setMainCompany, isDark } = useKanbanStore();
+    const { mainCompanies, addMainCompany, updateMainCompany, deleteMainCompany, setDefaultMainCompany, isDark } = useKanbanStore();
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const companyId = searchParams.get('id');
 
     const [isFetching, setIsFetching] = useState(false);
 
-    const [formData, setFormData] = useState({
-        razaoSocial: '',
-        nomeFantasia: '',
-        cnpj: '',
-        state: '',
-        porte: '',
-        taxRegime: '' as any,
-        simplesAnnexes: [] as string[],
-        pis: 0,
-        cofins: 0,
-        csll: 0,
-        irpj: 0,
-        cpp: 0,
-        iss: 0,
-        icms: 0,
-        ipi: 0,
-        naturezaJuridica: '',
-        cep: '',
-        logradouro: '',
-        numero: '',
-        complemento: '',
-        bairro: '',
-        municipio: '',
-        telefone: '',
-        email: '',
-        cnaes: [] as { code: string; description: string }[],
-        annexRates: {} as Record<string, { pis: number; cofins: number; csll: number; irpj: number; cpp: number; iss: number; icms: number; ipi: number; }>,
-    });
+    const [formData, setFormData] = useState(initialFormData);
 
     useEffect(() => {
-        if (mainCompany) {
-            setFormData(prev => ({
-                ...prev,
-                ...mainCompany,
-                simplesAnnexes: mainCompany.simplesAnnexes || [],
-                cnaes: mainCompany.cnaes || [],
-                annexRates: mainCompany.annexRates || {}
-            }));
+        if (companyId) {
+            const company = mainCompanies.find(c => c.id === companyId);
+            if (company) {
+                setFormData({
+                    ...initialFormData,
+                    ...company,
+                    simplesAnnexes: company.simplesAnnexes || [],
+                    cnaes: company.cnaes || [],
+                    annexRates: company.annexRates || {}
+                });
+            } else {
+                navigate('/company', { replace: true });
+            }
+        } else {
+            setFormData(initialFormData);
         }
-    }, [mainCompany]);
+    }, [companyId, mainCompanies, navigate]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -190,7 +190,9 @@ export default function CompanyProfilePage() {
                     cnaes: cnaes,
                     porte: porte,
                     taxRegime: newRegime,
-                    simplesAnnexes: newAnnexes
+                    simplesAnnexes: newAnnexes,
+                    lastSynced: new Date().toISOString(),
+                    dataSource: 'Brasil API',
                 };
 
                 // If we added a new annex automatically, let's trigger the annex change logic
@@ -218,10 +220,41 @@ export default function CompanyProfilePage() {
         }
     };
 
-    const calculateAndSave = () => {
-        setMainCompany(formData);
-        toast.success('Perfil da Empresa salvo com sucesso!');
+    const handleSave = () => {
+        if (!formData.razaoSocial || !formData.cnpj) {
+            toast.error("Razão Social e CNPJ são obrigatórios.");
+            return;
+        }
+
+        if (companyId) {
+            updateMainCompany(companyId, formData);
+            toast.success('Administradora atualizada com sucesso!');
+        } else {
+            const newId = addMainCompany(formData);
+            toast.success('Administradora criada com sucesso!');
+            navigate(`/company?id=${newId}`);
+        }
     };
+
+    const handleDelete = () => {
+        if (companyId) {
+            if (window.confirm("Tem certeza que deseja remover esta administradora?")) {
+                deleteMainCompany(companyId);
+                toast.success('Administradora removida com sucesso!');
+                navigate('/company');
+            }
+        }
+    };
+
+    const handleSetDefault = () => {
+        if (companyId) {
+            setDefaultMainCompany(companyId);
+            toast.success('Administradora definida como Padrão!');
+        }
+    };
+
+    const currentCompany = mainCompanies.find(c => c.id === companyId);
+    const isDefault = currentCompany?.isDefault;
 
     return (
         <div className={`flex-1 h-full overflow-y-auto ${isDark ? 'bg-[#1e1e2d] text-white' : 'bg-gray-50 text-gray-900'} custom-scrollbar`}>
@@ -229,22 +262,57 @@ export default function CompanyProfilePage() {
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <Building2 className="h-6 w-6 text-primary" />
-                        Perfil da Empresa (Administradora)
+                        {companyId ? 'Editar Administradora' : 'Nova Administradora'}
+                        {isDefault && (
+                            <span className="ml-2 text-[10px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-2 py-1 rounded border border-yellow-500/20 shadow-sm flex items-center gap-1">Padrão</span>
+                        )}
                     </h1>
                     <p className="text-sm text-foreground/60 mt-1">
-                        Gerencie as informações fiscais e os percentuais de impostos da POLARYON.
+                        Gerencie as informações fiscais desta empresa administradora.
                     </p>
                 </div>
-                <button
-                    onClick={calculateAndSave}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded font-medium hover:bg-primary/90 transition-colors shadow-lg"
-                >
-                    <Save className="h-4 w-4" />
-                    Salvar Alterações
-                </button>
+                <div className="flex items-center gap-2">
+                    {companyId && !isDefault && (
+                        <button
+                            onClick={handleSetDefault}
+                            className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 text-yellow-600 rounded border border-yellow-500/20 font-medium hover:bg-yellow-500/20 transition-colors shadow-sm text-sm"
+                            title="Tornar esta a empresa principal utilizada nos cálculos"
+                        >
+                            Definir como Padrão
+                        </button>
+                    )}
+                    <button
+                        onClick={handleSave}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded font-medium hover:bg-primary/90 transition-colors shadow-lg"
+                    >
+                        <Save className="h-4 w-4" />
+                        {companyId ? 'Salvar Alterações' : 'Criar Administradora'}
+                    </button>
+                </div>
             </header>
 
             <div className="p-6 max-w-5xl space-y-8">
+                {/* Status Section */}
+                {formData.lastSynced && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-primary/10 text-primary rounded-md">
+                                <Search className="h-4 w-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Fonte de Dados</p>
+                                <p className="text-sm font-semibold text-foreground">{formData.dataSource || 'Brasil API'}</p>
+                            </div>
+                        </div>
+                        <div className="text-left sm:text-right">
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Última Atualização</p>
+                            <p className="text-sm font-medium text-foreground">
+                                {new Date(formData.lastSynced).toLocaleString('pt-BR')}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Dados Básicos */}
                 <section className="bg-card border border-border rounded-lg p-5 shadow-sm">
                     <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -537,6 +605,20 @@ export default function CompanyProfilePage() {
                     </div>
                 )}
 
+                {companyId && (
+                    <section className="bg-destructive/5 flex flex-col sm:flex-row items-start sm:items-center justify-between border border-destructive/20 rounded-lg p-5 mt-8 gap-4">
+                        <div>
+                            <h2 className="text-sm font-semibold text-destructive mb-1">Zona de Perigo</h2>
+                            <p className="text-xs text-muted-foreground">Esta ação não pode ser desfeita. Isso excluirá permanentemente os dados desta administradora.</p>
+                        </div>
+                        <button
+                            onClick={handleDelete}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground px-4 py-2 rounded text-sm font-medium transition-colors shrink-0 whitespace-nowrap"
+                        >
+                            Excluir Administradora
+                        </button>
+                    </section>
+                )}
             </div>
         </div>
     );
