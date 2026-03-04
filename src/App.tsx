@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useDocumentStore } from '@/store/document-store';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,12 +17,15 @@ import SuppliersPage from "./pages/SuppliersPage";
 import CompanyListPage from "./pages/CompanyListPage";
 import BudgetsPage from "./pages/BudgetsPage";
 import CompanyProfilePage from "./pages/CompanyProfilePage";
+import DocumentationPage from "./pages/DocumentationPage";
+import CapacityCertificatesPage from "./pages/CapacityCertificatesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { cleanupTrash, companies, permanentlyDeleteCompany, updateCompany, addNotification } = useKanbanStore();
+  const { documents, validateDocumentStatuses } = useDocumentStore();
 
   useEffect(() => {
     cleanupTrash();
@@ -75,6 +79,54 @@ const AppContent = () => {
     return () => clearInterval(monitorInterval);
   }, [companies, permanentlyDeleteCompany, updateCompany, addNotification]);
 
+  // Document Expiration Monitor
+  useEffect(() => {
+    // Run validation on load and then periodically
+    validateDocumentStatuses();
+
+    // Check every hour
+    const interval = setInterval(() => {
+      validateDocumentStatuses();
+    }, 60 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [validateDocumentStatuses]);
+
+  useEffect(() => {
+    // Check for expiring documents and notify
+    const CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+    const checkDocs = () => {
+      const now = new Date();
+      documents.forEach(doc => {
+        if (doc.status !== 'valid') {
+          const expirationDate = new Date(doc.expirationDate);
+          const diffDays = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+          // Determine if we need to notify
+          // e.g. Notify at 30 days, 15 days, 5 days, and when expired
+          const notifyKey = doc.status === 'expired' ? 0 :
+            diffDays <= 5 ? 5 :
+              diffDays <= 15 ? 15 :
+                diffDays <= 30 ? 30 : -1;
+
+          if (notifyKey !== -1 && doc.lastNotifiedIndex !== notifyKey) {
+            const isExpired = doc.status === 'expired';
+            addNotification(
+              isExpired ? 'Documento Expirado' : 'Documento Vencendo Próximo',
+              `O documento "${doc.title}" ${isExpired ? 'expirou em' : 'vencerá em'} ${expirationDate.toLocaleDateString('pt-BR')}.`,
+              '/documentacao'
+            );
+            useDocumentStore.getState().updateDocument(doc.id, { lastNotifiedIndex: notifyKey });
+          }
+        }
+      });
+    };
+
+    checkDocs(); // initial check
+    const docInterval = setInterval(checkDocs, CHECK_INTERVAL);
+    return () => clearInterval(docInterval);
+  }, [documents, addNotification]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <AppHeader />
@@ -91,6 +143,8 @@ const AppContent = () => {
           <Route path="/transporters-list" element={<CompanyListPage type="Transportadora" />} />
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/company" element={<CompanyProfilePage />} />
+          <Route path="/documentacao" element={<DocumentationPage />} />
+          <Route path="/documentacao/atestados" element={<CapacityCertificatesPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

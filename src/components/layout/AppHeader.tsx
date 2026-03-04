@@ -1,10 +1,11 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2 } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import logo from '@/assets/logo.png';
 import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
 import CompanyArchiveViewer from './CompanyArchiveViewer';
+import DocsArchiveViewer from './DocsArchiveViewer';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
@@ -14,12 +15,14 @@ const AppHeader = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showGlobalArchiveViewer, setShowGlobalArchiveViewer] = useState<'archived' | 'trashed' | null>(null);
+  const [showDocsArchiveViewer, setShowDocsArchiveViewer] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
   const isAdminModule = location.pathname.startsWith('/company');
+  const isDocsModule = location.pathname.startsWith('/documentacao');
 
   const searchResults = searchQuery.trim() ? (isCompanyModule ? {
     companies: companies.filter(c => !c.trashed && (
@@ -42,6 +45,8 @@ const AppHeader = () => {
       c.cnpj.includes(searchQuery)
     ).slice(0, 8),
     companies: [], cards: [], boards: [], folders: [], lists: [], budgets: []
+  } : isDocsModule ? {
+    mainCompanies: [], companies: [], cards: [], boards: [], folders: [], lists: [], budgets: []
   } : {
     mainCompanies: [],
     companies: [],
@@ -96,6 +101,15 @@ const AppHeader = () => {
           <span className="uppercase tracking-wider hidden sm:inline">Empresa</span>
           <span className="uppercase tracking-wider sm:hidden">Empresa</span>
         </Link>
+        <Link
+          to="/documentacao"
+          className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname.startsWith('/documentacao') ? 'bg-primary/20 text-accent font-bold' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+            }`}
+        >
+          <FileText className="h-3.5 w-3.5 inline mr-1" />
+          <span className="uppercase tracking-wider hidden sm:inline">Documentação</span>
+          <span className="uppercase tracking-wider sm:hidden">Documentos</span>
+        </Link>
       </nav>
 
       <div className="flex-1" />
@@ -108,7 +122,7 @@ const AppHeader = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onBlur={() => setTimeout(() => { setSearchOpen(false); setSearchQuery(''); }, 200)}
-              placeholder={isCompanyModule ? "Buscar empresas por nome ou CNPJ..." : isBudgetModule ? "Buscar orçamentos..." : isAdminModule ? "Buscar administradoras..." : "Buscar quadros, pastas, cartões..."}
+              placeholder={isCompanyModule ? "Buscar empresas por nome ou CNPJ..." : isBudgetModule ? "Buscar orçamentos..." : isAdminModule ? "Buscar administradoras..." : isDocsModule ? "Buscar documentos..." : "Buscar quadros, pastas, cartões..."}
               className="w-full bg-primary/10 border-none rounded px-3 py-1.5 text-xs outline-none placeholder:text-kanban-header-foreground/50"
             />
             {searchResults && (
@@ -227,13 +241,13 @@ const AppHeader = () => {
       </div>
 
       <div className="flex items-center gap-1.5 mr-2 border-r border-border/50 pr-2">
-        {!isCompanyModule && !isAdminModule && (
+        {!isCompanyModule && !isAdminModule && !isDocsModule && (
           <button onClick={() => setShowGlobalArchiveViewer('archived')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-accent" title="Pastas, Boards e Orçamentos Arquivados">
             <Archive className="h-4 w-4" />
           </button>
         )}
         {!isAdminModule && (
-          <button onClick={() => setShowGlobalArchiveViewer('trashed')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-destructive" title="Lixeira">
+          <button onClick={() => isDocsModule ? setShowDocsArchiveViewer(true) : setShowGlobalArchiveViewer('trashed')} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative text-muted-foreground hover:text-destructive" title="Lixeira">
             <Trash2 className="h-4 w-4" />
           </button>
         )}
@@ -321,6 +335,9 @@ const AppHeader = () => {
               onClose={() => setShowGlobalArchiveViewer(null)}
             />
           )
+        )}
+        {showDocsArchiveViewer && (
+          <DocsArchiveViewer onClose={() => setShowDocsArchiveViewer(false)} />
         )}
       </AnimatePresence>
     </header>
