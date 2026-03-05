@@ -43,7 +43,7 @@ export const AccountantExportPanel = () => {
     };
 
     return (
-        <div id="export-panel" className="kanban-card rounded-xl border border-border shadow-sm flex flex-col p-4 animate-in fade-in zoom-in duration-300">
+        <div id="export-panel" className="kanban-card rounded-xl border border-border shadow-sm flex flex-col p-4">
             <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-primary/10 rounded-lg text-primary">
                     <Download className="h-5 w-5" />

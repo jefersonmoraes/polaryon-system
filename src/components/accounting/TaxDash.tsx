@@ -1,19 +1,25 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Calculator, Settings, CheckCircle } from 'lucide-react';
+import { Calculator, Settings, CheckCircle, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const TaxDash = () => {
-    const { taxObligations, settings, calculateTaxes, updateSettings, payTax, entries } = useAccountingStore();
+    const { taxObligations, settings, calculateTaxes, updateSettings, payTax, entries, updateTaxObligation, deleteTaxObligation } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
+
+    const [showPaid, setShowPaid] = useState(false);
+    const [taxToEdit, setTaxToEdit] = useState<any>(null);
 
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const currentYear = String(now.getFullYear());
 
     const companyTaxes = taxObligations.filter(t => t.companyId === activeCompany?.id);
+    const visibleTaxes = companyTaxes.filter(t => showPaid ? true : t.status === 'pending');
+
     const companySettings = activeCompany ? settings[activeCompany.id] : null;
     const isMEI = activeCompany?.porte === 'MEI';
 
@@ -86,6 +92,27 @@ export const TaxDash = () => {
         toast.success("Obrigação fiscal baixada como PAGA.");
     };
 
+    const handleDeleteTax = (id: string) => {
+        if (confirm("Tem certeza que deseja excluir esta obrigação? Isso não poderá ser desfeito.")) {
+            deleteTaxObligation(id);
+            toast.info("Obrigação fiscal removida.");
+        }
+    };
+
+    const handleSaveEditTax = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const name = formData.get('name') as string;
+        const amount = parseFloat((formData.get('amount') as string).replace(/\./g, '').replace(',', '.'));
+        const dueDate = formData.get('dueDate') as string;
+
+        if (taxToEdit) {
+            updateTaxObligation(taxToEdit.id, { name, amount, dueDate });
+            toast.success("Imposto ajustado manualmente com sucesso!");
+            setTaxToEdit(null);
+        }
+    };
+
     return (
         <div className="kanban-card rounded-xl border border-border shadow-sm flex flex-col h-full bg-gradient-to-br from-background to-muted/10">
             <div className="p-4 border-b border-border flex items-center justify-between">
@@ -99,15 +126,30 @@ export const TaxDash = () => {
 
                 {/* Métricas e Obrigações */}
                 <div className="md:col-span-2 space-y-4">
-                    <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        Obrigações e Guias Mensais
-                    </h4>
-                    {companyTaxes.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">Nenhuma obrigação apurada para esta empresa.</p>
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            Obrigações e Guias Mensais
+                        </h4>
+                        <button
+                            onClick={() => setShowPaid(!showPaid)}
+                            className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors bg-muted/30 px-2 py-1 rounded"
+                        >
+                            {showPaid ? (
+                                <><EyeOff className="h-3.5 w-3.5" /> Ocultar Pagos</>
+                            ) : (
+                                <><Eye className="h-3.5 w-3.5" /> Ver Pagos</>
+                            )}
+                        </button>
+                    </div>
+
+                    {visibleTaxes.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-border rounded-xl bg-muted/20 text-muted-foreground/60">
+                            <span className="text-sm font-medium">Nenhuma obrigação {showPaid ? 'encontrada' : 'pendente'} para exibição.</span>
+                        </div>
                     ) : (
                         <div className="grid gap-3">
-                            {companyTaxes.map(tax => (
-                                <div key={tax.id} className={`flex justify-between items-center p-4 rounded-xl border ${tax.status === 'paid' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-muted/20'}`}>
+                            {visibleTaxes.map(tax => (
+                                <div key={tax.id} className={`group flex justify-between items-center p-4 rounded-xl border transition-colors ${tax.status === 'paid' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-muted/20 hover:border-border/80'}`}>
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
                                             <p className="font-bold text-sm text-foreground">{tax.name}</p>
@@ -117,16 +159,35 @@ export const TaxDash = () => {
                                         <p className="text-xs text-muted-foreground mt-0.5">Vencimento: {tax.dueDate.split('-').reverse().join('/')}</p>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        <p className="font-bold text-lg text-rose-500">
-                                            R$ {tax.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </p>
+                                        <div className="text-right">
+                                            <p className={`font-bold text-lg ${tax.status === 'paid' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                R$ {tax.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                            <div className="flex items-center justify-end gap-1.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => setTaxToEdit(tax)}
+                                                    className="p-1 rounded bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 transition-colors"
+                                                    title="Editar Valor / Vencimento"
+                                                >
+                                                    <Edit className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteTax(tax.id)}
+                                                    className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition-colors"
+                                                    title="Excluir Guia"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         {tax.status === 'pending' && (
                                             <button
                                                 onClick={() => handlePay(tax.id)}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg flex gap-2 items-center text-xs font-medium transition-colors"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-lg flex gap-2 items-center text-xs font-medium transition-colors"
+                                                title="Marcar como Pago"
                                             >
-                                                <CheckCircle className="h-4 w-4" />
-                                                Pagar Guia
+                                                <CheckCircle className="h-5 w-5" />
                                             </button>
                                         )}
                                     </div>
@@ -261,6 +322,47 @@ export const TaxDash = () => {
                 </div>
 
             </div>
+
+            {taxToEdit && document.body && createPortal(
+                <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-background rounded-xl border border-border w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <Edit className="h-5 w-5 text-primary" />
+                                Alterar Obrigação Fiscal
+                            </h3>
+                            <button onClick={() => setTaxToEdit(null)} className="text-muted-foreground hover:text-foreground">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveEditTax} className="p-5 space-y-4">
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Use este recurso para alterar o valor pré-calculado pelo sistema para o valor exato emitido pela contabilidade na guia se houver divergência.
+                            </p>
+                            <div>
+                                <label className="block text-xs font-medium text-muted-foreground mb-1">Nome / Descrição</label>
+                                <input required name="name" type="text" className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary" defaultValue={taxToEdit.name} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-muted-foreground mb-1">Valor do Imposto (R$)</label>
+                                <input required name="amount" type="text" className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary font-mono" defaultValue={taxToEdit.amount.toFixed(2).replace('.', ',')} onChange={(e) => { e.target.value = e.target.value.replace(/[^0-9,]/g, ''); }} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-muted-foreground mb-1">Data de Vencimento</label>
+                                <input required name="dueDate" type="date" className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary" defaultValue={taxToEdit.dueDate} />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors mt-2"
+                            >
+                                <CheckCircle className="h-5 w-5" />
+                                Salvar Correção Contábil
+                            </button>
+                        </form>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

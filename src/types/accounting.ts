@@ -19,7 +19,15 @@ export interface AccountingEntry {
     type: EntryType;
     categoryId: string;
     status: EntryStatus;
+    documentNumber?: string; // Número da NF, Recibo ou Fatura
+    documentEntity?: string; // Nome do Cliente / Fornecedor
+    documentEntityId?: string; // CPF / CNPJ do Cliente / Fornecedor
+    competenceDate?: string; // Data de Competência (Fato gerador)
+    paymentMethod?: 'pix' | 'boleto' | 'credit_card' | 'debit_card' | 'bank_transfer' | 'cash';
+    notes?: string; // Observações para auditoria (Centro de custo, detalhes de contrato, etc)
     attachments?: string[]; // Array of file URLs/base64
+    linkedTaxId?: string; // Relacionamento bidirecional com Inteligência Tributária
+    linkedInvoiceId?: string; // Relacionamento bidirecional com NF Emitida
     createdAt: string;
     updatedAt: string;
 }

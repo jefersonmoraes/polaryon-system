@@ -30,8 +30,9 @@ export interface AccountingState {
     deleteCategory: (id: string) => void;
 
     // ERP Actions
-    addInvoice: (invoice: Omit<Invoice, 'id' | 'createdAt'>) => void;
+    addInvoice: (invoice: Omit<Invoice, 'createdAt'> & { id?: string }) => void;
     updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
+    deleteInvoice: (id: string) => void;
 
     addBankTransaction: (transaction: Omit<BankTransaction, 'id'>) => void;
     reconcileTransaction: (transactionId: string, entryId: string) => void;
@@ -39,6 +40,9 @@ export interface AccountingState {
     calculateTaxes: (companyId: string, month: string, porte?: string) => void;
     updateSettings: (companyId: string, settings: Partial<AccountingSettings>) => void;
     payTax: (id: string) => void;
+
+    updateTaxObligation: (id: string, tax: Partial<TaxObligation>) => void;
+    deleteTaxObligation: (id: string) => void;
 }
 
 const DEFAULT_CATEGORIES: AccountingCategory[] = [
@@ -87,9 +91,22 @@ export const useAccountingStore = create<AccountingState>()(
                 })),
 
             deleteEntry: (id) =>
-                set((state) => ({
-                    entries: state.entries.filter((entry) => entry.id !== id),
-                })),
+                set((state) => {
+                    const entryToDelete = state.entries.find((e) => e.id === id);
+                    if (!entryToDelete) return state;
+
+                    // Se a entrada apagada foi gerada por um imposto, revertemos o status do imposto
+                    const taxIdToRevert = entryToDelete.linkedTaxId;
+
+                    return {
+                        entries: state.entries.filter((entry) => entry.id !== id),
+                        taxObligations: taxIdToRevert
+                            ? state.taxObligations.map((tax) =>
+                                tax.id === taxIdToRevert ? { ...tax, status: 'pending', paymentDate: undefined } : tax
+                            )
+                            : state.taxObligations
+                    };
+                }),
 
             addCategory: (category) =>
                 set((state) => ({
@@ -117,7 +134,7 @@ export const useAccountingStore = create<AccountingState>()(
                         ...state.invoices,
                         {
                             ...invoice,
-                            id: crypto.randomUUID(),
+                            id: invoice.id || crypto.randomUUID(),
                             createdAt: new Date().toISOString(),
                         }
                     ]
@@ -128,6 +145,13 @@ export const useAccountingStore = create<AccountingState>()(
                     invoices: state.invoices.map((inv) =>
                         inv.id === id ? { ...inv, ...updatedInvoice } : inv
                     )
+                })),
+
+            deleteInvoice: (id) =>
+                set((state) => ({
+                    invoices: state.invoices.filter((inv) => inv.id !== id),
+                    // Bidirectional sync: if an invoice is hard-deleted from store, clean up related entries
+                    entries: state.entries.filter((e) => e.linkedInvoiceId !== id)
                 })),
 
             addBankTransaction: (transaction) =>
@@ -258,6 +282,20 @@ export const useAccountingStore = create<AccountingState>()(
                     }
                 })),
 
+            updateTaxObligation: (id, updatedTax) =>
+                set((state) => ({
+                    taxObligations: state.taxObligations.map(t =>
+                        t.id === id ? { ...t, ...updatedTax } : t
+                    )
+                })),
+
+            deleteTaxObligation: (id) =>
+                set((state) => ({
+                    taxObligations: state.taxObligations.filter(t => t.id !== id),
+                    // Também deletamos o lançamento financeiro caso exista (Sincronização Bidirecional)
+                    entries: state.entries.filter(e => e.linkedTaxId !== id)
+                })),
+
             payTax: (id) =>
                 set((state) => {
                     const tax = state.taxObligations.find(t => t.id === id);
@@ -277,6 +315,10 @@ export const useAccountingStore = create<AccountingState>()(
                         type: 'expense',
                         categoryId: 'cat-exp-2', // ID for Impostos e Taxas
                         status: 'paid',
+                        documentEntity: 'Governo / Receita',
+                        competenceDate: `${tax.month}-01T12:00:00.000Z`,
+                        paymentMethod: 'bank_transfer',
+                        linkedTaxId: tax.id,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString()
                     };
