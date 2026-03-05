@@ -22,6 +22,7 @@ import CapacityCertificatesPage from "./pages/CapacityCertificatesPage";
 import EssentialDocumentModelsPage from "./pages/EssentialDocumentModelsPage";
 import AccountingDashboard from "./pages/AccountingDashboard";
 import AccountingEntries from "./pages/AccountingEntries";
+import { CashflowForecastDash } from "./components/accounting/CashflowForecastDash"; // Added import
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -151,6 +152,7 @@ const AppContent = () => {
           <Route path="/documentacao/modelos" element={<EssentialDocumentModelsPage />} />
           <Route path="/contabil" element={<AccountingDashboard />} />
           <Route path="/contabil/lancamentos" element={<AccountingEntries />} />
+          <Route path="/contabil/fluxo-caixa" element={<CashflowForecastDash />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

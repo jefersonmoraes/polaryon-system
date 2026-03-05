@@ -8,6 +8,15 @@ export interface AccountingCategory {
     color: string;
 }
 
+export interface BankAccount {
+    id: string;
+    companyId: string;
+    name: string; // ex: "Itaú", "Nubank PJ"
+    balance: number; // Saldo atual no banco
+    color?: string; // Cor para o gráfico/UI
+    isHidden?: boolean; // Se o usuário quer ocultar no painel
+}
+
 export interface AccountingEntry {
     id: string;
     companyId: string; // Relacionado à 'Administradora'
@@ -24,10 +33,12 @@ export interface AccountingEntry {
     documentEntityId?: string; // CPF / CNPJ do Cliente / Fornecedor
     competenceDate?: string; // Data de Competência (Fato gerador)
     paymentMethod?: 'pix' | 'boleto' | 'credit_card' | 'debit_card' | 'bank_transfer' | 'cash';
+    bankAccountId?: string; // Relacionamento com a conta bancária
     notes?: string; // Observações para auditoria (Centro de custo, detalhes de contrato, etc)
     attachments?: string[]; // Array of file URLs/base64
     linkedTaxId?: string; // Relacionamento bidirecional com Inteligência Tributária
     linkedInvoiceId?: string; // Relacionamento bidirecional com NF Emitida
+    trashedAt?: string; // Lixeira (Soft Delete)
     createdAt: string;
     updatedAt: string;
 }
@@ -51,6 +62,7 @@ export interface Invoice {
     xmlData?: string; // Cache do XML se importado
     xmlUrl?: string; // Url para pdf ou recurso
     pdfUrl?: string;
+    trashedAt?: string; // Lixeira (Soft Delete)
     createdAt: string;
 }
 
@@ -76,6 +88,7 @@ export interface TaxObligation {
     dueDate: string;
     status: 'pending' | 'paid';
     paymentDate?: string;
+    trashedAt?: string; // Lixeira (Soft Delete)
 }
 
 export interface AccountingSettings {
@@ -88,4 +101,15 @@ export interface AccountingSettings {
     // NFe Settings
     nfeApiToken?: string;
     nfeEnvironment?: 'homologacao' | 'producao';
+}
+
+export interface AccountantExport {
+    id: string;
+    companyId: string;
+    type: 'csv' | 'sped_efd' | 'sintegra' | 'pdf_dre' | 'pdf_health';
+    period: string; // ex: "2026-03" ou "Março 2026"
+    fileName: string;
+    fileContent: string; // O conteúdo real do TXT ou CSV (para download)
+    trashedAt?: string; // Lixeira (Soft Delete)
+    createdAt: string;
 }

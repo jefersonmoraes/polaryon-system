@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { CreditCard, TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, Activity, AlertCircle, AlertTriangle, Clock, BarChart3, PieChart as PieChartIcon, ArrowDownRight, LineChart as LineChartIcon, Building, ShieldCheck, Wallet, Receipt, Users, Target, Briefcase, Landmark, Shield, Scale, Gavel, Award, CalendarClock, Percent, Filter } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CreditCard, TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, Activity, AlertCircle, AlertTriangle, Clock, BarChart3, PieChart as PieChartIcon, ArrowDownRight, LineChart as LineChartIcon, Building, ShieldCheck, Wallet, Receipt, Users, Target, Briefcase, Landmark, Shield, Scale, Gavel, Award, CalendarClock, Percent, Filter, ArrowLeftRight, Trash2 } from 'lucide-react';
 import { AccountantExportPanel } from '@/components/accounting/AccountantExportPanel';
+import { AccountingTrashViewer } from '@/components/accounting/AccountingTrashViewer';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Bar, Legend, PieChart, Pie, Cell, BarChart, LineChart, Line } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InvoiceManager } from '@/components/accounting/InvoiceManager';
@@ -17,6 +19,26 @@ const AccountingDashboard = () => {
     const { entries, invoices, categories } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Active Tab state read from URL params
+    const queryParams = new URLSearchParams(location.search);
+    const initialTab = queryParams.get('tab') || 'dashboard';
+    const [activeTab, setActiveTab] = useState(initialTab);
+    const [trashViewerOpen, setTrashViewerOpen] = useState(false);
+
+    useEffect(() => {
+        const currentTab = queryParams.get('tab');
+        if (currentTab && currentTab !== activeTab) {
+            setActiveTab(currentTab);
+        }
+    }, [location.search]);
+
+    const handleTabChange = (value: string) => {
+        setActiveTab(value);
+        navigate(`/contabil?tab=${value}`, { replace: true });
+    };
 
     // Robust Time Filter State
     const [filterMode, setFilterMode] = useState<FilterMode>('current_month');
@@ -83,6 +105,14 @@ const AccountingDashboard = () => {
         return name.includes('imposto') || name.includes('tributo') || name.includes('taxa') || name.includes('das') || name.includes('irpj') || name.includes('csll');
     };
 
+    const isCategoryFixed = (categoryId: string) => {
+        if (categoryId === 'cat-exp-1') return true; // Folha de Pagamento geralmente é fixa
+        const cat = categories.find(c => c.id === categoryId);
+        if (!cat) return false;
+        const name = cat.name.toLowerCase();
+        return name.includes('salário') || name.includes('aluguel') || name.includes('fixa') || name.includes('software') || name.includes('contador') || name.includes('folha');
+    };
+
     // CMV: Cost of Goods Sold / Suppliers
     const cmvExpenses = companyEntries
         .filter(e => e.type === 'expense' && e.status === 'paid' && isCategoryCMV(e.categoryId))
@@ -130,7 +160,12 @@ const AccountingDashboard = () => {
     const projectedCashflow = upcomingRevenue - upcomingExpense;
 
     // Chart Data Preparation - Historic Evolution
-    const chartDataMap = new Map<string, { name: string; fullDate: Date; Receitas: number; Despesas: number; Saldo: number }>();
+    const chartDataMap = new Map<string, {
+        name: string; fullDate: Date; Receitas: number; Despesas: number; Saldo: number;
+        ReceitasGeral: number; DespesasGeral: number;
+        ReceitasAcumuladas: number; DespesasAcumuladas: number;
+        ReceitasPagasAcumuladas: number; DespesasPagasAcumuladas: number;
+    }>();
 
     // Group by month if filterMode is year or all, otherwise by day
     const groupByMonth = filterMode === 'specific_year' || filterMode === 'all';
@@ -149,19 +184,46 @@ const AccountingDashboard = () => {
         }
 
         if (!chartDataMap.has(dateKeyStr)) {
-            chartDataMap.set(dateKeyStr, { name: displayStr, fullDate: date, Receitas: 0, Despesas: 0, Saldo: 0 });
+            chartDataMap.set(dateKeyStr, {
+                name: displayStr, fullDate: date, Receitas: 0, Despesas: 0, Saldo: 0,
+                ReceitasGeral: 0, DespesasGeral: 0, ReceitasAcumuladas: 0, DespesasAcumuladas: 0,
+                ReceitasPagasAcumuladas: 0, DespesasPagasAcumuladas: 0
+            });
         }
 
         const current = chartDataMap.get(dateKeyStr)!;
-        if (entry.type === 'revenue') current.Receitas += entry.amount;
-        if (entry.type === 'expense') current.Despesas += entry.amount;
-        current.Saldo = current.Receitas - current.Despesas;
+        if (entry.type === 'revenue' && entry.status === 'paid') current.Receitas += entry.amount;
+        if (entry.type === 'expense' && entry.status === 'paid') current.Despesas += entry.amount;
+
+        // Break-even data
+        if (entry.type === 'revenue') current.ReceitasGeral += entry.amount;
+        if (entry.type === 'expense') current.DespesasGeral += entry.amount;
     });
 
     // Sort chronologically
     const chartData = Array.from(chartDataMap.values())
         .sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime())
-        .map(({ name, Receitas, Despesas, Saldo }) => ({ name, Receitas, Despesas, Saldo }));
+        .map(d => {
+            d.Saldo = d.Receitas - d.Despesas;
+            return d;
+        });
+
+    let cumulativeRevenues = 0;
+    let cumulativeExpenses = 0;
+    let cumulativeRevenuesPaid = 0;
+    let cumulativeExpensesPaid = 0;
+
+    chartData.forEach(d => {
+        cumulativeRevenues += d.ReceitasGeral;
+        cumulativeExpenses += d.DespesasGeral;
+        cumulativeRevenuesPaid += d.Receitas;
+        cumulativeExpensesPaid += d.Despesas;
+
+        d.ReceitasAcumuladas = cumulativeRevenues;
+        d.DespesasAcumuladas = cumulativeExpenses;
+        d.ReceitasPagasAcumuladas = cumulativeRevenuesPaid;
+        d.DespesasPagasAcumuladas = cumulativeExpensesPaid;
+    });
 
     // Generate proactive alerts
     const alerts = [];
@@ -230,6 +292,21 @@ const AccountingDashboard = () => {
         .sort((a, b) => b.value - a.value)
         .slice(0, 5);
 
+    // X. Despesas Fixas vs Variáveis
+    let fixedExpensesValue = 0;
+    let variableExpensesValue = 0;
+    companyEntries.filter(e => e.type === 'expense' && e.status === 'paid').forEach(e => {
+        if (isCategoryFixed(e.categoryId)) {
+            fixedExpensesValue += e.amount;
+        } else {
+            variableExpensesValue += e.amount;
+        }
+    });
+    const fixedVsVariableData = [
+        { name: 'Despesas Fixas', value: fixedExpensesValue, fill: '#3b82f6' },
+        { name: 'Desp. Variáveis', value: variableExpensesValue, fill: '#f59e0b' }
+    ].filter(d => d.value > 0);
+
     // 3. Status de Recebíveis (Barra Empilhada)
     const revStatusMap = new Map<string, { name: string; fullDate: Date; Pago: number; Pendente: number }>();
     companyEntries.filter(e => e.type === 'revenue').forEach(entry => {
@@ -248,6 +325,7 @@ const AccountingDashboard = () => {
         if (entry.status === 'paid') curr.Pago += entry.amount;
         if (entry.status === 'pending') curr.Pendente += entry.amount;
     });
+
     const revStatusData = Array.from(revStatusMap.values())
         .sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime())
         .map(({ name, Pago, Pendente }) => ({ name, Pago, Pendente }));
@@ -349,6 +427,26 @@ const AccountingDashboard = () => {
         runwayText = "+12 Meses"
     }
 
+    // --- NEW: 4 Advanced Governance Metrics (Requested) ---
+    // 1. AR (Contas a Receber)
+    const contasAReceberAR = pendingRevenue;
+
+    // 2. EBITDA (Proxy Lucro antes de Juros, Impostos, Depreciação e Amortização - Usando Lucro Operacional como base simples)
+    const ebitda = operatingProfit; // Assuming 'operatingProfit' already excluded taxes, interest, and no depreciation is recorded yet
+    const ebitdaMargin = totalRevenue > 0 ? ((ebitda / totalRevenue) * 100).toFixed(1) : "0";
+
+    // 3. MRR (Receita Recorrente Mensal)
+    // Para simplificar: Soma das receitas vinculadas a contratos recorrentes. (Proxy: Receitas onde "notas" tem a palavra 'recorrente' ou 'mensalidade')
+    const mrr = companyEntries
+        .filter(e => e.type === 'revenue' && e.status === 'paid' &&
+            (e.title.toLowerCase().includes('recorrente') || e.title.toLowerCase().includes('mensalidade') || e.notes?.toLowerCase().includes('recorrente')))
+        .reduce((acc, curr) => acc + curr.amount, 0);
+
+    // 4. Cash Burn (Taxa de Queima de Caixa)
+    // Mede fluxo de caixa operacional negativo. Se for positivo, a queima é 0 (está gerando caixa).
+    const cashBurn = operatingProfit < 0 ? Math.abs(operatingProfit) : 0;
+    const runwayMeses = cashBurn > 0 ? (saldoAtualGlobal / cashBurn).toFixed(1) : "> 12";
+
     return (
         <div className="flex-1 bg-background text-foreground overflow-hidden flex flex-col">
             <div className="kanban-header h-12 flex items-center px-4 shrink-0 border-b border-border z-10">
@@ -358,11 +456,19 @@ const AccountingDashboard = () => {
                         {activeCompany.nomeFantasia || activeCompany.razaoSocial}
                     </span>
                 )}
+                <div className="ml-auto">
+                    <button
+                        onClick={() => setTrashViewerOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-background/20 hover:bg-rose-500/20 text-white hover:text-rose-400 rounded-md transition-colors text-sm font-medium border border-transparent hover:border-rose-500/30"
+                    >
+                        <Trash2 className="h-4 w-4" /> Lixeira
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-auto p-4 sm:p-6 custom-scrollbar">
                 <div className="max-w-6xl mx-auto space-y-6">
-                    <Tabs defaultValue="dashboard" className="w-full">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                         <TabsList className="mb-6 bg-muted/40 border border-border p-1 w-full flex flex-wrap gap-1 h-auto justify-start overflow-x-auto hide-scrollbar">
                             <TabsTrigger value="dashboard" className="data-[state=active]:bg-background">Visão Geral (DRE)</TabsTrigger>
                             <TabsTrigger value="notas" className="data-[state=active]:bg-background">Logística NF (XML)</TabsTrigger>
@@ -400,12 +506,12 @@ const AccountingDashboard = () => {
                                     <select
                                         value={filterMode}
                                         onChange={(e) => setFilterMode(e.target.value as FilterMode)}
-                                        className="bg-transparent text-sm border-none focus:ring-0 text-foreground cursor-pointer font-medium"
+                                        className="bg-background text-foreground text-sm border-none rounded-md focus:ring-1 focus:ring-primary cursor-pointer font-medium px-2 py-1"
                                     >
-                                        <option value="current_month">Mês Atual</option>
-                                        <option value="specific_month">Mês Específico</option>
-                                        <option value="specific_year">Ano Específico</option>
-                                        <option value="all">Todo o Período</option>
+                                        <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
+                                        <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
+                                        <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
+                                        <option className="bg-background text-foreground" value="all">Todo o Período</option>
                                     </select>
 
                                     {filterMode === 'specific_month' && (
@@ -549,7 +655,7 @@ const AccountingDashboard = () => {
                                     <BarChart3 className="h-5 w-5 text-primary" />
                                     Métricas Avançadas de Governança
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
                                         <div className="flex items-center gap-2 mb-2 text-muted-foreground">
                                             <BarChart3 className="h-4 w-4 text-emerald-500" />
@@ -558,6 +664,47 @@ const AccountingDashboard = () => {
                                         <div className="text-xl font-bold">R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                                         <p className="text-[10px] text-muted-foreground mt-1">Por recebimento pago no período</p>
                                     </div>
+
+                                    {/* --- 4 New Metrics --- */}
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Wallet className="h-4 w-4 text-emerald-500" />
+                                            <h3 className="text-sm font-medium">AR (Contas a Receber)</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-emerald-500">R$ {contasAReceberAR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Receitas pendentes (data base)</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <TrendingUp className="h-4 w-4 text-emerald-400" />
+                                            <h3 className="text-sm font-medium">EBITDA Gerencial</h3>
+                                        </div>
+                                        <div className="flex items-baseline gap-2">
+                                            <div className="text-xl font-bold text-emerald-400">R$ {ebitda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                            <span className="text-xs font-semibold text-emerald-400/80">({ebitdaMargin}%)</span>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Lucro Operacional antes de IR/CSLL</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-indigo-500/5">
+                                        <div className="flex items-center gap-2 mb-2 text-indigo-500">
+                                            <Activity className="h-4 w-4" />
+                                            <h3 className="text-sm font-medium">MRR Estimado</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-indigo-500">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-indigo-500/70 font-medium mt-1">Receita Recorrente Mensal</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-rose-500/5">
+                                        <div className="flex items-center gap-2 mb-2 text-rose-500">
+                                            <TrendingDown className="h-4 w-4" />
+                                            <h3 className="text-sm font-medium">Cash Burn (Queima)</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-rose-500">R$ {cashBurn.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-rose-500/70 font-medium mt-1">Déficit op. mensal (runway: {runwayMeses})</p>
+                                    </div>
+                                    {/* --- End New Metrics --- */}
 
                                     <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
                                         <div className="flex items-center gap-2 mb-2 text-muted-foreground">
@@ -599,7 +746,7 @@ const AccountingDashboard = () => {
                                     </div>
 
                                     {/* Line 2 (Remaining 5) */}
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                    <div className={`kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group transition-all duration-300 ${Number(concentracaoMaiorPagadorPercent) > 50 ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : ''}`}>
                                         <div className="flex items-center gap-2 mb-2 text-muted-foreground">
                                             <Percent className="h-4 w-4 text-blue-500" />
                                             <h3 className="text-sm font-medium">Concentração Cliente</h3>
@@ -635,6 +782,15 @@ const AccountingDashboard = () => {
                                         <p className="text-[10px] text-muted-foreground mt-1">Atestados, CREA/CAU, Docs</p>
                                     </div>
 
+                                    <div className={`kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group transition-all duration-300 ${Number(liquidezCorrente.replace('>', '').trim()) < 1.0 ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : ''}`}>
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <ShieldCheck className="h-4 w-4 text-teal-500" />
+                                            <h3 className="text-sm font-medium">Índice de Liquidez Corrente</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-teal-500">{liquidezCorrente}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Capacidade de pagar Curto Prazo</p>
+                                    </div>
+
                                     <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
                                         <div className="flex items-center gap-2 mb-2 text-muted-foreground">
                                             <Landmark className="h-4 w-4 text-blue-400" />
@@ -646,18 +802,18 @@ const AccountingDashboard = () => {
                                         <p className="text-[10px] text-muted-foreground mt-1">Rendimentos vs Tarifas</p>
                                     </div>
 
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-emerald-500/5">
-                                        <div className="flex items-center gap-2 mb-2 text-emerald-500">
+                                    <div className={`kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-emerald-500/5 transition-all duration-300 ${runwayText.includes('Critico') ? 'ring-2 ring-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]' : ''}`}>
+                                        <div className={`flex items-center gap-2 mb-2 ${runwayText.includes('Critico') ? 'text-rose-500' : 'text-emerald-500'}`}>
                                             <Clock className="h-4 w-4" />
                                             <h3 className="text-sm font-medium">Runway (Fôlego)</h3>
                                         </div>
-                                        <div className="text-xl font-bold text-emerald-500">{runwayText}</div>
-                                        <p className="text-[10px] text-emerald-500/70 font-medium mt-1">Sobrevivência x custo fixo</p>
+                                        <div className={`text-xl font-bold ${runwayText.includes('Critico') ? 'text-rose-500' : 'text-emerald-500'}`}>{runwayText}</div>
+                                        <p className={`text-[10px] font-medium mt-1 ${runwayText.includes('Critico') ? 'text-rose-500/70' : 'text-emerald-500/70'}`}>Sobrevivência x custo fixo</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                <div className="kanban-card rounded-xl border border-border lg:col-span-2 shadow-sm p-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="font-bold flex items-center gap-2">
                                             <Activity className="h-4 w-4 text-primary" />
@@ -700,38 +856,36 @@ const AccountingDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
-                                    <AccountantExportPanel />
-
-                                    <div className="kanban-card rounded-xl border border-border shadow-sm flex flex-col">
-                                        <div className="p-4 border-b border-border flex items-center justify-between">
-                                            <h3 className="font-bold flex items-center gap-2">
-                                                <FileText className="h-4 w-4 text-primary" />
-                                                Últimos Lançamentos
-                                            </h3>
-                                        </div>
-                                        <div className="p-4 flex-1 flex flex-col justify-center items-center text-center space-y-2 text-muted-foreground min-h-[200px]">
-                                            {companyEntries.length === 0 ? (
-                                                <>
-                                                    <FileText className="h-8 w-8 opacity-20" />
-                                                    <p className="text-sm">Nenhum lançamento encontrado para esta empresa.</p>
-                                                </>
-                                            ) : (
-                                                <div className="w-full text-left space-y-3">
-                                                    {companyEntries.slice(-5).reverse().map(entry => (
-                                                        <div key={entry.id} className="flex justify-between items-center text-sm border-b border-border pb-2 last:border-0">
-                                                            <div>
-                                                                <p className="font-medium text-foreground">{entry.title}</p>
-                                                                <p className="text-[10px] text-muted-foreground">{new Date(entry.date).toLocaleDateString('pt-BR')}</p>
-                                                            </div>
-                                                            <span className={`font-bold ${entry.type === 'revenue' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                                {entry.type === 'revenue' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <ArrowLeftRight className="h-4 w-4 text-emerald-500" />
+                                            Entradas vs Saídas Realizadas
+                                        </h3>
+                                    </div>
+                                    <div className="h-72 w-full pt-4">
+                                        {chartData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">O histórico de movimentação não possui dados suficientes.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`} />
+                                                    <Tooltip
+                                                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                                        contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }}
+                                                        itemStyle={{ fontWeight: 'bold' }}
+                                                        formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                                                    />
+                                                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                                                    <Bar dataKey="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                                    <Bar dataKey="Despesas" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -853,6 +1007,64 @@ const AccountingDashboard = () => {
                                     </div>
                                 </div>
 
+                                {/* Chart 6: Despesas Fixas vs Variáveis */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <PieChartIcon className="h-4 w-4 text-blue-500" />
+                                            Despesas Fixas vs Variáveis
+                                        </h3>
+                                    </div>
+                                    <div className="h-64 w-full">
+                                        {fixedVsVariableData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem dados de despesa no período.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie data={fixedVsVariableData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value">
+                                                        {fixedVsVariableData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Chart 7: Curva do Ponto de Equilíbrio */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <LineChartIcon className="h-4 w-4 text-emerald-500" />
+                                            Curva do Ponto de Equilíbrio
+                                        </h3>
+                                    </div>
+                                    <div className="h-64 w-full">
+                                        {chartData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem dados para projetar o Break-even.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
+                                                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                                                    <Line type="monotone" name="Receitas (Acumuladas)" dataKey="ReceitasAcumuladas" stroke="#10b981" strokeWidth={3} dot={false} />
+                                                    <Line type="monotone" name="Despesas (Acumuladas)" dataKey="DespesasAcumuladas" stroke="#f43f5e" strokeWidth={3} dot={false} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </div>
+
                                 {/* Chart 5: Evolução da Margem de Contribuição */}
                                 <div className="kanban-card rounded-xl border border-border lg:col-span-2 shadow-sm p-4 mb-6">
                                     <div className="flex items-center justify-between mb-4">
@@ -903,12 +1115,21 @@ const AccountingDashboard = () => {
                             <TaxDash />
                         </TabsContent>
 
+                        <TabsContent value="exportacao" className="space-y-6">
+                            <AccountantExportPanel />
+                        </TabsContent>
+
                         <TabsContent value="prolabore" className="space-y-6">
                             <ProLaboreDash />
                         </TabsContent>
                     </Tabs>
                 </div>
             </div>
+
+            <AccountingTrashViewer
+                open={trashViewerOpen}
+                onOpenChange={setTrashViewerOpen}
+            />
         </div>
     );
 };

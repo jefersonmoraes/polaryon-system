@@ -14,7 +14,7 @@ interface EntryFormModalProps {
 }
 
 const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }: EntryFormModalProps) => {
-    const { addEntry, updateEntry, entries, categories } = useAccountingStore();
+    const { addEntry, updateEntry, entries, categories, bankAccounts } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
 
@@ -32,6 +32,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
         documentEntityId: '',
         competenceDate: new Date().toISOString().split('T')[0],
         paymentMethod: 'bank_transfer' as any,
+        bankAccountId: '',
         notes: ''
     });
 
@@ -56,6 +57,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                         documentEntityId: entry.documentEntityId || '',
                         competenceDate: entry.competenceDate ? new Date(entry.competenceDate).toISOString().split('T')[0] : new Date(entry.date).toISOString().split('T')[0],
                         paymentMethod: entry.paymentMethod || 'bank_transfer',
+                        bankAccountId: entry.bankAccountId || '',
                         notes: entry.notes || ''
                     });
                 }
@@ -72,6 +74,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                     documentEntityId: '',
                     competenceDate: new Date().toISOString().split('T')[0],
                     paymentMethod: 'bank_transfer',
+                    bankAccountId: '',
                     notes: ''
                 });
                 setIsRecurring(false);
@@ -129,6 +132,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
             documentEntityId: formData.documentEntityId?.replace(/\D/g, ''),
             competenceDate: new Date(formData.competenceDate).toISOString(),
             paymentMethod: formData.paymentMethod,
+            bankAccountId: formData.bankAccountId || undefined,
             notes: formData.notes
         };
 
@@ -169,6 +173,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
             documentEntityId: '',
             competenceDate: new Date().toISOString().split('T')[0],
             paymentMethod: 'bank_transfer',
+            bankAccountId: '',
             notes: ''
         });
 
@@ -224,11 +229,11 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                     required
                                     value={formData.categoryId}
                                     onChange={(e) => setFormData(p => ({ ...p, categoryId: e.target.value }))}
-                                    className="w-full bg-secondary/50 border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
+                                    className="w-full bg-background text-foreground border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
                                 >
-                                    <option value="" disabled>Selecione uma categoria...</option>
+                                    <option className="bg-background text-foreground" value="" disabled>Selecione uma categoria...</option>
                                     {typeCategories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                        <option className="bg-background text-foreground" key={cat.id} value={cat.id}>{cat.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -275,16 +280,30 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 <select
                                     value={formData.paymentMethod}
                                     onChange={(e) => setFormData(p => ({ ...p, paymentMethod: e.target.value as any }))}
-                                    className="w-full bg-secondary/30 border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                                    className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
                                 >
-                                    <option value="pix">PIX</option>
-                                    <option value="bank_transfer">Transferência Bancária (TED/DOC)</option>
-                                    <option value="boleto">Boleto Bancário</option>
-                                    <option value="credit_card">Cartão de Crédito</option>
-                                    <option value="debit_card">Cartão de Débito</option>
-                                    <option value="cash">Dinheiro em Espécie</option>
+                                    <option className="bg-background text-foreground" value="pix">PIX</option>
+                                    <option className="bg-background text-foreground" value="bank_transfer">Transferência Bancária (TED/DOC)</option>
+                                    <option className="bg-background text-foreground" value="boleto">Boleto Bancário</option>
+                                    <option className="bg-background text-foreground" value="credit_card">Cartão de Crédito</option>
+                                    <option className="bg-background text-foreground" value="debit_card">Cartão de Débito</option>
+                                    <option className="bg-background text-foreground" value="cash">Dinheiro em Espécie</option>
                                 </select>
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-semibold uppercase text-muted-foreground">Instituição Financeira (Conta)</label>
+                            <select
+                                value={formData.bankAccountId}
+                                onChange={(e) => setFormData(p => ({ ...p, bankAccountId: e.target.value }))}
+                                className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                            >
+                                <option className="bg-background text-foreground" value="">Sem vínculo / Caixa Interno</option>
+                                {bankAccounts.filter(b => b.companyId === activeCompany?.id).map(bank => (
+                                    <option className="bg-background text-foreground" key={bank.id} value={bank.id}>{bank.name}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="space-y-2">
@@ -365,11 +384,11 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                         <select
                                             value={recurrenceFrequency}
                                             onChange={(e) => setRecurrenceFrequency(e.target.value as any)}
-                                            className="w-full bg-secondary/50 border border-border rounded px-3 py-1.5 text-sm outline-none focus:border-primary"
+                                            className="w-full bg-background text-foreground border border-border rounded px-3 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
                                         >
-                                            <option value="weekly">Semanal</option>
-                                            <option value="monthly">Mensal</option>
-                                            <option value="yearly">Anual</option>
+                                            <option className="bg-background text-foreground" value="weekly">Semanal</option>
+                                            <option className="bg-background text-foreground" value="monthly">Mensal</option>
+                                            <option className="bg-background text-foreground" value="yearly">Anual</option>
                                         </select>
                                     </div>
                                     <div className="space-y-1.5">

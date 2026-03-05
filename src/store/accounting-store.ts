@@ -5,16 +5,19 @@ import {
     EntryType,
     EntryStatus,
     AccountingCategory,
+    BankAccount,
     AccountingEntry,
     Invoice,
     BankTransaction,
     TaxObligation,
-    AccountingSettings
+    AccountingSettings,
+    AccountantExport
 } from '@/types/accounting';
 
 export interface AccountingState {
     entries: AccountingEntry[];
     categories: AccountingCategory[];
+    bankAccounts: BankAccount[];
     invoices: Invoice[];
     bankTransactions: BankTransaction[];
     taxObligations: TaxObligation[];
@@ -24,25 +27,37 @@ export interface AccountingState {
     addEntry: (entry: Omit<AccountingEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
     updateEntry: (id: string, entry: Partial<AccountingEntry>) => void;
     deleteEntry: (id: string) => void;
+    restoreEntry: (id: string) => void;
 
     addCategory: (category: Omit<AccountingCategory, 'id'>) => void;
     updateCategory: (id: string, category: Partial<AccountingCategory>) => void;
     deleteCategory: (id: string) => void;
-
-    // ERP Actions
-    addInvoice: (invoice: Omit<Invoice, 'createdAt'> & { id?: string }) => void;
+    // Bank Accounts
+    addBankAccount: (account: Omit<BankAccount, 'id'>) => void;
+    updateBankAccount: (id: string, account: Partial<BankAccount>) => void;
+    deleteBankAccount: (id: string) => void;
+    // Invoices
+    addInvoice: (invoice: Omit<Invoice, 'id' | 'createdAt'>) => void;
     updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
     deleteInvoice: (id: string) => void;
+    restoreInvoice: (id: string) => void;
 
     addBankTransaction: (transaction: Omit<BankTransaction, 'id'>) => void;
     reconcileTransaction: (transactionId: string, entryId: string) => void;
 
-    calculateTaxes: (companyId: string, month: string, porte?: string) => void;
+    calculateTaxes: (companyId: string, month: string, porte: string) => void;
     updateSettings: (companyId: string, settings: Partial<AccountingSettings>) => void;
     payTax: (id: string) => void;
 
     updateTaxObligation: (id: string, tax: Partial<TaxObligation>) => void;
     deleteTaxObligation: (id: string) => void;
+    restoreTaxObligation: (id: string) => void;
+
+    // Exports
+    exports: AccountantExport[];
+    addExport: (exp: Omit<AccountantExport, 'id' | 'createdAt'>) => void;
+    deleteExport: (id: string) => void;
+    restoreExport: (id: string) => void;
 }
 
 const DEFAULT_CATEGORIES: AccountingCategory[] = [
@@ -63,9 +78,11 @@ export const useAccountingStore = create<AccountingState>()(
         (set) => ({
             entries: [],
             categories: DEFAULT_CATEGORIES,
+            bankAccounts: [],
             invoices: [],
             bankTransactions: [],
             taxObligations: [],
+            exports: [],
             settings: {},
 
             addEntry: (entry) =>
@@ -95,18 +112,20 @@ export const useAccountingStore = create<AccountingState>()(
                     const entryToDelete = state.entries.find((e) => e.id === id);
                     if (!entryToDelete) return state;
 
-                    // Se a entrada apagada foi gerada por um imposto, revertemos o status do imposto
-                    const taxIdToRevert = entryToDelete.linkedTaxId;
-
+                    // Soft Delete
                     return {
-                        entries: state.entries.filter((entry) => entry.id !== id),
-                        taxObligations: taxIdToRevert
-                            ? state.taxObligations.map((tax) =>
-                                tax.id === taxIdToRevert ? { ...tax, status: 'pending', paymentDate: undefined } : tax
-                            )
-                            : state.taxObligations
+                        entries: state.entries.map((entry) =>
+                            entry.id === id ? { ...entry, trashedAt: new Date().toISOString() } : entry
+                        )
                     };
                 }),
+
+            restoreEntry: (id) =>
+                set((state) => ({
+                    entries: state.entries.map((entry) =>
+                        entry.id === id ? { ...entry, trashedAt: undefined } : entry
+                    )
+                })),
 
             addCategory: (category) =>
                 set((state) => ({
@@ -125,7 +144,27 @@ export const useAccountingStore = create<AccountingState>()(
 
             deleteCategory: (id) =>
                 set((state) => ({
-                    categories: state.categories.filter((category) => category.id !== id),
+                    categories: state.categories.filter((c) => c.id !== id),
+                })),
+
+            addBankAccount: (account) =>
+                set((state) => ({
+                    bankAccounts: [
+                        ...state.bankAccounts,
+                        { ...account, id: crypto.randomUUID() },
+                    ],
+                })),
+
+            updateBankAccount: (id, updatedAccount) =>
+                set((state) => ({
+                    bankAccounts: state.bankAccounts.map((a) =>
+                        a.id === id ? { ...a, ...updatedAccount } : a
+                    ),
+                })),
+
+            deleteBankAccount: (id) =>
+                set((state) => ({
+                    bankAccounts: state.bankAccounts.filter((a) => a.id !== id),
                 })),
 
             addInvoice: (invoice) =>
@@ -134,9 +173,9 @@ export const useAccountingStore = create<AccountingState>()(
                         ...state.invoices,
                         {
                             ...invoice,
-                            id: invoice.id || crypto.randomUUID(),
+                            id: crypto.randomUUID(),
                             createdAt: new Date().toISOString(),
-                        }
+                        } as Invoice
                     ]
                 })),
 
@@ -149,9 +188,12 @@ export const useAccountingStore = create<AccountingState>()(
 
             deleteInvoice: (id) =>
                 set((state) => ({
-                    invoices: state.invoices.filter((inv) => inv.id !== id),
-                    // Bidirectional sync: if an invoice is hard-deleted from store, clean up related entries
-                    entries: state.entries.filter((e) => e.linkedInvoiceId !== id)
+                    invoices: state.invoices.map((inv) => inv.id === id ? { ...inv, trashedAt: new Date().toISOString() } : inv),
+                })),
+
+            restoreInvoice: (id) =>
+                set((state) => ({
+                    invoices: state.invoices.map((inv) => inv.id === id ? { ...inv, trashedAt: undefined } : inv),
                 })),
 
             addBankTransaction: (transaction) =>
@@ -291,9 +333,12 @@ export const useAccountingStore = create<AccountingState>()(
 
             deleteTaxObligation: (id) =>
                 set((state) => ({
-                    taxObligations: state.taxObligations.filter(t => t.id !== id),
-                    // Também deletamos o lançamento financeiro caso exista (Sincronização Bidirecional)
-                    entries: state.entries.filter(e => e.linkedTaxId !== id)
+                    taxObligations: state.taxObligations.map(t => t.id === id ? { ...t, trashedAt: new Date().toISOString() } : t),
+                })),
+
+            restoreTaxObligation: (id) =>
+                set((state) => ({
+                    taxObligations: state.taxObligations.map(t => t.id === id ? { ...t, trashedAt: undefined } : t),
                 })),
 
             payTax: (id) =>
@@ -331,6 +376,24 @@ export const useAccountingStore = create<AccountingState>()(
                         entries: [...state.entries, taxExpense]
                     };
                 }),
+
+            addExport: (exp) =>
+                set((state) => ({
+                    exports: [
+                        ...state.exports,
+                        { ...exp, id: crypto.randomUUID(), createdAt: new Date().toISOString() } as AccountantExport
+                    ]
+                })),
+
+            deleteExport: (id) =>
+                set((state) => ({
+                    exports: state.exports.map(exp => exp.id === id ? { ...exp, trashedAt: new Date().toISOString() } : exp)
+                })),
+
+            restoreExport: (id) =>
+                set((state) => ({
+                    exports: state.exports.map(exp => exp.id === id ? { ...exp, trashedAt: undefined } : exp)
+                })),
         }),
         {
             name: 'accounting-storage',

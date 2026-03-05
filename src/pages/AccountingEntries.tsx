@@ -111,26 +111,26 @@ const AccountingEntries = () => {
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Tipo</label>
-                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary">
-                                    <option value="all">Todos</option>
-                                    <option value="revenue">Entradas</option>
-                                    <option value="expense">Saídas</option>
+                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+                                    <option className="bg-background text-foreground" value="all">Todos</option>
+                                    <option className="bg-background text-foreground" value="revenue">Entradas</option>
+                                    <option className="bg-background text-foreground" value="expense">Saídas</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Status</label>
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary">
-                                    <option value="all">Todos</option>
-                                    <option value="paid">Paga/Recebida</option>
-                                    <option value="pending">Pendente</option>
+                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+                                    <option className="bg-background text-foreground" value="all">Todos</option>
+                                    <option className="bg-background text-foreground" value="paid">Paga/Recebida</option>
+                                    <option className="bg-background text-foreground" value="pending">Pendente</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Categoria</label>
-                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary">
-                                    <option value="all">Todas as Categorias</option>
+                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+                                    <option className="bg-background text-foreground" value="all">Todas as Categorias</option>
                                     {categories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                        <option className="bg-background text-foreground" key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
                             </div>

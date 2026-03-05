@@ -224,11 +224,11 @@ export const TaxDash = () => {
                                 <select
                                     name="taxRegime"
                                     defaultValue={companySettings?.taxRegime || 'simples_nacional'}
-                                    className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                                 >
-                                    <option value="simples_nacional">Simples Nacional</option>
-                                    <option value="lucro_presumido">Lucro Presumido</option>
-                                    <option value="lucro_real">Lucro Real</option>
+                                    <option className="bg-background text-foreground" value="simples_nacional">Simples Nacional</option>
+                                    <option className="bg-background text-foreground" value="lucro_presumido">Lucro Presumido</option>
+                                    <option className="bg-background text-foreground" value="lucro_real">Lucro Real</option>
                                 </select>
                             </div>
                             <div>
@@ -257,11 +257,11 @@ export const TaxDash = () => {
                                     <select
                                         name="meiActivityType"
                                         defaultValue={companySettings?.meiActivityType || 'service'}
-                                        className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                                     >
-                                        <option value="commerce">Comércio ou Indústria (INSS + ICMS)</option>
-                                        <option value="service">Prestação de Serviços (INSS + ISS)</option>
-                                        <option value="both">Comércio e Serviços (INSS + ICMS + ISS)</option>
+                                        <option className="bg-background text-foreground" value="commerce">Comércio ou Indústria (INSS + ICMS)</option>
+                                        <option className="bg-background text-foreground" value="service">Prestação de Serviços (INSS + ISS)</option>
+                                        <option className="bg-background text-foreground" value="both">Comércio e Serviços (INSS + ICMS + ISS)</option>
                                     </select>
                                 </div>
                                 <button type="submit" className="w-full bg-primary/20 hover:bg-primary/30 text-primary font-medium rounded-lg py-2 transition-colors text-sm border border-primary/30">

@@ -7,7 +7,7 @@ import { InvoiceType, InvoiceStatus } from '@/types/accounting';
 import { toast } from 'sonner';
 
 export const InvoiceManager = () => {
-    const { invoices, addInvoice, updateInvoice, addEntry } = useAccountingStore();
+    const { invoices, addInvoice, updateInvoice, deleteInvoice, addEntry } = useAccountingStore();
     const { mainCompanies, budgets, cards } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
 
@@ -49,14 +49,17 @@ export const InvoiceManager = () => {
 
     // Derived state
     const filteredInvoices = companyInvoices.filter(inv => {
+        // Only show invoices that are not in the global trash
+        if (inv.trashedAt && filterStatus !== 'cancelled') return false;
+
         const matchesSearch = inv.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
             inv.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (inv.clientDocument && inv.clientDocument.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
 
         const matchesStatus = filterStatus === 'all'
-            ? inv.status !== 'cancelled'
+            ? true
             : filterStatus === 'cancelled'
-                ? inv.status === 'cancelled'
+                ? inv.trashedAt !== undefined // Map 'cancelled' local filter to 'trashed' items
                 : inv.status === filterStatus;
 
         return matchesSearch && matchesStatus;
@@ -271,24 +274,27 @@ export const InvoiceManager = () => {
     };
 
     const handleCancelInvoice = (invoice: any) => {
-        if (confirm(`Tem certeza que deseja cancelar a NF ${invoice.number}? Isso não a apaga definitivamente, mas a remove dos relatórios ativos.`)) {
-            // @ts-ignore - store exposed methods
+        if (confirm(`Tem certeza que deseja apagar a NF ${invoice.number}? Ela será enviada para a Lixeira Contábil.`)) {
+            deleteInvoice(invoice.id);
+            // Optionally, we could also cancel it, but trashedAt is enough for the global trash
             useAccountingStore.getState().updateInvoice(invoice.id, { status: 'cancelled' });
 
             // Tentar encontrar lançamento financeiro atrelado
             const storeState = useAccountingStore.getState();
             const relatedEntry = storeState.entries.find(e => e.linkedInvoiceId === invoice.id || (e.documentNumber === invoice.number && e.companyId === invoice.companyId));
             if (relatedEntry) {
-                if (confirm("Você deseja também deletar o lançamento de Receita atrelado a esta nota no fluxo de caixa?")) {
+                if (confirm("Você deseja também enviar o lançamento financeiro (Receita) atrelado a esta nota para a lixeira?")) {
                     storeState.deleteEntry(relatedEntry.id);
                 }
             }
-            toast.info(`Nota Fiscal ${invoice.number} cancelada.`);
+            toast.info(`Nota Fiscal ${invoice.number} enviada para a lixeira.`);
         }
     };
 
     const handleRecoverInvoice = (invoice: any) => {
+        // Call the global restore method from the store
         // @ts-ignore
+        useAccountingStore.getState().restoreInvoice(invoice.id);
         useAccountingStore.getState().updateInvoice(invoice.id, { status: 'issued' });
         toast.success(`Nota Fiscal ${invoice.number} restaurada com sucesso.`);
     };
@@ -386,10 +392,10 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                         <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value as any)}
-                            className="bg-transparent border-none text-xs font-semibold focus:outline-none text-muted-foreground focus:text-foreground cursor-pointer"
+                            className="bg-background text-foreground border-none rounded px-2 py-1 text-xs font-semibold focus:outline-none cursor-pointer focus:ring-1 focus:ring-primary"
                         >
-                            <option value="all">Ver Ativas</option>
-                            <option value="cancelled">Lixeira (Canceladas)</option>
+                            <option className="bg-background text-foreground" value="all">Ver Ativas</option>
+                            <option className="bg-background text-foreground" value="cancelled">Lixeira (Canceladas)</option>
                         </select>
                     </div>
                 </div>
@@ -439,11 +445,11 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                             <Download className="h-3.5 w-3.5" />
                                         </button>
 
-                                        {invoice.status === 'cancelled' ? (
+                                        {invoice.status === 'cancelled' || invoice.trashedAt ? (
                                             <button
                                                 onClick={() => handleRecoverInvoice(invoice)}
                                                 className="p-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition-colors"
-                                                title="Restaurar Nota Fiscal"
+                                                title="Restaurar Nota Fiscal da Lixeira"
                                             >
                                                 <RotateCcw className="h-3.5 w-3.5" />
                                             </button>
@@ -495,15 +501,15 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                 <div className="mb-2">
                                     <label className="block text-xs font-medium text-muted-foreground mb-1">Preencher a partir de Orçamento/Cotação Aprovada</label>
                                     <select
-                                        className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                                        className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
                                         onChange={(e) => handleAutoFillFromBudget(e.target.value)}
                                         defaultValue=""
                                     >
-                                        <option value="" disabled>Selecione um orçamento...</option>
+                                        <option className="bg-background text-foreground" value="" disabled>Selecione um orçamento...</option>
                                         {budgets.filter(b => b.status === 'Aprovado').map(b => {
                                             const finalAmount = b.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
                                             return (
-                                                <option key={b.id} value={b.id}>{b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                                <option className="bg-background text-foreground" key={b.id} value={b.id}>{b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
                                             );
                                         })}
                                     </select>
