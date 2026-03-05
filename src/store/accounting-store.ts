@@ -1,0 +1,294 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+import {
+    EntryType,
+    EntryStatus,
+    AccountingCategory,
+    AccountingEntry,
+    Invoice,
+    BankTransaction,
+    TaxObligation,
+    AccountingSettings
+} from '@/types/accounting';
+
+export interface AccountingState {
+    entries: AccountingEntry[];
+    categories: AccountingCategory[];
+    invoices: Invoice[];
+    bankTransactions: BankTransaction[];
+    taxObligations: TaxObligation[];
+    settings: Record<string, AccountingSettings>; // key: companyId
+
+    // Actions
+    addEntry: (entry: Omit<AccountingEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
+    updateEntry: (id: string, entry: Partial<AccountingEntry>) => void;
+    deleteEntry: (id: string) => void;
+
+    addCategory: (category: Omit<AccountingCategory, 'id'>) => void;
+    updateCategory: (id: string, category: Partial<AccountingCategory>) => void;
+    deleteCategory: (id: string) => void;
+
+    // ERP Actions
+    addInvoice: (invoice: Omit<Invoice, 'id' | 'createdAt'>) => void;
+    updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
+
+    addBankTransaction: (transaction: Omit<BankTransaction, 'id'>) => void;
+    reconcileTransaction: (transactionId: string, entryId: string) => void;
+
+    calculateTaxes: (companyId: string, month: string, porte?: string) => void;
+    updateSettings: (companyId: string, settings: Partial<AccountingSettings>) => void;
+    payTax: (id: string) => void;
+}
+
+const DEFAULT_CATEGORIES: AccountingCategory[] = [
+    // Revenues
+    { id: 'cat-rev-1', name: 'Venda de Produtos', type: 'revenue', color: '#10b981' },
+    { id: 'cat-rev-2', name: 'Prestação de Serviços', type: 'revenue', color: '#059669' },
+    { id: 'cat-rev-3', name: 'Rendimentos Financeiros', type: 'revenue', color: '#34d399' },
+    // Expenses
+    { id: 'cat-exp-1', name: 'Folha de Pagamento', type: 'expense', color: '#ef4444' },
+    { id: 'cat-exp-2', name: 'Impostos e Taxas', type: 'expense', color: '#dc2626' },
+    { id: 'cat-exp-3', name: 'Fornecedores', type: 'expense', color: '#f87171' },
+    { id: 'cat-exp-4', name: 'Despesas Operacionais', type: 'expense', color: '#ea580c' },
+    { id: 'cat-exp-5', name: 'Marketing / Vendas', type: 'expense', color: '#f97316' },
+];
+
+export const useAccountingStore = create<AccountingState>()(
+    persist(
+        (set) => ({
+            entries: [],
+            categories: DEFAULT_CATEGORIES,
+            invoices: [],
+            bankTransactions: [],
+            taxObligations: [],
+            settings: {},
+
+            addEntry: (entry) =>
+                set((state) => ({
+                    entries: [
+                        ...state.entries,
+                        {
+                            ...entry,
+                            id: crypto.randomUUID(),
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                        },
+                    ],
+                })),
+
+            updateEntry: (id, updatedEntry) =>
+                set((state) => ({
+                    entries: state.entries.map((entry) =>
+                        entry.id === id
+                            ? { ...entry, ...updatedEntry, updatedAt: new Date().toISOString() }
+                            : entry
+                    ),
+                })),
+
+            deleteEntry: (id) =>
+                set((state) => ({
+                    entries: state.entries.filter((entry) => entry.id !== id),
+                })),
+
+            addCategory: (category) =>
+                set((state) => ({
+                    categories: [
+                        ...state.categories,
+                        { ...category, id: crypto.randomUUID() },
+                    ],
+                })),
+
+            updateCategory: (id, updatedCategory) =>
+                set((state) => ({
+                    categories: state.categories.map((category) =>
+                        category.id === id ? { ...category, ...updatedCategory } : category
+                    ),
+                })),
+
+            deleteCategory: (id) =>
+                set((state) => ({
+                    categories: state.categories.filter((category) => category.id !== id),
+                })),
+
+            addInvoice: (invoice) =>
+                set((state) => ({
+                    invoices: [
+                        ...state.invoices,
+                        {
+                            ...invoice,
+                            id: crypto.randomUUID(),
+                            createdAt: new Date().toISOString(),
+                        }
+                    ]
+                })),
+
+            updateInvoice: (id, updatedInvoice) =>
+                set((state) => ({
+                    invoices: state.invoices.map((inv) =>
+                        inv.id === id ? { ...inv, ...updatedInvoice } : inv
+                    )
+                })),
+
+            addBankTransaction: (transaction) =>
+                set((state) => ({
+                    bankTransactions: [
+                        ...state.bankTransactions,
+                        {
+                            ...transaction,
+                            id: crypto.randomUUID()
+                        }
+                    ]
+                })),
+
+            reconcileTransaction: (transactionId, entryId) =>
+                set((state) => {
+                    const transaction = state.bankTransactions.find(t => t.id === transactionId);
+                    const entry = state.entries.find(e => e.id === entryId);
+
+                    if (!transaction || !entry) return state;
+
+                    return {
+                        bankTransactions: state.bankTransactions.map(t =>
+                            t.id === transactionId ? { ...t, status: 'reconciled', matchedEntryId: entryId } : t
+                        ),
+                        entries: state.entries.map(e =>
+                            e.id === entryId ? { ...e, status: 'paid', updatedAt: new Date().toISOString() } : e // Assume paid when reconciled
+                        )
+                    };
+                }),
+
+            calculateTaxes: (companyId, month, porte) =>
+                set((state) => {
+                    const settings = state.settings[companyId];
+                    // Se não for MEI e não tiver config, não avança. MEI não precisa de config para DAS fixo.
+                    if (!settings && porte !== 'MEI') return state;
+
+                    // Calculate total taxable revenue for the month
+                    const revenueForMonth = state.entries
+                        .filter(e => e.companyId === companyId && e.type === 'revenue' && e.date.startsWith(month))
+                        .reduce((sum, e) => sum + e.amount, 0);
+
+                    let taxAmount = 0;
+                    let taxName = 'Guia DAS';
+
+                    if (porte === 'MEI') {
+                        // Cálculo Automático do MEI (Baseado no Salário Mínimo do Ano)
+                        const year = parseInt(month.split('-')[0]) || new Date().getFullYear();
+                        // Tabela histórica / projeção de salários mínimos no Brasil
+                        const minimumWages: Record<number, number> = {
+                            2024: 1412.00,
+                            2025: 1518.00,
+                            2026: 1621.00, // Projeção oficial
+                            2027: 1720.00
+                        };
+                        const baseWage = minimumWages[year] || minimumWages[2026];
+
+                        // 5% de INSS sobre o salário mínimo
+                        const inss = baseWage * 0.05;
+
+                        // Acréscimos por atividade (ICMS / ISS)
+                        let additionalTax = 0;
+                        const activity = settings?.meiActivityType || 'service';
+                        if (activity === 'commerce') additionalTax = 1.00; // ICMS
+                        else if (activity === 'service') additionalTax = 5.00; // ISS
+                        else if (activity === 'both') additionalTax = 6.00; // ICMS + ISS
+
+                        taxAmount = inss + additionalTax;
+                        taxName = 'Guia DAS (MEI)';
+                    } else if (settings) {
+                        taxAmount = revenueForMonth * (settings.taxRatePercentage / 100);
+                        if (settings.taxRegime === 'lucro_presumido' || settings.taxRegime === 'lucro_real') {
+                            taxName = 'Impostos Federais/Municipais';
+                        }
+                    }
+
+                    // Check if obligation already exists for this month/company
+                    const existingTaxIndex = state.taxObligations.findIndex(
+                        t => t.companyId === companyId && t.month === month && (t.name === 'Guia DAS' || t.name === 'Guia DAS (MEI)' || t.name === 'Impostos Federais/Municipais')
+                    );
+
+                    let newObligations = [...state.taxObligations];
+
+                    if (existingTaxIndex >= 0) {
+                        if (taxAmount > 0) {
+                            newObligations[existingTaxIndex] = {
+                                ...newObligations[existingTaxIndex],
+                                amount: taxAmount,
+                                name: taxName
+                            };
+                        } else {
+                            // se zerar, remove a obrigacao (a menos que seja MEI q nunca zera normalmente)
+                            newObligations.splice(existingTaxIndex, 1);
+                        }
+                    } else if (taxAmount > 0) {
+                        // Create due date for day 20 of next month
+                        const [yyyy, mm] = month.split('-');
+                        let nextMonth = parseInt(mm) + 1;
+                        let year = parseInt(yyyy);
+                        if (nextMonth > 12) {
+                            nextMonth = 1;
+                            year++;
+                        }
+                        const dueDate = `${year}-${nextMonth.toString().padStart(2, '0')}-20`;
+
+                        newObligations.push({
+                            id: crypto.randomUUID(),
+                            companyId,
+                            month,
+                            name: taxName,
+                            amount: taxAmount,
+                            dueDate,
+                            status: 'pending' as const
+                        });
+                    }
+
+                    return { taxObligations: newObligations };
+                }),
+
+            updateSettings: (companyId, newSettings) =>
+                set((state) => ({
+                    settings: {
+                        ...state.settings,
+                        [companyId]: {
+                            ...state.settings[companyId],
+                            ...newSettings,
+                            companyId
+                        }
+                    }
+                })),
+
+            payTax: (id) =>
+                set((state) => {
+                    const tax = state.taxObligations.find(t => t.id === id);
+                    if (!tax) return state;
+
+                    const updatedObligations = state.taxObligations.map(t =>
+                        t.id === id ? { ...t, status: 'paid' as const, paymentDate: new Date().toISOString() } : t
+                    );
+
+                    const taxExpense: AccountingEntry = {
+                        id: crypto.randomUUID(),
+                        companyId: tax.companyId,
+                        title: `Pagamento ${tax.name} - Competência ${tax.month}`,
+                        description: 'Imposto recolhido.',
+                        amount: tax.amount,
+                        date: new Date().toISOString(),
+                        type: 'expense',
+                        categoryId: 'cat-exp-2', // ID for Impostos e Taxas
+                        status: 'paid',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    return {
+                        taxObligations: updatedObligations,
+                        entries: [...state.entries, taxExpense]
+                    };
+                }),
+        }),
+        {
+            name: 'accounting-storage',
+        }
+    )
+);

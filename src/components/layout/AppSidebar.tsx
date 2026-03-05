@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight } from 'lucide-react';
 import { useState } from 'react';
 
 const AppSidebar = () => {
@@ -40,6 +40,7 @@ const AppSidebar = () => {
   const isBudgetModule = location.pathname.startsWith('/budgets');
   const isDocsModule = location.pathname.startsWith('/documentacao');
   const isAdminModule = location.pathname.startsWith('/company');
+  const isAccountingModule = location.pathname.startsWith('/contabil');
 
   return (
     <aside className={`${isCollapsed ? 'w-16' : 'w-56'} shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-y-auto scrollbar-hide transition-all duration-300 relative group`}>
@@ -92,6 +93,10 @@ const AppSidebar = () => {
             <Link to="/documentacao/atestados" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/atestados' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Atestados de Capacidade Técnica">
               <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Acervo Técnico</span>}
             </Link>
+
+            <Link to="/documentacao/modelos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/modelos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Modelos de Doc. Essenciais">
+              <FileText className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Modelos de Doc. Essenciais</span>}
+            </Link>
           </div>
         </div>
       ) : isAdminModule ? (
@@ -127,6 +132,27 @@ const AppSidebar = () => {
             {mainCompanies.length === 0 && !isCollapsed && (
               <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
             )}
+          </div>
+        </div>
+      ) : isAccountingModule ? (
+        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
+
+            <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
+              <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
+            </Link>
+
+            <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
+              <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
+            </Link>
+
+            <button onClick={() => {
+              const el = document.getElementById('export-panel');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }} className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent w-full text-left`} title="Relatórios e Exportação">
+              <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}
+            </button>
           </div>
         </div>
       ) : (
