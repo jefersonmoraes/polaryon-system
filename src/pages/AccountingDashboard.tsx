@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, FileText, AlertCircle, TrendingUp, TrendingDown, Clock, Receipt, Filter, BarChart3, AlertTriangle } from 'lucide-react';
+import { CreditCard, TrendingUp, TrendingDown, DollarSign, FileText, ArrowUpRight, Activity, AlertCircle, AlertTriangle, Clock, BarChart3, PieChart as PieChartIcon, ArrowDownRight, LineChart as LineChartIcon, Building, ShieldCheck, Wallet, Receipt, Users, Target, Briefcase, Landmark, Shield, Scale, Gavel, Award, CalendarClock, Percent, Filter } from 'lucide-react';
 import { AccountantExportPanel } from '@/components/accounting/AccountantExportPanel';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, AreaChart, Area } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Bar, Legend, PieChart, Pie, Cell, BarChart, LineChart, Line } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InvoiceManager } from '@/components/accounting/InvoiceManager';
 import { XmlImporter } from '@/components/accounting/XmlImporter';
@@ -66,19 +66,34 @@ const AccountingDashboard = () => {
         .filter(e => e.type === 'revenue' && e.status === 'paid')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
-    // CMV: Identifies specific categories related to cost of goods sold/suppliers
-    // Assuming 'cat-exp-3' is the default 'Fornecedores' category
+    // Helpers to robustly identify category types even if they are renamed or recreated
+    const isCategoryCMV = (categoryId: string) => {
+        if (categoryId === 'cat-exp-3') return true;
+        const cat = categories.find(c => c.id === categoryId);
+        if (!cat) return false;
+        const name = cat.name.toLowerCase();
+        return name.includes('fornecedor') || name.includes('mercadoria') || name.includes('cmv') || name.includes('custo');
+    };
+
+    const isCategoryTax = (categoryId: string) => {
+        if (categoryId === 'cat-exp-2') return true;
+        const cat = categories.find(c => c.id === categoryId);
+        if (!cat) return false;
+        const name = cat.name.toLowerCase();
+        return name.includes('imposto') || name.includes('tributo') || name.includes('taxa') || name.includes('das') || name.includes('irpj') || name.includes('csll');
+    };
+
+    // CMV: Cost of Goods Sold / Suppliers
     const cmvExpenses = companyEntries
-        .filter(e => e.type === 'expense' && e.status === 'paid' && e.categoryId === 'cat-exp-3')
+        .filter(e => e.type === 'expense' && e.status === 'paid' && isCategoryCMV(e.categoryId))
         .reduce((acc, curr) => acc + curr.amount, 0);
 
     const grossProfit = totalRevenue - cmvExpenses;
     const grossMargin = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0;
 
     // Operating Expenses (excluding CMV and Taxes)
-    // Assuming 'cat-exp-2' is 'Impostos e Taxas' and 'cat-exp-3' is CMV
     const operatingExpenses = companyEntries
-        .filter(e => e.type === 'expense' && e.status === 'paid' && !['cat-exp-2', 'cat-exp-3'].includes(e.categoryId))
+        .filter(e => e.type === 'expense' && e.status === 'paid' && !isCategoryTax(e.categoryId) && !isCategoryCMV(e.categoryId))
         .reduce((acc, curr) => acc + curr.amount, 0);
 
     // EBIT (Lucro Operacional)
@@ -87,7 +102,7 @@ const AccountingDashboard = () => {
 
     // Taxes
     const taxesPaid = companyEntries
-        .filter(e => e.type === 'expense' && e.status === 'paid' && e.categoryId === 'cat-exp-2')
+        .filter(e => e.type === 'expense' && e.status === 'paid' && isCategoryTax(e.categoryId))
         .reduce((acc, curr) => acc + curr.amount, 0);
 
     // Net Income
@@ -191,6 +206,140 @@ const AccountingDashboard = () => {
     const totalHistoricalRevenue = entries.filter(e => e.companyId === activeCompany?.id && e.type === 'revenue' && e.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
     const totalHistoricalExpense = entries.filter(e => e.companyId === activeCompany?.id && e.type === 'expense' && e.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
     const saldoAtualGlobal = totalHistoricalRevenue - totalHistoricalExpense;
+
+    // --- 5 New Dashboard Charts Data Prep ---
+
+    // 1. Receita por Entidade (Top 5)
+    // Map using documentEntity (we already have entityRevenueMap from previous metrics if we want to reuse, but let's build exactly as we planned)
+    const entityRevenueMapForChart = new Map<string, number>();
+    companyEntries.filter(e => e.type === 'revenue' && e.status === 'paid').forEach(e => {
+        const entity = e.documentEntity || 'Desconhecido/Avulso';
+        entityRevenueMapForChart.set(entity, (entityRevenueMapForChart.get(entity) || 0) + e.amount);
+    });
+    const rawEntityData = Array.from(entityRevenueMapForChart.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+    const top5Entities = rawEntityData.slice(0, 5);
+    const othersEntityValue = rawEntityData.slice(5).reduce((acc, curr) => acc + curr.value, 0);
+    if (othersEntityValue > 0) top5Entities.push({ name: 'Outros', value: othersEntityValue });
+    const pieColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
+
+    // 2. Despesas por Categoria (Top 5)
+    const expenseChartData = Array.from(expenseMap.entries())
+        .map(([id, value]) => ({ name: categories.find(c => c.id === id)?.name || 'Sem Categoria', value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+
+    // 3. Status de Recebíveis (Barra Empilhada)
+    const revStatusMap = new Map<string, { name: string; fullDate: Date; Pago: number; Pendente: number }>();
+    companyEntries.filter(e => e.type === 'revenue').forEach(entry => {
+        const date = new Date(entry.date);
+        let dateKeyStr = '';
+        let displayStr = '';
+        if (groupByMonth) {
+            dateKeyStr = `${date.getFullYear()}-${date.getMonth()}`;
+            displayStr = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        } else {
+            dateKeyStr = date.toISOString().split('T')[0];
+            displayStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        }
+        if (!revStatusMap.has(dateKeyStr)) revStatusMap.set(dateKeyStr, { name: displayStr, fullDate: date, Pago: 0, Pendente: 0 });
+        const curr = revStatusMap.get(dateKeyStr)!;
+        if (entry.status === 'paid') curr.Pago += entry.amount;
+        if (entry.status === 'pending') curr.Pendente += entry.amount;
+    });
+    const revStatusData = Array.from(revStatusMap.values())
+        .sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime())
+        .map(({ name, Pago, Pendente }) => ({ name, Pago, Pendente }));
+
+    // 4. Inadimplência por Idade
+    let atrasoRecente = 0; // < 15 dias
+    let atrasoMedio = 0; // 15 - 30 dias
+    let atrasoGrave = 0; // 30 - 60 dias
+    let atrasoCritico = 0; // > 60 dias
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    companyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < now).forEach(e => {
+        const dueDate = new Date(e.date);
+        dueDate.setHours(0, 0, 0, 0);
+        const diffTime = Math.abs(now.getTime() - dueDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays <= 15) atrasoRecente += e.amount;
+        else if (diffDays <= 30) atrasoMedio += e.amount;
+        else if (diffDays <= 60) atrasoGrave += e.amount;
+        else atrasoCritico += e.amount;
+    });
+    const agingData = [
+        { name: '< 15 dias', valor: atrasoRecente, fill: '#facc15' },
+        { name: '15-30 dias', valor: atrasoMedio, fill: '#f59e0b' },
+        { name: '30-60 dias', valor: atrasoGrave, fill: '#ea580c' },
+        { name: '> 60 dias', valor: atrasoCritico, fill: '#dc2626' }
+    ];
+
+    // 5. Evolução da Margem
+    const marginChartData = chartData.map(d => {
+        const mRevenue = d.Receitas;
+        const mOperatingProfit = mRevenue - d.Despesas;
+        const mMargin = mRevenue > 0 ? ((mOperatingProfit / mRevenue) * 100).toFixed(1) : 0;
+        return { name: d.name, Margem: Number(mMargin) };
+    });
+
+    // --- NEW: 10 Advanced Governance Metrics for Licitações ---
+    // 1. Concentração de Receita (Maior Pagador)
+    let maiorPagadorKey = 'N/A';
+    let maiorPagadorValor = 0;
+    entityRevenueMapForChart.forEach((val, key) => {
+        if (val > maiorPagadorValor) {
+            maiorPagadorValor = val;
+            maiorPagadorKey = key;
+        }
+    });
+    const concentracaoMaiorPagadorPercent = totalRevenue > 0 ? ((maiorPagadorValor / totalRevenue) * 100).toFixed(1) : "0";
+
+    // 2. Prazo Médio de Recebimento (PMR) Est.
+    const vendasDiarias = totalRevenue > 0 ? totalRevenue / 30 : 0;
+    const pmr = vendasDiarias > 0 ? (pendingRevenue / vendasDiarias).toFixed(0) : "0";
+
+    // 3. Garantias Retidas / Caução (Estimativa 5% do faturamento histórico se for licitação)
+    const garantiasEstimadas = totalHistoricalRevenue * 0.05;
+
+    // 4. Despesas com Licitação (Plataformas, Certidões) proxy
+    const despesasLicitacao = companyEntries
+        .filter(e => e.type === 'expense' && e.status === 'paid' &&
+            (e.title.toLowerCase().includes('licita') ||
+                e.title.toLowerCase().includes('certidã') ||
+                e.title.toLowerCase().includes('edital') ||
+                e.title.toLowerCase().includes('plataforma')))
+        .reduce((acc, curr) => acc + curr.amount, 0);
+
+    // 5. Índice de Liquidez Corrente
+    const disponibilidades = (saldoAtualGlobal > 0 ? saldoAtualGlobal : 0);
+    const ativoCirculante = disponibilidades + pendingRevenue;
+    const passivoCirculante = pendingExpense + upcomingExpense;
+    const liquidezCorrente = passivoCirculante > 0 ? (ativoCirculante / passivoCirculante).toFixed(2) : (ativoCirculante > 0 ? "> 5.0" : "0.00");
+
+    // 6. Eficácia de Faturamento
+    const totalFaturadoReal = totalRevenue + pendingRevenue;
+    const eficaciaFaturamento = totalFaturadoReal > 0 ? ((totalRevenue / totalFaturadoReal) * 100).toFixed(1) : "0";
+
+    // 7. Custo de Aquisição de Acervo (ARTs, CREA) proxy
+    const custosAcervo = companyEntries
+        .filter(e => e.type === 'expense' && e.status === 'paid' &&
+            (e.title.toLowerCase().includes('art') ||
+                e.title.toLowerCase().includes('crea') ||
+                e.title.toLowerCase().includes('cau') ||
+                e.title.toLowerCase().includes('acervo') ||
+                e.title.toLowerCase().includes('atestado')))
+        .reduce((acc, curr) => acc + curr.amount, 0);
+
+    // 8. Carga Tributária Efetiva
+    const cargaTributaria = totalRevenue > 0 ? ((taxesPaid / totalRevenue) * 100).toFixed(1) : "0";
+
+    // 9. Resultado Financeiro Líquido
+    const rendimentos = companyEntries.filter(e => e.type === 'revenue' && e.status === 'paid' && e.title.toLowerCase().includes('rendimento')).reduce((acc, curr) => acc + curr.amount, 0);
+    const despesasBancarias = companyEntries.filter(e => e.type === 'expense' && e.status === 'paid' && (e.title.toLowerCase().includes('tarifa') || e.title.toLowerCase().includes('taxa banc'))).reduce((acc, curr) => acc + curr.amount, 0);
+    const resultadoFinanceiroLiquido = rendimentos - despesasBancarias;
 
     let runwayText = "Indefinido";
     if (operatingExpenses > 0) {
@@ -394,6 +543,119 @@ const AccountingDashboard = () => {
                                 </div>
                             </div>
 
+                            {/* --- Advanced KPI Grid --- */}
+                            <div className="mt-8 mb-4">
+                                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+                                    <BarChart3 className="h-5 w-5 text-primary" />
+                                    Métricas Avançadas de Governança
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <BarChart3 className="h-4 w-4 text-emerald-500" />
+                                            <h3 className="text-sm font-medium">Ticket Médio (Vendas)</h3>
+                                        </div>
+                                        <div className="text-xl font-bold">R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Por recebimento pago no período</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <AlertCircle className="h-4 w-4 text-rose-500" />
+                                            <h3 className="text-sm font-medium">Inadimplência Pública/Privada</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-rose-500">R$ {inadimplencia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Soma de recebíveis atrasados</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-indigo-500/5">
+                                        <div className="flex items-center gap-2 mb-2 text-indigo-500">
+                                            <ArrowUpRight className="h-4 w-4" />
+                                            <h3 className="text-sm font-medium">Margem de Contribuição</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-indigo-500">R$ {margemContribuicao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-indigo-500/70 font-medium mt-1">Sobra {margemContribuicaoPercent}% da receita para Custo Fixo e Lucro</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Activity className="h-4 w-4 text-amber-500" />
+                                            <h3 className="text-sm font-medium">Ponto de Equilíbrio (Break-even)</h3>
+                                        </div>
+                                        <div className="text-xl font-bold">R$ {breakEven.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Faturamento mín. para lucro zero (pagar OpEx e Impostos)</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <TrendingDown className="h-4 w-4 text-rose-500/70" />
+                                            <h3 className="text-sm font-medium">Maior Centro de Custo</h3>
+                                        </div>
+                                        <div className="text-sm font-bold truncate" title={maiorCustoNome}>{maiorCustoNome}</div>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-xs font-bold text-rose-500">R$ {maiorCustoValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-[10px] text-muted-foreground">{maiorCustoPercent}% de tudo gasto</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Line 2 (Remaining 5) */}
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Percent className="h-4 w-4 text-blue-500" />
+                                            <h3 className="text-sm font-medium">Concentração Cliente</h3>
+                                        </div>
+                                        <div className="text-xl font-bold">{concentracaoMaiorPagadorPercent}%</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Menor = Mais seguro</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Clock className="h-4 w-4 text-amber-400" />
+                                            <h3 className="text-sm font-medium">PMR Estimado</h3>
+                                        </div>
+                                        <div className="text-xl font-bold">{pmr} Dias</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Prazo Médio Recebimento</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Gavel className="h-4 w-4 text-orange-500" />
+                                            <h3 className="text-sm font-medium">Custo Licitações</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-orange-500">R$ {despesasLicitacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Plataformas, Editais, Cauções</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Award className="h-4 w-4 text-emerald-400" />
+                                            <h3 className="text-sm font-medium">Acervo Técnico</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-emerald-400">R$ {custosAcervo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Atestados, CREA/CAU, Docs</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
+                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                                            <Landmark className="h-4 w-4 text-blue-400" />
+                                            <h3 className="text-sm font-medium">Resultado Financeiro L.</h3>
+                                        </div>
+                                        <div className={`text-xl font-bold ${resultadoFinanceiroLiquido >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>
+                                            R$ {resultadoFinanceiroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Rendimentos vs Tarifas</p>
+                                    </div>
+
+                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-emerald-500/5">
+                                        <div className="flex items-center gap-2 mb-2 text-emerald-500">
+                                            <Clock className="h-4 w-4" />
+                                            <h3 className="text-sm font-medium">Runway (Fôlego)</h3>
+                                        </div>
+                                        <div className="text-xl font-bold text-emerald-500">{runwayText}</div>
+                                        <p className="text-[10px] text-emerald-500/70 font-medium mt-1">Sobrevivência x custo fixo</p>
+                                    </div>
+                                </div>
+                            </div>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 <div className="kanban-card rounded-xl border border-border lg:col-span-2 shadow-sm p-4">
                                     <div className="flex items-center justify-between mb-4">
@@ -474,71 +736,152 @@ const AccountingDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* --- Advanced KPI Grid --- */}
-                            <div className="mt-8 mb-4">
-                                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                    <BarChart3 className="h-5 w-5 text-primary" />
-                                    Métricas Avançadas de Governança
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
-                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                                            <BarChart3 className="h-4 w-4 text-emerald-500" />
-                                            <h3 className="text-sm font-medium">Ticket Médio (Vendas)</h3>
-                                        </div>
-                                        <div className="text-xl font-bold">R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">Por recebimento pago no período</p>
+                            {/* 5 New Advanced Visualizations Grid */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                {/* Chart 1: Concentração por Órgão */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <PieChartIcon className="h-4 w-4 text-purple-500" />
+                                            Receita por Órgão Pagador
+                                        </h3>
                                     </div>
-
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
-                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                                            <AlertCircle className="h-4 w-4 text-rose-500" />
-                                            <h3 className="text-sm font-medium">Inadimplência Pública/Privada</h3>
-                                        </div>
-                                        <div className="text-xl font-bold text-rose-500">R$ {inadimplencia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">Soma de recebíveis atrasados</p>
+                                    <div className="h-64 w-full">
+                                        {top5Entities.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem dados de receita pagos no período.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie data={top5Entities} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                                        {top5Entities.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                        )}
                                     </div>
+                                </div>
 
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-indigo-500/5">
-                                        <div className="flex items-center gap-2 mb-2 text-indigo-500">
-                                            <ArrowUpRight className="h-4 w-4" />
-                                            <h3 className="text-sm font-medium">Margem de Contribuição</h3>
-                                        </div>
-                                        <div className="text-xl font-bold text-indigo-500">R$ {margemContribuicao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                        <p className="text-[10px] text-indigo-500/70 font-medium mt-1">Sobra {margemContribuicaoPercent}% da receita para Custo Fixo e Lucro</p>
+                                {/* Chart 2: Custos por Categoria */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <Building className="h-4 w-4 text-rose-500" />
+                                            Top 5 Despesas por Categoria
+                                        </h3>
                                     </div>
-
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
-                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                                            <Activity className="h-4 w-4 text-amber-500" />
-                                            <h3 className="text-sm font-medium">Ponto de Equilíbrio (Break-even)</h3>
-                                        </div>
-                                        <div className="text-xl font-bold">R$ {breakEven.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">Faturamento mín. para lucro zero (pagar OpEx e Impostos)</p>
+                                    <div className="h-64 w-full">
+                                        {expenseChartData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem despesas pagas no período.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={expenseChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
+                                                    <XAxis type="number" stroke="#888" fontSize={10} tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
+                                                    <YAxis dataKey="name" type="category" stroke="#888" fontSize={11} width={100} tickLine={false} axisLine={false} />
+                                                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Bar dataKey="value" fill="#f43f5e" radius={[0, 4, 4, 0]} maxBarSize={30} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
                                     </div>
+                                </div>
 
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group">
-                                        <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                                            <TrendingDown className="h-4 w-4 text-rose-500/70" />
-                                            <h3 className="text-sm font-medium">Maior Centro de Custo</h3>
-                                        </div>
-                                        <div className="text-sm font-bold truncate" title={maiorCustoNome}>{maiorCustoNome}</div>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <p className="text-xs font-bold text-rose-500">R$ {maiorCustoValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                            <p className="text-[10px] text-muted-foreground">{maiorCustoPercent}% de tudo gasto</p>
-                                        </div>
+                                {/* Chart 3: Eficácia do Recebimento (Stacked) */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <Target className="h-4 w-4 text-blue-400" />
+                                            Status de Faturamentos
+                                        </h3>
                                     </div>
+                                    <div className="h-64 w-full">
+                                        {revStatusData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem receitas faturadas no período.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={revStatusData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`} />
+                                                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                                                    <Bar dataKey="Pago" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} maxBarSize={40} />
+                                                    <Bar dataKey="Pendente" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </div>
 
-                                    <div className="kanban-card p-4 rounded-xl border border-border shadow-sm flex flex-col justify-between group bg-emerald-500/5">
-                                        <div className="flex items-center gap-2 mb-2 text-emerald-500">
-                                            <Clock className="h-4 w-4" />
-                                            <h3 className="text-sm font-medium">Runway (Fôlego Financeiro)</h3>
-                                        </div>
-                                        <div className="text-xl font-bold text-emerald-500">{runwayText}</div>
-                                        <p className="text-[10px] text-emerald-500/70 font-medium mt-1">Sobrevivência c/ caixa atual x fluxo de OpEx atual</p>
+                                {/* Chart 4: Inadimplência por Idade (Aging) */}
+                                <div className="kanban-card rounded-xl border border-border shadow-sm p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <CalendarClock className="h-4 w-4 text-orange-500" />
+                                            Atrasos de Pagamento (Aging Público)
+                                        </h3>
+                                    </div>
+                                    <div className="h-64 w-full">
+                                        {(atrasoRecente + atrasoMedio + atrasoGrave + atrasoCritico) === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Sem atrasos no momento. Saúde financeira ótima!</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={agingData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Bar dataKey="valor" maxBarSize={60}>
+                                                        {agingData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Chart 5: Evolução da Margem de Contribuição */}
+                                <div className="kanban-card rounded-xl border border-border lg:col-span-2 shadow-sm p-4 mb-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <LineChartIcon className="h-4 w-4 text-indigo-400" />
+                                            Evolução Histórica da Margem
+                                        </h3>
+                                    </div>
+                                    <div className="h-64 w-full">
+                                        {marginChartData.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                                                <span className="text-muted-foreground text-sm">Faltam dados históricos para traçar a margem.</span>
+                                            </div>
+                                        ) : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={marginChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                                                    <Tooltip formatter={(value: number) => `${value}%`} contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                                                    <Line type="stepAfter" dataKey="Margem" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        )}
                                     </div>
                                 </div>
                             </div>
+
                         </TabsContent>
 
                         <TabsContent value="notas" className="space-y-6 h-[500px]">

@@ -6,7 +6,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 
 export const XmlImporter = () => {
     const [isDragging, setIsDragging] = useState(false);
-    const { addEntry } = useAccountingStore();
+    const { addEntry, categories } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
 
@@ -51,6 +51,10 @@ export const XmlImporter = () => {
                 return;
             }
 
+            // Find a suitable category for the invoice expense
+            const defaultCat = categories.find(c => c.id === 'cat-exp-3' || c.name.toLowerCase().includes('fornecedor') || c.name.toLowerCase().includes('mercadoria') || c.name.toLowerCase().includes('cmv')) || categories.find(c => c.type === 'expense');
+            const targetCategoryId = defaultCat ? defaultCat.id : 'cat-exp-3';
+
             // Create an expense entry for the imported XML
             addEntry({
                 companyId: activeCompany.id,
@@ -59,7 +63,7 @@ export const XmlImporter = () => {
                 amount: amount,
                 date: date,
                 type: 'expense', // XML import usually implies incoming NF-e (purchases)
-                categoryId: 'cat-exp-3', // Default to Fornecedores
+                categoryId: targetCategoryId, // Smart fallback for Fornecedores
                 status: 'pending'
             });
 

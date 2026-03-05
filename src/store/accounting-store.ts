@@ -232,7 +232,7 @@ export const useAccountingStore = create<AccountingState>()(
                         t => t.companyId === companyId && t.month === month && (t.name === 'Guia DAS' || t.name === 'Guia DAS (MEI)' || t.name === 'Impostos Federais/Municipais')
                     );
 
-                    let newObligations = [...state.taxObligations];
+                    const newObligations = [...state.taxObligations];
 
                     if (existingTaxIndex >= 0) {
                         if (taxAmount > 0) {
@@ -305,6 +305,9 @@ export const useAccountingStore = create<AccountingState>()(
                         t.id === id ? { ...t, status: 'paid' as const, paymentDate: new Date().toISOString() } : t
                     );
 
+                    const defaultTaxCategory = state.categories.find(c => c.id === 'cat-exp-2' || c.name.toLowerCase().includes('imposto') || c.name.toLowerCase().includes('tributo') || c.name.toLowerCase().includes('taxa')) || state.categories.find(c => c.type === 'expense');
+                    const targetCategoryId = defaultTaxCategory ? defaultTaxCategory.id : 'cat-exp-2';
+
                     const taxExpense: AccountingEntry = {
                         id: crypto.randomUUID(),
                         companyId: tax.companyId,
@@ -313,7 +316,7 @@ export const useAccountingStore = create<AccountingState>()(
                         amount: tax.amount,
                         date: new Date().toISOString(),
                         type: 'expense',
-                        categoryId: 'cat-exp-2', // ID for Impostos e Taxas
+                        categoryId: targetCategoryId, // Smart fallback for Impostos e Taxas
                         status: 'paid',
                         documentEntity: 'Governo / Receita',
                         competenceDate: `${tax.month}-01T12:00:00.000Z`,
