@@ -37,14 +37,18 @@ export const TaxDash = () => {
 
     const totalMeiDas = inss + additionalTax;
 
-    // Calculate annual revenue to check against MEI limit (81k)
+    // Calculate annual revenue to check against Revenue Limits
     const annualRevenue = entries
         .filter(e => e.companyId === activeCompany?.id && e.type === 'revenue' && e.date.startsWith(currentYear))
         .reduce((sum, e) => sum + e.amount, 0);
 
-    const meiLimit = 81000;
-    const meiWarningThreshold = meiLimit * 0.8; // 80% do limite
-    const isNearMeiLimit = isMEI && annualRevenue >= meiWarningThreshold;
+    let revenueLimit = 0;
+    if (activeCompany?.porte === 'MEI') revenueLimit = 81000;
+    else if (activeCompany?.porte === 'ME') revenueLimit = 360000;
+    else if (activeCompany?.porte === 'EPP') revenueLimit = 4800000;
+
+    const limitWarningThreshold = revenueLimit * 0.8; // 80% do limite
+    const isNearRevenueLimit = revenueLimit > 0 && annualRevenue >= limitWarningThreshold;
 
     useEffect(() => {
         if (activeCompany) {
@@ -204,11 +208,11 @@ export const TaxDash = () => {
                         {isMEI ? 'Dashboard MEI' : 'Ajuste de Parâmetros'}
                     </h4>
 
-                    {isNearMeiLimit && (
+                    {isNearRevenueLimit && (
                         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                            <p className="text-xs text-red-500 font-bold mb-1">⚠️ Atenção: Limite do MEI Próximo!</p>
+                            <p className="text-xs text-red-500 font-bold mb-1">⚠️ Atenção: Limite de Faturamento Próximo!</p>
                             <p className="text-[10px] text-red-500/80">
-                                Sua receita anual já atingiu R$ {annualRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ 81.000,00 permitidos. Considere falar com um contador sobre o reenquadramento para ME.
+                                Sua receita anual já atingiu R$ {annualRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ {revenueLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} permitidos para o porte {activeCompany?.porte || 'atual'}. Considere falar com um contador sobre o reenquadramento.
                             </p>
                         </div>
                     )}
@@ -298,8 +302,21 @@ export const TaxDash = () => {
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-muted-foreground">Teto MEI Permitido</span>
-                                    <span className="font-bold">R$ 81.000,00</span>
+                                    <span className="font-bold">R$ {revenueLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isMEI && revenueLimit > 0 && (
+                        <div className="mt-4 pt-4 border-t border-border/50">
+                            <div className="flex justify-between items-center text-sm border-b border-border/50 pb-2 mb-2">
+                                <span className="text-muted-foreground">Faturamento Anual Acumulado</span>
+                                <span className="font-bold">R$ {annualRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Teto {activeCompany?.porte} Permitido</span>
+                                <span className="font-bold">R$ {revenueLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     )}

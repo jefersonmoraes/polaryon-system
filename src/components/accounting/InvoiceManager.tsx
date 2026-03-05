@@ -8,8 +8,9 @@ import { toast } from 'sonner';
 
 export const InvoiceManager = () => {
     const { invoices, addInvoice, updateInvoice, addEntry } = useAccountingStore();
-    const { mainCompanies } = useKanbanStore();
+    const { mainCompanies, budgets, cards } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
+
 
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [invoiceType, setInvoiceType] = useState<InvoiceType>('service');
@@ -40,7 +41,9 @@ export const InvoiceManager = () => {
     const isMEI = activeCompany?.porte === 'MEI';
     const isMEIService = isMEI && invoiceType === 'service';
     const isMEIProduct = isMEI && invoiceType === 'product';
-    const isMEIDraftView = isMEIService || isMEIProduct;
+    const isMEIDraftView = true; // Enabled for all company types
+    const isProduct = invoiceType === 'product';
+    const isService = invoiceType === 'service';
 
     const companyInvoices = invoices.filter(i => i.companyId === activeCompany?.id);
 
@@ -59,19 +62,20 @@ export const InvoiceManager = () => {
         return matchesSearch && matchesStatus;
     });
 
-    // Auto-calculate total for Product draft
+    // Auto-calculate total for Product draft ONLY IF user is typing in quantity or unit price manually
+    // We will use a separate mechanism or just recalculate only if they haven't manually modified the draft amount.
+    const [isManualAmount, setIsManualAmount] = useState(false);
+
     useEffect(() => {
-        if (isMEIProduct) {
+        if (isProduct && !isManualAmount && draftQuantity && draftUnitPrice) {
             const rawQtd = parseFloat(draftQuantity.replace(',', '.')) || 0;
             const rawPrice = parseFloat(draftUnitPrice.replace(/\./g, '').replace(',', '.')) || 0;
             const total = (rawQtd * rawPrice).toFixed(2);
             if (rawQtd > 0 && rawPrice > 0) {
                 setDraftAmount(total.replace('.', ','));
-            } else {
-                setDraftAmount('');
             }
         }
-    }, [draftQuantity, draftUnitPrice, isMEIProduct]);
+    }, [draftQuantity, draftUnitPrice, isProduct, isManualAmount]);
 
     const handleCopy = (text: string, field: string) => {
         if (!text) {
@@ -235,14 +239,34 @@ export const InvoiceManager = () => {
         setIsInterstate(false);
     };
 
+    const handleAutoFillFromBudget = (budgetId: string) => {
+        const budget = budgets.find(b => b.id === budgetId);
+        if (!budget) return;
+
+        // Sum the finalSellingPrice of all items if it exists, otherwise fallback to totalValue
+        const finalAmount = budget.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
+
+        setDraftAmount(finalAmount.toFixed(2).replace('.', ','));
+        setIsManualAmount(true); // Flag to freeze auto-calculation from overwriting this budget value
+        setDraftDescription(budget.title);
+
+        if (budget.cardId) {
+            const card = cards.find((c: any) => c.id === budget.cardId);
+            if (card) {
+                setDraftClientName(card.title);
+            }
+        }
+
+        toast.success('Rascunho preenchido com dados do orçamento! Você pode editar os valores se precisar.');
+    };
+
     const handleEditInvoice = (invoice: any) => {
         setInvoiceType(invoice.type);
         setInvoiceToEdit(invoice);
-        if (isMEI) {
-            setDraftClientName(invoice.clientName);
-            setDraftClientDocument(invoice.clientDocument);
-            setDraftAmount(invoice.amount.toFixed(2).replace('.', ','));
-        }
+        // Setup draft values universally across all company types inside the editing flow
+        setDraftClientName(invoice.clientName);
+        setDraftClientDocument(invoice.clientDocument || '');
+        setDraftAmount(invoice.amount.toFixed(2).replace('.', ','));
         setIsFormOpen(true);
     };
 
@@ -467,6 +491,24 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                             {/* Left Side (or Full Width): The Form */}
                             <form id="invoice-form" onSubmit={handleIssueInvoice} className={`p-5 space-y-4 ${isMEIDraftView ? 'w-full md:w-1/2 md:border-r md:border-border' : 'w-full'}`}>
                                 <h4 className="font-bold">Dados do Faturamento</h4>
+
+                                <div className="mb-2">
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Preencher a partir de Orçamento/Cotação Aprovada</label>
+                                    <select
+                                        className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                                        onChange={(e) => handleAutoFillFromBudget(e.target.value)}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Selecione um orçamento...</option>
+                                        {budgets.filter(b => b.status === 'Aprovado').map(b => {
+                                            const finalAmount = b.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
+                                            return (
+                                                <option key={b.id} value={b.id}>{b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+
                                 <p className="text-sm text-muted-foreground mb-4">
                                     {isMEIDraftView
                                         ? "Preencha abaixo para gerar o rascunho de cópia para o site."
@@ -506,17 +548,23 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                 ) : (
                                     <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                                         <p className="text-xs text-blue-600 font-medium mb-3">
-                                            Empresas ME/EPP utilizam o sistema da Prefeitura ou SEFAZ. Emita a nota gratuitamente no portal oficial e registre abaixo.
+                                            Empresas ME/EPP utilizam o sistema da Prefeitura ou SEFAZ. Emita a nota no portal oficial e use o rascunho ao lado para facilitar.
                                         </p>
-                                        <a
-                                            href={invoiceType === 'service' ? "https://www.gov.br/empresas-e-negocios/pt-br/empreendedor/servicos-para-mei/nota-fiscal" : "https://www.nfe.fazenda.gov.br/portal/"}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center justify-center gap-2 w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg py-2 transition-colors text-xs"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            {invoiceType === 'service' ? 'Buscar Portal da Prefeitura' : 'Acessar Portal da NF-e (SEFAZ)'}
-                                        </a>
+                                        {invoiceType === 'service' ? (
+                                            <div className="text-xs text-blue-600 font-semibold text-center py-2 border border-blue-500/20 rounded-lg bg-blue-500/5">
+                                                Acesse o portal da prefeitura do seu município
+                                            </div>
+                                        ) : (
+                                            <a
+                                                href="https://www.nfe.fazenda.gov.br/portal/"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center gap-2 w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg py-2 transition-colors text-xs"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                Acessar Portal da NF-e (SEFAZ)
+                                            </a>
+                                        )}
                                     </div>
                                 )}
 
@@ -597,7 +645,7 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                             />
                                         </div>
                                     </>
-                                ) : isMEIProduct ? (
+                                ) : isProduct ? (
                                     <>
                                         <div className="mb-4">
                                             <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-primary/30 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer group">
@@ -704,11 +752,20 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                                            <Info className="h-4 w-4 text-primary shrink-0" />
-                                            <div className="flex-1">
-                                                <p className="text-xs font-medium">Valor Total Calculado: <span className="font-bold text-base ml-1">R$ {draftAmount || '0,00'}</span></p>
-                                            </div>
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-medium text-muted-foreground mb-1">Valor Total (R$) <span className="text-[10px] text-primary">(Editável)</span></label>
+                                            <input
+                                                required
+                                                name="amount"
+                                                type="text"
+                                                className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                                                placeholder="0,00"
+                                                value={draftAmount}
+                                                onChange={(e) => {
+                                                    setDraftAmount(e.target.value);
+                                                    setIsManualAmount(true);
+                                                }}
+                                            />
                                         </div>
                                     </>
                                 ) : (
@@ -720,7 +777,8 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                             type="text"
                                             className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
                                             placeholder="1.500,00"
-                                            defaultValue={invoiceToEdit ? invoiceToEdit.amount.toFixed(2).replace('.', ',') : undefined}
+                                            value={draftAmount}
+                                            onChange={(e) => setDraftAmount(e.target.value)}
                                         />
                                     </div>
                                 )}
@@ -783,7 +841,7 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                         </div>
 
                                         {/* Product Specific fields */}
-                                        {isMEIProduct && (
+                                        {isProduct && (
                                             <div className="flex gap-2 w-full">
                                                 <div className="flex-1 flex gap-2 items-center">
                                                     <div className="flex-1">
@@ -814,7 +872,7 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                         <div className="flex gap-2 items-start">
                                             <div className="flex-1">
                                                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">
-                                                    {isMEIProduct ? 'Descrição Produto' : 'Discriminação Serviço'}
+                                                    {isProduct ? 'Descrição Produto' : 'Discriminação Serviço'}
                                                 </p>
                                                 <div className="bg-background border border-border rounded-lg px-3 py-2 text-sm flex items-start justify-between min-h-[60px] max-h-[100px] overflow-auto custom-scrollbar">
                                                     <span className={draftDescription ? "text-foreground" : "text-muted-foreground italic"}>
@@ -832,7 +890,7 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                         </div>
 
                                         {/* Quantity/Price for Product, Total for both */}
-                                        {isMEIProduct ? (
+                                        {isProduct ? (
                                             <div className="flex gap-2 w-full">
                                                 <div className="flex-1 flex gap-2 items-center">
                                                     <div className="flex-1">
