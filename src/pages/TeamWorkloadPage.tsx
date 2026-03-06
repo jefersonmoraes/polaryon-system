@@ -1,11 +1,15 @@
 import { useKanbanStore } from '@/store/kanban-store';
-import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { useAccountingStore } from '@/store/accounting-store';
+import { useDocumentStore } from '@/store/document-store';
+import { Users, CheckCircle2, Clock, AlertCircle, FileText, PiggyBank, Calculator, Target } from 'lucide-react';
 import CardDetailPanel from '@/components/board/CardDetailPanel';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '@/types/kanban';
 
 export default function TeamWorkloadPage() {
-    const { members, cards, boards, lists, labels } = useKanbanStore();
+    const { members, cards, boards, lists, labels, budgets } = useKanbanStore();
+    const { documents } = useDocumentStore();
+    const { entries } = useAccountingStore();
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
     const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
 
@@ -64,7 +68,36 @@ export default function TeamWorkloadPage() {
         };
     };
 
-    const unassignedCards = activeCards.filter(c => !c.assignee && !c.completed);
+    const unassignedCards = activeCards.filter(c => !c.assignee && !c.completed && c.listId && lists.some(l => l.id === c.listId));
+
+    // Global System Stats
+    const systemStats = useMemo(() => {
+        const now = new Date();
+        const startOfPeriod = new Date();
+        if (period === 'week') {
+            const day = startOfPeriod.getDay();
+            const diff = startOfPeriod.getDate() - day + (day === 0 ? -6 : 1);
+            startOfPeriod.setDate(diff);
+            startOfPeriod.setHours(0, 0, 0, 0);
+        } else if (period === 'month') {
+            startOfPeriod.setDate(1);
+            startOfPeriod.setHours(0, 0, 0, 0);
+        } else if (period === 'year') {
+            startOfPeriod.setMonth(0, 1);
+            startOfPeriod.setHours(0, 0, 0, 0);
+        }
+
+        const periodBudgets = budgets.filter(b => !b.trashed && new Date(b.createdAt) >= startOfPeriod);
+        const periodDocs = documents.filter(d => !d.trashed && new Date(d.createdAt) >= startOfPeriod);
+        const periodEntries = entries.filter(e => !e.trashedAt && new Date(e.date) >= startOfPeriod);
+
+        return {
+            budgetsCreated: periodBudgets.length,
+            budgetsApproved: periodBudgets.filter(b => b.status === 'Aprovado').length,
+            docsAdded: periodDocs.length,
+            entriesProcessed: periodEntries.length
+        };
+    }, [budgets, documents, entries, period]);
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-background">
@@ -93,6 +126,47 @@ export default function TeamWorkloadPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+
+                {/* Global Operating Stats Header */}
+                <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600">
+                            <Calculator className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Orçamentos</p>
+                            <p className="text-xl font-bold">{systemStats.budgetsCreated} <span className="text-[10px] text-muted-foreground font-medium">({systemStats.budgetsApproved} aprovados)</span></p>
+                        </div>
+                    </div>
+                    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                        <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-600">
+                            <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Documentos</p>
+                            <p className="text-xl font-bold">{systemStats.docsAdded} <span className="text-[10px] text-muted-foreground font-medium">atualizados</span></p>
+                        </div>
+                    </div>
+                    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                        <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-600">
+                            <PiggyBank className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Lançamentos</p>
+                            <p className="text-xl font-bold">{systemStats.entriesProcessed} <span className="text-[10px] text-muted-foreground font-medium">registrados</span></p>
+                        </div>
+                    </div>
+                    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                        <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-600">
+                            <Target className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Eficiência Geral</p>
+                            <p className="text-xl font-bold">{members.length > 0 ? Math.round((members.map(m => getMemberStats(m.id).completionRate).reduce((a, b) => a + b, 0)) / members.length) : 0}% <span className="text-[10px] text-muted-foreground font-medium">entregas</span></p>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {members.map(member => {
                         const stats = getMemberStats(member.id);

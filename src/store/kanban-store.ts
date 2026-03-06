@@ -26,6 +26,8 @@ interface KanbanState {
   clearUndoAction: () => void;
   isDark: boolean;
   uiZoom: number;
+  isMobileMenuOpen: boolean;
+  setMobileMenuOpen: (open: boolean) => void;
   globalSectionOrder: string[];
   boardPreferences: Record<string, { viewMode: 'kanban' | 'calendar' | 'list', sortBy: 'default' | 'priority' | 'assignee' | 'dueDate' }>;
   setGlobalSectionOrder: (order: string[]) => void;
@@ -117,10 +119,12 @@ export const useKanbanStore = create<KanbanState>()(
       undoAction: null,
       isDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
       uiZoom: 1,
+      isMobileMenuOpen: false,
       recentMilestoneTitles: [],
       globalSectionOrder: ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'checklist', 'timer', 'comments'],
       boardPreferences: {},
 
+      setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
       setGlobalSectionOrder: (order) => set({ globalSectionOrder: order }),
       setBoardPreference: (boardId, prefs) => set(s => ({
         boardPreferences: {

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 interface CompanyListPageProps {
@@ -221,7 +221,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
 
     return (
-        <div className="flex-1 overflow-hidden bg-background flex flex-col h-full relative" style={{ zoom: uiZoom, transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` }}>
+        <div className="flex-1 overflow-hidden bg-background flex flex-col h-full relative">
             {/* Header */}
             <div className="p-6 border-b border-border bg-card/50">
                 <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -330,7 +330,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row max-w-6xl mx-auto w-full">
 
                 {/* Left pane: List */}
-                <div className="w-full md:w-1/3 border-r border-border overflow-y-auto custom-scrollbar flex flex-col bg-muted/10">
+                <div className={`w-full md:w-1/3 border-r border-border overflow-y-auto custom-scrollbar flex-col bg-muted/10 ${selectedCompanyId || (tabOption === 'routes' && expandedRouteId) ? 'hidden md:flex' : 'flex'}`}>
                     {tabOption === 'routes' && type === 'Transportadora' ? (
                         <div className="flex-1 flex flex-col p-4 space-y-4">
                             <div className="flex flex-col gap-2 mb-2">
@@ -468,7 +468,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                 </div>
 
                 {/* Right pane: Details */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar bg-background">
+                <div className={`flex-1 overflow-y-auto custom-scrollbar bg-background ${(!selectedCompanyId && !(tabOption === 'routes' && expandedRouteId)) ? 'hidden md:block' : 'block'}`}>
                     {tabOption === 'routes' && type === 'Transportadora' ? (
                         !expandedRouteId ? (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
@@ -483,7 +483,10 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                 .filter(Boolean);
 
                             return (
-                                <div className="p-6 md:p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <button onClick={() => setExpandedRouteId(null)} className="md:hidden flex items-center gap-1 text-xs font-semibold text-muted-foreground bg-muted/50 hover:bg-muted px-2 py-1.5 rounded-md transition-colors w-fit">
+                                        <ChevronLeft className="h-4 w-4" /> Voltar para Rotas
+                                    </button>
                                     <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-border">
                                         <div>
                                             <div className="flex items-center gap-3">
@@ -589,7 +592,12 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                             <p>Selecione um item da lista para ver os detalhes</p>
                         </div>
                     ) : (
-                        <div className="p-6 md:p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+
+                            {/* Mobile Back Button */}
+                            <button onClick={() => setSelectedCompanyId(null)} className="md:hidden flex items-center gap-1 text-xs font-semibold text-muted-foreground bg-muted/50 hover:bg-muted px-2 py-1.5 rounded-md transition-colors w-fit">
+                                <ChevronLeft className="h-4 w-4" /> Voltar para Lista
+                            </button>
 
                             {/* Header Details */}
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-border">

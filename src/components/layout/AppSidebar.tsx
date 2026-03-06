@@ -2,40 +2,26 @@ import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
 import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const AppSidebar = () => {
-  const { folders, boards, addFolder, mainCompanies } = useKanbanStore();
+  const { mainCompanies, isMobileMenuOpen, setMobileMenuOpen } = useKanbanStore();
   const location = useLocation();
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newSideImage, setNewSideImage] = useState<string | undefined>();
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  const activeFolders = folders.filter(f => !f.archived && !f.trashed);
-  const activeBoards = boards.filter(b => !b.archived && !b.trashed);
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname, location.search, setMobileMenuOpen]);
 
-  const toggleFolder = (id: string) => {
-    setExpandedFolders(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const handleAdd = () => {
-    if (newName.trim()) {
-      addFolder(newName.trim(), undefined, newSideImage);
-      setNewName('');
-      setNewSideImage(undefined);
-      setAdding(false);
-    }
-  };
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileMenuOpen) setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isMobileMenuOpen, setMobileMenuOpen]);
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
@@ -44,259 +30,168 @@ const AppSidebar = () => {
   const isAccountingModule = location.pathname.startsWith('/contabil');
 
   return (
-    <aside className={`${isCollapsed ? 'w-16' : 'w-56'} shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-y-auto scrollbar-hide transition-all duration-300 relative group`}>
-      <div className="h-16 shrink-0 flex items-center justify-center border-b border-sidebar-border/50">
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border border-sidebar-border rounded-lg p-1.5 shadow-sm transition-all text-sidebar-foreground flex items-center justify-center"
-          title={isCollapsed ? "Expandir menu" : "Recolher menu"}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-      </div>
+    <>
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] md:hidden transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
-      {isCompanyModule ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
-            <Link to="/suppliers" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Pesquisa CNPJ">
-              <Building2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa CNPJ</span>}
-            </Link>
-            <Link to="/suppliers-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Fornecedores">
-              <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fornecedores</span>}
-            </Link>
-            <Link to="/transporters-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && !location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Transportadoras">
-              <Truck className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Transportadoras</span>}
-            </Link>
-            <Link to="/transporters-list?tab=routes" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Rotas de Atuação">
-              <MapPin className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Rotas de Atuação</span>}
-            </Link>
-          </div>
-        </div>
-      ) : isBudgetModule ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Finanças</span>}
-            <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
-              <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
-            </Link>
-          </div>
-        </div>
-      ) : isDocsModule ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Documentos Internos</span>}
+      {/* Sidebar Container */}
+      <aside className={`
+        fixed md:relative top-0 left-0 h-full z-[70] md:z-auto
+        ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
+        ${isCollapsed ? 'w-16' : 'w-64'} 
+        shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col 
+        overflow-y-auto overflow-x-hidden scrollbar-hide transition-all duration-300 group
+      `}>
+        <div className="h-16 shrink-0 flex items-center justify-between px-2 border-b border-sidebar-border/50">
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden md:flex bg-sidebar-accent/50 hover:bg-sidebar-accent border border-sidebar-border rounded-lg p-1.5 shadow-sm transition-all text-sidebar-foreground items-center justify-center w-full max-w-[32px] mx-auto"
+            title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
 
-            <Link to="/documentacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Gestão de Documentos">
-              <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Documentos</span>}
-            </Link>
-
-            <Link to="/documentacao/atestados" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/atestados' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Atestados de Capacidade Técnica">
-              <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Acervo Técnico</span>}
-            </Link>
-
-            <Link to="/documentacao/modelos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/modelos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Modelos de Doc. Essenciais">
-              <FileText className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Modelos de Doc. Essenciais</span>}
-            </Link>
-          </div>
-        </div>
-      ) : isAdminModule ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-          <div className="flex flex-col gap-1 text-sidebar-foreground/80">
+          {/* Mobile specific header section inside sidebar */}
+          <div className="md:hidden flex items-center justify-between w-full px-2 mt-2">
+            <span className="font-bold text-sm tracking-tight">POLARYON</span>
             {!isCollapsed && (
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
-              </div>
-            )}
-
-            {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
-              <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
-                <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
-              </Link>
-            )}
-
-            <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
-              <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
-            </Link>
-
-            {mainCompanies.map(company => (
-              <Link
-                key={company.id}
-                to={`/company?id=${company.id}`}
-                className={`flex items-center justify-between gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/company' && location.search.includes(`id=${company.id}`) ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
-                title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
-                  {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
-                </div>
-                {!isCollapsed && company.isDefault && (
-                  <span className="text-[8px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/20 shrink-0">Padrão</span>
-                )}
-              </Link>
-            ))}
-
-            {mainCompanies.length === 0 && !isCollapsed && (
-              <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-1.5 text-muted-foreground hover:bg-sidebar-accent rounded transition-colors">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
             )}
           </div>
         </div>
-      ) : isAccountingModule ? (
-        <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
 
-            <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
-              <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
-            </Link>
-
-            <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
-              <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
-            </Link>
-
-            <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
-              <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
-            </Link>
-
-            <Link to="/contabil?tab=exportacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'} w-full text-left`} title="Relatórios e Exportação">
-              <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}
-            </Link>
+        {isCompanyModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
+              <Link to="/suppliers" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Pesquisa CNPJ">
+                <Building2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa CNPJ</span>}
+              </Link>
+              <Link to="/suppliers-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Fornecedores">
+                <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fornecedores</span>}
+              </Link>
+              <Link to="/transporters-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && !location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Transportadoras">
+                <Truck className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Transportadoras</span>}
+              </Link>
+              <Link to="/transporters-list?tab=routes" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Rotas de Atuação">
+                <MapPin className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Rotas de Atuação</span>}
+              </Link>
+            </div>
           </div>
-        </div>
-      ) : (
-        <>
-          <div className="p-3 border-b border-sidebar-border space-y-1 mt-6">
-            <Link to="/" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
-              <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Principal</span>}
-            </Link>
-            <Link to="/calendar" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/calendar' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Calendário">
-              <Calendar className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Calendário</span>}
-            </Link>
-            <Link to="/team" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/team' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Equipe e Fluxo">
-              <Users className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Equipe e Fluxo</span>}
-            </Link>
+        ) : isBudgetModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Finanças</span>}
+              <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
+                <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
+              </Link>
+            </div>
           </div>
+        ) : isDocsModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Documentos Internos</span>}
 
-          <div className="p-3">
-            {!isCollapsed && (
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pastas</span>
-                <button
-                  onClick={() => setAdding(true)}
-                  className="p-1 rounded hover:bg-sidebar-accent transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </div>
-            )}
+              <Link to="/documentacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Gestão de Documentos">
+                <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Documentos</span>}
+              </Link>
 
-            {isCollapsed && (
-              <div className="flex justify-center mb-3">
-                <button
-                  onClick={() => { setIsCollapsed(false); setAdding(true); }}
-                  className="p-1.5 rounded hover:bg-sidebar-accent transition-colors"
-                  title="Nova Pasta"
-                >
-                  <Plus className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
-            )}
+              <Link to="/documentacao/atestados" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/atestados' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Atestados de Capacidade Técnica">
+                <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Acervo Técnico</span>}
+              </Link>
 
-            {adding && (
-              <div className="mb-2 space-y-1.5 bg-sidebar-accent/30 p-2 rounded border border-border/50">
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAdding(false); }}
-                  placeholder="Nome da pasta..."
-                  className="w-full bg-background rounded px-2 py-1.5 text-xs outline-none border border-sidebar-border focus:border-sidebar-primary"
-                />
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Imagem lateral (opcional):</label>
-                  <input type="file" accept="image/*" className="text-[10px] text-muted-foreground w-full"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => setNewSideImage(event.target?.result as string);
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
+              <Link to="/documentacao/modelos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/modelos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Modelos de Doc. Essenciais">
+                <FileText className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Modelos de Doc. Essenciais</span>}
+              </Link>
+            </div>
+          </div>
+        ) : isAdminModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1 text-sidebar-foreground/80">
+              {!isCollapsed && (
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
                 </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={handleAdd}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1 rounded text-xs font-medium transition-colors flex-1"
-                    disabled={!newName.trim()}
-                  >Criar Pasta</button>
-                  <button
-                    onClick={() => { setAdding(false); setNewSideImage(undefined); setNewName(''); }}
-                    className="text-muted-foreground hover:text-foreground text-xs transition-colors px-2"
-                  >Cancelar</button>
-                </div>
-              </div>
-            )}
+              )}
 
-            <div className="space-y-0.5 mt-2">
-              {activeFolders.map(folder => {
-                const folderBoards = activeBoards.filter(b => b.folderId === folder.id);
-                const isExpanded = expandedFolders.has(folder.id) && !isCollapsed;
-                const isActive = location.pathname === `/folder/${folder.id}`;
+              {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
+                <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
+                  <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
+                </Link>
+              )}
 
-                return (
-                  <div key={folder.id}>
-                    <div
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'} ${isCollapsed ? 'justify-center' : ''}`}
-                      onClick={() => isCollapsed ? setIsCollapsed(false) : toggleFolder(folder.id)}
-                      title={folder.name}
-                    >
-                      {!isCollapsed && <ChevronRight className={`h-3 w-3 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />}
-                      {folder.sideImage ? (
-                        <img src={folder.sideImage} alt={folder.name} className="w-4 h-4 rounded object-cover shrink-0" />
-                      ) : (
-                        <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: folder.color }} />
-                      )}
-                      {!isCollapsed && (
-                        <>
-                          <Link to={`/folder/${folder.id}`} className="flex-1 truncate" onClick={e => e.stopPropagation()}>
-                            {folder.name}
-                          </Link>
-                          <span className="text-muted-foreground text-[10px]">{folderBoards.length}</span>
-                        </>
-                      )}
-                    </div>
+              <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
+                <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
+              </Link>
 
-                    {isExpanded && folderBoards.length > 0 && !isCollapsed && (
-                      <div className="ml-5 mt-0.5 space-y-0.5">
-                        {folderBoards.map(board => (
-                          <Link
-                            key={board.id}
-                            to={`/board/${board.id}`}
-                            className={`flex items-center gap-2 px-2 py-1 rounded text-[11px] transition-colors ${location.pathname === `/board/${board.id}` ? 'bg-sidebar-accent font-medium' : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                              }`}
-                          >
-                            <LayoutGrid className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{board.name}</span>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
+              {mainCompanies.map(company => (
+                <Link
+                  key={company.id}
+                  to={`/company?id=${company.id}`}
+                  className={`flex items-center justify-between gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/company' && location.search.includes(`id=${company.id}`) ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                  title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
+                    {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
                   </div>
-                );
-              })}
+                  {!isCollapsed && company.isDefault && (
+                    <span className="text-[8px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/20 shrink-0">Padrão</span>
+                  )}
+                </Link>
+              ))}
 
-              {activeFolders.length === 0 && !adding && !isCollapsed && (
-                <p className="text-[11px] text-muted-foreground px-2 py-4 text-center">
-                  Crie sua primeira pasta para começar
-                </p>
+              {mainCompanies.length === 0 && !isCollapsed && (
+                <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
               )}
             </div>
           </div>
-        </>
-      )}
-    </aside>
+        ) : isAccountingModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
+
+              <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
+                <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
+              </Link>
+
+              <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
+                <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
+              </Link>
+
+              <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
+                <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
+              </Link>
+
+              <Link to="/contabil?tab=exportacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'} w-full text-left`} title="Relatórios e Exportação">
+                <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="p-3 border-b border-sidebar-border space-y-1 mt-6">
+              <Link to="/" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
+                <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Principal</span>}
+              </Link>
+              <Link to="/calendar" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/calendar' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Calendário">
+                <Calendar className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Calendário</span>}
+              </Link>
+              <Link to="/team" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/team' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Equipe e Fluxo">
+                <Users className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Equipe e Fluxo</span>}
+              </Link>
+            </div>
+          </>
+        )}
+      </aside>
+    </>
   );
 };
 

@@ -1,12 +1,16 @@
 import { useKanbanStore } from '@/store/kanban-store';
-import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase } from 'lucide-react';
+import { useAccountingStore } from '@/store/accounting-store';
+import { useDocumentStore } from '@/store/document-store';
+import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useState, useMemo } from 'react';
 
 const Dashboard = () => {
-  const { folders, boards, lists, cards, labels, companies } = useKanbanStore();
+  const { folders, boards, lists, cards, labels, companies, budgets, mainCompanies } = useKanbanStore();
+  const { documents } = useDocumentStore();
+  const { entries, taxObligations } = useAccountingStore();
 
   // Filters
   const [filterBoard, setFilterBoard] = useState<string>('all');
@@ -71,6 +75,50 @@ const Dashboard = () => {
     { label: 'Tempo Médio', value: `${avgTimeMinutes}min`, icon: Clock, color: 'text-accent' },
   ];
 
+  // System-wide alerts calculations
+  const defaultCompany = mainCompanies.find(c => c.isDefault);
+  const pendingBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando').length;
+  const expiringDocs = documents.filter(d => !d.trashed && d.status === 'expiring').length;
+  const expiredDocs = documents.filter(d => !d.trashed && d.status === 'expired').length;
+  const overdueTaxes = taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate) < new Date()).length;
+
+  // Aggregate all upcoming events (next 15 days)
+  const allUpcomingEvents = useMemo(() => {
+    const today = new Date();
+    const futureLimit = new Date();
+    futureLimit.setDate(today.getDate() + 15);
+
+    const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType }[] = [];
+
+    // 1. Kanban Cards
+    upcomingCards.forEach(c => {
+      if (c.dueDate) {
+        events.push({ id: c.id, title: `Tarefa: ${c.title}`, date: new Date(c.dueDate), type: 'tarefa', color: 'text-primary', icon: Clock });
+      }
+    });
+
+    // 2. Budgets
+    budgets.filter(b => !b.trashed && b.status === 'Aguardando').forEach(b => {
+      // Usar a data de criação como referência para pendentes
+      const date = new Date(b.createdAt);
+      if (date >= today && date <= futureLimit) {
+        events.push({ id: b.id, title: `Proposta Aguardando: ${b.title}`, date, type: 'orcamento', color: 'text-blue-500', icon: Calculator });
+      }
+    });
+
+    // 3. Documents
+    documents.filter(d => !d.trashed && new Date(d.expirationDate) >= today && new Date(d.expirationDate) <= futureLimit).forEach(d => {
+      events.push({ id: d.id, title: `Doc Expirando: ${d.title}`, date: new Date(d.expirationDate), type: 'documento', color: 'text-yellow-500', icon: FileText });
+    });
+
+    // 4. Accounting (Tax Obligations)
+    taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate) >= today && new Date(t.dueDate) <= futureLimit).forEach(t => {
+      events.push({ id: t.id, title: `Imposto a Pagar: ${t.name}`, date: new Date(t.dueDate), type: 'contabil', color: 'text-red-500', icon: PiggyBank });
+    });
+
+    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [upcomingCards, budgets, documents, taxObligations]);
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto">
@@ -101,7 +149,54 @@ const Dashboard = () => {
           </select>
         </div>
 
-        {/* Stats */}
+        {/* System-Wide Alerts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {/* Main Company Info */}
+          <div className="bg-primary/5 rounded-lg p-4 border border-primary/20 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+              <Building2 className="h-4 w-4" /> Administradora Padrão
+            </div>
+            <p className="text-sm font-bold truncate">{defaultCompany?.nomeFantasia || defaultCompany?.razaoSocial || 'Nenhuma definida'}</p>
+            <Link to="/company" className="text-[10px] text-primary hover:underline mt-auto">Gerenciar empresas</Link>
+          </div>
+
+          {/* Budgets Alert */}
+          <div className={`rounded-lg p-4 border flex flex-col gap-2 ${pendingBudgets > 0 ? 'bg-blue-500/5 border-blue-500/20' : 'bg-card border-border'}`}>
+            <div className={`flex items-center gap-2 font-semibold text-sm ${pendingBudgets > 0 ? 'text-blue-500' : 'text-muted-foreground'}`}>
+              <Calculator className="h-4 w-4" /> Orçamentos
+            </div>
+            <p className="text-sm font-bold">{pendingBudgets} pendentes/em rascunho</p>
+            <Link to="/budgets" className="text-[10px] text-muted-foreground hover:underline mt-auto">Ver orçamentos</Link>
+          </div>
+
+          {/* Documents Alert */}
+          <div className={`rounded-lg p-4 border flex flex-col gap-2 ${expiredDocs > 0 ? 'bg-destructive/10 border-destructive/20' : expiringDocs > 0 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-card border-border'}`}>
+            <div className={`flex items-center gap-2 font-semibold text-sm ${expiredDocs > 0 ? 'text-destructive' : expiringDocs > 0 ? 'text-yellow-600' : 'text-muted-foreground'}`}>
+              <FileText className="h-4 w-4" /> Documentação
+            </div>
+            <p className="text-sm font-bold">
+              {expiredDocs > 0 ? `${expiredDocs} expirados` : expiringDocs > 0 ? `${expiringDocs} expirando em breve` : 'Tudo em dia'}
+            </p>
+            <Link to="/documentacao" className="text-[10px] text-muted-foreground hover:underline mt-auto">Acessar acervo</Link>
+          </div>
+
+          {/* Tax/Accounting Alert */}
+          <div className={`rounded-lg p-4 border flex flex-col gap-2 ${overdueTaxes > 0 ? 'bg-destructive/10 border-destructive/20' : 'bg-card border-border'}`}>
+            <div className={`flex items-center gap-2 font-semibold text-sm ${overdueTaxes > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              <PiggyBank className="h-4 w-4" /> Contábil
+            </div>
+            <p className="text-sm font-bold">
+              {overdueTaxes > 0 ? `${overdueTaxes} guias vencidas` : 'Impostos em dia'}
+            </p>
+            <Link to="/contabil" className="text-[10px] text-muted-foreground hover:underline mt-auto">Painel Financeiro</Link>
+          </div>
+        </div>
+
+        {/* Kanban Stats */}
+        <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          Métricas de Tarefas
+        </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {stats.map((s, i) => (
             <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
@@ -166,23 +261,26 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Upcoming tasks */}
-          <div className="bg-card rounded-lg border border-border p-4">
-            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-accent" />
-              Próximas Entregas
+          {/* Global Upcoming tasks */}
+          <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-full max-h-[300px]">
+            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 shrink-0">
+              <CalendarDays className="h-4 w-4 text-accent" />
+              Próximas Datas Importantes
             </h2>
-            <div className="space-y-2">
-              {upcomingCards.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-8 text-center">Nenhuma tarefa com data de entrega</p>
+            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
+              {allUpcomingEvents.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-8 text-center flex flex-col items-center gap-2">
+                  <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
+                  Nenhum evento global previsto para os próximos 15 dias!
+                </p>
               ) : (
-                upcomingCards.map(card => {
-                  const isOverdue = new Date(card.dueDate!) < new Date();
+                allUpcomingEvents.map(event => {
                   return (
-                    <div key={card.id} className={`flex items-center gap-2 p-2 rounded text-xs ${isOverdue ? 'bg-label-red/10' : 'bg-secondary/50'}`}>
-                      <div className="flex-1 truncate font-medium">{card.title}</div>
-                      <span className={`shrink-0 ${isOverdue ? 'text-label-red font-semibold' : 'text-muted-foreground'}`}>
-                        {new Date(card.dueDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                    <div key={`${event.type}-${event.id}`} className="flex items-center gap-2 p-2 rounded text-xs bg-secondary/50 border border-border/50 hover:bg-secondary transition-colors">
+                      <event.icon className={`h-3.5 w-3.5 shrink-0 ${event.color}`} />
+                      <div className="flex-1 truncate font-medium" title={event.title}>{event.title}</div>
+                      <span className={`shrink-0 font-semibold text-muted-foreground`}>
+                        {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                       </span>
                     </div>
                   );

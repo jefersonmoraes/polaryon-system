@@ -1,22 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { ShieldCheck, LogIn, Lock, RefreshCcw, Mail } from 'lucide-react';
+import { LogIn, Lock, RefreshCcw, Mail } from 'lucide-react';
+import logo from '@/assets/logo.png';
 
 export default function LoginPage() {
     const { login, isAuthenticated } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
 
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
     // Captcha State
-    const [num1, setNum1] = useState(0);
-    const [num2, setNum2] = useState(0);
+    const [captchaText, setCaptchaText] = useState('');
     const [captchaAnswer, setCaptchaAnswer] = useState('');
     const [isCaptchaValid, setIsCaptchaValid] = useState(false);
 
+    // Anti-Bot Security Enhancements
+    const [honeypot, setHoneypot] = useState('');
+    const [loadTime, setLoadTime] = useState(0);
+
     // Auth State
     const [isLoading, setIsLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const from = location.state?.from || '/';
 
     useEffect(() => {
@@ -24,21 +31,72 @@ export default function LoginPage() {
         if (isAuthenticated) {
             navigate(from, { replace: true });
         } else {
+            setLoadTime(Date.now());
             generateCaptcha();
         }
     }, [isAuthenticated, navigate, from]);
 
     const generateCaptcha = () => {
-        setNum1(Math.floor(Math.random() * 10) + 1);
-        setNum2(Math.floor(Math.random() * 10) + 1);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Clear
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Background noise
+        ctx.fillStyle = '#171717'; // neutral-900
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Security against OCR: Use confusing characters, avoid I, 1, O, 0.
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let text = '';
+        for (let i = 0; i < 5; i++) {
+            text += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setCaptchaText(text);
+
+        // Draw noise lines to confuse simple AI/OCR
+        for (let i = 0; i < 7; i++) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`;
+            ctx.lineWidth = Math.random() * 2 + 1;
+            ctx.beginPath();
+            ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+            ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+            ctx.stroke();
+        }
+
+        // Draw noise dots
+        for (let i = 0; i < 40; i++) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`;
+            ctx.beginPath();
+            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw Text with varying rotation, size, and slight offset
+        ctx.font = 'bold 28px monospace';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < text.length; i++) {
+            ctx.save();
+            const x = 20 + i * 22;
+            const y = canvas.height / 2 + (Math.random() - 0.5) * 12;
+            ctx.translate(x, y);
+            ctx.rotate((Math.random() - 0.5) * 0.6); // Random rotation to confuse OCR tools
+            ctx.fillStyle = `hsl(${Math.random() * 360}, 50%, 80%)`; // Slight color variation
+            ctx.fillText(text[i], 0, 0);
+            ctx.restore();
+        }
+
         setCaptchaAnswer('');
         setIsCaptchaValid(false);
     };
 
     const handleCaptchaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
+        const val = e.target.value.toUpperCase();
         setCaptchaAnswer(val);
-        if (parseInt(val) === num1 + num2) {
+        if (val === captchaText && captchaText.length > 0) {
             setIsCaptchaValid(true);
         } else {
             setIsCaptchaValid(false);
@@ -46,8 +104,22 @@ export default function LoginPage() {
     };
 
     const handleGoogleLoginMock = () => {
+        // Anti-Bot Checks
+        if (honeypot.length > 0) {
+            // Honeypot trapped a bot
+            toast.error("Comportamento suspeito detectado.", { position: 'top-center' });
+            return;
+        }
+
+        const timeElapsed = Date.now() - loadTime;
+        if (timeElapsed < 1500) {
+            // Unhumanly fast reaction
+            toast.error("Ações muito rápidas detectadas. Tente novamente.", { position: 'top-center' });
+            return;
+        }
+
         if (!isCaptchaValid) {
-            toast.error("Por favor, resolva o desafio matemático primeiro.", { position: 'top-center' });
+            toast.error("Por favor, resolva o desafio de segurança primeiro.", { position: 'top-center' });
             return;
         }
 
@@ -55,7 +127,7 @@ export default function LoginPage() {
 
         // Simulating OAuth / Google Popup Delay
         setTimeout(() => {
-            // MOCK: Ask the user to input the email that Google "returned" 
+            // MOCK: Ask the user to input the email that Google "returned"
             const mockedEmail = window.prompt(
                 "SIMULAÇÃO GOOGLE OAUTH\n\nQual e-mail o Google retornou do seu celular/computador?",
                 "admin@polaryon.com"
@@ -64,11 +136,13 @@ export default function LoginPage() {
             if (!mockedEmail) {
                 setIsLoading(false);
                 toast.info("Login com Google cancelado.");
+                // Renew challenge to prevent stale sessions
+                generateCaptcha();
                 return;
             }
 
             // MOCK: Try to login against the Auth Store
-            const success = login(mockedEmail.trim());
+            const success = login(mockedEmail.trim(), rememberMe);
 
             if (success) {
                 toast.success("Autenticação Google concluída com sucesso!");
@@ -80,6 +154,7 @@ export default function LoginPage() {
                         description: "Peça para um Administrador cadastrar o seu e-mail previamente."
                     }
                 );
+                generateCaptcha();
             }
             setIsLoading(false);
         }, 800);
@@ -93,48 +168,87 @@ export default function LoginPage() {
 
             <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl overflow-hidden z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
                 <div className="p-8 pb-6 flex flex-col items-center">
-                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6 shadow-inner border border-primary/20">
-                        <ShieldCheck className="w-8 h-8" />
+                    <div className="w-48 h-24 flex items-center justify-center mb-6">
+                        <img src={logo} alt="Polaryon Logo" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white text-center mb-2 tracking-tight">
-                        Sistema de Gestão Segura
+                    <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400 text-center mb-3 tracking-[0.2em] uppercase">
+                        POLARYON
                     </h1>
                     <p className="text-neutral-400 text-sm text-center mb-8">
                         Seu fluxo de trabalho centralizado e protegido.
                     </p>
 
+                    {/* Honeypot field (hidden from real users, attractive to spam bots) */}
+                    <input
+                        type="text"
+                        name="email_secondary_verification"
+                        className="opacity-0 absolute -z-50 w-0 h-0"
+                        tabIndex={-1}
+                        value={honeypot}
+                        onChange={(e) => setHoneypot(e.target.value)}
+                        autoComplete="off"
+                    />
+
                     <div className="w-full space-y-6">
                         {/* Captcha Section */}
                         <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 shadow-inner">
-                            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3 flex items-center gap-2">
-                                <Lock className="w-3.5 h-3.5" /> Segurança Anti-Bot
+                            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3 flex items-center justify-between">
+                                <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Segurança Anti-Bot Avançada</span>
                             </label>
 
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 flex items-center justify-center gap-2 font-mono text-lg font-bold text-white select-none">
-                                    <span>{num1}</span>
-                                    <span className="text-primary">+</span>
-                                    <span>{num2}</span>
-                                    <span className="text-neutral-500">=</span>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex gap-3 items-center">
+                                    <div className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex items-center justify-center relative h-[60px]">
+                                        <canvas
+                                            ref={canvasRef}
+                                            width="150"
+                                            height="60"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        {!captchaText && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-neutral-900">
+                                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={generateCaptcha}
+                                        className="p-3 h-[60px] text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg transition-colors flex items-center justify-center"
+                                        title="Gerar novo desafio"
+                                    >
+                                        <RefreshCcw className="w-5 h-5" />
+                                    </button>
                                 </div>
 
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={captchaAnswer}
                                     onChange={handleCaptchaChange}
-                                    className="w-24 bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-center text-lg font-bold font-mono text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
-                                    placeholder="?"
+                                    maxLength={5}
+                                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-center text-lg font-bold font-mono text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700 uppercase tracking-[0.5em]"
+                                    placeholder="DIGITE O CÓDIGO"
                                 />
-
-                                <button
-                                    onClick={generateCaptcha}
-                                    className="p-3 text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg transition-colors"
-                                    title="Gerar novo desafio"
-                                >
-                                    <RefreshCcw className="w-5 h-5" />
-                                </button>
                             </div>
                         </div>
+
+                        {/* Remember Me Checkbox */}
+                        <label className="flex items-center justify-center gap-3 cursor-pointer group mt-2">
+                            <div className="relative flex items-center justify-center w-5 h-5">
+                                <input
+                                    type="checkbox"
+                                    className="peer appearance-none w-5 h-5 bg-neutral-950 border-2 border-neutral-700 rounded-md checked:bg-primary checked:border-primary transition-all cursor-pointer"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                />
+                                <svg className="absolute w-3.5 h-3.5 text-neutral-900 pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" viewBox="0 0 14 14" fill="none">
+                                    <path d="M3 8L6 11L11 3.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" stroke="currentColor" />
+                                </svg>
+                            </div>
+                            <span className="text-sm font-medium text-neutral-400 group-hover:text-white transition-colors select-none">
+                                Lembrar-me neste navegador
+                            </span>
+                        </label>
 
                         <div className="relative">
                             <div className="absolute inset-0 flex items-center">
@@ -152,8 +266,8 @@ export default function LoginPage() {
                             onClick={handleGoogleLoginMock}
                             disabled={!isCaptchaValid || isLoading}
                             className={`w-full group relative flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl font-bold transition-all duration-300 overflow-hidden ${isCaptchaValid && !isLoading
-                                    ? 'bg-white text-neutral-900 hover:bg-neutral-200 hover:shadow-lg hover:shadow-white/10'
-                                    : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                                ? 'bg-white text-neutral-900 hover:bg-neutral-200 hover:shadow-lg hover:shadow-white/10'
+                                : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
                                 }`}
                         >
                             {isLoading ? (
@@ -184,3 +298,4 @@ export default function LoginPage() {
         </div>
     );
 }
+

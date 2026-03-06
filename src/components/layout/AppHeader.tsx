@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import logo from '@/assets/logo.png';
 import { useState } from 'react';
@@ -10,7 +10,7 @@ import UserProfile from './UserProfile';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
-  const { isDark, toggleTheme, uiZoom, setUiZoom, folders, boards, lists, cards, companies, budgets, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications } = useKanbanStore();
+  const { isDark, toggleTheme, uiZoom, setUiZoom, folders, boards, lists, cards, companies, budgets, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications, setMobileMenuOpen } = useKanbanStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -62,21 +62,35 @@ const AppHeader = () => {
   }) : null;
 
   return (
-    <header className="kanban-header h-12 flex items-center px-4 gap-3 shrink-0 z-50">
+    <header className="kanban-header h-14 md:h-12 flex items-center px-2 md:px-4 gap-2 md:gap-3 shrink-0 z-50">
+      {/* Hamburger menu for Mobile Sidebar Drawer */}
+      <button onClick={() => setMobileMenuOpen(true)} className="md:hidden p-1.5 rounded hover:bg-primary/10 transition-colors shrink-0">
+        <Menu className="h-5 w-5" />
+      </button>
+
       <Link to="/" className="flex items-center gap-2 shrink-0">
-        <img src={logo} alt="JJ Corporation" className="h-7 w-7 rounded-full" />
-        <span className="font-bold text-sm tracking-tight hidden sm:block">POLARYON</span>
+        <img src={logo} alt="JJ Corporation" className="h-6 w-6 md:h-7 md:w-7 rounded-full" />
+        <span className="font-bold text-sm tracking-tight hidden lg:block">POLARYON</span>
       </Link>
 
-      <nav className="flex flex-wrap items-center gap-1 sm:gap-2 ml-2 sm:ml-4 border-l border-white/20 pl-2 sm:pl-4">
+      <nav className="flex-1 min-w-0 flex items-center overflow-x-auto scrollbar-hide gap-1 mx-1 md:mx-2 md:border-l border-white/20 md:pl-2 pb-0.5 md:pb-0">
         <Link
           to="/"
-          className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname === '/' ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+          className={`flex-shrink-0 whitespace-nowrap px-2 md:px-3 py-1.5 rounded text-[10px] md:text-xs font-medium transition-colors ${location.pathname === '/' ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
             }`}
         >
           <LayoutDashboard className="h-3.5 w-3.5 inline mr-1" />
           <span className="uppercase tracking-wider hidden sm:inline">Tarefas</span>
           <span className="uppercase tracking-wider sm:hidden">Tarefas</span>
+        </Link>
+        <Link
+          to="/kunbun"
+          className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname === '/kunbun' || location.pathname.startsWith('/folder') || location.pathname.startsWith('/board') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+            }`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5 inline mr-1" />
+          <span className="uppercase tracking-wider hidden sm:inline">Kunbun</span>
+          <span className="uppercase tracking-wider sm:hidden">Kunbun</span>
         </Link>
         <Link
           to="/suppliers"
@@ -125,9 +139,9 @@ const AppHeader = () => {
         </Link>
       </nav>
 
-      <div className="flex-1" />
+      {/* spacer below is replaced by generic flex layouts */}
 
-      <div className={`relative flex items-center transition-all ${searchOpen ? 'w-64' : 'w-8'}`}>
+      <div className={`relative shrink-0 flex items-center transition-all ${searchOpen ? 'w-48 sm:w-64' : 'w-8'}`}>
         {searchOpen ? (
           <>
             <input
@@ -266,7 +280,7 @@ const AppHeader = () => {
         )}
       </div>
 
-      <div className="relative">
+      <div className="flex items-center shrink-0">
         <button onClick={() => setShowNotifications(!showNotifications)} className="p-1.5 rounded hover:bg-primary/10 transition-colors relative" title="Notificações">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
@@ -324,11 +338,13 @@ const AppHeader = () => {
         </button>
       </div>
 
-      <button onClick={toggleTheme} className="p-1.5 rounded hover:bg-primary/10 transition-colors">
+      <button onClick={toggleTheme} className="hidden lg:block p-1.5 rounded hover:bg-primary/10 transition-colors shrink-0">
         {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
 
-      <UserProfile />
+      <div className="shrink-0 hidden md:block">
+        <UserProfile />
+      </div>
 
       <AnimatePresence>
         {showGlobalArchiveViewer && (

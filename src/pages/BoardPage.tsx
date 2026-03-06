@@ -183,7 +183,7 @@ const BoardPage = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative" style={boardStyle}>
+    <div className="absolute inset-0 flex flex-col overflow-hidden" style={boardStyle}>
       {/* Board header */}
       <div className="flex items-center gap-3 px-4 py-2 bg-black/20">
         {folder && (
@@ -252,19 +252,14 @@ const BoardPage = () => {
           <Droppable droppableId="board" type="LIST" direction="horizontal">
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps}
-                className="flex-1 flex gap-3 overflow-auto p-3 items-start custom-scrollbar h-full min-h-0"
-                style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
+                className="flex-1 flex gap-3 overflow-x-auto overflow-y-hidden p-3 pb-6 items-start custom-scrollbar h-full min-h-0">
                 {boardLists.map((list, index) => (
                   <Draggable key={list.id} draggableId={list.id} index={index}>
                     {(provided, snapshot) => {
                       const child = (
                         <div ref={provided.innerRef} {...provided.draggableProps}
                           className={`shrink-0 transition-shadow max-h-full flex flex-col ${snapshot.isDragging ? 'shadow-xl rotate-2' : ''}`}
-                          style={{
-                            ...provided.draggableProps.style,
-                            ...((snapshot.isDragging || snapshot.isDropAnimating) && uiZoom !== 1 ? { transform: `${provided.draggableProps.style?.transform} scale(${uiZoom})`, transformOrigin: 'top left' } : {}),
-                            ...((snapshot.isDragging || snapshot.isDropAnimating) ? { transitionDuration: '0.001s' } : {})
-                          }}
+                          style={provided.draggableProps.style}
                         >
                           <KanbanListComponent list={list} dragHandleProps={provided.dragHandleProps} onCardClick={setSelectedCardId} />
                         </div>
@@ -309,13 +304,13 @@ const BoardPage = () => {
       )}
 
       {prefs.viewMode === 'list' && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
+        <div className="flex-1 overflow-hidden flex flex-col">
           <BoardListView boardId={board.id} onCardClick={setSelectedCardId} sortBy={prefs.sortBy as 'default' | 'priority' | 'assignee' | 'dueDate'} />
         </div>
       )}
 
       {prefs.viewMode === 'calendar' && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` } as React.CSSProperties}>
+        <div className="flex-1 overflow-hidden flex flex-col">
           <BoardCalendarView boardId={board.id} onCardClick={setSelectedCardId} />
         </div>
       )}

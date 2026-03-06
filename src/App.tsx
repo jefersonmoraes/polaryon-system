@@ -26,13 +26,18 @@ import EssentialDocumentModelsPage from "./pages/EssentialDocumentModelsPage";
 import AccountingDashboard from "./pages/AccountingDashboard";
 import AccountingEntries from "./pages/AccountingEntries";
 import { CashflowForecastDash } from "./components/accounting/CashflowForecastDash"; // Added import
+import KunbunPage from "./pages/KunbunPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { cleanupTrash, companies, permanentlyDeleteCompany, updateCompany, addNotification } = useKanbanStore();
+  const { cleanupTrash, companies, permanentlyDeleteCompany, updateCompany, addNotification, uiZoom } = useKanbanStore();
   const { documents, validateDocumentStatuses } = useDocumentStore();
+
+  useEffect(() => {
+    document.body.style.zoom = uiZoom as any;
+  }, [uiZoom]);
 
   useEffect(() => {
     cleanupTrash();
@@ -140,6 +145,7 @@ const AppContent = () => {
       <Route path="/login" element={<LoginPage />} />
       {/* Protected Routes Wrapper */}
       <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/kunbun" element={<ProtectedRoute><KunbunPage /></ProtectedRoute>} />
       <Route path="/folder/:folderId" element={<ProtectedRoute><FolderPage /></ProtectedRoute>} />
       <Route path="/board/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />

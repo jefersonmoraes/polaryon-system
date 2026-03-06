@@ -102,7 +102,7 @@ const FolderPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" style={{ zoom: uiZoom } as React.CSSProperties}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {folderBoards.map((board, i) => {
             const boardLists = lists.filter(l => l.boardId === board.id);
             const boardCards = cards.filter(c => boardLists.some(l => l.id === c.listId));

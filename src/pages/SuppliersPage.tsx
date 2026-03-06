@@ -166,7 +166,7 @@ const SuppliersPage = () => {
     };
 
     return (
-        <div className="flex-1 bg-background relative" style={{ zoom: uiZoom, transform: `scale(${uiZoom})`, transformOrigin: 'top left', width: `${100 / uiZoom}%`, height: `${100 / uiZoom}%` }}>
+        <div className="flex-1 bg-background relative">
             <div className="h-full overflow-auto p-6 custom-scrollbar">
                 <div className="max-w-4xl mx-auto space-y-6">
 

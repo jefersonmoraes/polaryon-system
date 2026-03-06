@@ -142,7 +142,7 @@ const AccountingEntries = () => {
                     )}
 
                     {/* Dashboard de Totais Filtrados */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="bg-background border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group">
                             <div className="absolute right-0 top-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full -z-10 group-hover:bg-emerald-500/20 transition-colors"></div>
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1"><ArrowUpRight className="h-3 w-3 text-emerald-500" /> Entradas (Pagas)</p>

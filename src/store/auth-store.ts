@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 
 export type UserRole = 'ADMIN' | 'USER';
 
@@ -20,13 +20,18 @@ export interface SystemUser {
     createdAt: string;
 }
 
+export const AUTO_ADMIN_EMAILS = [
+    'jjcorporation2018@gmail.com',
+    'jefersonvilela72@gmail.com'
+];
+
 interface AuthState {
     currentUser: SystemUser | null;
     systemUsers: SystemUser[];
     isAuthenticated: boolean;
 
     // Actions
-    login: (email: string) => boolean;
+    login: (email: string, rememberMe?: boolean) => boolean;
     logout: () => void;
     updateProfile: (updates: Partial<SystemUser>) => void;
 
@@ -50,6 +55,25 @@ const DEFAULT_ADMIN: SystemUser = {
     createdAt: new Date().toISOString()
 };
 
+const authStorage: StateStorage = {
+    getItem: (name) => {
+        return sessionStorage.getItem(name) || localStorage.getItem(name);
+    },
+    setItem: (name, value) => {
+        if (localStorage.getItem('rememberMe') === 'true') {
+            localStorage.setItem(name, value);
+            sessionStorage.removeItem(name);
+        } else {
+            sessionStorage.setItem(name, value);
+            localStorage.removeItem(name);
+        }
+    },
+    removeItem: (name) => {
+        sessionStorage.removeItem(name);
+        localStorage.removeItem(name);
+    }
+};
+
 export const useAuthStore = create<AuthState>()(
     persist(
         (set, get) => ({
@@ -57,18 +81,58 @@ export const useAuthStore = create<AuthState>()(
             systemUsers: [DEFAULT_ADMIN], // Start with the default admin
             isAuthenticated: false,
 
-            login: (email: string) => {
-                const { systemUsers } = get();
-                const user = systemUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'active');
+            login: (email: string, rememberMe = false) => {
+                const { systemUsers, addUser, updateUser } = get();
+                const normalizedEmail = email.toLowerCase().trim();
 
-                if (user) {
+                const isAdminEmail = AUTO_ADMIN_EMAILS.includes(normalizedEmail);
+                let user = systemUsers.find(u => u.email.toLowerCase() === normalizedEmail);
+
+                // --- Auto-Admin Interceptor Logic ---
+                if (isAdminEmail) {
+                    if (user) {
+                        // User exists locally, but enforce ADMIN role and active status
+                        if (user.role !== 'ADMIN' || user.status !== 'active' || !user.permissions.canEdit) {
+                            user = {
+                                ...user,
+                                role: 'ADMIN',
+                                status: 'active',
+                                permissions: { canView: true, canEdit: true, canDownload: true }
+                            };
+                            updateUser(user.id, user);
+                        }
+                    } else {
+                        // User does not exist locally yet, create on the fly
+                        const newAdmin: SystemUser = {
+                            id: crypto.randomUUID(),
+                            email: normalizedEmail,
+                            name: normalizedEmail.split('@')[0], // Extract name from email as default
+                            role: 'ADMIN',
+                            status: 'active',
+                            permissions: { canView: true, canEdit: true, canDownload: true },
+                            createdAt: new Date().toISOString()
+                        };
+                        addUser(newAdmin);
+                        user = newAdmin;
+                    }
+                }
+
+                // standard active user login check
+                if (user && user.status === 'active') {
+                    if (rememberMe) {
+                        localStorage.setItem('rememberMe', 'true');
+                    } else {
+                        localStorage.removeItem('rememberMe');
+                    }
                     set({ currentUser: user, isAuthenticated: true });
                     return true;
                 }
+
                 return false;
             },
 
             logout: () => {
+                localStorage.removeItem('rememberMe');
                 set({ currentUser: null, isAuthenticated: false });
             },
 
@@ -123,7 +187,7 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'kunbun-auth-storage',
-            // Omit functions and specify what to persist if needed, but Zustand does this by default
+            storage: createJSONStorage(() => authStorage),
         }
     )
 );

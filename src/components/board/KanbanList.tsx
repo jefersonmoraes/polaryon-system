@@ -122,7 +122,7 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   };
 
   return (
-    <div className={`kanban-list flex flex-col rounded-lg ${isDark ? 'shadow-md' : 'shadow-lg shadow-black/10'}`} style={listStyle}>
+    <div className={`kanban-list flex flex-col rounded-lg max-h-full ${isDark ? 'shadow-md' : 'shadow-lg shadow-black/10'}`} style={listStyle}>
       {/* List header */}
       <div className="flex items-center gap-1 mb-2 px-1">
         <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5">
@@ -319,7 +319,7 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
       )}
 
       {/* Cards */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto px-1 custom-scrollbar w-full">
         <Droppable droppableId={list.id} type="CARD">
           {(provided, snapshot) => (
             <div
@@ -336,14 +336,7 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className={snapshot.isDragging ? 'shadow-2xl ring-2 ring-primary/50 relative z-50 rounded-md cursor-grabbing bg-card' : 'transition-[box-shadow] hover:shadow-md'}
-                        style={{
-                          ...provided.draggableProps.style,
-                          // If dragging or dropping, scale back down by uiZoom so it visually matches the board zoom,
-                          // since portaling to document.body means it loses the ancestor scale
-                          ...((snapshot.isDragging || snapshot.isDropAnimating) && uiZoom !== 1 ? { transform: `${provided.draggableProps.style?.transform} scale(${uiZoom})`, transformOrigin: 'top left' } : {}),
-                          // Disable the drop animation jump when portaling back into a scaled container
-                          ...((snapshot.isDropAnimating || snapshot.isDragging) ? { transitionDuration: '0.001s' } : {})
-                        }}
+                        style={provided.draggableProps.style}
                       >
                         <KanbanCardComponent card={card} listColor={list.color} onClick={() => onCardClick(card.id)} />
                       </div>
