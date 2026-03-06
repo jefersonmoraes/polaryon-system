@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company, MainCompanyProfile } from '@/types/kanban';
 import {
     X, Plus, Calculator, Trash2, Building2, Calendar, FileText,
-    CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp, MapPin, DollarSign, Percent, Star, AlertTriangle
+    CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp, MapPin, DollarSign, Percent, Star, AlertTriangle,
+    Phone, Mail, MessageCircle, ExternalLink
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 
@@ -38,9 +40,12 @@ interface QuotationItemCardProps {
     removeItem: (id: string) => void;
     cloneItem: (id: string) => void;
     formatCurrency: (val: number) => string;
+    isExpanded: boolean;
+    onToggleExpand: () => void;
+    canEdit: boolean;
 }
 
-const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency }) => {
+const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit }) => {
     const { routes } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
@@ -52,9 +57,6 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const [isUfOpen, setIsUfOpen] = useState(false);
     const [isTaxTooltipOpen, setIsTaxTooltipOpen] = useState(false); // Novo state para o balão de impostos
     const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
-
-    // Inicia recolhido como padrão
-    const [isExpanded, setIsExpanded] = useState(false);
 
     const supRef = useRef<HTMLDivElement>(null);
     const transRef = useRef<HTMLDivElement>(null);
@@ -369,14 +371,15 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             {/* ... Header and Toggle are unchanged ... */}
             <div
                 className={`p-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between cursor-pointer hover:bg-secondary/50 transition-colors ${isExpanded ? 'border-b border-border/50 bg-secondary/20' : ''}`}
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={onToggleExpand}
             >
                 <div className="flex items-center gap-3">
                     <div>
                         <h4 className="text-sm font-semibold flex items-center gap-2">
                             <button
                                 onClick={(e) => { e.stopPropagation(); updateItem(item.id, 'isFavorite', !item.isFavorite); }}
-                                className={`transition-all hover:scale-125 focus:outline-none ${item.isFavorite ? 'text-yellow-500 drop-shadow-md' : 'text-muted-foreground/30 hover:text-yellow-500/50'}`}
+                                disabled={!canEdit}
+                                className={`transition-all hover:scale-125 focus:outline-none disabled:cursor-not-allowed ${item.isFavorite ? 'text-yellow-500 drop-shadow-md' : 'text-muted-foreground/30 hover:text-yellow-500/50'}`}
                                 title={item.isFavorite ? "Remover Favorito" : "Tornar Vencedora (Favorita)"}
                             >
                                 ★
@@ -463,7 +466,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 Escolha
                             </span>
                         )}
-                        <div className="p-1 rounded-full hover:bg-secondary/80 text-muted-foreground cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                        <div className="p-1 rounded-full hover:bg-secondary/80 text-muted-foreground cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </div>
                     </div>
@@ -485,7 +488,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </label>
                             <button
                                 onClick={() => setIsAdminOpen(!isAdminOpen)}
-                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground"
+                                disabled={!canEdit}
+                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <span className="truncate">
                                     {adminLabel}
@@ -516,7 +520,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </label>
                             <button
                                 onClick={() => setIsUfOpen(!isUfOpen)}
-                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground"
+                                disabled={!canEdit}
+                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 text-left flex items-center justify-between focus:ring-1 focus:ring-primary/30 outline-none text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <span className="truncate">
                                     {item.destinationState
@@ -560,13 +565,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     max="99.9"
                                     step="0.1"
                                     value={item.profitMargin || ''}
+                                    disabled={!canEdit}
                                     onChange={e => {
                                         let val = Number(e.target.value);
                                         if (val >= 100) val = 99.9; // Prevent division by zero
                                         if (val < 0) val = 0;
                                         handleFieldChangeImpactingTotal('profitMargin', val);
                                     }}
-                                    className="w-full bg-primary/10 border-primary/30 text-primary font-bold rounded text-xs pr-6 pl-2 py-1.5 focus:ring-1 focus:ring-primary/50 outline-none"
+                                    className="w-full bg-primary/10 border-primary/30 text-primary font-bold rounded text-xs pr-6 pl-2 py-1.5 focus:ring-1 focus:ring-primary/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">%</span>
                             </div>
@@ -645,7 +651,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         <button
                                             key={star}
                                             onClick={() => updateItem(item.id, 'supplierRating', star)}
-                                            className={`outline-none transition-all p-0.5 hover:scale-125 ${item.supplierRating && item.supplierRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
+                                            disabled={!canEdit}
+                                            className={`outline-none transition-all p-0.5 hover:scale-125 disabled:cursor-not-allowed ${item.supplierRating && item.supplierRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
                                             title={`${star} Estrela${star > 1 ? 's' : ''}`}
                                         >
                                             <Star className="h-3.5 w-3.5 fill-current" />
@@ -655,7 +662,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </label>
                             <button
                                 onClick={() => setIsSupplierOpen(!isSupplierOpen)}
-                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 outline-none"
+                                disabled={!canEdit}
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <span className="truncate">{supplierName}</span>
                                 <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -769,7 +777,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         <button
                                             key={star}
                                             onClick={() => updateItem(item.id, 'transporterRating', star)}
-                                            className={`outline-none transition-all p-0.5 hover:scale-125 ${item.transporterRating && item.transporterRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
+                                            disabled={!canEdit}
+                                            className={`outline-none transition-all p-0.5 hover:scale-125 disabled:cursor-not-allowed ${item.transporterRating && item.transporterRating >= star ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground/30 hover:text-yellow-500/60'}`}
                                             title={`${star} Estrela${star > 1 ? 's' : ''}`}
                                         >
                                             <Star className="h-3.5 w-3.5 fill-current" />
@@ -779,7 +788,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </label>
                             <button
                                 onClick={() => setIsTransporterOpen(!isTransporterOpen)}
-                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 outline-none"
+                                disabled={!canEdit}
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <span className="truncate">
                                     {item.transporterId
@@ -906,9 +916,10 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     min="0"
                                     step="0.01"
                                     value={item.freightValue || ''}
+                                    disabled={!canEdit}
                                     onChange={e => handleFreightChange(e.target.value)}
                                     placeholder="CIF..."
-                                    className="w-full bg-background border border-border rounded text-xs pl-7 pr-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none"
+                                    className="w-full bg-background border border-border rounded text-xs pl-7 pr-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                             </div>
                             <label className="flex items-center gap-1.5 cursor-pointer mt-1 group">
@@ -917,6 +928,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         type="checkbox"
                                         checked={!!item.hasInvoiceTriangulation}
                                         onChange={e => updateItem(item.id, 'hasInvoiceTriangulation', e.target.checked)}
+                                        disabled={!canEdit}
                                         className="peer sr-only"
                                     />
                                     <div className="h-3 w-3 border border-input rounded flex-shrink-0 bg-background peer-checked:bg-primary peer-checked:border-primary peer-focus:ring-1 transition-all flex items-center justify-center">
@@ -932,8 +944,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <input
                                 value={item.validity || ''}
                                 onChange={e => updateItem(item.id, 'validity', e.target.value)}
+                                disabled={!canEdit}
                                 placeholder="30 dias..."
-                                className="w-full bg-background border border-border rounded text-xs px-2.5 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none"
+                                className="w-full bg-background border border-border rounded text-xs px-2.5 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>
 
@@ -943,14 +956,16 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 <input
                                     type="date"
                                     value={item.deliveryDate || ''}
+                                    disabled={!canEdit}
                                     onChange={e => updateItem(item.id, 'deliveryDate', e.target.value)}
-                                    className="w-full bg-background border border-border rounded text-[11px] px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none"
+                                    className="w-full bg-background border border-border rounded text-[11px] px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <input
                                     value={item.deliveryTime || ''}
+                                    disabled={!canEdit}
                                     onChange={e => updateItem(item.id, 'deliveryTime', e.target.value)}
                                     placeholder="Ex: 5 dias úteis..."
-                                    className="w-full bg-background border border-border rounded text-[11px] px-2 py-1 focus:ring-1 focus:ring-primary/30 outline-none"
+                                    className="w-full bg-background border border-border rounded text-[11px] px-2 py-1 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                             </div>
                         </div>
@@ -959,25 +974,27 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Garantia</label>
                             <input
                                 value={item.warrantyDays || ''}
+                                disabled={!canEdit}
                                 onChange={e => updateItem(item.id, 'warrantyDays', e.target.value)}
                                 placeholder="Nenhuma / 1 Ano"
-                                className="w-full bg-background border border-border rounded text-xs px-2.5 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none"
+                                className="w-full bg-background border border-border rounded text-xs px-2.5 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>
 
                         <div className="space-y-1.5">
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">VENDE FATURADO?</label>
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex border border-border rounded overflow-hidden select-none bg-background">
-                                    <span onClick={() => updateItem(item.id, 'invoicedSales', false)} className={`flex-1 text-center py-1 text-[11px] cursor-pointer font-medium ${item.invoicedSales !== true ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary/50'}`}>Não</span>
-                                    <span onClick={() => updateItem(item.id, 'invoicedSales', true)} className={`flex-1 text-center py-1 text-[11px] cursor-pointer font-medium border-l border-border ${item.invoicedSales === true ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'}`}>Sim</span>
+                                <div className={`flex border border-border rounded overflow-hidden select-none bg-background ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    <span onClick={() => canEdit && updateItem(item.id, 'invoicedSales', false)} className={`flex-1 text-center py-1 text-[11px] cursor-pointer font-medium ${item.invoicedSales !== true ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary/50'}`}>Não</span>
+                                    <span onClick={() => canEdit && updateItem(item.id, 'invoicedSales', true)} className={`flex-1 text-center py-1 text-[11px] cursor-pointer font-medium border-l border-border ${item.invoicedSales === true ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary/50'}`}>Sim</span>
                                 </div>
                                 {item.invoicedSales && (
                                     <input
                                         value={item.invoiceTerm || ''}
+                                        disabled={!canEdit}
                                         onChange={e => updateItem(item.id, 'invoiceTerm', e.target.value)}
                                         placeholder="Prazos: 15/30/45..."
-                                        className="w-full animate-in fade-in bg-background border border-primary/30 rounded text-[11px] px-2 py-1 focus:ring-1 focus:ring-primary outline-none"
+                                        className="w-full animate-in fade-in bg-background border border-primary/30 rounded text-[11px] px-2 py-1 focus:ring-1 focus:ring-primary outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                 )}
                             </div>
@@ -987,8 +1004,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Forma de Pagamento</label>
                             <select
                                 value={item.paymentTerms || ''}
+                                disabled={!canEdit}
                                 onChange={e => handleFieldChangeImpactingTotal('paymentTerms', e.target.value)}
-                                className="w-full bg-background border border-border text-foreground rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none"
+                                className="w-full bg-background border border-border text-foreground rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <option value="">Não informado</option>
                                 <option value="À vista">Dinheiro (À vista)</option>
@@ -1007,10 +1025,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     <input
                                         type="checkbox"
                                         checked={!!item.hasCashDiscount}
+                                        disabled={!canEdit}
                                         onChange={e => handleFieldChangeImpactingTotal('hasCashDiscount', e.target.checked)}
                                         className="peer sr-only"
                                     />
-                                    <div className="h-3.5 w-3.5 border border-input rounded flex-shrink-0 bg-background peer-checked:bg-green-500/80 peer-checked:border-green-500 peer-focus:ring-2 transition-all flex items-center justify-center">
+                                    <div className="h-3.5 w-3.5 border border-input rounded flex-shrink-0 bg-background peer-checked:bg-green-500/80 peer-checked:border-green-500 peer-focus:ring-2 disabled:cursor-not-allowed transition-all flex items-center justify-center">
                                         {item.hasCashDiscount && <CheckCircle2 className="h-2.5 w-2.5 text-white" />}
                                     </div>
                                 </div>
@@ -1025,10 +1044,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         min="0"
                                         step="0.1"
                                         max="100"
+                                        disabled={!canEdit}
                                         value={item.cashDiscount || ''}
                                         onChange={e => handleFieldChangeImpactingTotal('cashDiscount', Number(e.target.value))}
                                         placeholder="Porcentagem (Ex: 5, 12, 18.5)..."
-                                        className="w-full bg-green-500/10 border-green-500/30 text-green-600 border rounded text-xs pl-6 pr-2 py-1 focus:ring-1 focus:ring-green-500/50 outline-none"
+                                        className="w-full bg-green-500/10 border-green-500/30 text-green-600 border rounded text-xs pl-6 pr-2 py-1 focus:ring-1 focus:ring-green-500/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                 </div>
                             )}
@@ -1114,12 +1134,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                     <div className="bg-background/50 rounded border border-border/50 p-3 mt-2">
                         <div className="flex items-center justify-between mb-3 border-b border-border/50 pb-2">
                             <h5 className="text-xs font-bold text-muted-foreground">Itens da Cotação</h5>
-                            <button
-                                onClick={addSubItem}
-                                className="text-[10px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 bg-primary/10 px-2 py-1 rounded transition-colors"
-                            >
-                                <Plus className="h-3 w-3" /> ADICIONAR ITEM
-                            </button>
+                            {canEdit && (
+                                <button
+                                    onClick={addSubItem}
+                                    className="text-[10px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 bg-primary/10 px-2 py-1 rounded transition-colors"
+                                >
+                                    <Plus className="h-3 w-3" /> ADICIONAR ITEM
+                                </button>
+                            )}
                         </div>
 
                         {(item.items?.length === 0 || !item.items) ? (
@@ -1143,18 +1165,20 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         <div className="col-span-5 relative">
                                             <input
                                                 value={sub.description}
+                                                disabled={!canEdit}
                                                 onChange={e => updateSubItem(sub.id, 'description', e.target.value)}
                                                 placeholder="Nome do produto ou serviço..."
-                                                className="w-full bg-transparent border-none text-xs px-1 py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none"
+                                                className="w-full bg-transparent border-none text-xs px-1 py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="col-span-2">
                                             <input
                                                 type="number"
                                                 min="1"
+                                                disabled={!canEdit}
                                                 value={sub.quantity || ''}
                                                 onChange={e => updateSubItem(sub.id, 'quantity', Number(e.target.value))}
-                                                className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono"
+                                                className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="col-span-2 relative">
@@ -1163,9 +1187,10 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                 type="number"
                                                 step="0.01"
                                                 min="0"
+                                                disabled={!canEdit}
                                                 value={sub.unitPrice || ''}
                                                 onChange={e => updateSubItem(sub.id, 'unitPrice', Number(e.target.value))}
-                                                className="w-full bg-background border border-border/50 rounded text-xs pl-6 pr-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono"
+                                                className="w-full bg-background border border-border/50 rounded text-xs pl-6 pr-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="col-span-2 text-right text-xs font-mono font-bold text-primary flex justify-between items-center pl-1">
@@ -1173,13 +1198,15 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                 <DollarSign className="h-3 w-3 inline text-muted-foreground mr-1" />
                                                 {formatCurrency(sub.totalPrice || 0)}
                                             </span>
-                                            <button
-                                                onClick={() => removeSubItem(sub.id)}
-                                                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
-                                                title="Remover Item"
-                                            >
-                                                <X className="h-3.5 w-3.5" />
-                                            </button>
+                                            {canEdit && (
+                                                <button
+                                                    onClick={() => removeSubItem(sub.id)}
+                                                    className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
+                                                    title="Remover Item"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -1227,6 +1254,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
 const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     const { addBudget, updateBudget, companies, mainCompanies } = useKanbanStore();
+    const { currentUser } = useAuthStore();
+    const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
@@ -1237,7 +1266,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         totalValue: 0
     });
 
-    const { cards, lists, boards } = useKanbanStore();
+    const { cards, lists, boards, routes } = useKanbanStore();
+    const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
     const allowedCards = cards.filter(c => {
         if (c.archived || c.trashed) return false;
@@ -1365,6 +1395,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     const updateItemField = (id: string, field: keyof BudgetItem, value: any) => {
         setFormData(prev => {
+            if (!canEdit) return prev;
             const newItems = (prev.items || []).map(group => {
                 if (group.id === id) {
                     const updated = { ...group, [field]: value };
@@ -1439,9 +1470,15 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     const lowestCost = prices.length > 0 ? Math.min(...prices) : 0;
     const highestCost = prices.length > 0 ? Math.max(...prices) : 0;
     const savings = highestCost - lowestCost;
+
+    // Sidebar data
+    const expandedQuote = formData.items?.find(i => i.id === expandedQuoteId);
+    const supplierProfile = companies.find(c => c.id === expandedQuote?.companyId);
+    const transporterProfile = companies.find(c => c.id === expandedQuote?.transporterId);
+
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <div className="bg-background w-full max-w-7xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] border border-border overflow-hidden">
+        <div className="fixed inset-0 bg-background z-[100] flex flex-col overflow-hidden">
+            <div className="bg-background w-full h-full flex flex-col overflow-hidden">
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border bg-card">
@@ -1459,166 +1496,452 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
-                    <div className="flex flex-col gap-6">
+                {/* Content Area with Sidebars */}
+                <div className="flex-1 flex overflow-hidden">
+                    {/* Left Sidebar (Supplier) */}
+                    {expandedQuoteId && (
+                        <div className="w-80 lg:w-96 border-r border-border bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-[inset_-10px_0_20px_-20px_rgba(0,0,0,0.1)] transition-all animate-in slide-in-from-left-8">
+                            <h3 className="text-sm font-bold flex items-center gap-2 border-b border-border pb-2 text-primary">
+                                <Building2 className="h-4 w-4" /> Perfil do Fornecedor
+                            </h3>
+                            {supplierProfile ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <h4 className="font-bold text-foreground text-sm">{supplierProfile.nome_fantasia || supplierProfile.razao_social}</h4>
+                                        <p className="text-xs text-muted-foreground mt-0.5">{supplierProfile.razao_social}</p>
+                                    </div>
 
-                        {/* Top Area (Main Info) */}
-                        <div className="space-y-6">
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold flex items-center gap-2 border-b border-border pb-2">
-                                    <FileText className="h-4 w-4 text-primary" /> Informações Básicas
-                                </h3>
-
-                                <div className="space-y-2 relative" ref={cardDropdownRef}>
-                                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cartão Referente (opcional)</label>
-                                    <button
-                                        onClick={() => setIsCardDropdownOpen(!isCardDropdownOpen)}
-                                        className="w-full bg-secondary border border-border/50 rounded-lg px-4 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                                    >
-                                        <span className="truncate">
-                                            {formData.cardId
-                                                ? cards.find(c => c.id === formData.cardId)?.title
-                                                : "Nenhum (Avulso)"}
-                                        </span>
-                                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                                    </button>
-
-                                    {isCardDropdownOpen && (
-                                        <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
-                                            <div className="p-2 border-b border-border flex items-center gap-2">
-                                                <Search className="h-4 w-4 text-muted-foreground opacity-50 shrink-0" />
-                                                <input
-                                                    autoFocus
-                                                    value={cardSearch}
-                                                    onChange={e => setCardSearch(e.target.value)}
-                                                    placeholder="Buscar cartões..."
-                                                    autoComplete="off"
-                                                    spellCheck="false"
-                                                    className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                                                />
+                                    <div className="space-y-2 text-xs">
+                                        {supplierProfile.cnpj && (
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">CNPJ</span>
+                                                <span className="font-mono">{supplierProfile.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}</span>
                                             </div>
-                                            <div className="max-h-56 overflow-y-auto custom-scrollbar p-1">
-                                                <button
-                                                    onClick={() => {
-                                                        handleUpdateField('cardId', undefined);
-                                                        setIsCardDropdownOpen(false);
-                                                    }}
-                                                    className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary ${!formData.cardId ? 'bg-primary/10 text-primary font-medium' : ''}`}
-                                                >
-                                                    Nenhum (Avulso)
-                                                </button>
-                                                {filteredCards.length === 0 ? (
-                                                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhum cartão encontrado.</p>
-                                                ) : (
-                                                    filteredCards.map(c => {
-                                                        const list = lists.find(l => l.id === c.listId);
-                                                        const board = list ? boards.find(b => b.id === list.boardId) : null;
-                                                        return (
-                                                            <button
-                                                                key={c.id}
-                                                                onClick={() => {
-                                                                    handleUpdateField('cardId', c.id);
-                                                                    handleUpdateField('title', c.title);
-                                                                    setIsCardDropdownOpen(false);
-                                                                }}
-                                                                className={`w-full text-left flex flex-col px-3 py-2 rounded-md transition-colors hover:bg-secondary ${formData.cardId === c.id ? 'bg-primary/10 text-primary font-medium' : 'text-sm'}`}
-                                                            >
-                                                                <span>{c.title}</span>
-                                                                {board && <span className="text-[10px] text-muted-foreground mt-0.5">{board.name} {' > '} {list?.title}</span>}
-                                                            </button>
-                                                        )
-                                                    })
+                                        )}
+                                        {(supplierProfile.logradouro || supplierProfile.municipio) && (
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Endereço Completo</span>
+                                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${supplierProfile.logradouro || ''} ${supplierProfile.numero || ''} ${supplierProfile.bairro || ''} ${supplierProfile.municipio || ''} ${supplierProfile.uf || ''} ${supplierProfile.cep || ''}`)}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-600 transition-colors">
+                                                        <MapPin className="h-3 w-3" /> Ver no mapa
+                                                    </a>
+                                                </div>
+                                                <span className="leading-tight mt-0.5">
+                                                    {supplierProfile.logradouro}{supplierProfile.numero ? `, ${supplierProfile.numero}` : ''}{supplierProfile.complemento ? ` - ${supplierProfile.complemento}` : ''}
+                                                    <br />
+                                                    {supplierProfile.bairro && `${supplierProfile.bairro} - `}
+                                                    {supplierProfile.municipio} - {supplierProfile.uf}
+                                                    <br />
+                                                    {supplierProfile.cep && `CEP: ${supplierProfile.cep}`}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {supplierProfile.email && (
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">E-mails</span>
+                                                {supplierProfile.email.split(/[,;/]+/).map(e => e.trim()).filter(Boolean).map((em, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="truncate text-xs" title={em}>{em}</span>
+                                                        <a href={`mailto:${em}`} className="shrink-0 p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded transition-colors" title="Enviar E-mail">
+                                                            <Mail className="h-3.5 w-3.5" />
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {(supplierProfile.ddd_telefone_1 || supplierProfile.ddd_telefone_2) && (
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Telefones</span>
+                                                {supplierProfile.ddd_telefone_1 && (
+                                                    <div className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="text-xs">{supplierProfile.ddd_telefone_1}</span>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <a href={`https://wa.me/55${supplierProfile.ddd_telefone_1.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded transition-colors" title="WhatsApp">
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                            </a>
+                                                            <a href={`tel:${supplierProfile.ddd_telefone_1.replace(/\D/g, '')}`} className="p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors" title="Ligar">
+                                                                <Phone className="h-3.5 w-3.5" />
+                                                            </a>
+                                                        </div>
+                                                    </div>
                                                 )}
+                                                {supplierProfile.ddd_telefone_2 && (
+                                                    <div className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="text-xs">{supplierProfile.ddd_telefone_2}</span>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <a href={`https://wa.me/55${supplierProfile.ddd_telefone_2.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded transition-colors" title="WhatsApp">
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                            </a>
+                                                            <a href={`tel:${supplierProfile.ddd_telefone_2.replace(/\D/g, '')}`} className="p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors" title="Ligar">
+                                                                <Phone className="h-3.5 w-3.5" />
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {supplierProfile.areasAtuacao && supplierProfile.areasAtuacao.length > 0 && (
+                                        <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+                                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Áreas de Atuação</span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {supplierProfile.areasAtuacao.map(area => (
+                                                    <span key={area} className="text-[9px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded border border-border/50">
+                                                        {area}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {supplierProfile.contacts && supplierProfile.contacts.length > 0 && (
+                                        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Contatos Adicionais</span>
+                                            {supplierProfile.contacts.map(c => (
+                                                <div key={c.id} className="text-[11px] bg-background border border-border rounded p-2 flex flex-col gap-1">
+                                                    <span className="font-bold flex items-center justify-between">
+                                                        {c.label}
+                                                        <div className="flex gap-1">
+                                                            {c.phone && <a href={`https://wa.me/55${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1 hover:bg-green-500/20 text-green-600 rounded"><MessageCircle className="h-3 w-3" /></a>}
+                                                            {c.email && <a href={`mailto:${c.email}`} className="p-1 hover:bg-blue-500/20 text-blue-600 rounded"><Mail className="h-3 w-3" /></a>}
+                                                        </div>
+                                                    </span>
+                                                    {c.email && <span className="text-muted-foreground truncate" title={c.email}>{c.email}</span>}
+                                                    {c.phone && <span className="text-muted-foreground">{c.phone}</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {supplierProfile.comments && (
+                                        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Observações do Cadastro</span>
+                                            <div className="text-xs text-muted-foreground whitespace-pre-wrap bg-background border border-border/50 rounded p-2">
+                                                {supplierProfile.comments}
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Título do Orçamento</label>
-                                    <input
-                                        value={formData.title}
-                                        onChange={e => handleUpdateField('title', e.target.value)}
-                                        placeholder="Ex: Aquisição de Computadores Desktop"
-                                        className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tipo</label>
-                                        <select
-                                            value={formData.type}
-                                            onChange={e => handleUpdateField('type', e.target.value as BudgetType)}
-                                            className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                        >
-                                            <option value="Produto">Produto</option>
-                                            <option value="Serviço">Serviço</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={e => handleUpdateField('status', e.target.value as BudgetStatus)}
-                                            className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                        >
-                                            <option value="Aguardando">Aguardando</option>
-                                            <option value="Cotado">Cotado</option>
-                                            <option value="Aprovado">Aprovado</option>
-                                            <option value="Recusado">Recusado</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between border-b border-border pb-2 mt-6">
-                                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                                        <Calculator className="h-4 w-4 text-primary" /> Cotações
-                                    </h3>
-                                    <button onClick={addItem} className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1">
-                                        <Plus className="h-3.5 w-3.5" /> Adicionar cotação
-                                    </button>
-                                </div>
-
-                                {formData.items?.length === 0 ? (
-                                    <div className="text-center py-8 bg-secondary/50 rounded-lg border border-dashed border-border">
-                                        <Calculator className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
-                                        <p className="text-sm text-muted-foreground">Nenhuma cotação adicionada a este orçamento.</p>
-                                        <button onClick={addItem} className="mt-3 text-xs font-medium text-primary hover:underline">
-                                            Adicionar a primeira cotação
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {[...(formData.items || [])].sort((a, b) => {
-                                            if (a.isFavorite && !b.isFavorite) return -1;
-                                            if (!a.isFavorite && b.isFavorite) return 1;
-                                            return (a.totalPrice || 0) - (b.totalPrice || 0);
-                                        }).map((item, idx) => (
-                                            <QuotationItemCard
-                                                key={item.id}
-                                                item={item}
-                                                budgetType={formData.type as BudgetType}
-                                                totalQuotes={formData.items?.length || 0}
-                                                highestCost={highestCost}
-                                                lowestCost={lowestCost}
-                                                companies={companies}
-                                                mainCompanies={mainCompanies}
-                                                updateItem={updateItemField}
-                                                removeItem={removeItem}
-                                                cloneItem={cloneItem}
-                                                formatCurrency={formatCurrency}
-                                            />
-                                        ))}
-
-                                    </div>
-                                )}
-                            </div>
+                            ) : (
+                                <p className="text-xs text-muted-foreground italic text-center mt-10">
+                                    Nenhum fornecedor selecionado para esta cotação.
+                                </p>
+                            )}
                         </div>
+                    )}
 
+                    {/* Main Center */}
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+                        <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto">
+
+                            {/* Top Area (Main Info) */}
+                            <div className="space-y-6">
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold flex items-center gap-2 border-b border-border pb-2">
+                                        <FileText className="h-4 w-4 text-primary" /> Informações Básicas
+                                    </h3>
+
+                                    <div className="space-y-2 relative" ref={cardDropdownRef}>
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cartão Referente (opcional)</label>
+                                        <button
+                                            onClick={() => setIsCardDropdownOpen(!isCardDropdownOpen)}
+                                            disabled={!canEdit}
+                                            className="w-full bg-secondary border border-border/50 rounded-lg px-4 py-2 text-sm text-left flex items-center justify-between focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <span className="truncate">
+                                                {formData.cardId
+                                                    ? cards.find(c => c.id === formData.cardId)?.title
+                                                    : "Nenhum (Avulso)"}
+                                            </span>
+                                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                                        </button>
+
+                                        {isCardDropdownOpen && (
+                                            <div className="absolute z-50 top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
+                                                <div className="p-2 border-b border-border flex items-center gap-2">
+                                                    <Search className="h-4 w-4 text-muted-foreground opacity-50 shrink-0" />
+                                                    <input
+                                                        autoFocus
+                                                        value={cardSearch}
+                                                        onChange={e => setCardSearch(e.target.value)}
+                                                        placeholder="Buscar cartões..."
+                                                        autoComplete="off"
+                                                        spellCheck="false"
+                                                        className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                                                    />
+                                                </div>
+                                                <div className="max-h-56 overflow-y-auto custom-scrollbar p-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            handleUpdateField('cardId', undefined);
+                                                            setIsCardDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-secondary ${!formData.cardId ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                                                    >
+                                                        Nenhum (Avulso)
+                                                    </button>
+                                                    {filteredCards.length === 0 ? (
+                                                        <p className="px-3 py-4 text-center text-xs text-muted-foreground">Nenhum cartão encontrado.</p>
+                                                    ) : (
+                                                        filteredCards.map(c => {
+                                                            const list = lists.find(l => l.id === c.listId);
+                                                            const board = list ? boards.find(b => b.id === list.boardId) : null;
+                                                            return (
+                                                                <button
+                                                                    key={c.id}
+                                                                    onClick={() => {
+                                                                        handleUpdateField('cardId', c.id);
+                                                                        handleUpdateField('title', c.title);
+                                                                        setIsCardDropdownOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left flex flex-col px-3 py-2 rounded-md transition-colors hover:bg-secondary ${formData.cardId === c.id ? 'bg-primary/10 text-primary font-medium' : 'text-sm'}`}
+                                                                >
+                                                                    <span>{c.title}</span>
+                                                                    {board && <span className="text-[10px] text-muted-foreground mt-0.5">{board.name} {' > '} {list?.title}</span>}
+                                                                </button>
+                                                            )
+                                                        })
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Título do Orçamento</label>
+                                        <input
+                                            value={formData.title}
+                                            onChange={e => handleUpdateField('title', e.target.value)}
+                                            disabled={!canEdit}
+                                            placeholder="Ex: Aquisição de Computadores Desktop"
+                                            className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tipo</label>
+                                            <select
+                                                value={formData.type}
+                                                onChange={e => handleUpdateField('type', e.target.value as BudgetType)}
+                                                disabled={!canEdit}
+                                                className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <option value="Produto">Produto</option>
+                                                <option value="Serviço">Serviço</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
+                                            <select
+                                                value={formData.status}
+                                                onChange={e => handleUpdateField('status', e.target.value as BudgetStatus)}
+                                                disabled={!canEdit}
+                                                className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <option value="Aguardando">Aguardando</option>
+                                                <option value="Cotado">Cotado</option>
+                                                <option value="Aprovado">Aprovado</option>
+                                                <option value="Recusado">Recusado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between border-b border-border pb-2 mt-6">
+                                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                                            <Calculator className="h-4 w-4 text-primary" /> Cotações
+                                        </h3>
+                                        {canEdit && (
+                                            <button onClick={addItem} className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1">
+                                                <Plus className="h-3.5 w-3.5" /> Adicionar cotação
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {formData.items?.length === 0 ? (
+                                        <div className="text-center py-8 bg-secondary/50 rounded-lg border border-dashed border-border">
+                                            <Calculator className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                                            <p className="text-sm text-muted-foreground">Nenhuma cotação adicionada a este orçamento.</p>
+                                            {canEdit && (
+                                                <button onClick={addItem} className="mt-3 text-xs font-medium text-primary hover:underline">
+                                                    Adicionar a primeira cotação
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {[...(formData.items || [])].sort((a, b) => {
+                                                if (a.isFavorite && !b.isFavorite) return -1;
+                                                if (!a.isFavorite && b.isFavorite) return 1;
+                                                return (a.totalPrice || 0) - (b.totalPrice || 0);
+                                            }).map((item, idx) => (
+                                                <QuotationItemCard
+                                                    key={item.id}
+                                                    item={item}
+                                                    budgetType={formData.type as BudgetType}
+                                                    totalQuotes={formData.items?.length || 0}
+                                                    highestCost={highestCost}
+                                                    lowestCost={lowestCost}
+                                                    companies={companies}
+                                                    mainCompanies={mainCompanies}
+                                                    updateItem={updateItemField}
+                                                    removeItem={removeItem}
+                                                    cloneItem={cloneItem}
+                                                    formatCurrency={formatCurrency}
+                                                    isExpanded={expandedQuoteId === item.id}
+                                                    onToggleExpand={() => setExpandedQuoteId(prev => prev === item.id ? null : item.id)}
+                                                    canEdit={!!canEdit}
+                                                />
+                                            ))}
+
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
+
+                    {/* Right Sidebar (Transporter) */}
+                    {expandedQuoteId && (
+                        <div className="w-80 lg:w-96 border-l border-border bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-[inset_10px_0_20px_-20px_rgba(0,0,0,0.1)] transition-all animate-in slide-in-from-right-8">
+                            <h3 className="text-sm font-bold flex items-center gap-2 border-b border-border pb-2 text-primary">
+                                <Truck className="h-4 w-4" /> Perfil da Transportadora
+                            </h3>
+                            {transporterProfile ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <h4 className="font-bold text-foreground text-sm">{transporterProfile.nome_fantasia || transporterProfile.razao_social}</h4>
+                                        <p className="text-xs text-muted-foreground mt-0.5">{transporterProfile.razao_social}</p>
+                                    </div>
+
+                                    <div className="space-y-2 text-xs">
+                                        {transporterProfile.cnpj && (
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">CNPJ</span>
+                                                <span className="font-mono">{transporterProfile.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}</span>
+                                            </div>
+                                        )}
+                                        {(transporterProfile.logradouro || transporterProfile.municipio) && (
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Endereço Completo</span>
+                                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${transporterProfile.logradouro || ''} ${transporterProfile.numero || ''} ${transporterProfile.bairro || ''} ${transporterProfile.municipio || ''} ${transporterProfile.uf || ''} ${transporterProfile.cep || ''}`)}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-600 transition-colors">
+                                                        <MapPin className="h-3 w-3" /> Ver no mapa
+                                                    </a>
+                                                </div>
+                                                <span className="leading-tight mt-0.5">
+                                                    {transporterProfile.logradouro}{transporterProfile.numero ? `, ${transporterProfile.numero}` : ''}{transporterProfile.complemento ? ` - ${transporterProfile.complemento}` : ''}
+                                                    <br />
+                                                    {transporterProfile.bairro && `${transporterProfile.bairro} - `}
+                                                    {transporterProfile.municipio} - {transporterProfile.uf}
+                                                    <br />
+                                                    {transporterProfile.cep && `CEP: ${transporterProfile.cep}`}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {transporterProfile.email && (
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">E-mails</span>
+                                                {transporterProfile.email.split(/[,;/]+/).map(e => e.trim()).filter(Boolean).map((em, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="truncate text-xs" title={em}>{em}</span>
+                                                        <a href={`mailto:${em}`} className="shrink-0 p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded transition-colors" title="Enviar E-mail">
+                                                            <Mail className="h-3.5 w-3.5" />
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {(transporterProfile.ddd_telefone_1 || transporterProfile.ddd_telefone_2) && (
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Telefones</span>
+                                                {transporterProfile.ddd_telefone_1 && (
+                                                    <div className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="text-xs">{transporterProfile.ddd_telefone_1}</span>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <a href={`https://wa.me/55${transporterProfile.ddd_telefone_1.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded transition-colors" title="WhatsApp">
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                            </a>
+                                                            <a href={`tel:${transporterProfile.ddd_telefone_1.replace(/\D/g, '')}`} className="p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors" title="Ligar">
+                                                                <Phone className="h-3.5 w-3.5" />
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {transporterProfile.ddd_telefone_2 && (
+                                                    <div className="flex items-center justify-between gap-2 bg-secondary/10 p-1.5 rounded border border-border/50">
+                                                        <span className="text-xs">{transporterProfile.ddd_telefone_2}</span>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <a href={`https://wa.me/55${transporterProfile.ddd_telefone_2.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded transition-colors" title="WhatsApp">
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                            </a>
+                                                            <a href={`tel:${transporterProfile.ddd_telefone_2.replace(/\D/g, '')}`} className="p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors" title="Ligar">
+                                                                <Phone className="h-3.5 w-3.5" />
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Rotas de Atuacao */}
+                                    {routes && (() => {
+                                        const transporterRoutes = routes.filter(r => r.transporterIds.includes(transporterProfile.id));
+                                        if (transporterRoutes.length === 0) return null;
+                                        return (
+                                            <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Rotas de Atuação</span>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {transporterRoutes.map((route) => {
+                                                        const rank = route.transporterIds.indexOf(transporterProfile.id) + 1;
+                                                        return (
+                                                            <div key={route.id} className="flex justify-between items-center bg-background border border-border/50 rounded px-2 py-1.5">
+                                                                <span className="text-[11px] font-medium">{route.name}</span>
+                                                                <span className="text-[9px] bg-primary/10 text-primary uppercase font-bold px-1.5 py-0.5 rounded shadow-sm">
+                                                                    Rank #{rank}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                    {transporterProfile.contacts && transporterProfile.contacts.length > 0 && (
+                                        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Contatos Adicionais</span>
+                                            {transporterProfile.contacts.map(c => (
+                                                <div key={c.id} className="text-[11px] bg-background border border-border rounded p-2 flex flex-col gap-1">
+                                                    <span className="font-bold flex items-center justify-between">
+                                                        {c.label}
+                                                        <div className="flex gap-1">
+                                                            {c.phone && <a href={`https://wa.me/55${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-1 hover:bg-green-500/20 text-green-600 rounded"><MessageCircle className="h-3 w-3" /></a>}
+                                                            {c.email && <a href={`mailto:${c.email}`} className="p-1 hover:bg-blue-500/20 text-blue-600 rounded"><Mail className="h-3 w-3" /></a>}
+                                                        </div>
+                                                    </span>
+                                                    {c.email && <span className="text-muted-foreground truncate" title={c.email}>{c.email}</span>}
+                                                    {c.phone && <span className="text-muted-foreground">{c.phone}</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {transporterProfile.comments && (
+                                        <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Observações do Cadastro</span>
+                                            <div className="text-xs text-muted-foreground whitespace-pre-wrap bg-background border border-border/50 rounded p-2">
+                                                {transporterProfile.comments}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-muted-foreground italic text-center mt-10">
+                                    Nenhuma transportadora selecionada para esta cotação (FOB/Incluso).
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer (Removido - Será trocado pelo Auto-Save) */}

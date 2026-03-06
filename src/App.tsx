@@ -8,6 +8,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
 import AppSidebar from "@/components/layout/AppSidebar";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import DashboardPage from "./pages/DashboardPage";
 import FolderPage from "./pages/FolderPage";
 import BoardPage from "./pages/BoardPage";
@@ -132,31 +135,29 @@ const AppContent = () => {
   }, [documents, addNotification]);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <AppHeader />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar />
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/folder/:folderId" element={<FolderPage />} />
-          <Route path="/board/:boardId" element={<BoardPage />} />
-          <Route path="/calendar" element={<GlobalCalendarPage />} />
-          <Route path="/team" element={<TeamWorkloadPage />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
-          <Route path="/suppliers-list" element={<CompanyListPage type="Fornecedor" />} />
-          <Route path="/transporters-list" element={<CompanyListPage type="Transportadora" />} />
-          <Route path="/budgets" element={<BudgetsPage />} />
-          <Route path="/company" element={<CompanyProfilePage />} />
-          <Route path="/documentacao" element={<DocumentationPage />} />
-          <Route path="/documentacao/atestados" element={<CapacityCertificatesPage />} />
-          <Route path="/documentacao/modelos" element={<EssentialDocumentModelsPage />} />
-          <Route path="/contabil" element={<AccountingDashboard />} />
-          <Route path="/contabil/lancamentos" element={<AccountingEntries />} />
-          <Route path="/contabil/fluxo-caixa" element={<CashflowForecastDash />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
-    </div>
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/login" element={<LoginPage />} />
+      {/* Protected Routes Wrapper */}
+      <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/folder/:folderId" element={<ProtectedRoute><FolderPage /></ProtectedRoute>} />
+      <Route path="/board/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
+      <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />
+      <Route path="/team" element={<ProtectedRoute><TeamWorkloadPage /></ProtectedRoute>} />
+      <Route path="/suppliers" element={<ProtectedRoute><SuppliersPage /></ProtectedRoute>} />
+      <Route path="/suppliers-list" element={<ProtectedRoute><CompanyListPage type="Fornecedor" /></ProtectedRoute>} />
+      <Route path="/transporters-list" element={<ProtectedRoute><CompanyListPage type="Transportadora" /></ProtectedRoute>} />
+      <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
+      <Route path="/company" element={<ProtectedRoute><CompanyProfilePage /></ProtectedRoute>} />
+      <Route path="/documentacao" element={<ProtectedRoute><DocumentationPage /></ProtectedRoute>} />
+      <Route path="/documentacao/atestados" element={<ProtectedRoute><CapacityCertificatesPage /></ProtectedRoute>} />
+      <Route path="/documentacao/modelos" element={<ProtectedRoute><EssentialDocumentModelsPage /></ProtectedRoute>} />
+      <Route path="/contabil" element={<ProtectedRoute><AccountingDashboard /></ProtectedRoute>} />
+      <Route path="/contabil/lancamentos" element={<ProtectedRoute><AccountingEntries /></ProtectedRoute>} />
+      <Route path="/contabil/fluxo-caixa" element={<ProtectedRoute><CashflowForecastDash /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 };
 

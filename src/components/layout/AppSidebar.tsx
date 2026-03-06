@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert } from 'lucide-react';
+import { useAuthStore } from '@/store/auth-store';
 import { useState } from 'react';
 
 const AppSidebar = () => {
@@ -106,6 +107,12 @@ const AppSidebar = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
               </div>
+            )}
+
+            {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
+              <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
+                <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
+              </Link>
             )}
 
             <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">

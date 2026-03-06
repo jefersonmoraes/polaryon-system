@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Check, ExternalLink, Star, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
@@ -34,6 +35,7 @@ const SuppliersPage = () => {
     const [expandedTransporters, setExpandedTransporters] = useState(false);
 
     const { addCompany, companies, budgets = [], uiZoom } = useKanbanStore();
+    const { currentUser } = useAuthStore();
 
     // Calculate dynamic ratings from budgets
     const companyRatings = useMemo(() => {
@@ -89,6 +91,13 @@ const SuppliersPage = () => {
 
     const handleSave = (type: 'Fornecedor' | 'Transportadora') => {
         if (!result) return;
+
+        // Check Permissions
+        const { currentUser } = useAuthStore.getState();
+        if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+            toast.error('Você não tem permissão para cadastrar novas empresas.');
+            return;
+        }
 
         // Check for Duplicates
         const isDuplicate = companies.some(c => c.cnpj === result.cnpj);
@@ -177,7 +186,16 @@ const SuppliersPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Search Column */}
                         <div className="md:col-span-1 space-y-6">
-                            <div className="bg-card rounded-xl border border-border/50 shadow-sm p-6">
+                            <div className="bg-card rounded-xl border border-border/50 shadow-sm p-6 relative overflow-hidden">
+                                {currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit && (
+                                    <div className="absolute inset-0 bg-background/80 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center p-4 text-center">
+                                        <div className="p-3 bg-destructive/10 text-destructive rounded-full mb-2">
+                                            <Search className="h-6 w-6" />
+                                        </div>
+                                        <p className="font-bold text-sm text-foreground">Acesso Restrito</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Sua conta tem permissão apenas para leitura.</p>
+                                    </div>
+                                )}
                                 <h2 className="text-lg font-semibold flex items-center gap-2 mb-4 text-foreground/80">
                                     <Search className="h-5 w-5" />
                                     Consultar CNPJ
@@ -191,12 +209,13 @@ const SuppliersPage = () => {
                                             value={cnpj}
                                             onChange={handleCnpjChange}
                                             maxLength={18} // Max length for formatted CNPJ
+                                            disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
                                         />
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     </div>
                                     <button
                                         type="submit"
-                                        disabled={loading || cnpj.replace(/\D/g, '').length !== 14}
+                                        disabled={loading || cnpj.replace(/\D/g, '').length !== 14 || (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit)}
                                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-primary/50 disabled:cursor-not-allowed"
                                     >
                                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}

@@ -1,6 +1,8 @@
 import { Card } from '@/types/kanban';
 import { useKanbanStore } from '@/store/kanban-store';
 import { CheckSquare, Calendar, MessageSquare, Paperclip, Clock, User } from 'lucide-react';
+import { useAuthStore } from '@/store/auth-store';
+import { toast } from 'sonner';
 
 interface Props {
   card: Card;
@@ -10,6 +12,7 @@ interface Props {
 
 const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
   const { labels, members, updateCard } = useKanbanStore();
+  const { currentUser } = useAuthStore();
   const cardLabels = labels.filter(l => card.labels.includes(l.id));
   const assignedMember = members.find(m => m.id === card.assignee);
   const checkDone = card.checklist.filter(i => i.completed).length;
@@ -44,7 +47,14 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
 
         {/* Toggle Completed Button */}
         <button
-          onClick={(e) => { e.stopPropagation(); updateCard(card.id, { completed: !card.completed }); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+              toast.error('Você não tem permissão para editar cartões.');
+              return;
+            }
+            updateCard(card.id, { completed: !card.completed });
+          }}
           className={`shrink-0 p-1.5 rounded-full transition-colors border ${card.completed ? 'bg-label-green text-white border-label-green' : 'bg-secondary/50 text-muted-foreground border-border hover:bg-label-green/20 hover:text-label-green hover:border-label-green/50 opacity-0 group-hover:opacity-100'}`}
           title={card.completed ? 'Marcar como não concluída' : 'Marcar como concluída'}
         >

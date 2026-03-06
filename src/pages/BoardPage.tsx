@@ -10,6 +10,8 @@ import { BoardCalendarView } from '@/components/board/BoardCalendarView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
 import ReactDOM from 'react-dom';
+import { useAuthStore } from '@/store/auth-store';
+import { toast } from 'sonner';
 
 const BoardPage = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -24,6 +26,7 @@ const BoardPage = () => {
   const boardLists = lists
     .filter(l => l.boardId === boardId)
     .sort((a, b) => a.position - b.position);
+  const { currentUser } = useAuthStore();
 
   const [addingList, setAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -43,6 +46,10 @@ const BoardPage = () => {
   if (!board) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Board não encontrado</div>;
 
   const handleAddList = () => {
+    if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+      toast.error('Você não tem permissão para adicionar listas.');
+      return;
+    }
     if (newListTitle.trim() && boardId) {
       addList(boardId, newListTitle.trim());
       setNewListTitle('');
@@ -54,6 +61,10 @@ const BoardPage = () => {
   };
 
   const handleDragEnd = (result: DropResult) => {
+    if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+      toast.error('Você não tem permissão para mover cartões/listas.');
+      return;
+    }
     const { source, destination, type } = result;
     if (!destination || !boardId) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
@@ -269,26 +280,28 @@ const BoardPage = () => {
                 {provided.placeholder}
 
                 {/* Add list */}
-                <div className="shrink-0 w-[280px]">
-                  {addingList ? (
-                    <div className="kanban-list">
-                      <input autoFocus value={newListTitle} onChange={e => setNewListTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleAddList(); if (e.key === 'Escape') setAddingList(false); }}
-                        placeholder="Título da lista..."
-                        className="w-full bg-card rounded px-2 py-1.5 text-xs outline-none border border-border focus:border-primary mb-2" />
-                      <div className="flex gap-2">
-                        <button onClick={handleAddList} className="bg-primary text-primary-foreground px-3 py-1 rounded text-xs font-medium hover:bg-primary/90 transition-colors">Adicionar</button>
-                        <button onClick={() => setAddingList(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                {(currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) && (
+                  <div className="shrink-0 w-[280px]">
+                    {addingList ? (
+                      <div className="kanban-list">
+                        <input autoFocus value={newListTitle} onChange={e => setNewListTitle(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddList(); if (e.key === 'Escape') setAddingList(false); }}
+                          placeholder="Título da lista..."
+                          className="w-full bg-card rounded px-2 py-1.5 text-xs outline-none border border-border focus:border-primary mb-2" />
+                        <div className="flex gap-2">
+                          <button onClick={handleAddList} className="bg-primary text-primary-foreground px-3 py-1 rounded text-xs font-medium hover:bg-primary/90 transition-colors">Adicionar</button>
+                          <button onClick={() => setAddingList(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <button onClick={() => setAddingList(true)}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-                      <Plus className="h-4 w-4" /> Adicionar lista
-                    </button>
-                  )}
-                </div>
+                    ) : (
+                      <button onClick={() => setAddingList(true)}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                        style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
+                        <Plus className="h-4 w-4" /> Adicionar lista
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </Droppable>
@@ -388,21 +401,25 @@ const BoardPage = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <button onClick={() => updateCard(card.id, { archived: false, trashed: false })}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary hover:bg-primary hover:text-primary-foreground text-xs font-medium transition-colors">
-                                  <Undo2 className="h-3.5 w-3.5" /> Restaurar
-                                </button>
-                                {showArchiveViewer === 'trashed' && (
-                                  <ConfirmAction
-                                    title="Excluir Permanentemente?"
-                                    description="O cartão será excluído de forma permanente."
-                                    onConfirm={() => deleteCard(card.id)}
-                                    destructive
-                                  >
-                                    <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
-                                      <Trash2 className="h-4 w-4" />
+                                {(currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) && (
+                                  <>
+                                    <button onClick={() => updateCard(card.id, { archived: false, trashed: false })}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary hover:bg-primary hover:text-primary-foreground text-xs font-medium transition-colors">
+                                      <Undo2 className="h-3.5 w-3.5" /> Restaurar
                                     </button>
-                                  </ConfirmAction>
+                                    {showArchiveViewer === 'trashed' && (
+                                      <ConfirmAction
+                                        title="Excluir Permanentemente?"
+                                        description="O cartão será excluído de forma permanente."
+                                        onConfirm={() => deleteCard(card.id)}
+                                        destructive
+                                      >
+                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </ConfirmAction>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -439,21 +456,25 @@ const BoardPage = () => {
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <button onClick={() => updateList(list.id, { archived: false, trashed: false })}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary hover:bg-primary hover:text-primary-foreground text-xs font-medium transition-colors">
-                                  <Undo2 className="h-3.5 w-3.5" /> Restaurar
-                                </button>
-                                {showArchiveViewer === 'trashed' && (
-                                  <ConfirmAction
-                                    title="Excluir Permanentemente?"
-                                    description="A lista e seus cartões serão excluídos de forma permanente."
-                                    onConfirm={() => deleteList(list.id)}
-                                    destructive
-                                  >
-                                    <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
-                                      <Trash2 className="h-4 w-4" />
+                                {(currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) && (
+                                  <>
+                                    <button onClick={() => updateList(list.id, { archived: false, trashed: false })}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary hover:bg-primary hover:text-primary-foreground text-xs font-medium transition-colors">
+                                      <Undo2 className="h-3.5 w-3.5" /> Restaurar
                                     </button>
-                                  </ConfirmAction>
+                                    {showArchiveViewer === 'trashed' && (
+                                      <ConfirmAction
+                                        title="Excluir Permanentemente?"
+                                        description="A lista e seus cartões serão excluídos de forma permanente."
+                                        onConfirm={() => deleteList(list.id)}
+                                        destructive
+                                      >
+                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </ConfirmAction>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>

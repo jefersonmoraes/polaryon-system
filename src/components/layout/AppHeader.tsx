@@ -6,6 +6,7 @@ import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
 import CompanyArchiveViewer from './CompanyArchiveViewer';
 import DocsArchiveViewer from './DocsArchiveViewer';
+import UserProfile from './UserProfile';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
@@ -327,9 +328,7 @@ const AppHeader = () => {
         {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
 
-      <div className="h-7 w-7 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground">
-        JJ
-      </div>
+      <UserProfile />
 
       <AnimatePresence>
         {showGlobalArchiveViewer && (

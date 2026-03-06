@@ -506,7 +506,7 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                         defaultValue=""
                                     >
                                         <option className="bg-background text-foreground" value="" disabled>Selecione um orçamento...</option>
-                                        {budgets.filter(b => b.status === 'Aprovado').map(b => {
+                                        {budgets.filter(b => b.status === 'Aprovado' && b.type.toLowerCase() === (invoiceType === 'product' ? 'produto' : 'serviço')).map(b => {
                                             const finalAmount = b.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
                                             return (
                                                 <option className="bg-background text-foreground" key={b.id} value={b.id}>{b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>

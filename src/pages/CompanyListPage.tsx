@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown } from 'lucide-react';
+import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 interface CompanyListPageProps {
     type: 'Fornecedor' | 'Transportadora';
@@ -12,6 +13,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const urlId = searchParams.get('id');
     const tabOption = searchParams.get('tab');
+    const { currentUser } = useAuthStore();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -503,10 +505,12 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                         </div>
                                         <button
                                             onClick={() => {
+                                                if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) return;
                                                 deleteRoute(expandedRoute.id);
                                                 setExpandedRouteId(null);
                                             }}
-                                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                            disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <Trash2 className="h-4 w-4" />
                                             Mover para Lixeira
@@ -702,7 +706,11 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                 <div className="space-y-4 sm:col-span-2 mt-4 border-t border-border pt-6">
                                     <div className="flex items-center justify-between">
                                         <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"><Phone className="h-4 w-4" /> Informações de Contato</p>
-                                        <button onClick={handleAddContact} className="text-xs flex items-center gap-1 text-primary hover:text-primary/80 font-semibold bg-primary/10 px-2 py-1 rounded transition-colors">
+                                        <button
+                                            onClick={handleAddContact}
+                                            disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                            className="text-xs flex items-center gap-1 text-primary hover:text-primary/80 font-semibold bg-primary/10 px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
                                             <Plus className="h-3 w-3" /> Adicionar Contato Dinâmico
                                         </button>
                                     </div>
@@ -820,8 +828,9 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                     <textarea
                                         value={selectedCompany.comments || ''}
                                         onChange={(e) => updateCompany(selectedCompany.id, { comments: e.target.value })}
+                                        disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
                                         placeholder="Adicione notas, comentários ou histórico de negociações sobre esta empresa..."
-                                        className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm min-h-[100px] outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-y custom-scrollbar"
+                                        className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm min-h-[100px] outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-y custom-scrollbar disabled:opacity-60 disabled:cursor-not-allowed"
                                     />
                                 </div>
 
@@ -945,7 +954,8 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Truck className="h-4 w-4 text-primary" /> Rotas de Atuação</h3>
                                             <button
                                                 onClick={() => setIsCreatingRoute(!isCreatingRoute)}
-                                                className="text-xs flex items-center gap-1 text-primary hover:text-primary/80 font-semibold bg-primary/10 px-2 py-1 rounded transition-colors"
+                                                disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                                className="text-xs flex items-center gap-1 text-primary hover:text-primary/80 font-semibold bg-primary/10 px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {isCreatingRoute ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                                                 {isCreatingRoute ? 'Cancelar' : 'Nova Rota'}

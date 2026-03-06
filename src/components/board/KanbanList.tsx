@@ -7,6 +7,8 @@ import ReactDOM from 'react-dom';
 import KanbanCardComponent from './KanbanCard';
 import { BOARD_COLORS } from '@/types/kanban';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
+import { useAuthStore } from '@/store/auth-store';
+import { toast } from 'sonner';
 
 interface Props {
   list: KanbanList;
@@ -17,6 +19,7 @@ interface Props {
 const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   const { cards, boards, addCard, deleteList, updateList, boardPreferences, labels, isDark, uiZoom } = useKanbanStore();
   const prefs = boardPreferences[list.boardId] || { viewMode: 'kanban', sortBy: 'default' };
+  const { currentUser } = useAuthStore();
 
   const listCards = cards
     .filter(c => c.listId === list.id && !c.archived && !c.trashed)
@@ -73,6 +76,10 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   ];
 
   const handleAdd = () => {
+    if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+      toast.error('Você não tem permissão para adicionar cartões.');
+      return;
+    }
     if (newTitle.trim()) {
       addCard(list.id, newTitle.trim());
       setNewTitle('');
@@ -80,6 +87,10 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   };
 
   const handleRename = () => {
+    if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
+      setEditing(false);
+      return;
+    }
     if (title.trim()) {
       updateList(list.id, { title: title.trim() });
       setEditing(false);
@@ -129,8 +140,12 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
           />
         ) : (
           <h3
-            className="flex-1 text-xs font-semibold cursor-pointer px-1 py-0.5"
-            onClick={() => setEditing(true)}
+            className={`flex-1 text-xs font-semibold px-1 py-0.5 ${currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit ? 'cursor-pointer' : ''}`}
+            onClick={() => {
+              if (currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) {
+                setEditing(true);
+              }
+            }}
           >
             {list.title}
           </h3>
@@ -142,56 +157,58 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
           </span>
         )}
         <span className="text-[10px] text-muted-foreground">{listCards.length}</span>
-        <div className="relative">
-          <button onClick={() => setShowMenu(!showMenu)} className="p-1 rounded hover:bg-secondary transition-colors">
-            <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[180px]">
-                <button
-                  onClick={() => { setShowColorPicker(true); setShowMenu(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
-                >
-                  <Palette className="h-3 w-3" /> Cor da lista
-                </button>
-                <button
-                  onClick={() => { setShowIconPicker(true); setShowMenu(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
-                >
-                  <SmilePlus className="h-3 w-3" /> Ícone
-                </button>
-                <button
-                  onClick={() => { setShowAutomation(true); setShowMenu(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
-                >
-                  <Zap className="h-3 w-3" /> Automação
-                </button>
-                <hr className="my-1 border-border" />
-                <ConfirmAction
-                  title="Arquivar Lista?"
-                  description="A lista será arquivada e não aparecerá no board princial, mas pode ser restaurada acessando os itens arquivados."
-                  onConfirm={() => { updateList(list.id, { archived: true }); setShowMenu(false); }}
-                >
-                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors text-muted-foreground">
-                    <Archive className="h-3 w-3" /> Arquivar lista
+        {(currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) && (
+          <div className="relative">
+            <button onClick={() => setShowMenu(!showMenu)} className="p-1 rounded hover:bg-secondary transition-colors">
+              <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[180px]">
+                  <button
+                    onClick={() => { setShowColorPicker(true); setShowMenu(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
+                  >
+                    <Palette className="h-3 w-3" /> Cor da lista
                   </button>
-                </ConfirmAction>
-                <ConfirmAction
-                  title="Mover para a Lixeira?"
-                  description="A lista será movida para a lixeira. Você poderá restaurá-la mais tarde na visualização da lixeira."
-                  onConfirm={() => { updateList(list.id, { trashed: true }); setShowMenu(false); }}
-                  destructive
-                >
-                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors">
-                    <Trash2 className="h-3 w-3" /> Enviar para lixeira
+                  <button
+                    onClick={() => { setShowIconPicker(true); setShowMenu(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
+                  >
+                    <SmilePlus className="h-3 w-3" /> Ícone
                   </button>
-                </ConfirmAction>
-              </div>
-            </>
-          )}
-        </div>
+                  <button
+                    onClick={() => { setShowAutomation(true); setShowMenu(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors"
+                  >
+                    <Zap className="h-3 w-3" /> Automação
+                  </button>
+                  <hr className="my-1 border-border" />
+                  <ConfirmAction
+                    title="Arquivar Lista?"
+                    description="A lista será arquivada e não aparecerá no board princial, mas pode ser restaurada acessando os itens arquivados."
+                    onConfirm={() => { updateList(list.id, { archived: true }); setShowMenu(false); }}
+                  >
+                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors text-muted-foreground">
+                      <Archive className="h-3 w-3" /> Arquivar lista
+                    </button>
+                  </ConfirmAction>
+                  <ConfirmAction
+                    title="Mover para a Lixeira?"
+                    description="A lista será movida para a lixeira. Você poderá restaurá-la mais tarde na visualização da lixeira."
+                    onConfirm={() => { updateList(list.id, { trashed: true }); setShowMenu(false); }}
+                    destructive
+                  >
+                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors">
+                      <Trash2 className="h-3 w-3" /> Enviar para lixeira
+                    </button>
+                  </ConfirmAction>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Color picker popover */}
@@ -366,13 +383,15 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1 w-full px-2 py-1.5 rounded text-xs text-muted-foreground hover:bg-secondary/50 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Adicionar cartão
-          </button>
+          (currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit) && (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1 w-full px-2 py-1.5 rounded text-xs text-muted-foreground hover:bg-secondary/50 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Adicionar cartão
+            </button>
+          )
         )}
       </div>
     </div>

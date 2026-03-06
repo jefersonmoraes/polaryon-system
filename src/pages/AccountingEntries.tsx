@@ -4,11 +4,13 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { ArrowUpRight, ArrowDownRight, Edit, Trash2, ArrowLeft, Search, Filter, Calendar } from 'lucide-react';
 import EntryFormModal from '@/components/accounting/EntryFormModal';
 import { Link } from 'react-router-dom';
+import { useAuthStore } from '@/store/auth-store';
 
 const AccountingEntries = () => {
     const { entries, categories, deleteEntry } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
+    const { currentUser } = useAuthStore();
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalType, setModalType] = useState<'revenue' | 'expense'>('revenue');
@@ -85,13 +87,15 @@ const AccountingEntries = () => {
                         <div className="flex gap-2 w-full sm:w-auto">
                             <button
                                 onClick={() => { setModalType('revenue'); setEntryToEdit(undefined); setModalOpen(true); }}
-                                className="flex-1 sm:flex-none px-4 py-2 bg-emerald-500 text-white rounded-md text-sm font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                className="flex-1 sm:flex-none px-4 py-2 bg-emerald-500 text-white rounded-md text-sm font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <ArrowUpRight className="h-4 w-4" /> Nova Entrada
                             </button>
                             <button
                                 onClick={() => { setModalType('expense'); setEntryToEdit(undefined); setModalOpen(true); }}
-                                className="flex-1 sm:flex-none px-4 py-2 bg-rose-500 text-white rounded-md text-sm font-bold hover:bg-rose-600 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                className="flex-1 sm:flex-none px-4 py-2 bg-rose-500 text-white rounded-md text-sm font-bold hover:bg-rose-600 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <ArrowDownRight className="h-4 w-4" /> Nova Saída
                             </button>
@@ -209,7 +213,8 @@ const AccountingEntries = () => {
                                                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <button
                                                                 onClick={() => handleEdit(entry.id, entry.type)}
-                                                                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                                                                disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                                                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 title="Editar Lançamento"
                                                             >
                                                                 <Edit className="h-4 w-4" />
@@ -220,7 +225,8 @@ const AccountingEntries = () => {
                                                                         deleteEntry(entry.id);
                                                                     }
                                                                 }}
-                                                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                                                                disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 title="Excluir Lançamento"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />

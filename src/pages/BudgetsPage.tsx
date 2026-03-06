@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAuthStore } from '@/store/auth-store';
 
 const statusStyles: Record<BudgetStatus, string> = {
     Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
@@ -36,6 +37,8 @@ const BudgetsPage = () => {
     const [selectedBudget, setSelectedBudget] = useState<Budget | undefined>();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+    const { currentUser } = useAuthStore();
+    const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
 
     const filteredBudgets = useMemo(() => {
         return budgets
@@ -89,7 +92,8 @@ const BudgetsPage = () => {
 
                     <button
                         onClick={handleNew}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2"
+                        disabled={!canEdit}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Plus className="h-4 w-4" />
                         Novo Orçamento
@@ -196,15 +200,23 @@ const BudgetsPage = () => {
                                             </button>
                                         </PopoverTrigger>
                                         <PopoverContent align="end" className="w-40 p-1">
-                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(budget); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
-                                                <Edit className="h-3.5 w-3.5" /> Editar
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); updateBudget(budget.id, { archived: true }); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-muted-foreground transition-colors flex items-center gap-2">
-                                                <Archive className="h-3.5 w-3.5" /> Arquivar
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); deleteBudget(budget.id); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-destructive/10 text-destructive transition-colors flex items-center gap-2">
-                                                <Trash2 className="h-3.5 w-3.5" /> Excluir
-                                            </button>
+                                            {canEdit ? (
+                                                <>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(budget); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
+                                                        <Edit className="h-3.5 w-3.5" /> Editar
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); updateBudget(budget.id, { archived: true }); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-muted-foreground transition-colors flex items-center gap-2">
+                                                        <Archive className="h-3.5 w-3.5" /> Arquivar
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteBudget(budget.id); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-destructive/10 text-destructive transition-colors flex items-center gap-2">
+                                                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div className="px-2 py-1.5 text-[10px] text-muted-foreground text-center">
+                                                    Visualização apenas
+                                                </div>
+                                            )}
                                         </PopoverContent>
                                     </Popover>
                                 </div>

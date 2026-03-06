@@ -11,6 +11,7 @@ import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
+import { useAuthStore } from '@/store/auth-store';
 
 const statusStyles: Record<BudgetStatus, string> = {
   Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
@@ -52,6 +53,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const card = cards.find(c => c.id === cardId);
   const list = card ? lists.find(l => l.id === card.listId) : null;
   const navigate = useNavigate();
+  const { currentUser } = useAuthStore();
+  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
+  const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
 
   const getCompanyName = (id?: string) => {
     if (!id) return '';
@@ -136,9 +140,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     updateCard(cardId, { labels: next });
   };
   const handleAddCheckItem = () => {
+    if (!canEdit) return;
     if (newCheckItem.trim()) { addChecklistItem(cardId, newCheckItem.trim()); setNewCheckItem(''); }
   };
   const handleAddComment = () => {
+    if (!canEdit) return;
     if (newComment.trim()) { addComment(cardId, newComment.trim()); setNewComment(''); }
   };
   const handleSetDueDate = (val: string) => { setDueDate(val); updateCard(cardId, { dueDate: val || undefined }); };
@@ -253,8 +259,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <FileText className="h-3.5 w-3.5" /> Resumo
             </label>
             <input value={summary} onChange={e => setSummary(e.target.value)} onBlur={handleSaveSummary}
+              disabled={!canEdit}
               placeholder="Breve resumo da tarefa..."
-              className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary" />
+              className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
         );
       case 'labels':
@@ -278,8 +285,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <div className="grid grid-cols-2 gap-1.5">
                   {labels.map(label => (
                     <div key={label.id} className="flex items-center gap-1">
-                      <button onClick={() => handleToggleLabel(label.id)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all ${card.labels.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
+                      <button onClick={() => canEdit && handleToggleLabel(label.id)}
+                        disabled={!canEdit}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${card.labels.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
                         style={{ backgroundColor: label.color }}>
                         {label.icon && <span>{label.icon}</span>}
                         {label.name}
@@ -290,9 +298,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => { setEditingLabel(true); setEditLabelId(null); setLabelName(''); setLabelColor('#3b82f6'); setLabelHex('#3b82f6'); }}
-                  className="text-[11px] text-primary hover:underline">+ Criar nova etiqueta</button>
-                {editingLabel && (
+                {canEdit && <button onClick={() => { setEditingLabel(true); setEditLabelId(null); setLabelName(''); setLabelColor('#3b82f6'); setLabelHex('#3b82f6'); }}
+                  className="text-[11px] text-primary hover:underline">+ Criar nova etiqueta</button>}
+                {editingLabel && canEdit && (
                   <div className="p-2 bg-background rounded-lg border border-border space-y-2">
                     <input value={labelName} onChange={e => setLabelName(e.target.value)} placeholder="Nome da etiqueta"
                       className="w-full bg-secondary rounded px-2 py-1 text-xs outline-none border border-border focus:border-primary" />
@@ -348,7 +356,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <select
                 value={assignee}
                 onChange={e => handleSetAssignee(e.target.value)}
-                className="flex-1 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary"
+                disabled={!canEdit}
+                className="flex-1 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Sem responsável</option>
                 {members.map(m => (
@@ -370,11 +379,13 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               {(card.milestones || []).map(ms => (
                 <div key={ms.id} className="flex flex-col gap-2 p-3 bg-secondary/50 rounded-lg border border-border group focus-within:border-primary/50 transition-colors">
                   <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={ms.completed} onChange={() => handleUpdateMilestone(ms.id, { completed: !ms.completed })} className="rounded cursor-pointer" />
-                    <input value={ms.title} onChange={(e) => handleUpdateMilestone(ms.id, { title: e.target.value })} className={`flex-1 text-xs bg-transparent outline-none font-medium ${ms.completed ? 'line-through text-muted-foreground' : ''}`} />
-                    <button onClick={() => handleDeleteMilestone(ms.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 transition-colors text-destructive">
-                      <X className="w-3 h-3" />
-                    </button>
+                    <input type="checkbox" checked={ms.completed} onChange={() => handleUpdateMilestone(ms.id, { completed: !ms.completed })} disabled={!canEdit} className="rounded cursor-pointer disabled:cursor-not-allowed" />
+                    <input value={ms.title} onChange={(e) => handleUpdateMilestone(ms.id, { title: e.target.value })} disabled={!canEdit} className={`flex-1 text-xs bg-transparent outline-none font-medium disabled:opacity-70 ${ms.completed ? 'line-through text-muted-foreground' : ''}`} />
+                    {canEdit && (
+                      <button onClick={() => handleDeleteMilestone(ms.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 transition-colors text-destructive">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-col sm:flex-row items-center gap-3 pl-5">
                     <div className="flex items-center gap-1.5 w-full sm:flex-1">
@@ -391,7 +402,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <button onClick={() => handleAddMilestone(newMilestoneTitle)} className="px-3 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">Adicionar</button>
             </div>
 
-            {recentMilestoneTitles.length > 0 && (
+            {recentMilestoneTitles.length > 0 && canEdit && (
               <div className="flex gap-2 flex-wrap mb-4">
                 <span className="text-[10px] text-muted-foreground w-full">Etapas recentes usadas:</span>
                 {recentMilestoneTitles.map(sug => (
@@ -400,8 +411,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               </div>
             )}
 
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mt-4 pt-3 border-t border-border focus-within:text-foreground transition-colors cursor-pointer">
-              <input type="checkbox" checked={card.completed} onChange={() => updateCard(cardId, { completed: !card.completed })} className="rounded" />
+            <label className={`flex items-center gap-1.5 text-xs text-muted-foreground mt-4 pt-3 border-t border-border focus-within:text-foreground transition-colors ${canEdit ? 'cursor-pointer' : 'opacity-80'}`}>
+              <input type="checkbox" checked={card.completed} onChange={() => updateCard(cardId, { completed: !card.completed })} disabled={!canEdit} className="rounded disabled:cursor-not-allowed" />
               Cartão concluído geral
             </label>
           </div>
@@ -413,7 +424,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <Timer className="h-3.5 w-3.5" /> Estimativa de Tempo (minutos)
             </label>
             <input type="number" value={estimatedTime} onChange={e => handleSetEstimatedTime(e.target.value)} placeholder="Ex: 120"
-              className="w-32 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary" />
+              disabled={!canEdit}
+              className="w-32 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
         );
       case 'description':
@@ -423,42 +435,44 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <AlignLeft className="h-3.5 w-3.5" /> Descrição
             </label>
             {/* Rich text toolbar */}
-            <div className="flex items-center gap-0.5 mb-1 p-1 bg-secondary rounded-t-lg border border-b-0 border-border">
-              <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-background transition-colors" title="Negrito">
-                <Bold className="h-3 w-3" />
-              </button>
-              <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-background transition-colors" title="Itálico">
-                <Italic className="h-3 w-3" />
-              </button>
-              <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-background transition-colors" title="Sublinhado">
-                <Underline className="h-3 w-3" />
-              </button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-background transition-colors" title="Lista">
-                <List className="h-3 w-3" />
-              </button>
-              <button onClick={() => execCommand('insertHTML', '<table border="1" style="border-collapse:collapse;width:100%"><tr><td style="padding:4px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px;border:1px solid #ccc">&nbsp;</td></tr><tr><td style="padding:4px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px;border:1px solid #ccc">&nbsp;</td></tr></table>')}
-                className="p-1.5 rounded hover:bg-background transition-colors" title="Tabela">
-                <Table className="h-3 w-3" />
-              </button>
-              <button onClick={() => { const url = prompt('URL do link:'); if (url) execCommand('createLink', url); }}
-                className="p-1.5 rounded hover:bg-background transition-colors" title="Link">
-                <Link2 className="h-3 w-3" />
-              </button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <select onChange={e => { if (e.target.value) execCommand('formatBlock', e.target.value); e.target.value = ''; }}
-                className="text-[10px] bg-transparent outline-none text-muted-foreground" defaultValue="">
-                <option value="" disabled>Cabeçalho</option>
-                <option value="h1">H1</option>
-                <option value="h2">H2</option>
-                <option value="h3">H3</option>
-                <option value="p">Normal</option>
-              </select>
-            </div>
+            {canEdit && (
+              <div className="flex items-center gap-0.5 mb-1 p-1 bg-secondary rounded-t-lg border border-b-0 border-border">
+                <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-background transition-colors" title="Negrito">
+                  <Bold className="h-3 w-3" />
+                </button>
+                <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-background transition-colors" title="Itálico">
+                  <Italic className="h-3 w-3" />
+                </button>
+                <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-background transition-colors" title="Sublinhado">
+                  <Underline className="h-3 w-3" />
+                </button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-background transition-colors" title="Lista">
+                  <List className="h-3 w-3" />
+                </button>
+                <button onClick={() => execCommand('insertHTML', '<table border="1" style="border-collapse:collapse;width:100%"><tr><td style="padding:4px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px;border:1px solid #ccc">&nbsp;</td></tr><tr><td style="padding:4px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px;border:1px solid #ccc">&nbsp;</td></tr></table>')}
+                  className="p-1.5 rounded hover:bg-background transition-colors" title="Tabela">
+                  <Table className="h-3 w-3" />
+                </button>
+                <button onClick={() => { const url = prompt('URL do link:'); if (url) execCommand('createLink', url); }}
+                  className="p-1.5 rounded hover:bg-background transition-colors" title="Link">
+                  <Link2 className="h-3 w-3" />
+                </button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <select onChange={e => { if (e.target.value) execCommand('formatBlock', e.target.value); e.target.value = ''; }}
+                  className="text-[10px] bg-transparent outline-none text-muted-foreground" defaultValue="">
+                  <option value="" disabled>Cabeçalho</option>
+                  <option value="h1">H1</option>
+                  <option value="h2">H2</option>
+                  <option value="h3">H3</option>
+                  <option value="p">Normal</option>
+                </select>
+              </div>
+            )}
             <div className="relative">
               <div
                 ref={descRef}
-                contentEditable
+                contentEditable={canEdit}
                 onBlur={handleSaveDesc}
                 onClick={() => !isDescExpanded && setIsDescExpanded(true)}
                 dangerouslySetInnerHTML={{ __html: card.description }}
@@ -480,12 +494,16 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <Paperclip className="h-3.5 w-3.5" /> Anexos
             </label>
-            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-              onChange={handleFileUpload} className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 px-3 py-1.5 rounded bg-secondary text-xs hover:bg-secondary/80 transition-colors border border-border mb-2">
-              <Plus className="h-3 w-3" /> Anexar arquivo
-            </button>
+            {canEdit && (
+              <>
+                <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  onChange={handleFileUpload} className="hidden" />
+                <button onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded bg-secondary text-xs hover:bg-secondary/80 transition-colors border border-border mb-2">
+                  <Plus className="h-3 w-3" /> Anexar arquivo
+                </button>
+              </>
+            )}
             {card.attachments.length > 0 && (
               <div className="space-y-1.5">
                 {card.attachments.map(att => (
@@ -501,12 +519,16 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       <p className="text-[11px] font-medium truncate">{att.name}</p>
                       <p className="text-[9px] text-muted-foreground">{new Date(att.addedAt).toLocaleDateString('pt-BR')}</p>
                     </div>
-                    <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
-                      <Image className="h-3 w-3" />
-                    </a>
-                    <button onClick={() => handleRemoveAttachment(att.id)} className="p-1 rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
-                      <X className="h-3 w-3 text-destructive" />
-                    </button>
+                    {canDownload && (
+                      <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
+                        <Image className="h-3 w-3" />
+                      </a>
+                    )}
+                    {canEdit && (
+                      <button onClick={() => handleRemoveAttachment(att.id)} className="p-1 rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
+                        <X className="h-3 w-3 text-destructive" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -529,10 +551,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   <div
                     key={budget.id}
                     onClick={() => {
+                      if (!canEdit) return;
                       setSelectedBudgetToEdit(budget);
                       setIsBudgetModalOpen(true);
                     }}
-                    className="bg-secondary/50 rounded-lg p-3 border border-border group hover:border-primary/50 transition-colors flex flex-col gap-2 cursor-pointer"
+                    className={`bg-secondary/50 rounded-lg p-3 border border-border group transition-colors flex flex-col gap-2 ${canEdit ? 'hover:border-primary/50 cursor-pointer' : ''}`}
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
@@ -567,7 +590,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">Melhor Preço</span>
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">Preço Final</span>
                         {(() => {
                           if (!budget.items || budget.items.length === 0) {
                             return <span className="text-xs font-bold text-muted-foreground">R$ 0,00</span>;
@@ -607,22 +630,26 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             <div className="space-y-1 mb-2">
               {card.checklist.map(item => (
                 <div key={item.id} className="flex items-center gap-2 group">
-                  <input type="checkbox" checked={item.completed} onChange={() => toggleChecklistItem(cardId, item.id)} className="rounded" />
+                  <input type="checkbox" checked={item.completed} onChange={() => toggleChecklistItem(cardId, item.id)} disabled={!canEdit} className="rounded disabled:cursor-not-allowed" />
                   <span className={`flex-1 text-xs ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</span>
-                  <button onClick={() => deleteChecklistItem(cardId, item.id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-secondary transition-all">
-                    <X className="h-3 w-3 text-muted-foreground" />
-                  </button>
+                  {canEdit && (
+                    <button onClick={() => deleteChecklistItem(cardId, item.id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-secondary transition-all">
+                      <X className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex gap-1">
-              <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddCheckItem()} placeholder="Novo item..."
-                className="flex-1 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border focus:border-primary" />
-              <button onClick={handleAddCheckItem} className="p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {canEdit && (
+              <div className="flex gap-1">
+                <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCheckItem()} placeholder="Novo item..."
+                  className="flex-1 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border focus:border-primary" />
+                <button onClick={handleAddCheckItem} className="p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         );
       case 'timer':
@@ -635,18 +662,24 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               {activeEntry ? (
                 <>
                   <span className="text-xl font-mono font-bold text-accent">{timerDisplay}</span>
-                  <button onClick={() => stopTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors">
-                    <Square className="h-3 w-3" /> Parar
-                  </button>
+                  {canEdit && (
+                    <button onClick={() => stopTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors">
+                      <Square className="h-3 w-3" /> Parar
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
-                  <button onClick={() => startTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
-                    <Play className="h-3 w-3" /> Iniciar
-                  </button>
-                  <button onClick={() => resetTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-secondary text-foreground text-xs font-medium hover:bg-secondary/80 transition-colors">
-                    <RotateCcw className="h-3 w-3" /> Resetar
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button onClick={() => startTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                        <Play className="h-3 w-3" /> Iniciar
+                      </button>
+                      <button onClick={() => resetTimer(cardId)} className="flex items-center gap-1 px-3 py-1.5 rounded bg-secondary text-foreground text-xs font-medium hover:bg-secondary/80 transition-colors">
+                        <RotateCcw className="h-3 w-3" /> Resetar
+                      </button>
+                    </>
+                  )}
                 </>
               )}
               {totalTimeSecs > 0 && <span className="text-xs text-muted-foreground">Total: {totalH}h {totalM}min</span>}
@@ -682,7 +715,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     onChange={e => setTitle(e.target.value)}
                     onBlur={handleSaveTitle}
                     onKeyDown={e => e.key === 'Enter' && handleSaveTitle()}
-                    className="w-full text-lg font-bold bg-transparent outline-none border-b border-transparent focus:border-primary pb-1"
+                    disabled={!canEdit}
+                    className="w-full text-lg font-bold bg-transparent outline-none border-b border-transparent focus:border-primary pb-1 disabled:opacity-80 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -716,8 +750,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               )}
 
               {/* Modular sections - reorderable */}
-              <Reorder.Group axis="y" values={globalSectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} onReorder={(newOrder) => setGlobalSectionOrder([...newOrder, 'budgets', 'comments'])} className="space-y-5">
-                {globalSectionOrder.filter(s => s !== 'comments').map(section => (
+              <Reorder.Group axis="y" values={globalSectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} onReorder={(newOrder) => setGlobalSectionOrder(newOrder)} className="space-y-5">
+                {globalSectionOrder.filter(s => s !== 'comments' && s !== 'budgets').map(section => (
                   <Reorder.Item key={section} value={section} className="relative group">
                     <div className="absolute -left-5 top-1 opacity-0 group-hover:opacity-50 cursor-grab">
                       <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -726,6 +760,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   </Reorder.Item>
                 ))}
               </Reorder.Group>
+
+              <div className="space-y-5 mt-5">
+                {renderSection('budgets')}
+              </div>
 
               {/* Actions */}
               <div className="pt-4 border-t border-border flex flex-wrap gap-2">
@@ -742,22 +780,26 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 )}
 
                 <button onClick={() => {
+                  if (!canEdit) return;
                   updateCard(cardId, { archived: true });
                   if (list) setUndoAction({ cardId, previousListId: list.id, previousPosition: card.position, message: `"${card.title}" foi arquivado`, type: 'archived' });
                   onClose();
                 }}
-                  className={`flex items-center gap-2 text-xs text-muted-foreground hover:bg-secondary px-3 py-2 rounded transition-colors ${!card.automationUndoAction ? 'ml-auto' : ''}`}>
+                  disabled={!canEdit}
+                  className={`flex items-center gap-2 text-xs text-muted-foreground hover:bg-secondary px-3 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${!card.automationUndoAction ? 'ml-auto' : ''}`}>
                   <Archive className="h-3.5 w-3.5" /> Arquivar
                 </button>
                 <button onClick={() => {
+                  if (!canEdit) return;
                   updateCard(cardId, { trashed: true });
                   if (list) setUndoAction({ cardId, previousListId: list.id, previousPosition: card.position, message: `"${card.title}" foi enviado para lixeira`, type: 'trashed' });
                   onClose();
                 }}
-                  className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors">
+                  disabled={!canEdit}
+                  className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   <Trash2 className="h-3.5 w-3.5" /> Lixeira
                 </button>
-                {card.trashed && (
+                {card.trashed && canEdit && (
                   <button onClick={() => { deleteCard(cardId); onClose(); }}
                     className="flex items-center gap-2 text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded transition-colors">
                     <Trash2 className="h-3.5 w-3.5" /> Excluir permanentemente
@@ -792,17 +834,19 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   ))
                 )}
               </div>
-              <div className="p-3 bg-card border-t border-border">
-                <div className="flex flex-col gap-2">
-                  <textarea value={newComment} onChange={e => setNewComment(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
-                    placeholder="Escreva um comentário... Use @nome para mencionar"
-                    className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary resize-none min-h-[60px]" />
-                  <button onClick={handleAddComment} className="self-end px-4 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors shadow-sm">
-                    Enviar
-                  </button>
+              {canEdit && (
+                <div className="p-3 bg-card border-t border-border">
+                  <div className="flex flex-col gap-2">
+                    <textarea value={newComment} onChange={e => setNewComment(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                      placeholder="Escreva um comentário... Use @nome para mencionar"
+                      className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary resize-none min-h-[60px]" />
+                    <button onClick={handleAddComment} className="self-end px-4 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors shadow-sm">
+                      Enviar
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </motion.div>
