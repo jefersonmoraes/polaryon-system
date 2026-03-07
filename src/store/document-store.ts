@@ -38,6 +38,7 @@ export interface CompanyDocument {
     status: DocumentStatus;
     lastNotifiedIndex?: number; // internal: helps to not spam the same notification
     trashed?: boolean;
+    trashedAt?: string;
 }
 
 interface DocumentStore {
@@ -48,6 +49,7 @@ interface DocumentStore {
     restoreDocument: (id: string) => void;
     permanentlyDeleteDocument: (id: string) => void;
     validateDocumentStatuses: () => void;
+    cleanOldTrash: () => void;
 }
 
 const checkStatus = (expirationDate: string): DocumentStatus => {
@@ -106,12 +108,12 @@ export const useDocumentStore = create<DocumentStore>()(
                 set((state) => ({
                     documents: state.documents.map((doc) => {
                         if (doc.id === id) {
-                            const merged = { ...doc, ...updatedFields, updatedAt: new Date().toISOString() };
+                            const merged: any = { ...doc, ...updatedFields, updatedAt: new Date().toISOString() };
                             // Re-check status if expiration date changed
                             if (updatedFields.expirationDate) {
                                 merged.status = checkStatus(merged.expirationDate);
                             }
-                            return merged;
+                            return merged as CompanyDocument;
                         }
                         return doc;
                     }),
@@ -132,7 +134,7 @@ export const useDocumentStore = create<DocumentStore>()(
                 }
 
                 set((state) => ({
-                    documents: state.documents.map((doc) => doc.id === id ? { ...doc, trashed: true, updatedAt: new Date().toISOString() } : doc),
+                    documents: state.documents.map((doc) => doc.id === id ? { ...doc, trashed: true, trashedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : doc),
                 }));
             },
             restoreDocument: (id) => {
@@ -153,13 +155,21 @@ export const useDocumentStore = create<DocumentStore>()(
                         const newStatus = checkStatus(doc.expirationDate);
                         if (newStatus !== doc.status) {
                             changed = true;
-                            return { ...doc, status: newStatus };
+                            return { ...doc, status: newStatus } as CompanyDocument;
                         }
                         return doc;
                     });
                     return changed ? { documents: newDocs } : state;
                 });
-            }
+            },
+            cleanOldTrash: () => set(state => {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                return {
+                    documents: state.documents.filter(doc => !doc.trashedAt || new Date(doc.trashedAt) >= thirtyDaysAgo)
+                };
+            })
         }),
         {
             name: 'polaryon-document-storage',

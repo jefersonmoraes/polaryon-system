@@ -9,7 +9,7 @@ interface CompanyListPageProps {
 }
 
 const CompanyListPage = ({ type }: CompanyListPageProps) => {
-    const { companies, budgets = [], removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute, uiZoom } = useKanbanStore();
+    const { companies, budgets = [], removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute } = useKanbanStore();
     const [searchParams, setSearchParams] = useSearchParams();
     const urlId = searchParams.get('id');
     const tabOption = searchParams.get('tab');

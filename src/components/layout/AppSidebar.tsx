@@ -1,11 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useEffect } from 'react';
 
 const AppSidebar = () => {
-  const { mainCompanies, isMobileMenuOpen, setMobileMenuOpen } = useKanbanStore();
+  const { mainCompanies } = useKanbanStore();
+  const { isMobileMenuOpen, setMobileMenuOpen } = useUserPrefsStore();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -26,7 +28,7 @@ const AppSidebar = () => {
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
   const isDocsModule = location.pathname.startsWith('/documentacao');
-  const isAdminModule = location.pathname.startsWith('/company');
+  const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
 
   return (
@@ -122,9 +124,14 @@ const AppSidebar = () => {
               )}
 
               {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
-                <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
-                  <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
-                </Link>
+                <>
+                  <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
+                    <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
+                  </Link>
+                  <Link to="/admin/audit" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin/audit' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Histórico de Ações">
+                    <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Histórico de Ações</span>}
+                  </Link>
+                </>
               )}
 
               <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">

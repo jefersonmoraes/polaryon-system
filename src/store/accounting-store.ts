@@ -60,6 +60,8 @@ export interface AccountingState {
     addExport: (exp: Omit<AccountantExport, 'id' | 'createdAt'>) => void;
     deleteExport: (id: string) => void;
     restoreExport: (id: string) => void;
+
+    cleanOldTrash: () => void;
 }
 
 const DEFAULT_CATEGORIES: AccountingCategory[] = [
@@ -129,9 +131,19 @@ export const useAccountingStore = create<AccountingState>()(
                 }
 
                 return {
-                    entries: state.entries.map((entry) =>
-                        entry.id === id ? { ...entry, ...updatedEntry, updatedAt: new Date().toISOString() } : entry
-                    ),
+                    entries: state.entries.map((entry) => {
+                        if (entry.id === id) {
+                            const isTrashing = (updatedEntry as any).trashed === true && !(entry as any).trashed;
+                            return {
+                                ...entry,
+                                ...updatedEntry,
+                                updatedAt: new Date().toISOString(),
+                                // If some manual edit sends it to trash or uses the generic update, catch it here just in case.
+                                trashedAt: isTrashing ? new Date().toISOString() : ((updatedEntry as any).trashed === false ? undefined : entry.trashedAt)
+                            };
+                        }
+                        return entry;
+                    }),
                 };
             }),
 
@@ -218,9 +230,17 @@ export const useAccountingStore = create<AccountingState>()(
 
             updateInvoice: (id, updatedInvoice) =>
                 set((state) => ({
-                    invoices: state.invoices.map((inv) =>
-                        inv.id === id ? { ...inv, ...updatedInvoice } : inv
-                    )
+                    invoices: state.invoices.map((inv) => {
+                        if (inv.id === id) {
+                            const isTrashing = (updatedInvoice as any).trashed === true && !(inv as any).trashed;
+                            return {
+                                ...inv,
+                                ...updatedInvoice,
+                                trashedAt: isTrashing ? new Date().toISOString() : ((updatedInvoice as any).trashed === false ? undefined : inv.trashedAt)
+                            };
+                        }
+                        return inv;
+                    })
                 })),
 
             deleteInvoice: (id) =>
@@ -363,9 +383,17 @@ export const useAccountingStore = create<AccountingState>()(
 
             updateTaxObligation: (id, updatedTax) =>
                 set((state) => ({
-                    taxObligations: state.taxObligations.map(t =>
-                        t.id === id ? { ...t, ...updatedTax } : t
-                    )
+                    taxObligations: state.taxObligations.map(t => {
+                        if (t.id === id) {
+                            const isTrashing = (updatedTax as any).trashed === true && !(t as any).trashed;
+                            return {
+                                ...t,
+                                ...updatedTax,
+                                trashedAt: isTrashing ? new Date().toISOString() : ((updatedTax as any).trashed === false ? undefined : t.trashedAt)
+                            }
+                        }
+                        return t;
+                    })
                 })),
 
             deleteTaxObligation: (id) =>
@@ -431,6 +459,18 @@ export const useAccountingStore = create<AccountingState>()(
                 set((state) => ({
                     exports: state.exports.map(exp => exp.id === id ? { ...exp, trashedAt: undefined } : exp)
                 })),
+
+            cleanOldTrash: () => set(state => {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                return {
+                    entries: state.entries.filter(e => !e.trashedAt || new Date(e.trashedAt) >= thirtyDaysAgo),
+                    invoices: state.invoices.filter(i => !i.trashedAt || new Date(i.trashedAt) >= thirtyDaysAgo),
+                    taxObligations: state.taxObligations.filter(t => !t.trashedAt || new Date(t.trashedAt) >= thirtyDaysAgo),
+                    exports: state.exports.filter(exp => !exp.trashedAt || new Date(exp.trashedAt) >= thirtyDaysAgo)
+                };
+            })
         }),
         {
             name: 'accounting-storage',

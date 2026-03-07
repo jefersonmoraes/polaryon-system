@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArchiveIcon, Trash2, Folder as FolderIcon, LayoutGrid, Undo2 } from 'lucide-react';
+import { ArchiveIcon, Trash2, Folder as FolderIcon, LayoutGrid, Undo2, AlertTriangle } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useState } from 'react';
 
@@ -38,6 +38,13 @@ const GlobalArchiveViewer = ({ type, onClose, initialTab }: Props) => {
                 </div>
 
                 <div className="p-4 overflow-y-auto custom-scrollbar flex-1 bg-background/50">
+                    {type === 'trashed' && (filteredFolders.length > 0 || filteredBoards.length > 0 || filteredBudgets.length > 0) && (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3 text-yellow-600 mb-6">
+                            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                            <p className="text-sm leading-relaxed">Itens na lixeira por mais de 30 dias serão apagados permanentemente de forma automática.</p>
+                        </div>
+                    )}
+
                     {tab === 'folders' && (
                         filteredFolders.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">

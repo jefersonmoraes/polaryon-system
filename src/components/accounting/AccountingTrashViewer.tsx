@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { RefreshCw, Trash2, CalendarDays, Receipt, FileText, DownloadCloud } from 'lucide-react';
+import { RefreshCw, Trash2, CalendarDays, Receipt, FileText, DownloadCloud, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountingTrashViewerProps {
@@ -63,6 +63,13 @@ export const AccountingTrashViewer = ({ open, onOpenChange }: AccountingTrashVie
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
+
+                    {totalTrashed > 0 && (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3 text-yellow-600 -mb-2">
+                            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                            <p className="text-sm leading-relaxed">Itens na lixeira por mais de 30 dias serão apagados permanentemente de forma automática.</p>
+                        </div>
+                    )}
 
                     {totalTrashed === 0 && (
                         <div className="h-48 flex items-center justify-center border-2 border-dashed border-border rounded-lg bg-muted/20">

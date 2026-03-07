@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { Building2, Save, Calculator, MapPin, Percent, Search } from 'lucide-react';
 import { STATES, calculateDifal, SIMPLES_NACIONAL_RATES, PRESUMIDO_RATES, REAL_RATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { toast } from 'sonner';
@@ -22,7 +23,8 @@ const initialFormData = {
 };
 
 export default function CompanyProfilePage() {
-    const { mainCompanies, addMainCompany, updateMainCompany, deleteMainCompany, setDefaultMainCompany, isDark } = useKanbanStore();
+    const { mainCompanies, addMainCompany, updateMainCompany, deleteMainCompany, setDefaultMainCompany } = useKanbanStore();
+    const isDark = useUserPrefsStore(state => state.isDark);
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const companyId = searchParams.get('id');

@@ -22,6 +22,7 @@ export interface CapacityCertificate {
     createdAt: string;
     updatedAt: string;
     trashed?: boolean;
+    trashedAt?: string;
 }
 
 interface CertificateStore {
@@ -31,6 +32,7 @@ interface CertificateStore {
     trashCertificate: (id: string) => void;
     restoreCertificate: (id: string) => void;
     permanentlyDeleteCertificate: (id: string) => void;
+    cleanOldTrash: () => void;
 }
 
 export const useCertificateStore = create<CertificateStore>()(
@@ -57,7 +59,7 @@ export const useCertificateStore = create<CertificateStore>()(
             trashCertificate: (id) => {
                 set((state) => ({
                     certificates: state.certificates.map((cert) =>
-                        cert.id === id ? { ...cert, trashed: true, updatedAt: new Date().toISOString() } : cert
+                        cert.id === id ? { ...cert, trashed: true, trashedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : cert
                     ),
                 }));
             },
@@ -73,6 +75,14 @@ export const useCertificateStore = create<CertificateStore>()(
                     certificates: state.certificates.filter((cert) => cert.id !== id),
                 }));
             },
+            cleanOldTrash: () => set(state => {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                return {
+                    certificates: state.certificates.filter(cert => !cert.trashedAt || new Date(cert.trashedAt) >= thirtyDaysAgo)
+                };
+            })
         }),
         {
             name: 'polaryon-certificates-storage',

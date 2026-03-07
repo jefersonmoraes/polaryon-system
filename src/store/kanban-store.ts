@@ -26,26 +26,10 @@ interface KanbanState {
   setUndoAction: (action: KanbanState['undoAction']) => void;
   executeUndo: () => void;
   clearUndoAction: () => void;
-  isDark: boolean;
-  uiZoom: number;
-  isMobileMenuOpen: boolean;
-  setMobileMenuOpen: (open: boolean) => void;
-  globalSectionOrder: string[];
-  boardPreferences: Record<string, { viewMode: 'kanban' | 'calendar' | 'list', sortBy: 'default' | 'priority' | 'assignee' | 'dueDate' }>;
-  setGlobalSectionOrder: (order: string[]) => void;
-  setBoardPreference: (boardId: string, prefs: Partial<{ viewMode: 'kanban' | 'calendar' | 'list', sortBy: 'default' | 'priority' | 'assignee' | 'dueDate' }>) => void;
-  toggleTheme: () => void;
-  setUiZoom: (zoom: number) => void;
   // milestones memory
   recentMilestoneTitles: string[];
   addRecentMilestoneTitle: (title: string) => void;
   removeRecentMilestoneTitle: (title: string) => void;
-  // notifications
-  notifications: Notification[];
-  addNotification: (title: string, message: string, link?: string) => void;
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
-  clearNotifications: () => void;
   // companies
   addCompany: (companyData: Omit<Company, 'id' | 'createdAt'>) => void;
   removeCompany: (id: string) => void;
@@ -84,6 +68,7 @@ interface KanbanState {
   moveCard: (cardId: string, toListId: string, newPosition: number) => void;
   reorderCards: (listId: string, cardIds: string[]) => void;
   cleanupTrash: () => void;
+  cleanOldTrash: () => void;
   // checklist
   addChecklistItem: (cardId: string, text: string) => void;
   toggleChecklistItem: (cardId: string, itemId: string) => void;
@@ -109,7 +94,6 @@ export const useKanbanStore = create<KanbanState>()(
       lists: [],
       cards: [],
       labels: [...DEFAULT_LABELS],
-      notifications: [],
       members: [
         { id: 'm1', name: 'João Silva', email: 'joao@jjcorp.com', avatar: 'https://i.pravatar.cc/150?u=joao' },
         { id: 'm2', name: 'Maria Souza', email: 'maria@jjcorp.com', avatar: 'https://i.pravatar.cc/150?u=maria' },
@@ -119,21 +103,7 @@ export const useKanbanStore = create<KanbanState>()(
       routes: [],
       budgets: [],
       undoAction: null,
-      isDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
-      uiZoom: 1,
-      isMobileMenuOpen: false,
       recentMilestoneTitles: [],
-      globalSectionOrder: ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'checklist', 'timer', 'comments'],
-      boardPreferences: {},
-
-      setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
-      setGlobalSectionOrder: (order) => set({ globalSectionOrder: order }),
-      setBoardPreference: (boardId, prefs) => set(s => ({
-        boardPreferences: {
-          ...s.boardPreferences,
-          [boardId]: { ...s.boardPreferences[boardId] || { viewMode: 'kanban', sortBy: 'default' }, ...prefs }
-        }
-      })),
 
       addMainCompany: (data) => {
         const newId = uid();
@@ -158,10 +128,6 @@ export const useKanbanStore = create<KanbanState>()(
         }))
       })),
 
-      setUiZoom: (zoom) => set({ uiZoom: zoom }),
-
-      setUndoAction: (action) => set({ undoAction: action }),
-      clearUndoAction: () => set({ undoAction: null }),
       executeUndo: () => {
         const state = get();
         if (!state.undoAction) return;
@@ -175,12 +141,6 @@ export const useKanbanStore = create<KanbanState>()(
         set({ undoAction: null });
       },
 
-      toggleTheme: () => set(s => {
-        const next = !s.isDark;
-        document.documentElement.classList.toggle('dark', next);
-        return { isDark: next };
-      }),
-
       // Milestones Memory
       addRecentMilestoneTitle: (title) => set(s => {
         const unique = new Set([title, ...s.recentMilestoneTitles]);
@@ -189,18 +149,6 @@ export const useKanbanStore = create<KanbanState>()(
       removeRecentMilestoneTitle: (title) => set(s => ({
         recentMilestoneTitles: s.recentMilestoneTitles.filter(t => t !== title)
       })),
-
-      // Notifications
-      addNotification: (title, message, link) => set(s => ({
-        notifications: [{ id: uid(), title, message, link, read: false, createdAt: new Date().toISOString() }, ...s.notifications]
-      })),
-      markNotificationRead: (id) => set(s => ({
-        notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n)
-      })),
-      markAllNotificationsRead: () => set(s => ({
-        notifications: s.notifications.map(n => ({ ...n, read: true }))
-      })),
-      clearNotifications: () => set({ notifications: [] }),
 
       // Companies
       addCompany: (companyData) => set(s => {
@@ -211,7 +159,7 @@ export const useKanbanStore = create<KanbanState>()(
             userName: currentUser.name,
             action: 'CRIAR',
             entity: 'EMPRESA',
-            details: `Cadastrou o contato comercial "${companyData.name}"`
+            details: `Cadastrou o contato comercial "${companyData.nome_fantasia || companyData.razao_social}"`
           });
         }
         return {
@@ -230,13 +178,26 @@ export const useKanbanStore = create<KanbanState>()(
             userName: currentUser.name,
             action: 'EDITAR',
             entity: 'EMPRESA',
-            details: `Atualizou os dados de negócio de "${target.name}"`
+            details: `Atualizou os dados de negócio de "${target.nome_fantasia || target.razao_social}"`
           });
         }
         return {
-          companies: s.companies.map(c => c.id === id ? { ...c, ...data } : c)
+          companies: s.companies.map(c => {
+            if (c.id === id) {
+              const isTrashing = data.trashed === true && !c.trashed;
+              return {
+                ...c,
+                ...data,
+                trashedAt: isTrashing ? new Date().toISOString() : (data.trashed === false ? undefined : c.trashedAt)
+              };
+            }
+            return c;
+          })
         };
       }),
+      deleteCompany: (id) => set(s => ({
+        companies: s.companies.map(c => c.id === id ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c)
+      })),
       restoreCompany: (id) => set(s => ({
         companies: s.companies.map(c => c.id === id ? { ...c, trashed: false, trashedAt: undefined } : c)
       })),
@@ -249,10 +210,20 @@ export const useKanbanStore = create<KanbanState>()(
         routes: [...s.routes, { ...routeData, id: uid(), createdAt: new Date().toISOString() }]
       })),
       updateRoute: (id, data) => set(s => ({
-        routes: s.routes.map(r => r.id === id ? { ...r, ...data } : r)
+        routes: s.routes.map(r => {
+          if (r.id === id) {
+            const isTrashing = data.trashed === true && !r.trashed;
+            return {
+              ...r,
+              ...data,
+              trashedAt: isTrashing ? new Date().toISOString() : (data.trashed === false ? undefined : r.trashedAt)
+            };
+          }
+          return r;
+        })
       })),
       deleteRoute: (id) => set(s => ({
-        routes: s.routes.map(r => r.id === id ? { ...r, trashed: true } : r)
+        routes: s.routes.map(r => r.id === id ? { ...r, trashed: true, trashedAt: new Date().toISOString() } : r)
       })),
       restoreRoute: (id) => set(s => ({
         routes: s.routes.map(r => r.id === id ? { ...r, trashed: false } : r)
@@ -309,9 +280,22 @@ export const useKanbanStore = create<KanbanState>()(
       restoreBudget: (id) => set(s => ({
         budgets: s.budgets.map(b => b.id === id ? { ...b, trashed: false, trashedAt: undefined } : b)
       })),
-      permanentlyDeleteBudget: (id) => set(s => ({
-        budgets: s.budgets.filter(b => b.id !== id)
-      })),
+      permanentlyDeleteBudget: (id) => set(s => {
+        const currentUser = useAuthStore.getState().currentUser;
+        const target = s.budgets.find(b => b.id === id);
+        if (currentUser && target) {
+          useAuditStore.getState().addLog({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            action: 'EXCLUIR',
+            entity: 'ORÇAMENTO',
+            details: `Excluiu permanentemente o orçamento "${target.title}"`
+          });
+        }
+        return {
+          budgets: s.budgets.filter(b => b.id !== id)
+        };
+      }),
 
       // Folders
       addFolder: (name, color = '#026AA7', sideImage) => set(s => ({
@@ -331,13 +315,25 @@ export const useKanbanStore = create<KanbanState>()(
         })
       })),
       deleteFolder: (id) => set(s => {
+        const currentUser = useAuthStore.getState().currentUser;
+        const target = s.folders.find(f => f.id === id);
+        if (currentUser && target) {
+          useAuditStore.getState().addLog({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            action: 'EXCLUIR',
+            entity: 'QUADRO/LISTA',
+            details: `Excluiu permanentemente a pasta "${target.name}"`
+          });
+        }
+
         const boardIds = s.boards.filter(b => b.folderId === id).map(b => b.id);
         const listIds = s.lists.filter(l => boardIds.includes(l.boardId)).map(l => l.id);
         return {
-          folders: s.folders.filter(f => f.id !== id),
-          boards: s.boards.filter(b => b.folderId !== id),
-          lists: s.lists.filter(l => !boardIds.includes(l.boardId)),
-          cards: s.cards.filter(c => !listIds.includes(c.listId)),
+          folders: s.folders.map(f => f.id === id ? { ...f, trashed: true, trashedAt: new Date().toISOString() } : f),
+          boards: s.boards.map(b => boardIds.includes(b.id) ? { ...b, trashed: true, trashedAt: new Date().toISOString() } : b),
+          lists: s.lists.map(l => listIds.includes(l.id) ? { ...l, trashed: true, trashedAt: new Date().toISOString() } : l),
+          cards: s.cards.map(c => listIds.includes(c.listId) ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
         };
       }),
 
@@ -359,11 +355,23 @@ export const useKanbanStore = create<KanbanState>()(
         })
       })),
       deleteBoard: (id) => set(s => {
+        const currentUser = useAuthStore.getState().currentUser;
+        const target = s.boards.find(b => b.id === id);
+        if (currentUser && target) {
+          useAuditStore.getState().addLog({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            action: 'EXCLUIR',
+            entity: 'QUADRO/LISTA',
+            details: `Excluiu permanentemente o quadro "${target.name}"`
+          });
+        }
+
         const listIds = s.lists.filter(l => l.boardId === id).map(l => l.id);
         return {
-          boards: s.boards.filter(b => b.id !== id),
-          lists: s.lists.filter(l => l.boardId !== id),
-          cards: s.cards.filter(c => !listIds.includes(c.listId)),
+          boards: s.boards.map(b => b.id === id ? { ...b, trashed: true, trashedAt: new Date().toISOString() } : b),
+          lists: s.lists.map(l => l.boardId === id ? { ...l, trashed: true, trashedAt: new Date().toISOString() } : l),
+          cards: s.cards.map(c => listIds.includes(c.listId) ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
         };
       }),
 
@@ -385,10 +393,24 @@ export const useKanbanStore = create<KanbanState>()(
           return l;
         })
       })),
-      deleteList: (id) => set(s => ({
-        lists: s.lists.filter(l => l.id !== id),
-        cards: s.cards.filter(c => c.listId !== id),
-      })),
+      deleteList: (id) => set(s => {
+        const currentUser = useAuthStore.getState().currentUser;
+        const target = s.lists.find(l => l.id === id);
+        if (currentUser && target) {
+          useAuditStore.getState().addLog({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            action: 'EXCLUIR',
+            entity: 'QUADRO/LISTA',
+            details: `Excluiu permanentemente a lista "${target.title}"`
+          });
+        }
+
+        return {
+          lists: s.lists.map(l => l.id === id ? { ...l, trashed: true, trashedAt: new Date().toISOString() } : l),
+          cards: s.cards.map(c => c.listId === id ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
+        };
+      }),
       reorderLists: (boardId, listIds) => set(s => ({
         lists: s.lists.map(l => {
           if (l.boardId !== boardId) return l;
@@ -480,8 +502,8 @@ export const useKanbanStore = create<KanbanState>()(
         };
       }),
       deleteCard: (id) => set(s => ({
-        cards: s.cards.filter(c => c.id !== id),
-        budgets: s.budgets.filter(b => b.cardId !== id)
+        cards: s.cards.map(c => c.id === id ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
+        budgets: s.budgets.map(b => b.cardId === id ? { ...b, trashed: true, trashedAt: new Date().toISOString() } : b)
       })),
       moveCard: (cardId, toListId, newPosition) => set(s => {
         const currentUser = useAuthStore.getState().currentUser;
@@ -542,6 +564,20 @@ export const useKanbanStore = create<KanbanState>()(
           })
         };
       }),
+      cleanOldTrash: () => set(s => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        return {
+          cards: s.cards.filter(c => !c.trashed || !c.trashedAt || new Date(c.trashedAt) >= thirtyDaysAgo),
+          lists: s.lists.filter(l => !l.trashed || !l.trashedAt || new Date(l.trashedAt) >= thirtyDaysAgo),
+          boards: s.boards.filter(b => !b.trashed || !b.trashedAt || new Date(b.trashedAt) >= thirtyDaysAgo),
+          folders: s.folders.filter(f => !f.trashed || !f.trashedAt || new Date(f.trashedAt) >= thirtyDaysAgo),
+          companies: s.companies.filter(c => !c.trashed || !c.trashedAt || new Date(c.trashedAt) >= thirtyDaysAgo),
+          budgets: s.budgets.filter(b => !b.trashed || !b.trashedAt || new Date(b.trashedAt) >= thirtyDaysAgo),
+          routes: s.routes.filter(r => !r.trashed || !r.trashedAt || new Date(r.trashedAt) >= thirtyDaysAgo),
+        };
+      }),
 
       // Checklist
       addChecklistItem: (cardId, text) => set(s => ({
@@ -575,6 +611,10 @@ export const useKanbanStore = create<KanbanState>()(
         labels: s.labels.map(l => l.id === id ? { ...l, ...data } : l)
       })),
       deleteLabel: (id) => set(s => ({
+        labels: s.labels.filter(l => l.id !== id),
+        cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
+      })),
+      approveBudget: (id) => set(s => ({
         labels: s.labels.filter(l => l.id !== id),
         cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
       })),

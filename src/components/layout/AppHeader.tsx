@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu, ChevronDown, MoreVertical } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import logo from '@/assets/logo.png';
 import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
@@ -10,7 +11,8 @@ import UserProfile from './UserProfile';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
-  const { isDark, toggleTheme, uiZoom, setUiZoom, folders, boards, lists, cards, companies, budgets, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications, setMobileMenuOpen } = useKanbanStore();
+  const { folders, boards, lists, cards, companies, budgets } = useKanbanStore();
+  const { isDark, toggleTheme, uiZoom, setUiZoom, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications, setMobileMenuOpen } = useUserPrefsStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -24,7 +26,7 @@ const AppHeader = () => {
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
-  const isAdminModule = location.pathname.startsWith('/company');
+  const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isDocsModule = location.pathname.startsWith('/documentacao');
   const isAccountingModule = location.pathname.startsWith('/contabil');
 

@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 const FolderPage = () => {
   const { folderId } = useParams<{ folderId: string }>();
   const navigate = useNavigate();
-  const { folders, boards, lists, cards, addBoard, updateBoard, updateFolder, uiZoom } = useKanbanStore();
+  const { folders, boards, lists, cards, addBoard, updateBoard, updateFolder } = useKanbanStore();
   const folder = folders.find(f => f.id === folderId);
   const folderBoards = boards.filter(b => b.folderId === folderId && !b.trashed);
 

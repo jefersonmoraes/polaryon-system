@@ -14,6 +14,7 @@ export interface Route {
   transporterIds: string[]; // Ordered list of preferred transporters
   isFavorite?: boolean;
   trashed?: boolean;
+  trashedAt?: string;
   createdAt: string;
 }
 

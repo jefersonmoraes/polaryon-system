@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { Plus, ArrowLeft, Undo2, Archive as ArchiveIcon, Trash2, Clock, User, Star } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -20,8 +21,6 @@ const BoardPage = () => {
   const folders = useKanbanStore(state => state.folders);
   const cards = useKanbanStore(state => state.cards);
   const members = useKanbanStore(state => state.members);
-  const uiZoom = useKanbanStore(state => state.uiZoom);
-
   const addList = useKanbanStore(state => state.addList);
   const updateList = useKanbanStore(state => state.updateList);
   const deleteList = useKanbanStore(state => state.deleteList);
@@ -37,9 +36,9 @@ const BoardPage = () => {
   const executeUndo = useKanbanStore(state => state.executeUndo);
   const clearUndoAction = useKanbanStore(state => state.clearUndoAction);
 
-  const boardPreferences = useKanbanStore(state => state.boardPreferences);
-  const setBoardPreference = useKanbanStore(state => state.setBoardPreference);
-  const isDark = useKanbanStore(state => state.isDark);
+  const boardPreferences = useUserPrefsStore(state => state.boardPreferences);
+  const setBoardPreference = useUserPrefsStore(state => state.setBoardPreference);
+  const isDark = useUserPrefsStore(state => state.isDark);
 
   const board = useMemo(() => boards.find(b => b.id === boardId), [boards, boardId]);
   const folder = useMemo(() => board ? folders.find(f => f.id === board.folderId) : null, [board, folders]);

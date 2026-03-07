@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useDocumentStore } from '@/store/document-store';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -11,6 +12,7 @@ import AppSidebar from "@/components/layout/AppSidebar";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AuditLogPage from "./pages/AuditLogPage";
 import DashboardPage from "./pages/DashboardPage";
 import FolderPage from "./pages/FolderPage";
 import BoardPage from "./pages/BoardPage";
@@ -31,17 +33,32 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+import { useAccountingStore } from '@/store/accounting-store';
+import { useEssentialDocumentStore } from '@/store/essential-document-store';
+import { useCertificateStore } from '@/store/certificate-store';
+
 const AppContent = () => {
-  const { cleanupTrash, companies, permanentlyDeleteCompany, updateCompany, addNotification, uiZoom } = useKanbanStore();
-  const { documents, validateDocumentStatuses } = useDocumentStore();
+  const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany } = useKanbanStore();
+  const { addNotification, uiZoom } = useUserPrefsStore();
+  const { documents, validateDocumentStatuses, cleanOldTrash: cleanDocsTrash } = useDocumentStore();
+  const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
+  const { cleanOldTrash: cleanEssentialDocsTrash } = useEssentialDocumentStore();
+  const { cleanOldTrash: cleanCertificateTrash } = useCertificateStore();
 
   useEffect(() => {
     document.body.style.zoom = uiZoom as any;
   }, [uiZoom]);
 
   useEffect(() => {
-    cleanupTrash();
-  }, [cleanupTrash]);
+    cleanupTrash(); // Keep the old 15-day cleanup for cards if that's what's intended, or just run the new one
+
+    // Purging soft-deleted items older than 30 days
+    cleanKanbanTrash();
+    cleanDocsTrash();
+    cleanAccountingTrash();
+    cleanEssentialDocsTrash();
+    cleanCertificateTrash();
+  }, [cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash]);
 
   // Background CNPJ Monitor
   useEffect(() => {
@@ -71,7 +88,7 @@ const AppContent = () => {
               if (invalidStatuses.includes(data.descricao_situacao_cadastral?.toUpperCase())) {
                 // If the status became invalid, delete it and notify the user
                 store.permanentlyDeleteCompany(needsCheck.id);
-                store.addNotification(
+                useUserPrefsStore.getState().addNotification(
                   'Empresa Removida Automaticamente',
                   `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) foi excluído do sistema pois a situação cadastral na Receita consta como "${data.descricao_situacao_cadastral}".`
                 );
@@ -128,7 +145,7 @@ const AppContent = () => {
 
           if (notifyKey !== -1 && doc.lastNotifiedIndex !== notifyKey) {
             const isExpired = doc.status === 'expired';
-            uiStore.addNotification(
+            useUserPrefsStore.getState().addNotification(
               isExpired ? 'Documento Expirado' : 'Documento Vencendo Próximo',
               `O documento "${doc.title}" ${isExpired ? 'expirou em' : 'vencerá em'} ${expirationDate.toLocaleDateString('pt-BR')}.`,
               '/documentacao'
@@ -167,6 +184,7 @@ const AppContent = () => {
       <Route path="/contabil/lancamentos" element={<ProtectedRoute><AccountingEntries /></ProtectedRoute>} />
       <Route path="/contabil/fluxo-caixa" element={<ProtectedRoute><CashflowForecastDash /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+      <Route path="/admin/audit" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

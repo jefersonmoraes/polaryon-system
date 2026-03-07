@@ -1,5 +1,6 @@
 import { Droppable, Draggable, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useKanbanStore } from '@/store/kanban-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { KanbanList, Card } from '@/types/kanban';
 import { MoreHorizontal, Plus, Trash2, GripVertical, Palette, Zap, ArrowRight, Archive, SmilePlus, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
@@ -17,7 +18,8 @@ interface Props {
 }
 
 const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
-  const { cards, boards, addCard, deleteList, updateList, boardPreferences, labels, isDark, uiZoom } = useKanbanStore();
+  const { cards, boards, addCard, deleteList, updateList, labels } = useKanbanStore();
+  const { boardPreferences, isDark, uiZoom } = useUserPrefsStore();
   const prefs = boardPreferences[list.boardId] || { viewMode: 'kanban', sortBy: 'default' };
   const { currentUser } = useAuthStore();
 

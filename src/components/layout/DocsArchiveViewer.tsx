@@ -71,6 +71,13 @@ const DocsArchiveViewer = ({ onClose }: DocsArchiveViewerProps) => {
                 </div>
 
                 <div className="flex-1 overflow-auto p-6 custom-scrollbar">
+                    {(trashedDocs.length > 0 || trashedCerts.length > 0 || trashedModels.length > 0) && (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3 text-yellow-600 mb-6">
+                            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                            <p className="text-sm leading-relaxed">Itens na lixeira por mais de 30 dias serão apagados permanentemente de forma automática.</p>
+                        </div>
+                    )}
+
                     {activeTab === 'documents' && (
                         <div className="space-y-3">
                             {trashedDocs.length === 0 ? (

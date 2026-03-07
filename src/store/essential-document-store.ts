@@ -13,9 +13,9 @@ export interface EssentialDocumentModel {
     title: string;
     description?: string;
     attachments?: EssentialDocumentAttachment[];
-    createdAt: string;
     updatedAt: string;
     trashed?: boolean;
+    trashedAt?: string;
 }
 
 interface EssentialDocumentStore {
@@ -26,6 +26,7 @@ interface EssentialDocumentStore {
     restoreModel: (id: string) => void;
     permanentlyDeleteModel: (id: string) => void;
     initializeDefaultModels: () => void;
+    cleanOldTrash: () => void;
 }
 
 const DEFAULT_MODELS = [
@@ -82,7 +83,7 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
             trashModel: (id) => {
                 set((state) => ({
                     models: state.models.map((model) =>
-                        model.id === id ? { ...model, trashed: true, updatedAt: new Date().toISOString() } : model
+                        model.id === id ? { ...model, trashed: true, trashedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : model
                     ),
                 }));
             },
@@ -114,7 +115,16 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
 
                     set({ models: defaultModelsData });
                 }
-            }
+            },
+
+            cleanOldTrash: () => set(state => {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                return {
+                    models: state.models.filter(model => !model.trashedAt || new Date(model.trashedAt) >= thirtyDaysAgo)
+                };
+            })
         }),
         {
             name: 'polaryon-essential-document-storage',

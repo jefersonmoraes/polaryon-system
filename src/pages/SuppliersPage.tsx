@@ -34,7 +34,7 @@ const SuppliersPage = () => {
     const [expandedSuppliers, setExpandedSuppliers] = useState(false);
     const [expandedTransporters, setExpandedTransporters] = useState(false);
 
-    const { addCompany, companies, budgets = [], uiZoom } = useKanbanStore();
+    const { addCompany, companies, budgets = [] } = useKanbanStore();
     const { currentUser } = useAuthStore();
 
     // Calculate dynamic ratings from budgets
