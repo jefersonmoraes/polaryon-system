@@ -166,17 +166,21 @@ const AppSidebar = () => {
             <div className="flex flex-col gap-1">
               {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
 
-              <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
-                <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
-              </Link>
+              {useAuthStore.getState().currentUser?.role !== 'CONTADOR' && (
+                <>
+                  <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && !location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
+                    <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
+                  </Link>
 
-              <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
-                <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
-              </Link>
+                  <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
+                    <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
+                  </Link>
 
-              <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
-                <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
-              </Link>
+                  <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
+                    <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
+                  </Link>
+                </>
+              )}
 
               <Link to="/contabil?tab=exportacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'} w-full text-left`} title="Relatórios e Exportação">
                 <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}

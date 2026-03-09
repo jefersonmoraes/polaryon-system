@@ -4,6 +4,9 @@ import { useDocumentStore } from '@/store/document-store';
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, HardDriveDownload, FileText, PiggyBank, Calculator } from 'lucide-react';
 import CardDetailPanel from '@/components/board/CardDetailPanel';
+import { useAuthStore } from '@/store/auth-store';
+import api from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function GlobalCalendarPage() {
     const { cards, boards, lists, labels, budgets } = useKanbanStore();
@@ -18,6 +21,8 @@ export default function GlobalCalendarPage() {
     // Feriados da Brasil API
     const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([]);
 
+    const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+
     useEffect(() => {
         const year = currentDate.getFullYear();
         fetch(`https://brasilapi.com.br/api/feriados/v1/${year}`)
@@ -28,9 +33,43 @@ export default function GlobalCalendarPage() {
             .catch(() => console.error('Erro ao buscar feriados'));
     }, [currentDate.getFullYear()]);
 
-    // Backend Google Calendar Sync Placeholder
-    const syncWithGoogleCalendar = () => {
-        alert("Chamada para o Backend: Sincronizando com jjcorporation2018@gmail.com\n\nA integração OAuth2.0 do Google Calendar será executada por essa função no servidor. (Aguardando Deploy do Backend)");
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('sync') === 'success') {
+            toast.success("Google Agenda Integrada! Sincronizando dados...", { duration: 5000 });
+            window.history.replaceState({}, document.title, window.location.pathname);
+            syncWithGoogleCalendar();
+        }
+    }, []);
+
+    const syncWithGoogleCalendar = async () => {
+        try {
+            toast.loading("Sincronizando com G Agenda do Administrador...", { id: 'gcal' });
+
+            // Push active tasks with due dates
+            const eventsToPush = cards.filter(c => !c.archived && !c.trashed && c.dueDate && !c.completed).map(c => ({
+                id: c.id,
+                title: `[Polaryon] ${c.title}`,
+                date: c.dueDate
+            }));
+
+            const res = await api.post('/calendar/sync', { eventsToPush });
+
+            if (res.data.success && res.data.events) {
+                setGoogleEvents(res.data.events);
+                toast.success("Conexão e sincronização concluída com sucesso!", { id: 'gcal' });
+            }
+        } catch (err: any) {
+            if (err.response?.status === 401 && err.response?.data?.error === 'NEEDS_AUTH') {
+                toast.dismiss('gcal');
+                const authUrl = err.response.data.authUrl;
+                toast.info("Aguarde, redirecionando para autorizar no Google de forma Segura...", { duration: 8000 });
+                // Enforce redirect through same domains if needed or absolute url
+                setTimeout(() => window.location.assign(authUrl), 1500);
+            } else {
+                toast.error("Falha ao se conectar com a API do Google Calendar.", { id: 'gcal' });
+            }
+        }
     };
 
     // Get all active cards
@@ -131,6 +170,9 @@ export default function GlobalCalendarPage() {
         taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate) >= today && new Date(t.dueDate) <= nextWeek).forEach(t => {
             events.push({ id: t.id, title: `Imposto Pendente: ${t.name}`, date: new Date(t.dueDate), type: 'contabil' });
         });
+        googleEvents.filter(g => new Date(g.date) >= today && new Date(g.date) <= nextWeek).forEach(g => {
+            events.push({ id: g.id, title: g.title, date: new Date(g.date), type: 'google' });
+        });
         return events.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 15);
     })();
 
@@ -149,10 +191,12 @@ export default function GlobalCalendarPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={syncWithGoogleCalendar} className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shadow-sm transition-colors">
-                            <span className="w-4 h-4 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-[10px]">G</span>
-                            Sincronizar G Agenda
-                        </button>
+                        {useAuthStore.getState().currentUser?.permissions?.canEdit && (
+                            <button onClick={syncWithGoogleCalendar} className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shadow-sm transition-colors">
+                                <span className="w-4 h-4 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-[10px]">G</span>
+                                Sincronizar G Agenda
+                            </button>
+                        )}
                         <div className="flex bg-secondary/50 rounded p-1 mr-4">
                             <button onClick={() => setViewType('month')} className={`px-3 py-1 text-xs font-semibold rounded ${viewType === 'month' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Mês</button>
                             <button onClick={() => setViewType('week')} className={`px-3 py-1 text-xs font-semibold rounded ${viewType === 'week' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Semana</button>
@@ -196,11 +240,12 @@ export default function GlobalCalendarPage() {
                             const dateBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando' && new Date(b.createdAt).toDateString() === dateStr);
                             const dateDocs = documents.filter(d => !d.trashed && new Date(d.expirationDate).toDateString() === dateStr);
                             const dateTaxes = taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate).toDateString() === dateStr);
-                            // Adjusting Holiday string parsing to correct timezone without shift
                             const dateHolidays = holidays.filter(h => {
                                 const [y, m, d] = h.date.split('-');
                                 return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toDateString() === dateStr;
                             });
+
+                            const dateGoogleEvents = googleEvents.filter(g => new Date(g.date).toDateString() === dateStr);
 
                             const isToday = new Date().toDateString() === dateStr;
 
@@ -256,6 +301,13 @@ export default function GlobalCalendarPage() {
                                                 </div>
                                             );
                                         })}
+
+                                        {/* Render Google Events */}
+                                        {dateGoogleEvents.map(g => (
+                                            <a key={`g-${g.id}`} href={g.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] truncate px-2 py-1.5 rounded-md bg-blue-600/10 text-blue-600 font-semibold border border-blue-600/20 shadow-sm hover:opacity-80 transition-all font-mono hover:underline" title={`Google Agenda: ${g.title}`}>
+                                                <span className="w-3 h-3 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[8px] shrink-0">G</span> {g.title}
+                                            </a>
+                                        ))}
                                     </div>
                                 </div>
                             );
@@ -280,6 +332,7 @@ export default function GlobalCalendarPage() {
                         if (event.type === 'orcamento') { Icon = Calculator; colorClass = "text-blue-500 border-blue-500/20 bg-blue-500/5"; }
                         if (event.type === 'documento') { Icon = FileText; colorClass = "text-yellow-600 border-yellow-500/20 bg-yellow-500/5"; }
                         if (event.type === 'contabil') { Icon = PiggyBank; colorClass = "text-red-500 border-red-500/20 bg-red-500/5"; }
+                        if (event.type === 'google') { Icon = CalendarIcon; colorClass = "text-blue-600 border-blue-600/30 bg-blue-600/5"; }
 
                         return (
                             <div key={`upcoming-${event.type}-${event.id}`}

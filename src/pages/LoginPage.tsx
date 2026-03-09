@@ -130,10 +130,12 @@ export default function LoginPage() {
                 email: user.email,
                 name: user.name,
                 photoURL: user.picture,
-                role: user.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER',
+                role: user.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : (user.role.toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER'),
                 permissions: user.role.toUpperCase() === 'ADMIN'
                     ? { canView: true, canEdit: true, canDownload: true }
-                    : { canView: true, canEdit: false, canDownload: false },
+                    : (user.role.toUpperCase() === 'CONTADOR'
+                        ? { canView: true, canEdit: false, canDownload: true }
+                        : { canView: true, canEdit: false, canDownload: false }),
                 status: 'active',
                 createdAt: new Date().toISOString()
             };
@@ -259,18 +261,27 @@ export default function LoginPage() {
                         </div>
 
                         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-                            <div className="mt-4 flex justify-center w-full min-h-[44px]">
-                                <GoogleLogin
-                                    onSuccess={handleGoogleSuccess}
-                                    onError={() => {
-                                        toast.error('O Google recusou a conexão ou o Popup foi fechado.');
-                                    }}
-                                    theme="filled_black"
-                                    size="large"
-                                    shape="pill"
-                                    text="continue_with"
-                                    width="100%"
-                                />
+                            <div className="mt-4 flex justify-center w-full min-h-[44px] relative">
+                                {!isCaptchaValid && window.location.hostname !== 'localhost' && (
+                                    <div
+                                        className="absolute inset-0 z-10 cursor-not-allowed bg-transparent"
+                                        onClick={() => toast.error("Por favor, digite o CÓDIGO de segurança corretamente para liberar o login.", { position: 'top-center' })}
+                                        title="Resolva o CAPTCHA primeiro"
+                                    />
+                                )}
+                                <div className={`w-full transition-opacity duration-300 ${!isCaptchaValid && window.location.hostname !== 'localhost' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                                    <GoogleLogin
+                                        onSuccess={handleGoogleSuccess}
+                                        onError={() => {
+                                            toast.error('O Google recusou a conexão ou o Popup foi fechado.');
+                                        }}
+                                        theme="filled_black"
+                                        size="large"
+                                        shape="pill"
+                                        text="continue_with"
+                                        width="100%"
+                                    />
+                                </div>
                             </div>
                         </GoogleOAuthProvider>
 

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { useAuditStore } from './audit-store';
 
-export type UserRole = 'ADMIN' | 'USER';
+export type UserRole = 'ADMIN' | 'USER' | 'CONTADOR';
 
 export interface UserPermissions {
     canView: boolean;

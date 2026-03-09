@@ -62,7 +62,7 @@ router.put('/:id/role', async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const { role } = req.body;
 
-    if (!['admin', 'default', 'disabled', 'pending'].includes(role)) {
+    if (!['admin', 'default', 'disabled', 'pending', 'contador'].includes(role)) {
         return res.status(400).json({ error: 'Invalid role provided' });
     }
 
@@ -81,6 +81,26 @@ router.put('/:id/role', async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error('Error updating user role:', error);
         res.status(500).json({ error: 'Could not update user role' });
+    }
+});
+
+// DELETE /api/users/:id - Delete a user
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+    const id = req.params.id as string;
+
+    // Prevent deleting yourself
+    if (req.user.id === id) {
+        return res.status(403).json({ error: 'Você não pode excluir sua própria conta.' });
+    }
+
+    try {
+        await prisma.user.delete({
+            where: { id }
+        });
+        res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Could not delete user' });
     }
 });
 

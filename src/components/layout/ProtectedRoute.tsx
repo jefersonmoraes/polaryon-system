@@ -16,9 +16,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login', { replace: true, state: { from: location.pathname } });
-        } else if (currentUser?.status === 'disabled') {
+        } else if (currentUser?.status === 'disabled' || currentUser?.status === 'invited') {
             useAuthStore.getState().logout();
             navigate('/login', { replace: true });
+        } else if (currentUser?.role === 'CONTADOR') {
+            if (!location.pathname.startsWith('/contabil')) {
+                navigate('/contabil?tab=exportacao', { replace: true });
+            }
         }
     }, [isAuthenticated, currentUser, navigate, location]);
 

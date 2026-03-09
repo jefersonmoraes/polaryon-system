@@ -36,10 +36,12 @@ export default function AdminDashboardPage() {
                 email: u.email,
                 name: u.name,
                 photoURL: u.picture,
-                role: u.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER',
+                role: u.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : (u.role.toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER'),
                 permissions: u.role === 'admin'
                     ? { canView: true, canEdit: true, canDownload: true }
-                    : { canView: true, canEdit: false, canDownload: false },
+                    : (u.role === 'contador'
+                        ? { canView: true, canEdit: false, canDownload: true }
+                        : { canView: true, canEdit: false, canDownload: false }),
                 status: u.role === 'disabled' ? 'disabled' : (u.role === 'pending' ? 'invited' : 'active'),
                 createdAt: u.createdAt
             }));
@@ -84,7 +86,10 @@ export default function AdminDashboardPage() {
     const toggleRole = async (userId: string) => {
         const user = systemsUsersDb.find(u => u.id === userId);
         if (user && user.id !== currentUser?.id) {
-            const newRoleInDb = user.role === 'ADMIN' ? 'default' : 'admin';
+            let newRoleInDb = 'default';
+            if (user.role === 'USER') newRoleInDb = 'contador';
+            else if (user.role === 'CONTADOR') newRoleInDb = 'admin';
+
             try {
                 toast.loading("Alterando privilégios no Banco de Dados...", { id: `role-${userId}` });
                 await api.put(`/users/${userId}/role`, { role: newRoleInDb });
@@ -113,13 +118,21 @@ export default function AdminDashboardPage() {
         }
     };
 
-    const handleDeleteUser = (userId: string) => {
+    const handleDeleteUser = async (userId: string) => {
         if (userId === currentUser?.id) {
             toast.error("Você não pode excluir sua própria conta aqui.");
             return;
         }
-        if (window.confirm("Certeza que deseja remover este acesso permanentemente?")) {
-            toast.info("A exclusão definitiva será implementada na Fase 45. Por enquanto, Desative o Status da conta para revogar o acesso imediato.");
+        if (window.confirm("Certeza absoluta que deseja remover este acesso PRMANENTEMENTE da nuvem?")) {
+            try {
+                toast.loading("Excluindo usuário permanentemente...", { id: `del-${userId}` });
+                await api.delete(`/users/${userId}`);
+                toast.success("Usuário excluído definitivamente.", { id: `del-${userId}` });
+                loadUsers();
+            } catch (error) {
+                console.error(error);
+                toast.error("Erro ao excluir usuário da base de dados.", { id: `del-${userId}` });
+            }
         }
     };
 
@@ -287,12 +300,14 @@ export default function AdminDashboardPage() {
                                                 onClick={() => toggleRole(user.id)}
                                                 disabled={isMe}
                                                 className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${user.role === 'ADMIN'
-                                                    ? 'bg-primary/20 text-primary hover:bg-primary/30'
-                                                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                                                        ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                                                        : user.role === 'CONTADOR'
+                                                            ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30'
+                                                            : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
                                                     } ${isMe ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
                                                 <span className="flex items-center gap-1.5 justify-center">
-                                                    {user.role === 'ADMIN' ? <ShieldAlert className="w-3 h-3" /> : <Users className="w-3 h-3" />}
+                                                    {user.role === 'ADMIN' ? <ShieldAlert className="w-3 h-3" /> : (user.role === 'CONTADOR' ? <KeyRound className="w-3 h-3" /> : <Users className="w-3 h-3" />)}
                                                     {user.role}
                                                 </span>
                                             </button>
@@ -300,6 +315,8 @@ export default function AdminDashboardPage() {
                                         <td className="px-5 py-4">
                                             {user.role === 'ADMIN' ? (
                                                 <span className="text-xs text-muted-foreground italic flex items-center gap-1"><KeyRound className="w-3 h-3" /> Acesso Total</span>
+                                            ) : user.role === 'CONTADOR' ? (
+                                                <span className="text-xs text-muted-foreground italic flex items-center gap-1"><KeyRound className="w-3 h-3" /> Acesso Exportação</span>
                                             ) : (
                                                 <div className="flex items-center gap-3 text-xs">
                                                     <label className="flex items-center gap-1.5 cursor-pointer">
@@ -326,10 +343,10 @@ export default function AdminDashboardPage() {
                                                 onClick={() => toggleStatus(user.id)}
                                                 disabled={isMe}
                                                 className={`text-xs font-bold px-2 py-1 rounded transition-colors ${user.status === 'active'
-                                                        ? 'text-emerald-500 hover:bg-emerald-500/10'
-                                                        : user.status === 'invited'
-                                                            ? 'text-amber-500 hover:bg-amber-500/10 border border-amber-500/30'
-                                                            : 'text-destructive hover:bg-destructive/10'
+                                                    ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                                    : user.status === 'invited'
+                                                        ? 'text-amber-500 hover:bg-amber-500/10 border border-amber-500/30'
+                                                        : 'text-destructive hover:bg-destructive/10'
                                                     } ${isMe ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
                                                 {user.status === 'active' ? 'Ativo' : (user.status === 'invited' ? 'Aprovar (Pendente)' : 'Desativado')}

@@ -3,7 +3,9 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { Plus, LayoutGrid, Search, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuthStore } from '@/store/auth-store';
 const KunbunPage = () => {
+    const { currentUser } = useAuthStore();
     const { folders, boards, addFolder } = useKanbanStore();
     const navigate = useNavigate();
     const [addingFolder, setAddingFolder] = useState(false);
@@ -64,13 +66,15 @@ const KunbunPage = () => {
                             />
                         </div>
 
-                        <button
-                            onClick={() => setAddingFolder(true)}
-                            className="shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-                        >
-                            <Plus className="h-4 w-4" />
-                            Nova Pasta
-                        </button>
+                        {currentUser?.permissions?.canEdit && (
+                            <button
+                                onClick={() => setAddingFolder(true)}
+                                className="shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Nova Pasta
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
