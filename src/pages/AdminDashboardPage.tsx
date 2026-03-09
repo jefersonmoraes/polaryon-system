@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
                 permissions: u.role === 'admin'
                     ? { canView: true, canEdit: true, canDownload: true }
                     : { canView: true, canEdit: false, canDownload: false },
-                status: u.role === 'disabled' ? 'disabled' : 'active',
+                status: u.role === 'disabled' ? 'disabled' : (u.role === 'pending' ? 'invited' : 'active'),
                 createdAt: u.createdAt
             }));
             setSystemsUsersDb(mappedUsers);
@@ -102,9 +102,9 @@ export default function AdminDashboardPage() {
         if (user && user.id !== currentUser?.id) {
             const newRoleStatus = user.status === 'active' ? 'disabled' : (user.role === 'ADMIN' ? 'admin' : 'default');
             try {
-                toast.loading(`${user.status === 'active' ? 'Desativando' : 'Reativando'} conta...`, { id: `status-${userId}` });
+                toast.loading(`${user.status === 'active' ? 'Desativando' : 'Ativando'} conta...`, { id: `status-${userId}` });
                 await api.put(`/users/${userId}/role`, { role: newRoleStatus });
-                toast.success(`Conta ${user.status === 'active' ? 'desativada bloqueando acesso' : 'reativada'}.`, { id: `status-${userId}` });
+                toast.success(`Conta ${user.status === 'active' ? 'desativada bloqueando acesso' : 'ativada com sucesso'}.`, { id: `status-${userId}` });
                 loadUsers();
             } catch (error) {
                 console.error(error);
@@ -326,11 +326,13 @@ export default function AdminDashboardPage() {
                                                 onClick={() => toggleStatus(user.id)}
                                                 disabled={isMe}
                                                 className={`text-xs font-bold px-2 py-1 rounded transition-colors ${user.status === 'active'
-                                                    ? 'text-emerald-500 hover:bg-emerald-500/10'
-                                                    : 'text-destructive hover:bg-destructive/10'
+                                                        ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                                        : user.status === 'invited'
+                                                            ? 'text-amber-500 hover:bg-amber-500/10 border border-amber-500/30'
+                                                            : 'text-destructive hover:bg-destructive/10'
                                                     } ${isMe ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                {user.status === 'active' ? 'Ativo' : 'Desativado'}
+                                                {user.status === 'active' ? 'Ativo' : (user.status === 'invited' ? 'Aprovar (Pendente)' : 'Desativado')}
                                             </button>
                                         </td>
                                         <td className="px-5 py-4 text-right">

@@ -36,21 +36,25 @@ router.post('/google', async (req: Request, res: Response) => {
         let user = await prisma.user.findUnique({ where: { email } });
 
         if (!user) {
-            // Auto-register first-time users as 'default' role
+            const isAdmin = ['jjcorporation2018@gmail.com', 'jefersonvilela72@gmail.com'].includes(email.toLowerCase());
+            // Auto-register first-time users as 'pending' unless they are admins
             user = await prisma.user.create({
                 data: {
                     email,
                     name: name || 'Usuário',
                     picture: picture || '',
                     googleId,
-                    role: 'default'
+                    role: isAdmin ? 'admin' : 'pending'
                 }
             });
         }
 
-        // Checking if user was banned/disabled by an Admin
+        // Checking if user was banned/disabled or is pending
         if (user.role === 'disabled') {
-            return res.status(403).json({ error: 'Your account has been disabled by an administrator.' });
+            return res.status(403).json({ error: 'Sua conta foi desativada pelo administrador.' });
+        }
+        if (user.role === 'pending') {
+            return res.status(403).json({ error: 'Conta registrada! Aguarde a aprovação de um Administrador.' });
         }
 
         // 3. Issue our own internal JWT Session Token
