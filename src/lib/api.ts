@@ -15,15 +15,15 @@ api.interceptors.request.use(
     (config) => {
         // Retrieve token from whatever auth store mechanism you are using
         // It could be sessionStorage or zustand. We'll read from sessionStorage to be safe.
-        const authDataStr = sessionStorage.getItem('auth-storage');
+        const authDataStr = sessionStorage.getItem('kunbun-auth-storage') || localStorage.getItem('kunbun-auth-storage');
         if (authDataStr) {
             try {
                 const state = JSON.parse(authDataStr).state;
-                if (state && state.token) {
-                    config.headers.Authorization = `Bearer ${state.token}`;
+                if (state && state.jwtToken) {
+                    config.headers.Authorization = `Bearer ${state.jwtToken}`;
                 }
             } catch (e) {
-                console.error("Error parsing auth-storage", e);
+                console.error("Error parsing kunbun-auth-storage", e);
             }
         }
         return config;
