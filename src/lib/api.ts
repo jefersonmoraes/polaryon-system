@@ -1,8 +1,6 @@
-import axios from 'axios';
-
 // Create central Axios instance
 const api = axios.create({
-    baseURL: 'http://204.168.151.231/api', // Produção: Servidor Ubuntu Hetzner
+    baseURL: 'https://polaryon.com.br/api', // Produção: Domínio Oficial HTTPS
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
