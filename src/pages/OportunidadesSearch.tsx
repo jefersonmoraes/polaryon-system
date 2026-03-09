@@ -61,8 +61,8 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
                 return;
             }
             try {
-                // To bypass Gov.br CORS, we use our custom Vite Middleware proxy server-side
-                const res = await fetch(`/api/pncp/datas/${item.orgao_cnpj}/${ano}/${seq}`);
+                // A Rota /pncp/v1 foi desativada e redireciona (301) sem CORS. A Rota /consulta/v1/ é a oficial aberta.
+                const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${item.orgao_cnpj}/compras/${ano}/${seq}`);
                 if (!res.ok) throw new Error();
                 const detail = await res.json();
                 if (isMounted) {
@@ -121,7 +121,7 @@ export default function OportunidadesSearch() {
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
-    const handleClearFilters = () => {
+    const handleClearFilters = useCallback(() => {
         setKeyword('');
         setUfFilter('');
         setOrgaoFilter('');
@@ -135,7 +135,7 @@ export default function OportunidadesSearch() {
         setDataInicialFilter('');
         setDataFinalFilter('');
         setPage(1);
-    };
+    }, []);
 
     const [page, setPage] = useState(1);
     const [pageInput, setPageInput] = useState('1'); // Para digitação manual no Pagination footer
@@ -149,11 +149,11 @@ export default function OportunidadesSearch() {
     const [selectedFilesToExport, setSelectedFilesToExport] = useState<any[]>([]);
     const [loadingFiles, setLoadingFiles] = useState(false);
 
-    const getOfficialLink = (item: PncpItem) => {
+    const getOfficialLink = useCallback((item: PncpItem) => {
         if (!item?.item_url) return '#';
         if (item.item_url.startsWith('http')) return item.item_url;
         return `https://pncp.gov.br${item.item_url.replace('/compras/', '/app/editais/')}`;
-    };
+    }, []);
 
     useEffect(() => {
         if (!selectedItem) {
@@ -281,7 +281,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         setIsExportDialogOpen(false);
     };
 
-    const fetchOportunidades = async (currentPage = 1) => {
+    const fetchOportunidades = useCallback(async (currentPage = 1) => {
         setLoading(true);
         setError('');
         try {
@@ -371,7 +371,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         } finally {
             setLoading(false);
         }
-    };
+    }, [
+        keyword, ufFilter, modalidadeFilter, statusFilter, instrumentoFilter,
+        esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
+        orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
+        fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter
+    ]);
 
     // Auto-load abertas recentes
     useEffect(() => {
@@ -379,12 +384,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleSearch = (e: React.FormEvent) => {
+    const handleSearch = useCallback((e: React.FormEvent) => {
         e.preventDefault();
         fetchOportunidades(1);
-    };
+    }, [fetchOportunidades]);
 
-    const formatDate = (dateString?: string, showTime = false) => {
+    const formatDate = useCallback((dateString?: string, showTime = false) => {
         if (!dateString) return '-';
         try {
             const d = new Date(dateString);
@@ -392,20 +397,20 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         } catch {
             return dateString;
         }
-    };
+    }, []);
 
-    const getStatusStyle = (situacao: string) => {
+    const getStatusStyle = useCallback((situacao: string) => {
         const lower = situacao.toLowerCase();
         if (lower.includes('divulgada')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
         if (lower.includes('suspensa')) return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
         if (lower.includes('encerrada') || lower.includes('revogada')) return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
         return 'bg-secondary text-foreground border-border';
-    };
+    }, []);
 
-    const formatCurrency = (val?: number) => {
+    const formatCurrency = useCallback((val?: number) => {
         if (val === undefined || val === null) return 'N/I';
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-    };
+    }, []);
 
     const handlePageInputSubmit = () => {
         let p = parseInt(pageInput);

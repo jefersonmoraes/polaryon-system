@@ -109,6 +109,7 @@ const AppHeader = () => {
             <Target className="h-3.5 w-3.5 inline mr-1" />
             <span className="uppercase tracking-wider">Oportunidades</span>
           </Link>
+          {/* Botão Gestor de Licitação Oculto a pedido do P.O
           <Link
             to="/licitacao"
             className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname.startsWith('/licitacao') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
@@ -117,6 +118,7 @@ const AppHeader = () => {
             <Gavel className="h-3.5 w-3.5 inline mr-1" />
             <span className="uppercase tracking-wider">Gestor de Licitação</span>
           </Link>
+          */}
           <Link
             to="/suppliers"
             className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname === '/suppliers' || location.pathname.startsWith('/suppliers-list') || location.pathname.startsWith('/transporters-list') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
@@ -183,9 +185,11 @@ const AppHeader = () => {
                 <Link to="/oportunidades" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname.startsWith('/oportunidades') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
                   <div className="p-1.5 rounded bg-primary/10 text-primary"><Target className="h-4 w-4" /></div> Oportunidades
                 </Link>
+                {/* Botão Mobile Gestor de Licitação Oculto a pedido do P.O
                 <Link to="/licitacao" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname.startsWith('/licitacao') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
                   <div className="p-1.5 rounded bg-primary/10 text-primary"><Gavel className="h-4 w-4" /></div> Gestor de Licitação
                 </Link>
+                */}
                 <Link to="/suppliers" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/suppliers' || location.pathname.startsWith('/suppliers-list') || location.pathname.startsWith('/transporters-list') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
                   <div className="p-1.5 rounded bg-primary/10 text-primary"><Briefcase className="h-4 w-4" /></div> Fornecedores/Transportadoras
                 </Link>

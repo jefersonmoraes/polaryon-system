@@ -14,23 +14,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const location = useLocation();
 
     useEffect(() => {
-        /*
         if (!isAuthenticated) {
-            // Redirect to login if trying to access a protected route
             navigate('/login', { replace: true, state: { from: location.pathname } });
         } else if (currentUser?.status === 'disabled') {
-            // If the user was disabled by an admin while logged in
             useAuthStore.getState().logout();
             navigate('/login', { replace: true });
         }
-        */
     }, [isAuthenticated, currentUser, navigate, location]);
 
-    /*
     if (!isAuthenticated) {
-        return null; // Will redirect in useEffect
+        return null;
     }
-    */
 
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-background">
