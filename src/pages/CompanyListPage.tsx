@@ -782,9 +782,11 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 {(selectedCompany.contacts || []).map(contact => (
                                                     <div key={contact.id} className="p-3 bg-muted/20 border border-border rounded-xl space-y-3 relative group">
-                                                        <button onClick={() => handleRemoveContact(contact.id)} className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-background rounded-md shadow-sm border border-border">
-                                                            <X className="h-3 w-3" />
-                                                        </button>
+                                                        {currentUser?.role !== 'USER' && (
+                                                            <button onClick={() => handleRemoveContact(contact.id)} className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-background rounded-md shadow-sm border border-border">
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        )}
                                                         <div>
                                                             <input
                                                                 type="text"
@@ -886,13 +888,15 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                             className="px-2 py-1 flex items-center gap-2 text-xs font-medium rounded-md bg-primary/10 text-primary border border-primary/20"
                                                         >
                                                             {area}
-                                                            <button
-                                                                onClick={() => handleToggleArea(area)}
-                                                                className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
-                                                                title="Remover Área"
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
+                                                            {currentUser?.role !== 'USER' && (
+                                                                <button
+                                                                    onClick={() => handleToggleArea(area)}
+                                                                    className="hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                                                                    title="Remover Área"
+                                                                >
+                                                                    <X className="h-3 w-3" />
+                                                                </button>
+                                                            )}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -1016,13 +1020,15 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                         {routes.filter(r => r.transporterIds.includes(selectedCompany.id)).map(route => (
                                                             <div key={route.id} className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 relative group hover:shadow-sm transition-all">
-                                                                <button
-                                                                    onClick={() => handleRemoveTransporterFromRoute(route.id)}
-                                                                    className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive bg-muted/50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                    title="Remover desta rota"
-                                                                >
-                                                                    <X className="h-3 w-3" />
-                                                                </button>
+                                                                {currentUser?.role !== 'USER' && (
+                                                                    <button
+                                                                        onClick={() => handleRemoveTransporterFromRoute(route.id)}
+                                                                        className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive bg-muted/50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        title="Remover desta rota"
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                )}
                                                                 <div className="flex items-center justify-between pr-6">
                                                                     <h4 className="font-semibold text-sm line-clamp-1">{route.name}</h4>
                                                                     {route.isFavorite && <Heart className="h-3 w-3 text-red-500 fill-red-500 shrink-0" />}
@@ -1119,12 +1125,16 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    <button onClick={() => restoreRoute(route.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors">
-                                                        <RefreshCcw className="h-4 w-4" /> Restaurar
-                                                    </button>
-                                                    <button onClick={() => permanentlyDeleteRoute(route.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
-                                                        <Trash2 className="h-4 w-4" /> Excluir
-                                                    </button>
+                                                    {currentUser?.role !== 'USER' && (
+                                                        <>
+                                                            <button onClick={() => restoreRoute(route.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors">
+                                                                <RefreshCcw className="h-4 w-4" /> Restaurar
+                                                            </button>
+                                                            <button onClick={() => permanentlyDeleteRoute(route.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
+                                                                <Trash2 className="h-4 w-4" /> Excluir
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
