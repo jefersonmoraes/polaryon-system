@@ -203,7 +203,7 @@ const DocumentationPage = () => {
                                                     </td>
                                                     <td className="px-6 py-4 font-medium">
                                                         <span className={doc.status === 'expired' ? 'text-red-500' : doc.status === 'expiring' ? 'text-yellow-500' : ''}>
-                                                            {format(new Date(doc.expirationDate), 'dd/MM/yyyy')}
+                                                            {doc.expirationDate ? format(new Date(doc.expirationDate), 'dd/MM/yyyy') : '-'}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 flex items-center justify-end gap-2">

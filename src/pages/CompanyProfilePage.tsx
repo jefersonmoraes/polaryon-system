@@ -129,42 +129,44 @@ export default function CompanyProfilePage() {
             return;
         }
 
-        // CUSTOM SYSTEM OVERRIDE FOR FIXING SPECIFIC MEI CNPJ
-        if (cleanCnpj === '65516785000103') {
-            const customMeiCnaes = [
-                { code: '4744-0/99', description: 'Comércio varejista de materiais de construção em geral' },
-                { code: '4713-0/02', description: 'Lojas de variedades, exceto lojas de departamentos ou magazines' },
-                { code: '4744-0/01', description: 'Comércio varejista de ferragens e ferramentas' },
-                { code: '4742-3/00', description: 'Comércio varejista de material elétrico' },
-                { code: '4744-0/03', description: 'Comércio varejista de materiais hidráulicos' },
-                { code: '4744-0/04', description: 'Comércio varejista de cal, areia, pedra britada, tijolos e telhas' },
-                { code: '4744-0/02', description: 'Comércio varejista de madeira e artefatos' },
-                { code: '4753-9/00', description: 'Comércio varejista especializado de eletrodomésticos e equipamentos de áudio e vídeo' }
-            ];
+        const checkAndApplyMeiOverride = (cnaeCount: number) => {
+            if (cleanCnpj === '65516785000103' && cnaeCount <= 1) {
+                const customMeiCnaes = [
+                    { code: '4744-0/99', description: 'Comércio varejista de materiais de construção em geral' },
+                    { code: '4713-0/02', description: 'Lojas de variedades, exceto lojas de departamentos ou magazines' },
+                    { code: '4744-0/01', description: 'Comércio varejista de ferragens e ferramentas' },
+                    { code: '4742-3/00', description: 'Comércio varejista de material elétrico' },
+                    { code: '4744-0/03', description: 'Comércio varejista de materiais hidráulicos' },
+                    { code: '4744-0/04', description: 'Comércio varejista de cal, areia, pedra britada, tijolos e telhas' },
+                    { code: '4744-0/02', description: 'Comércio varejista de madeira e artefatos' },
+                    { code: '4753-9/00', description: 'Comércio varejista especializado de eletrodomésticos e equipamentos de áudio e vídeo' }
+                ];
 
-            setFormData(prev => ({
-                ...prev,
-                razaoSocial: '65.516.785 JOELISON ERICLES BARBOSA BELTRAO',
-                nomeFantasia: '65.516.785 JOELISON ERICLES BARBOSA BELTRAO',
-                naturezaJuridica: 'Empresário (Individual)',
-                cep: '72236-800',
-                logradouro: 'SETOR HABITACIONAL SOL NASCENTE',
-                numero: '08',
-                bairro: 'CEILANDIA SUL',
-                municipio: 'BRASILIA',
-                state: 'DF',
-                porte: 'MEI',
-                taxRegime: 'Simples Nacional',
-                cnaes: customMeiCnaes,
-                simplesAnnexes: ['Anexo I'],
-                annexRates: { 'Anexo I': { ...SIMPLES_NACIONAL_RATES['Anexo I'] } },
-                pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0,
-                lastSynced: new Date().toISOString(),
-                dataSource: 'Dados Oficiais MEI (Polaryon)'
-            }));
-            toast.success('Dados preenchidos via base direta do sistema para este MEI.');
-            return;
-        }
+                setFormData(prev => ({
+                    ...prev,
+                    razaoSocial: '65.516.785 JOELISON ERICLES BARBOSA BELTRAO',
+                    nomeFantasia: '65.516.785 JOELISON ERICLES BARBOSA BELTRAO',
+                    naturezaJuridica: 'Empresário (Individual)',
+                    cep: '72236-800',
+                    logradouro: 'SETOR HABITACIONAL SOL NASCENTE',
+                    numero: '08',
+                    bairro: 'CEILANDIA SUL',
+                    municipio: 'BRASILIA',
+                    state: 'DF',
+                    porte: 'MEI',
+                    taxRegime: 'Simples Nacional',
+                    cnaes: customMeiCnaes,
+                    simplesAnnexes: ['Anexo I'],
+                    annexRates: { 'Anexo I': { ...SIMPLES_NACIONAL_RATES['Anexo I'] } },
+                    pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0,
+                    lastSynced: new Date().toISOString(),
+                    dataSource: 'Dados Oficiais MEI (Polaryon Correção)'
+                }));
+                toast.success('Dados preenchidos via base direta do sistema para este MEI (API incompleta).');
+                return true;
+            }
+            return false;
+        };
 
         setIsFetching(true);
         try {
@@ -210,6 +212,8 @@ export default function CompanyProfilePage() {
                     toast.success(`Regime e Anexo (${inferredAnnex}) configurados automaticamente via Receita Federal.`);
                 }
             }
+
+            if (checkAndApplyMeiOverride(cnaes.length)) return;
 
             setFormData(prev => {
                 let newData = {
@@ -294,6 +298,8 @@ export default function CompanyProfilePage() {
                         toast.success(`Regime e Anexo (${inferredAnnex}) configurados automaticamente via Receita Federal (CNPJ.ws).`);
                     }
                 }
+
+                if (checkAndApplyMeiOverride(fbCnaes.length)) return;
 
                 setFormData(prev => {
                     let newData = {

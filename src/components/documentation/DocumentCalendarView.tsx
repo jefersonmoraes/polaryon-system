@@ -32,6 +32,7 @@ const DocumentCalendarView = ({ documents, onEditDocument }: DocumentCalendarVie
 
     const getDocumentsForDate = (date: Date) => {
         return documents.filter(doc => {
+            if (!doc.expirationDate) return false;
             const docDate = parseISO(doc.expirationDate);
             return isSameDay(docDate, date) && !doc.trashed;
         });
