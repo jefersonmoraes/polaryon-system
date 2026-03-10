@@ -1,4 +1,5 @@
 import { useKanbanStore } from '@/store/kanban-store';
+import { useAuthStore } from '@/store/auth-store';
 import { Card, KanbanList } from '@/types/kanban';
 import { Clock, MessageSquare, Paperclip, CheckSquare } from 'lucide-react';
 import { useState } from 'react';

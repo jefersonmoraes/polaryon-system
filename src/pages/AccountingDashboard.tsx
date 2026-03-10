@@ -170,8 +170,17 @@ const AccountingDashboard = () => {
     // Group by month if filterMode is year or all, otherwise by day
     const groupByMonth = filterMode === 'specific_year' || filterMode === 'all';
 
+    const safeDateObject = (dateParam: any) => {
+        if (!dateParam) return new Date();
+        const str = typeof dateParam === 'string' ? dateParam : new Date(dateParam).toISOString();
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return new Date(dateParam);
+        const [, y, m, d] = match;
+        return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0); // pad midday
+    };
+
     companyEntries.filter(e => e.status === 'paid').forEach(entry => {
-        const date = new Date(entry.date);
+        const date = safeDateObject(entry.date);
         let dateKeyStr = '';
         let displayStr = '';
 
@@ -310,7 +319,7 @@ const AccountingDashboard = () => {
     // 3. Status de Recebíveis (Barra Empilhada)
     const revStatusMap = new Map<string, { name: string; fullDate: Date; Pago: number; Pendente: number }>();
     companyEntries.filter(e => e.type === 'revenue').forEach(entry => {
-        const date = new Date(entry.date);
+        const date = safeDateObject(entry.date);
         let dateKeyStr = '';
         let displayStr = '';
         if (groupByMonth) {

@@ -10,7 +10,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'dummy';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'dummy_secret';
 // The Redirect URI must match what's configured in Google Cloud Console
 const GOOGLE_REDIRECT_URI = process.env.NODE_ENV === 'production'
-    ? 'https://app.polaryon.com.br/api/calendar/callback' // Update to correct domain or IP
+    ? 'https://polaryon.com.br/api/calendar/callback' // Update to correct domain or IP
     : 'http://localhost:3000/api/calendar/callback';
 
 export const oauth2Client = new OAuth2Client(
@@ -76,14 +76,18 @@ export const fetchGoogleEvents = async () => {
 
     if (!response.ok) {
         if (response.status === 401) throw new Error("NEEDS_AUTH");
-        throw new Error(`Google API Error: ${response.statusText}`);
+        const bodyText = await response.text();
+        throw new Error(`Google API Error: ${response.status} ${response.statusText} - ${bodyText}`);
     }
 
     const data = await response.json();
     return data.items || [];
 };
 
-export const pushEventToGoogle = async (event: { summary: string, description?: string, start: { date?: string, dateTime?: string }, end: { date?: string, dateTime?: string } }) => {
+export const pushEventToGoogle = async (
+    event: { summary: string, description?: string, start: { date?: string, dateTime?: string }, end: { date?: string, dateTime?: string } },
+    cardId?: string
+) => {
     let accessToken: string | null | undefined = null;
     try {
         accessToken = (await oauth2Client.getAccessToken()).token;
@@ -93,16 +97,73 @@ export const pushEventToGoogle = async (event: { summary: string, description?: 
     }
     if (!accessToken) throw new Error("NEEDS_AUTH");
 
-    const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events`, {
-        method: 'POST',
+    let eventToPush = { ...event };
+    if (cardId) {
+        eventToPush.description = `${event.description || ''}\n\n[PolaryonID: ${cardId}]`;
+    }
+
+    // Attempt to find an existing event by PolaryonID
+    let existingEventId = null;
+    if (cardId) {
+        try {
+            const searchRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?q=[PolaryonID: ${cardId}]`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (searchRes.ok) {
+                const searchData = await searchRes.json();
+                if (searchData.items && searchData.items.length > 0) {
+                    existingEventId = searchData.items[0].id;
+                }
+            }
+        } catch (e) {
+            console.error("Error searching for existing Google Event:", e);
+        }
+    }
+
+    const method = existingEventId ? 'PUT' : 'POST';
+    const url = existingEventId
+        ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${existingEventId}`
+        : `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+
+    const response = await fetch(url, {
+        method,
         headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(event)
+        body: JSON.stringify(eventToPush)
     });
 
     if (!response.ok) {
         console.error("Failed to push event", await response.text());
+    }
+};
+
+export const deleteEventFromGoogle = async (cardId: string) => {
+    let accessToken: string | null | undefined = null;
+    try {
+        accessToken = (await oauth2Client.getAccessToken()).token;
+    } catch (error: any) {
+        console.error('getAccessToken Error in deleteEventFromGoogle:', error.message);
+        return; // Silent fail for sync
+    }
+    if (!accessToken) return;
+
+    try {
+        const searchRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?q=[PolaryonID: ${cardId}]`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            if (searchData.items && searchData.items.length > 0) {
+                const existingEventId = searchData.items[0].id;
+                await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${existingEventId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error deleting existing Google Event:", e);
     }
 };

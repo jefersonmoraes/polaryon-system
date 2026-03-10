@@ -251,7 +251,7 @@ const AccountingEntries = () => {
                                             return (
                                                 <tr key={entry.id} className="hover:bg-muted/10 transition-colors group">
                                                     <td className="px-4 py-3 whitespace-nowrap">
-                                                        {new Date(entry.date).toLocaleDateString('pt-BR')}
+                                                        {new Date(entry.date.includes('T') ? entry.date : entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                     </td>
                                                     <td className="px-4 py-3 font-medium text-foreground">
                                                         <div className="flex items-center gap-2">

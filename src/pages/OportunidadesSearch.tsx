@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader } from '@/components/ui/dialog';
+import { useLocation } from 'react-router-dom';
+import api from '@/lib/api';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 
@@ -102,7 +104,8 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
 });
 
 export default function OportunidadesSearch() {
-    const [keyword, setKeyword] = useState('');
+    const location = useLocation();
+    const [keyword, setKeyword] = useState(location.state?.openPncpId || '');
     const [statusFilter, setStatusFilter] = useState('1'); // Default = A Receber Propostas
     const [ufFilter, setUfFilter] = useState('');
     const [instrumentoFilter, setInstrumentoFilter] = useState('edital');
@@ -235,9 +238,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             listId: exportListId,
             position: 0,
             labels: [],
-            assignees: [],
-            priority: 'medium' as const,
-            status: 'todo' as const,
+            assignee: null,
             completed: false,
             archived: false,
             trashed: false,
@@ -264,8 +265,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
         }
 
-        // Inject Card
-        useKanbanStore.getState().cards.push({
+        // Create Full Card Object
+        const newCardData = {
             id: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
             comments: [],
@@ -275,7 +276,13 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             customLink: getOfficialLink(selectedItem),
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
-        });
+        };
+
+        // Inject Card Optimistically properly via Zustand SetState to trigger LocalStorage Persist
+        useKanbanStore.setState(state => ({
+            cards: [...state.cards, newCardData]
+        }));
+        api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
 
         toast.success("Oportunidade exportada! Cartão criado no Kunbun.");
         setIsExportDialogOpen(false);
@@ -743,7 +750,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             <AnimatePresence>
                 {selectedItem && (
                     <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-                        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 border-border bg-background shadow-2xl z-[100] sm:rounded-xl">
+                        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto p-0 gap-0 border-border bg-background shadow-2xl z-[100] sm:rounded-xl">
                             <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30 sticky top-0 z-10 backdrop-blur-md">
                                 <div className="flex items-start justify-between gap-4">
                                     <DialogTitle className="text-xl font-bold leading-tight pt-1">

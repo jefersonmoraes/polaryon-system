@@ -1,8 +1,20 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { pushEventToGoogle, deleteEventFromGoogle } from '../services/GoogleCalendarService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+const DEFAULT_LABELS = [
+    { id: 'l1', name: 'Urgente', color: '#ef4444' },
+    { id: 'l2', name: 'Importante', color: '#f97316' },
+    { id: 'l3', name: 'Em progresso', color: '#eab308' },
+    { id: 'l4', name: 'Concluído', color: '#22c55e' },
+    { id: 'l5', name: 'Bug', color: '#a855f7' },
+    { id: 'l6', name: 'Feature', color: '#3b82f6' },
+    { id: 'l7', name: 'Design', color: '#14b8a6' },
+    { id: 'l8', name: 'Review', color: '#ec4899' },
+];
 
 // FOLDERS
 router.get('/folders', async (req: Request, res: Response) => {
@@ -16,18 +28,22 @@ router.get('/folders', async (req: Request, res: Response) => {
 
 router.post('/folders', async (req: Request, res: Response) => {
     try {
-        const folder = await prisma.folder.create({ data: req.body });
+        const { boards, ...data } = req.body;
+        const folder = await prisma.folder.create({ data });
         res.json(folder);
     } catch (e: any) {
+        console.error("Folder Create Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 router.put('/folders/:id', async (req: Request, res: Response) => {
     try {
-        const folder = await prisma.folder.update({ where: { id: req.params.id as string }, data: req.body });
+        const { boards, ...data } = req.body;
+        const folder = await prisma.folder.update({ where: { id: req.params.id as string }, data });
         res.json(folder);
     } catch (e: any) {
+        console.error("Folder Update Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -53,18 +69,22 @@ router.get('/boards', async (req: Request, res: Response) => {
 
 router.post('/boards', async (req: Request, res: Response) => {
     try {
-        const board = await prisma.board.create({ data: req.body });
+        const { lists, ...data } = req.body;
+        const board = await prisma.board.create({ data });
         res.json(board);
     } catch (e: any) {
+        console.error("Board Create Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 router.put('/boards/:id', async (req: Request, res: Response) => {
     try {
-        const board = await prisma.board.update({ where: { id: req.params.id as string }, data: req.body });
+        const { lists, ...data } = req.body;
+        const board = await prisma.board.update({ where: { id: req.params.id as string }, data });
         res.json(board);
     } catch (e: any) {
+        console.error("Board Update Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -90,18 +110,22 @@ router.get('/lists', async (req: Request, res: Response) => {
 
 router.post('/lists', async (req: Request, res: Response) => {
     try {
-        const list = await prisma.kanbanList.create({ data: req.body });
+        const { cards, ...data } = req.body;
+        const list = await prisma.kanbanList.create({ data });
         res.json(list);
     } catch (e: any) {
+        console.error("List Create Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 router.put('/lists/:id', async (req: Request, res: Response) => {
     try {
-        const list = await prisma.kanbanList.update({ where: { id: req.params.id as string }, data: req.body });
+        const { cards, ...data } = req.body;
+        const list = await prisma.kanbanList.update({ where: { id: req.params.id as string }, data });
         res.json(list);
     } catch (e: any) {
+        console.error("List Update Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -109,6 +133,36 @@ router.put('/lists/:id', async (req: Request, res: Response) => {
 router.delete('/lists/:id', async (req: Request, res: Response) => {
     try {
         await prisma.kanbanList.delete({ where: { id: req.params.id as string } });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// LABELS
+router.post('/labels', async (req: Request, res: Response) => {
+    try {
+        const label = await prisma.label.create({ data: req.body });
+        res.json(label);
+    } catch (e: any) {
+        // Just mock it if table doesn't exist to prevent crashes
+        console.error("Label Create Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.put('/labels/:id', async (req: Request, res: Response) => {
+    try {
+        const label = await prisma.label.update({ where: { id: req.params.id as string }, data: req.body });
+        res.json(label);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.delete('/labels/:id', async (req: Request, res: Response) => {
+    try {
+        await prisma.label.delete({ where: { id: req.params.id as string } });
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -129,18 +183,142 @@ router.get('/cards', async (req: Request, res: Response) => {
 
 router.post('/cards', async (req: Request, res: Response) => {
     try {
-        const card = await prisma.card.create({ data: req.body });
+        const { labels, checklist, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+
+        if (data.dueDate === '') data.dueDate = null;
+        else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
+            data.dueDate = new Date(data.dueDate).toISOString();
+        }
+        if (data.startDate === '') data.startDate = null;
+        else if (data.startDate && typeof data.startDate === 'string' && data.startDate.length === 10) {
+            data.startDate = new Date(data.startDate).toISOString();
+        }
+
+        const card = await prisma.card.create({ data });
+
+        if (attachments && attachments.length > 0) {
+            await prisma.attachment.createMany({
+                data: attachments.map((att: any) => ({
+                    cardId: card.id,
+                    name: att.name,
+                    url: att.url,
+                    type: att.type,
+                    addedAt: att.addedAt ? new Date(att.addedAt) : new Date()
+                }))
+            }).catch(e => console.error("Failed to link attachments on create:", e));
+        }
+
+        // Auto-sync to Google Calendar if due date is present
+        if (card.dueDate && !card.completed && !card.archived && !card.trashed) {
+            pushEventToGoogle({
+                summary: `[Polaryon] ${(card as any).title}`,
+                description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático criado através do seu quadro Kanban.',
+                start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
+                end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
+            }, card.id).catch(err => console.error("Background sync failed:", err));
+        }
+
         res.json(card);
     } catch (e: any) {
+        console.error("Card Create Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
-        const card = await prisma.card.update({ where: { id: req.params.id as string }, data: req.body });
+        const { labels, checklist, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        const cardId = req.params.id as string;
+
+        if (data.dueDate === '') data.dueDate = null;
+        else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
+            data.dueDate = new Date(data.dueDate).toISOString();
+        }
+        if (data.startDate === '') data.startDate = null;
+        else if (data.startDate && typeof data.startDate === 'string' && data.startDate.length === 10) {
+            data.startDate = new Date(data.startDate).toISOString();
+        }
+
+        const card = await prisma.card.update({ where: { id: cardId }, data });
+
+        // Update Labels relationship (Array of Strings to link table)
+        if (labels !== undefined) {
+            await prisma.cardLabel.deleteMany({ where: { cardId } });
+            if (labels.length > 0) {
+                await prisma.cardLabel.createMany({
+                    data: labels.map((labelId: string) => ({ cardId, labelId }))
+                }).catch(e => console.error("Failed to link labels:", e));
+            }
+        }
+
+        if (checklist !== undefined) {
+            await prisma.checklistItem.deleteMany({ where: { cardId } });
+            if (checklist.length > 0) {
+                await prisma.checklistItem.createMany({
+                    data: checklist.map((i: any) => ({ ...i, cardId }))
+                });
+            }
+        }
+
+        if (comments !== undefined) {
+            await prisma.comment.deleteMany({ where: { cardId } });
+            if (comments.length > 0) {
+                await prisma.comment.createMany({
+                    data: comments.map((i: any) => ({ ...i, cardId }))
+                });
+            }
+        }
+
+        if (timeEntries !== undefined) {
+            await prisma.timeEntry.deleteMany({ where: { cardId } });
+            if (timeEntries.length > 0) {
+                await prisma.timeEntry.createMany({
+                    data: timeEntries.map((i: any) => ({ ...i, cardId }))
+                });
+            }
+        }
+
+        if (milestones !== undefined) {
+            await prisma.milestone.deleteMany({ where: { cardId } });
+            if (milestones.length > 0) {
+                await prisma.milestone.createMany({
+                    data: milestones.map((i: any) => {
+                        let parsedDate = i.dueDate;
+                        if (parsedDate === '') parsedDate = null;
+                        else if (parsedDate && typeof parsedDate === 'string' && parsedDate.length === 10) {
+                            parsedDate = new Date(parsedDate).toISOString();
+                        }
+                        return { ...i, dueDate: parsedDate, cardId };
+                    })
+                });
+            }
+        }
+
+        if (attachments !== undefined) {
+            await prisma.attachment.deleteMany({ where: { cardId } });
+            if (attachments.length > 0) {
+                for (const att of attachments) {
+                    // Create one by one to avoid large payload errors or handle them gracefully
+                    await prisma.attachment.create({ data: { ...att, cardId } }).catch(e => console.error("Attachment failed (possibly too large)"));
+                }
+            }
+        }
+
+        // Auto-sync or cleanup Google Calendar based on state
+        if (card.completed || card.archived || card.trashed) {
+            deleteEventFromGoogle(card.id).catch(err => console.error("Background sync delete failed:", err));
+        } else if (card.dueDate) {
+            pushEventToGoogle({
+                summary: `[Polaryon] ${(card as any).title}`,
+                description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático atualizado do seu quadro Kanban.',
+                start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
+                end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
+            }, card.id).catch(err => console.error("Background sync failed:", err));
+        }
+
         res.json(card);
     } catch (e: any) {
+        console.error("Card Update Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -148,6 +326,10 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
 router.delete('/cards/:id', async (req: Request, res: Response) => {
     try {
         await prisma.card.delete({ where: { id: req.params.id as string } });
+
+        // Auto-cleanup on hard delete
+        deleteEventFromGoogle(req.params.id as string).catch(err => console.error("Background sync delete failed:", err));
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -342,21 +524,53 @@ router.delete('/notifications/:id', async (req: Request, res: Response) => {
 // SYNC ALL (Pull state to client)
 router.get('/sync', async (req: Request, res: Response) => {
     try {
-        const [folders, boards, lists, cards, companies, mainCompanies, routes, budgets, notifications] = await Promise.all([
+        // Guarantee default labels exist in postgres to prevent FK errors when cards link them
+        await prisma.label.createMany({
+            data: DEFAULT_LABELS,
+            skipDuplicates: true
+        }).catch(e => console.error("Label seed skipped", e));
+
+        const [folders, boards, lists, cards, companies, mainCompanies, routes, budgets, notifications, usersDb, labels] = await Promise.all([
             prisma.folder.findMany(),
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                include: { checklist: true, comments: true, attachments: true, milestones: true }
+                include: { labels: true, checklist: true, comments: true, attachments: true, milestones: true, timeEntries: true }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany(),
             prisma.route.findMany(),
             prisma.budget.findMany(),
             prisma.notification.findMany(),
+            prisma.user.findMany({
+                where: {
+                    role: {
+                        notIn: ['disabled', 'pending']
+                    }
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    picture: true
+                }
+            }),
+            prisma.label.findMany()
         ]);
 
-        res.json({ folders, boards, lists, cards, companies, mainCompanies, routes, budgets, notifications });
+        const members = usersDb.map(u => ({
+            id: u.id,
+            name: u.name || u.email.split('@')[0],
+            email: u.email,
+            avatar: u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email.split('@')[0])}&background=random`
+        }));
+
+        const formattedCards = cards.map((c: any) => ({
+            ...c,
+            labels: c.labels.map((l: any) => l.labelId) // flatten intersection table into string array
+        }));
+
+        res.json({ folders, boards, lists, cards: formattedCards, companies, mainCompanies, routes, budgets, notifications, members, labels });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }

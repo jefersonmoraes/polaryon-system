@@ -91,6 +91,9 @@ interface KanbanState {
   stopTimer: (cardId: string) => void;
   resetTimer: (cardId: string) => void;
   fetchKanbanData: () => Promise<void>;
+
+  // Members Sync
+  setMembers: (members: WorkspaceMember[]) => void;
 }
 
 export const useKanbanStore = create<KanbanState>()(
@@ -110,6 +113,8 @@ export const useKanbanStore = create<KanbanState>()(
       undoAction: null,
       recentMilestoneTitles: [],
 
+      setMembers: (members) => set({ members }),
+
       fetchKanbanData: async () => {
         try {
           const res = await api.get('/kanban/sync');
@@ -119,6 +124,8 @@ export const useKanbanStore = create<KanbanState>()(
               boards: res.data.boards || [],
               lists: res.data.lists || [],
               cards: res.data.cards || [],
+              members: res.data.members || [],
+              labels: res.data.labels && res.data.labels.length > 0 ? res.data.labels : [...DEFAULT_LABELS],
             });
           }
         } catch (error) {
@@ -737,66 +744,73 @@ export const useKanbanStore = create<KanbanState>()(
       }),
 
       // Checklist
-      addChecklistItem: (cardId, text) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? {
-          ...c, checklist: [...c.checklist, { id: uid(), text, completed: false }]
-        } : c)
-      })),
-      toggleChecklistItem: (cardId, itemId) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? {
-          ...c, checklist: c.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i)
-        } : c)
-      })),
-      deleteChecklistItem: (cardId, itemId) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? {
-          ...c, checklist: c.checklist.filter(i => i.id !== itemId)
-        } : c)
-      })),
+      addChecklistItem: (cardId, text) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { checklist: [...c.checklist, { id: uid(), text, completed: false }] });
+      },
+      toggleChecklistItem: (cardId, itemId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { checklist: c.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i) });
+      },
+      deleteChecklistItem: (cardId, itemId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { checklist: c.checklist.filter(i => i.id !== itemId) });
+      },
 
       // Comments
-      addComment: (cardId, text) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? {
-          ...c, comments: [...c.comments, { id: uid(), text, author: 'Você', createdAt: new Date().toISOString() }]
-        } : c)
-      })),
+      addComment: (cardId, text) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { comments: [...c.comments, { id: uid(), text, author: useAuthStore.getState().currentUser?.name || 'Você', createdAt: new Date().toISOString() }] });
+      },
 
       // Labels
-      addLabel: (name, color) => set(s => ({
-        labels: [...s.labels, { id: uid(), name, color }]
-      })),
-      updateLabel: (id, data) => set(s => ({
-        labels: s.labels.map(l => l.id === id ? { ...l, ...data } : l)
-      })),
-      deleteLabel: (id) => set(s => ({
-        labels: s.labels.filter(l => l.id !== id),
-        cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
-      })),
+      addLabel: (name, color) => {
+        const newLabel = { id: uid(), name, color };
+        set(s => ({ labels: [...s.labels, newLabel] }));
+        api.post('/kanban/labels', newLabel).catch(console.error);
+      },
+      updateLabel: (id, data) => {
+        set(s => ({ labels: s.labels.map(l => l.id === id ? { ...l, ...data } : l) }));
+        api.put(`/kanban/labels/${id}`, data).catch(console.error);
+      },
+      deleteLabel: (id) => {
+        set(s => ({
+          labels: s.labels.filter(l => l.id !== id),
+          cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
+        }));
+        api.delete(`/kanban/labels/${id}`).catch(console.error);
+      },
       approveBudget: (id) => set(s => ({
         labels: s.labels.filter(l => l.id !== id),
         cards: s.cards.map(c => ({ ...c, labels: c.labels.filter(l => l !== id) }))
       })),
 
       // Time tracking
-      startTimer: (cardId) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? {
-          ...c, timeEntries: [...c.timeEntries, { id: uid(), startedAt: new Date().toISOString(), duration: 0 }]
-        } : c)
-      })),
-      stopTimer: (cardId) => set(s => ({
-        cards: s.cards.map(c => {
-          if (c.id !== cardId) return c;
-          const entries = [...c.timeEntries];
-          const last = entries[entries.length - 1];
-          if (last && !last.endedAt) {
-            const dur = Math.floor((Date.now() - new Date(last.startedAt).getTime()) / 1000);
-            entries[entries.length - 1] = { ...last, endedAt: new Date().toISOString(), duration: dur };
-          }
-          return { ...c, timeEntries: entries };
-        })
-      })),
-      resetTimer: (cardId) => set(s => ({
-        cards: s.cards.map(c => c.id === cardId ? { ...c, timeEntries: [] } : c)
-      })),
+      startTimer: (cardId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { timeEntries: [...c.timeEntries, { id: uid(), startedAt: new Date().toISOString(), duration: 0 }] });
+      },
+      stopTimer: (cardId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        const entries = [...c.timeEntries];
+        const last = entries[entries.length - 1];
+        if (last && !last.endedAt) {
+          const dur = Math.floor((Date.now() - new Date(last.startedAt).getTime()) / 1000);
+          entries[entries.length - 1] = { ...last, endedAt: new Date().toISOString(), duration: dur };
+        }
+        get().updateCard(cardId, { timeEntries: entries });
+      },
+      resetTimer: (cardId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { timeEntries: [] });
+      },
     }),
     { name: 'jj-kanban-store' }
   )
@@ -815,3 +829,18 @@ const initTheme = () => {
   }
 };
 initTheme();
+
+// Auto-sync Assignees from Global Auth Store
+useAuthStore.subscribe((state) => {
+  const activeMembers = state.systemUsers
+    .filter(u => u.status === 'active')
+    .map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      avatar: u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`,
+      status: 'active' as const
+    }));
+  useKanbanStore.setState({ members: activeMembers });
+});

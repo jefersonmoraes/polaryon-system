@@ -8,19 +8,7 @@ import { useState, useMemo } from 'react';
 import { Card } from '@/types/kanban';
 
 export default function TeamWorkloadPage() {
-    // Dynamic mapping of members from the auth-store
-    const { systemUsers } = useAuthStore();
-    const members = useMemo(() => {
-        return systemUsers
-            .filter(u => u.permissions.canEdit)
-            .map(u => ({
-                id: u.id,
-                name: u.name,
-                email: u.email,
-                avatar: u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`
-            }));
-    }, [systemUsers]);
-
+    const members = useKanbanStore(state => state.members);
     const cards = useKanbanStore(state => state.cards);
     const boards = useKanbanStore(state => state.boards);
     const lists = useKanbanStore(state => state.lists);

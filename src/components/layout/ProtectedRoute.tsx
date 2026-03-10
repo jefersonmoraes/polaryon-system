@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
+import { useKanbanStore } from '@/store/kanban-store';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
 

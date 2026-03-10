@@ -54,15 +54,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const card = cards.find(c => c.id === cardId);
   const list = card ? lists.find(l => l.id === card.listId) : null;
   const navigate = useNavigate();
-  const { currentUser, systemUsers } = useAuthStore();
-  const members = systemUsers
-    .filter(u => u.permissions.canEdit)
-    .map(u => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      avatar: u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`
-    }));
+  const { currentUser } = useAuthStore();
+  const members = useKanbanStore(state => state.members);
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
 
@@ -72,7 +65,20 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     return c ? (c.nome_fantasia || c.razao_social) : 'Empresa Indisponível';
   };
 
-  const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTIONS);
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('polaryon_card_section_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return DEFAULT_SECTIONS;
+    } catch { return DEFAULT_SECTIONS; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('polaryon_card_section_order', JSON.stringify(sectionOrder));
+  }, [sectionOrder]);
   const [title, setTitle] = useState(card?.title || '');
   const [summary, setSummary] = useState(card?.summary || '');
   const [customLink, setCustomLink] = useState(card?.customLink || '');
@@ -402,7 +408,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   <div className="flex flex-col sm:flex-row items-center gap-3 pl-5">
                     <div className="flex items-center gap-1.5 w-full sm:flex-1">
                       <span className="text-[10px] text-muted-foreground w-max font-semibold">Data de Entrega:</span>
-                      <input type="date" value={ms.dueDate || ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary" />
+                      <input type="date" value={ms.dueDate ? ms.dueDate.split('T')[0] : ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary" />
                     </div>
                   </div>
                 </div>
@@ -786,7 +792,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       </a>
                     )}
                   </div>
-                  <button onClick={() => { onClose(); navigate('/oportunidades/busca'); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0 shadow-sm" title="Abrir painel de busca do PNCP">
+                  <button onClick={() => { onClose(); navigate('/oportunidades/busca', { state: { openPncpId: card.pncpId } }); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0 shadow-sm" title="Abrir painel de busca do PNCP">
                     <Building2 className="h-3.5 w-3.5" /> Acessar Oportunidade no Sistema
                   </button>
                 </div>

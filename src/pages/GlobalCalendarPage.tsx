@@ -39,8 +39,26 @@ export default function GlobalCalendarPage() {
             toast.success("Google Agenda Integrada! Sincronizando dados...", { duration: 5000 });
             window.history.replaceState({}, document.title, window.location.pathname);
             syncWithGoogleCalendar();
+        } else {
+            loadGoogleEvents();
         }
     }, []);
+
+    const loadGoogleEvents = async () => {
+        try {
+            const res = await api.get('/calendar/events');
+            if (res.data.success && res.data.events) {
+                setGoogleEvents(res.data.events);
+            }
+        } catch (err: any) {
+            // Silently ignore NEEDS_AUTH or other errors on passive load
+            console.error("Silent Google Events Load Error:", err);
+            if (err.response?.status === 401 && err.response?.data?.error === 'NEEDS_AUTH') {
+                // Do nothing, just let user see empty Google events
+                // Let them click Sincronizar manually to trigger the prompt
+            }
+        }
+    };
 
     const syncWithGoogleCalendar = async () => {
         try {
@@ -131,6 +149,15 @@ export default function GlobalCalendarPage() {
         headerText = `${currentDate.getDate()} de ${monthNames[currentDate.getMonth()]} de ${currentDate.getFullYear()}`;
     }
 
+    const safeDateObject = (dateParam: any) => {
+        if (!dateParam) return new Date();
+        const str = typeof dateParam === 'string' ? dateParam : new Date(dateParam).toISOString();
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return new Date(dateParam);
+        const [, y, m, d] = match;
+        return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    };
+
     // Find upcoming cards (next 7 days)
     const today = new Date();
     const nextWeek = new Date(today);
@@ -141,37 +168,38 @@ export default function GlobalCalendarPage() {
 
         // Check main due date
         if (c.dueDate) {
-            const d = new Date(c.dueDate);
+            const d = safeDateObject(c.dueDate);
             if (d >= today && d <= nextWeek) return true;
         }
 
         // Check milestones
         if (c.milestones) {
-            return c.milestones.some(m => m.dueDate && new Date(m.dueDate) >= today && new Date(m.dueDate) <= nextWeek && !m.completed);
+            return c.milestones.some(m => m.dueDate && safeDateObject(m.dueDate) >= today && safeDateObject(m.dueDate) <= nextWeek && !m.completed);
         }
 
         return false;
     }).sort((a, b) => {
-        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 9999999999999;
-        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 9999999999999;
+        const dateA = a.dueDate ? safeDateObject(a.dueDate).getTime() : 9999999999999;
+        const dateB = b.dueDate ? safeDateObject(b.dueDate).getTime() : 9999999999999;
         return dateA - dateB;
     }).slice(0, 10);
 
     // Global Upcoming Events for the Sidebar
     const allUpcomingEvents = (() => {
         const events: any[] = [];
-        upcomingCards.forEach(c => c.dueDate && events.push({ id: c.id, title: `Tarefa: ${c.title}`, date: new Date(c.dueDate), type: 'tarefa' }));
-        budgets.filter(b => !b.trashed && b.status === 'Aguardando' && new Date(b.createdAt) >= today && new Date(b.createdAt) <= nextWeek).forEach(b => {
-            events.push({ id: b.id, title: `Proposta: ${b.title}`, date: new Date(b.createdAt), type: 'orcamento' });
+        upcomingCards.forEach(c => c.dueDate && events.push({ id: c.id, title: `Tarefa: ${c.title}`, date: safeDateObject(c.dueDate), type: 'tarefa' }));
+        // Budgets removed as requested by user
+
+        documents.filter(d => !d.trashed && safeDateObject(d.expirationDate) >= today && safeDateObject(d.expirationDate) <= nextWeek).forEach(d => {
+            events.push({ id: d.id, title: `Doc Expirando: ${d.title}`, date: safeDateObject(d.expirationDate), type: 'documento' });
         });
-        documents.filter(d => !d.trashed && new Date(d.expirationDate) >= today && new Date(d.expirationDate) <= nextWeek).forEach(d => {
-            events.push({ id: d.id, title: `Doc Expirando: ${d.title}`, date: new Date(d.expirationDate), type: 'documento' });
+        taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && safeDateObject(t.dueDate) >= today && safeDateObject(t.dueDate) <= nextWeek).forEach(t => {
+            events.push({ id: t.id, title: `Imposto Pendente: ${t.name}`, date: safeDateObject(t.dueDate), type: 'contabil' });
         });
-        taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate) >= today && new Date(t.dueDate) <= nextWeek).forEach(t => {
-            events.push({ id: t.id, title: `Imposto Pendente: ${t.name}`, date: new Date(t.dueDate), type: 'contabil' });
-        });
-        googleEvents.filter(g => new Date(g.date) >= today && new Date(g.date) <= nextWeek).forEach(g => {
-            events.push({ id: g.id, title: g.title, date: new Date(g.date), type: 'google' });
+        googleEvents.filter(g => safeDateObject(g.date) >= today && safeDateObject(g.date) <= nextWeek).forEach(g => {
+            if (g.title && !g.title.startsWith('[Polaryon]')) {
+                events.push({ id: g.id, title: g.title, date: safeDateObject(g.date), type: 'google' });
+            }
         });
         return events.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 15);
     })();
@@ -191,7 +219,7 @@ export default function GlobalCalendarPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {useAuthStore.getState().currentUser?.permissions?.canEdit && (
+                        {useAuthStore.getState().currentUser?.email === 'jjcorporation2018@gmail.com' && (
                             <button onClick={syncWithGoogleCalendar} className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shadow-sm transition-colors">
                                 <span className="w-4 h-4 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-[10px]">G</span>
                                 Sincronizar G Agenda
@@ -230,22 +258,29 @@ export default function GlobalCalendarPage() {
                             }
 
                             const dateStr = date.toDateString();
+
+                            const safeDateMatch = (dateParam: any, target: string) => {
+                                if (!dateParam) return false;
+                                const str = typeof dateParam === 'string' ? dateParam : new Date(dateParam).toISOString();
+                                const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                                if (!match) return new Date(dateParam).toDateString() === target;
+                                const [, y, m, d] = match;
+                                return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toDateString() === target;
+                            };
+
                             // Tasks
                             const dateCards = activeCards.filter(c => {
-                                const matchesMain = c.dueDate && new Date(c.dueDate).toDateString() === dateStr;
-                                const matchesMilestone = c.milestones && c.milestones.some(m => m.dueDate && new Date(m.dueDate).toDateString() === dateStr);
+                                const matchesMain = c.dueDate && safeDateMatch(c.dueDate, dateStr);
+                                const matchesMilestone = c.milestones && c.milestones.some(m => m.dueDate && safeDateMatch(m.dueDate, dateStr));
                                 return matchesMain || matchesMilestone;
                             });
                             // System Global metrics
-                            const dateBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando' && new Date(b.createdAt).toDateString() === dateStr);
-                            const dateDocs = documents.filter(d => !d.trashed && new Date(d.expirationDate).toDateString() === dateStr);
-                            const dateTaxes = taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate).toDateString() === dateStr);
-                            const dateHolidays = holidays.filter(h => {
-                                const [y, m, d] = h.date.split('-');
-                                return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toDateString() === dateStr;
-                            });
+                            const dateBudgets: any[] = []; // Removed by user request
+                            const dateDocs = documents.filter(d => !d.trashed && safeDateMatch(d.expirationDate, dateStr));
+                            const dateTaxes = taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && safeDateMatch(t.dueDate, dateStr));
+                            const dateHolidays = holidays.filter(h => safeDateMatch(h.date, dateStr));
 
-                            const dateGoogleEvents = googleEvents.filter(g => new Date(g.date).toDateString() === dateStr);
+                            const dateGoogleEvents = googleEvents.filter(g => safeDateMatch(g.date, dateStr) && (!g.title || !g.title.startsWith('[Polaryon]')));
 
                             const isToday = new Date().toDateString() === dateStr;
 
