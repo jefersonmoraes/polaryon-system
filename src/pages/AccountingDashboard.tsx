@@ -14,7 +14,7 @@ import { CobrancasPanel } from '@/components/accounting/CobrancasPanel';
 import { TaxDash } from '@/components/accounting/TaxDash';
 import { ProLaboreDash } from '@/components/accounting/ProLaboreDash';
 
-type FilterMode = 'current_month' | 'specific_month' | 'specific_year' | 'all';
+type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'specific_year' | 'all';
 const AccountingDashboard = () => {
     const { entries, invoices, categories } = useAccountingStore();
     const { mainCompanies } = useKanbanStore();
@@ -46,6 +46,14 @@ const AccountingDashboard = () => {
         const now = new Date();
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     });
+    const [startMonth, setStartMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [endMonth, setEndMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
     const isDateInFilter = (dateStr: string) => {
@@ -62,6 +70,15 @@ const AccountingDashboard = () => {
             const [year, month] = selectedMonth.split('-');
             return dYear === parseInt(year) && dMonth === parseInt(month) - 1;
         }
+        if (filterMode === 'custom_period') {
+            if (!startMonth || !endMonth) return true;
+            const [sYear, sMonth] = startMonth.split('-');
+            const [eYear, eMonth] = endMonth.split('-');
+            const startStr = `${sYear}-${sMonth}`;
+            const endStr = `${eYear}-${eMonth}`;
+            const targetStr = `${yearStr}-${monthStr}`;
+            return targetStr >= startStr && targetStr <= endStr;
+        }
         if (filterMode === 'specific_year') {
             return dYear === selectedYear;
         }
@@ -75,7 +92,7 @@ const AccountingDashboard = () => {
             if (e.trashedAt) return false;
             return isDateInFilter(e.date);
         });
-    }, [entries, activeCompany?.id, filterMode, selectedMonth, selectedYear]);
+    }, [entries, activeCompany?.id, filterMode, selectedMonth, startMonth, endMonth, selectedYear]);
 
     const companyInvoices = useMemo(() => {
         return invoices.filter(i => {
@@ -83,7 +100,7 @@ const AccountingDashboard = () => {
             if (i.trashedAt) return false;
             return isDateInFilter(i.issueDate);
         });
-    }, [invoices, activeCompany?.id, filterMode, selectedMonth, selectedYear]);
+    }, [invoices, activeCompany?.id, filterMode, selectedMonth, startMonth, endMonth, selectedYear]);
 
     // Invoice Metrics
     const totalInvoicesValue = companyInvoices.reduce((acc, curr) => acc + curr.amount, 0);
@@ -148,12 +165,12 @@ const AccountingDashboard = () => {
     // Global company entries (for balances that should ignore period filters like A Pagar / A Receber)
     const globalCompanyEntries = entries.filter(e => e.companyId === activeCompany?.id && !e.trashedAt);
 
-    // Pending (Global Balances)
-    const pendingRevenue = globalCompanyEntries
+    // Pending (Reverted to filtered by period as requested)
+    const pendingRevenue = companyEntries
         .filter(e => e.type === 'revenue' && e.status === 'pending')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
-    const pendingExpense = globalCompanyEntries
+    const pendingExpense = companyEntries
         .filter(e => e.type === 'expense' && e.status === 'pending')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -261,7 +278,7 @@ const AccountingDashboard = () => {
     const revenueCount = companyEntries.filter(e => e.type === 'revenue' && e.status === 'paid').length;
     const ticketMedio = revenueCount > 0 ? (totalRevenue / revenueCount) : 0;
 
-    const inadimplencia = globalCompanyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < new Date(new Date().setHours(0, 0, 0, 0))).reduce((acc, curr) => acc + curr.amount, 0);
+    const inadimplencia = companyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < new Date(new Date().setHours(0, 0, 0, 0))).reduce((acc, curr) => acc + curr.amount, 0);
 
     const margemContribuicao = grossProfit - taxesPaid;
     const margemContribuicaoPercent = totalRevenue > 0 ? ((margemContribuicao / totalRevenue) * 100).toFixed(1) : "0";
@@ -356,7 +373,7 @@ const AccountingDashboard = () => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    globalCompanyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < now).forEach(e => {
+    companyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < now).forEach(e => {
         const dueDate = new Date(e.date);
         dueDate.setHours(0, 0, 0, 0);
         const diffTime = Math.abs(now.getTime() - dueDate.getTime());
@@ -528,6 +545,7 @@ const AccountingDashboard = () => {
                                     >
                                         <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
                                         <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
+                                        <option className="bg-background text-foreground" value="custom_period">Vários Meses</option>
                                         <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
                                         <option className="bg-background text-foreground" value="all">Todo o Período</option>
                                     </select>
@@ -539,6 +557,24 @@ const AccountingDashboard = () => {
                                             onChange={(e) => setSelectedMonth(e.target.value)}
                                             className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary"
                                         />
+                                    )}
+
+                                    {filterMode === 'custom_period' && (
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="month"
+                                                value={startMonth}
+                                                onChange={(e) => setStartMonth(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-32"
+                                            />
+                                            <span className="text-muted-foreground text-sm">até</span>
+                                            <input
+                                                type="month"
+                                                value={endMonth}
+                                                onChange={(e) => setEndMonth(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-32"
+                                            />
+                                        </div>
                                     )}
 
                                     {filterMode === 'specific_year' && (
