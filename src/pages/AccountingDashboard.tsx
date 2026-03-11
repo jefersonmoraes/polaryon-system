@@ -145,12 +145,15 @@ const AccountingDashboard = () => {
     const netIncome = operatingProfit - taxesPaid;
     const netMargin = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : 0;
 
-    // Pending
-    const pendingRevenue = companyEntries
+    // Global company entries (for balances that should ignore period filters like A Pagar / A Receber)
+    const globalCompanyEntries = entries.filter(e => e.companyId === activeCompany?.id && !e.trashedAt);
+
+    // Pending (Global Balances)
+    const pendingRevenue = globalCompanyEntries
         .filter(e => e.type === 'revenue' && e.status === 'pending')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
-    const pendingExpense = companyEntries
+    const pendingExpense = globalCompanyEntries
         .filter(e => e.type === 'expense' && e.status === 'pending')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -258,7 +261,7 @@ const AccountingDashboard = () => {
     const revenueCount = companyEntries.filter(e => e.type === 'revenue' && e.status === 'paid').length;
     const ticketMedio = revenueCount > 0 ? (totalRevenue / revenueCount) : 0;
 
-    const inadimplencia = companyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < new Date(new Date().setHours(0, 0, 0, 0))).reduce((acc, curr) => acc + curr.amount, 0);
+    const inadimplencia = globalCompanyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < new Date(new Date().setHours(0, 0, 0, 0))).reduce((acc, curr) => acc + curr.amount, 0);
 
     const margemContribuicao = grossProfit - taxesPaid;
     const margemContribuicaoPercent = totalRevenue > 0 ? ((margemContribuicao / totalRevenue) * 100).toFixed(1) : "0";
@@ -353,7 +356,7 @@ const AccountingDashboard = () => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    companyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < now).forEach(e => {
+    globalCompanyEntries.filter(e => e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) < now).forEach(e => {
         const dueDate = new Date(e.date);
         dueDate.setHours(0, 0, 0, 0);
         const diffTime = Math.abs(now.getTime() - dueDate.getTime());
