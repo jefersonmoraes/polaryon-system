@@ -156,11 +156,11 @@ const AccountingDashboard = () => {
 
     // Cash Flow Forecast metrics (next 30 days independent of time filter, but filtered by company)
     const upcomingRevenue = entries
-        .filter(e => e.companyId === activeCompany?.id && e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) <= new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000))
+        .filter(e => e.companyId === activeCompany?.id && !e.trashedAt && e.type === 'revenue' && e.status === 'pending' && e.date && new Date(e.date) <= new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000))
         .reduce((acc, curr) => acc + curr.amount, 0);
 
     const upcomingExpense = entries
-        .filter(e => e.companyId === activeCompany?.id && e.type === 'expense' && e.status === 'pending' && e.date && new Date(e.date) <= new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000))
+        .filter(e => e.companyId === activeCompany?.id && !e.trashedAt && e.type === 'expense' && e.status === 'pending' && e.date && new Date(e.date) <= new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000))
         .reduce((acc, curr) => acc + curr.amount, 0);
 
     const projectedCashflow = upcomingRevenue - upcomingExpense;

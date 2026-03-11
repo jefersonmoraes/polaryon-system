@@ -294,18 +294,19 @@ export const useAccountingStore = create<AccountingState>()(
             calculateTaxes: (companyId, month, porte) =>
                 set((state) => {
                     const settings = state.settings[companyId];
+                    const isMei = porte?.toUpperCase() === 'MEI' || porte?.toUpperCase() === 'MICROEMPREENDEDOR INDIVIDUAL';
                     // Se não for MEI e não tiver config, não avança. MEI não precisa de config para DAS fixo.
-                    if (!settings && porte !== 'MEI') return state;
+                    if (!settings && !isMei) return state;
 
                     // Calculate total taxable revenue for the month
                     const revenueForMonth = state.entries
-                        .filter(e => e.companyId === companyId && e.type === 'revenue' && e.date.startsWith(month))
+                        .filter(e => e.companyId === companyId && e.type === 'revenue' && e.date.startsWith(month) && !e.trashedAt)
                         .reduce((sum, e) => sum + e.amount, 0);
 
                     let taxAmount = 0;
                     let taxName = 'Guia DAS';
 
-                    if (porte === 'MEI') {
+                    if (isMei) {
                         // Cálculo Automático do MEI (Baseado no Salário Mínimo do Ano)
                         const year = parseInt(month.split('-')[0]) || new Date().getFullYear();
                         // Tabela histórica / projeção de salários mínimos no Brasil
@@ -336,9 +337,9 @@ export const useAccountingStore = create<AccountingState>()(
                         }
                     }
 
-                    // Check if obligation already exists for this month/company
+                    // Check if obligation already exists for this month/company AND is not trashed
                     const existingTaxIndex = state.taxObligations.findIndex(
-                        t => t.companyId === companyId && t.month === month && (t.name === 'Guia DAS' || t.name === 'Guia DAS (MEI)' || t.name === 'Impostos Federais/Municipais')
+                        t => t.companyId === companyId && t.month === month && !t.trashedAt && (t.name.includes('DAS') || t.name.includes('Federal') || t.name.includes('Municipal'))
                     );
 
                     const newObligations = [...state.taxObligations];
