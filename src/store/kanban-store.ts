@@ -50,7 +50,7 @@ interface KanbanState {
   restoreRoute: (id: string) => void;
   permanentlyDeleteRoute: (id: string) => void;
   // budgets
-  addBudget: (budgetData: Omit<Budget, 'id' | 'createdAt'>) => void;
+  addBudget: (budgetData: Omit<Budget, 'createdAt'> | Omit<Budget, 'id' | 'createdAt'>) => string | void;
   updateBudget: (id: string, data: Partial<Budget>) => void;
   deleteBudget: (id: string) => void; // Soft delete
   restoreBudget: (id: string) => void;
@@ -129,6 +129,11 @@ export const useKanbanStore = create<KanbanState>()(
               cards: res.data.cards || [],
               members: res.data.members || [],
               labels: res.data.labels && res.data.labels.length > 0 ? res.data.labels : [...DEFAULT_LABELS],
+              companies: res.data.companies || [],
+              mainCompanies: res.data.mainCompanies || [],
+              routes: res.data.routes || [],
+              budgets: res.data.budgets || [],
+              notifications: res.data.notifications || [],
             });
           }
         } catch (error) {
@@ -364,7 +369,8 @@ export const useKanbanStore = create<KanbanState>()(
 
       // Budgets
       addBudget: (budgetData) => {
-        const id = uid();
+        // If the UI passes an ID, use it to avoid async sync bugs, otherwise generate
+        const id = (budgetData as any).id || uid();
         const createdAt = new Date().toISOString();
         const currentUser = useAuthStore.getState().currentUser;
 
@@ -384,6 +390,8 @@ export const useKanbanStore = create<KanbanState>()(
         });
 
         api.post('/kanban/budgets', { ...budgetData, userId: currentUser?.id, id, createdAt }).catch(console.error);
+        
+        return id;
       },
       updateBudget: (id, data) => {
         set(s => {
