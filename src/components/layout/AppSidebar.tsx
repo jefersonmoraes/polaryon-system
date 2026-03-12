@@ -62,12 +62,12 @@ const AppSidebar = () => {
       kunbunFolderId = location.pathname.split('/')[2];
     } else if (location.pathname.startsWith('/board/')) {
       const boardId = location.pathname.split('/')[2];
-      const board = boards.find(b => b.id === boardId);
+      const board = boards.find(b => b.id === boardId && !b.trashed && !b.archived);
       if (board) kunbunFolderId = board.folderId;
     }
   }
-  const activeKunbunFolder = folders.find(f => f.id === kunbunFolderId);
-  const activeKunbunBoards = boards.filter(b => b.folderId === kunbunFolderId);
+  const activeKunbunFolder = folders.find(f => f.id === kunbunFolderId && !f.trashed && !f.archived);
+  const activeKunbunBoards = boards.filter(b => b.folderId === kunbunFolderId && !b.trashed && !b.archived);
 
   return (
     <>
@@ -241,24 +241,49 @@ const AppSidebar = () => {
             <div className="flex flex-col gap-1">
               {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Links Úteis</span>}
               
-              <a href="https://www.gov.br/compras/pt-br/sistemas/sicaf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="SICAF">
+              <a href="https://www3.comprasnet.gov.br/sicaf-web/index.jsf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="SICAF">
                 <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="SICAF" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
                 {!isCollapsed && <span>SICAF</span>}
               </a>
 
-              <a href="https://www.gov.br/compras/pt-br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Compras.gov">
+              <a href="https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras?compra=" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Compras.gov">
                 <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="Compras.gov" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
                 {!isCollapsed && <span>Compras.gov</span>}
               </a>
 
-              <a href="https://pncp.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="PNCP">
+              <a href="https://pncp.gov.br/app/editais?q=&status=recebendo_proposta&pagina=1" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="PNCP">
                 <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://pncp.gov.br" alt="PNCP" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
                 {!isCollapsed && <span>Portal PNCP</span>}
               </a>
 
-              <a href="https://capag.tesouro.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="CAPAG">
+              <a href="https://www.tesourotransparente.gov.br/temas/estados-e-municipios/capacidade-de-pagamento-capag" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="CAPAG">
                 <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://tesourotransparente.gov.br" alt="CAPAG" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
                 {!isCollapsed && <span>CAPAG</span>}
+              </a>
+
+              <a href="https://paineldeprecos.planejamento.gov.br/analise-materiais" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Preços">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldeprecos.planejamento.gov.br" alt="Painel de Preços" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                {!isCollapsed && <span>Painel de Preços</span>}
+              </a>
+
+              <a href="https://paineldecompras.economia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Compras">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldecompras.economia.gov.br" alt="Painel de Compras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                {!isCollapsed && <span>Painel de Compras</span>}
+              </a>
+
+              <a href="https://portaldatransparencia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Portal da Transparência">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://portaldatransparencia.gov.br" alt="Portal da Transparência" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                {!isCollapsed && <span>Transparência</span>}
+              </a>
+
+              <a href="https://prefeiturasdobrasil.org/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Prefeituras do Brasil">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://prefeiturasdobrasil.org" alt="Prefeituras do Brasil" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                {!isCollapsed && <span>Prefeituras Br</span>}
+              </a>
+
+              <a href="https://www.transvias.com.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Transportadoras">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.transvias.com.br" alt="Transportadoras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                {!isCollapsed && <span>Transportadoras</span>}
               </a>
             </div>
           </div>

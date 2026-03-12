@@ -59,10 +59,12 @@ interface KanbanState {
   addFolder: (name: string, color?: string, sideImage?: string) => void;
   updateFolder: (id: string, data: Partial<Folder>) => void;
   deleteFolder: (id: string) => void;
+  permanentlyDeleteFolder: (id: string) => void;
   // boards
   addBoard: (folderId: string, name: string, color?: string) => void;
   updateBoard: (id: string, data: Partial<Board>) => void;
   deleteBoard: (id: string) => void;
+  permanentlyDeleteBoard: (id: string) => void;
   // lists
   addList: (boardId: string, title: string) => void;
   updateList: (id: string, data: Partial<KanbanList>) => void;
@@ -475,7 +477,7 @@ export const useKanbanStore = create<KanbanState>()(
               userName: currentUser.name,
               action: 'EXCLUIR',
               entity: 'QUADRO/LISTA',
-              details: `Excluiu permanentemente a pasta "${target.name}"`
+              details: `Moveu para a lixeira a pasta "${target.name}"`
             });
           }
 
@@ -489,6 +491,31 @@ export const useKanbanStore = create<KanbanState>()(
           };
         });
         api.put(`/kanban/folders/${id}`, { trashed: true }).catch(console.error);
+      },
+      permanentlyDeleteFolder: (id) => {
+        set(s => {
+          const currentUser = useAuthStore.getState().currentUser;
+          const target = s.folders.find(f => f.id === id);
+          if (currentUser && target) {
+            useAuditStore.getState().addLog({
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: 'EXCLUIR',
+              entity: 'QUADRO/LISTA',
+              details: `Excluiu permanentemente a pasta "${target.name}"`
+            });
+          }
+
+          const boardIds = s.boards.filter(b => b.folderId === id).map(b => b.id);
+          const listIds = s.lists.filter(l => boardIds.includes(l.boardId)).map(l => l.id);
+          return {
+            folders: s.folders.filter(f => f.id !== id),
+            boards: s.boards.filter(b => !boardIds.includes(b.id)),
+            lists: s.lists.filter(l => !listIds.includes(l.id)),
+            cards: s.cards.filter(c => !listIds.includes(c.listId)),
+          };
+        });
+        api.delete(`/kanban/folders/${id}`).catch(console.error);
       },
 
       // Boards
@@ -523,7 +550,7 @@ export const useKanbanStore = create<KanbanState>()(
               userName: currentUser.name,
               action: 'EXCLUIR',
               entity: 'QUADRO/LISTA',
-              details: `Excluiu permanentemente o quadro "${target.name}"`
+              details: `Moveu para a lixeira o quadro "${target.name}"`
             });
           }
 
@@ -535,6 +562,29 @@ export const useKanbanStore = create<KanbanState>()(
           };
         });
         api.put(`/kanban/boards/${id}`, { trashed: true }).catch(console.error);
+      },
+      permanentlyDeleteBoard: (id) => {
+        set(s => {
+          const currentUser = useAuthStore.getState().currentUser;
+          const target = s.boards.find(b => b.id === id);
+          if (currentUser && target) {
+            useAuditStore.getState().addLog({
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: 'EXCLUIR',
+              entity: 'QUADRO/LISTA',
+              details: `Excluiu permanentemente o quadro "${target.name}"`
+            });
+          }
+
+          const listIds = s.lists.filter(l => l.boardId === id).map(l => l.id);
+          return {
+            boards: s.boards.filter(b => b.id !== id),
+            lists: s.lists.filter(l => l.boardId !== id),
+            cards: s.cards.filter(c => !listIds.includes(c.listId)),
+          };
+        });
+        api.delete(`/kanban/boards/${id}`).catch(console.error);
       },
 
       // Lists

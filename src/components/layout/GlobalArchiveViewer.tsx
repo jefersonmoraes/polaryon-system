@@ -10,7 +10,7 @@ interface Props {
 }
 
 const GlobalArchiveViewer = ({ type, onClose, initialTab }: Props) => {
-    const { folders, boards, budgets, updateFolder, deleteFolder, updateBoard, deleteBoard, restoreBudget, permanentlyDeleteBudget, updateBudget } = useKanbanStore();
+    const { folders, boards, budgets, updateFolder, permanentlyDeleteFolder, updateBoard, permanentlyDeleteBoard, restoreBudget, permanentlyDeleteBudget, updateBudget } = useKanbanStore();
     const [tab, setTab] = useState<'folders' | 'boards' | 'budgets'>(initialTab || 'folders');
 
     const filteredFolders = folders.filter(f => (type === 'archived' ? f.archived && !f.trashed : f.trashed));
@@ -65,7 +65,7 @@ const GlobalArchiveViewer = ({ type, onClose, initialTab }: Props) => {
                                                 <Undo2 className="h-3.5 w-3.5" /> Restaurar
                                             </button>
                                             {type === 'trashed' && (
-                                                <button onClick={() => deleteFolder(folder.id)}
+                                                <button onClick={() => permanentlyDeleteFolder(folder.id)}
                                                     className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
@@ -96,7 +96,7 @@ const GlobalArchiveViewer = ({ type, onClose, initialTab }: Props) => {
                                                 <Undo2 className="h-3.5 w-3.5" /> Restaurar
                                             </button>
                                             {type === 'trashed' && (
-                                                <button onClick={() => deleteBoard(board.id)}
+                                                <button onClick={() => permanentlyDeleteBoard(board.id)}
                                                     className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
