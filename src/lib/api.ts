@@ -15,7 +15,7 @@ api.interceptors.request.use(
     (config) => {
         // Retrieve token from whatever auth store mechanism you are using
         // It could be sessionStorage or zustand. We'll read from sessionStorage to be safe.
-        const authDataStr = sessionStorage.getItem('kunbun-auth-storage') || localStorage.getItem('kunbun-auth-storage');
+        const authDataStr = sessionStorage.getItem('polaryon-auth-v2') || localStorage.getItem('polaryon-auth-v2');
         if (authDataStr) {
             try {
                 const state = JSON.parse(authDataStr).state;
@@ -23,7 +23,7 @@ api.interceptors.request.use(
                     config.headers.Authorization = `Bearer ${state.jwtToken}`;
                 }
             } catch (e) {
-                console.error("Error parsing kunbun-auth-storage", e);
+                console.error("Error parsing polaryon-auth-v2", e);
             }
         }
         return config;

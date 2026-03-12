@@ -906,11 +906,12 @@ export const useKanbanStore = create<KanbanState>()(
       },
     }),
     { 
-      name: 'jj-kanban-store',
+      name: 'jj-kanban-v2', // bumped version to wipe corrupted localstorage with large images
       partialize: (state) => ({
         ...state,
         folders: state.folders.map(f => ({ ...f, sideImage: undefined })),
-        boards: state.boards.map(b => ({ ...b, backgroundImage: undefined }))
+        boards: state.boards.map(b => ({ ...b, backgroundImage: undefined })),
+        members: [] // Drop members from local storage to prevent QuotaExceededError and ensure fresh sync
       })
     }
   )
@@ -930,17 +931,20 @@ const initTheme = () => {
 };
 initTheme();
 
-// Auto-sync Assignees from Global Auth Store
+// Syncing the Current User's profile updates into the Kanban members instantly without overriding everyone else
 useAuthStore.subscribe((state) => {
-  const activeMembers = state.systemUsers
-    .filter(u => u.status === 'active')
-    .map(u => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      avatar: u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`,
-      status: 'active' as const
-    }));
-  useKanbanStore.setState({ members: activeMembers });
+  const currentUser = state.currentUser;
+  if (currentUser) {
+    const kanbanMembers = useKanbanStore.getState().members;
+    const existing = kanbanMembers.find(m => m.id === currentUser.id);
+    if (existing && (existing.name !== currentUser.name || existing.avatar !== currentUser.photoURL)) {
+        useKanbanStore.setState({
+            members: kanbanMembers.map(m => m.id === currentUser.id ? {
+                ...m,
+                name: currentUser.name,
+                avatar: currentUser.photoURL || m.avatar
+            } : m)
+        });
+    }
+  }
 });

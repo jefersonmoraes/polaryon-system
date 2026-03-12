@@ -284,8 +284,12 @@ export const useAuthStore = create<AuthState>()(
             }
         }),
         {
-            name: 'kunbun-auth-storage',
+            name: 'polaryon-auth-v2', // bumped to force users out of the QuotaExceededError poisoned state
             storage: createJSONStorage(() => authStorage),
+            partialize: (state) => ({
+                 ...state,
+                 systemUsers: [] // Drop huge arrays from local storage
+            })
         }
     )
 );
