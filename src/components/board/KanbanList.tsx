@@ -187,25 +187,28 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
                     <Zap className="h-3 w-3" /> Automação
                   </button>
                   <hr className="my-1 border-border" />
-                  <ConfirmAction
-                    title="Arquivar Lista?"
-                    description="A lista será arquivada e não aparecerá no board princial, mas pode ser restaurada acessando os itens arquivados."
-                    onConfirm={() => { updateList(list.id, { archived: true }); setShowMenu(false); }}
+                  <button
+                    onClick={() => {
+                      if (window.confirm("A lista será arquivada e não aparecerá no board princial, mas pode ser restaurada acessando os itens arquivados.")) {
+                        updateList(list.id, { archived: true });
+                        setShowMenu(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors text-muted-foreground"
                   >
-                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary transition-colors text-muted-foreground">
-                      <Archive className="h-3 w-3" /> Arquivar lista
-                    </button>
-                  </ConfirmAction>
-                  <ConfirmAction
-                    title="Mover para a Lixeira?"
-                    description="A lista será movida para a lixeira. Você poderá restaurá-la mais tarde na visualização da lixeira."
-                    onConfirm={() => { updateList(list.id, { trashed: true }); setShowMenu(false); }}
-                    destructive
+                    <Archive className="h-3 w-3" /> Arquivar lista
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("A lista será movida para a lixeira. Você poderá restaurá-la mais tarde na visualização da lixeira.")) {
+                        updateList(list.id, { trashed: true });
+                        setShowMenu(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
                   >
-                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors">
-                      <Trash2 className="h-3 w-3" /> Enviar para lixeira
-                    </button>
-                  </ConfirmAction>
+                    <Trash2 className="h-3 w-3" /> Enviar para lixeira
+                  </button>
                 </div>
               </>
             )}

@@ -108,8 +108,8 @@ const FolderPage = () => {
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {folderBoards.map((board, i) => {
-            const boardLists = lists.filter(l => l.boardId === board.id);
-            const boardCards = cards.filter(c => boardLists.some(l => l.id === c.listId));
+            const boardLists = lists.filter(l => l.boardId === board.id && !l.trashed && !l.archived);
+            const boardCards = cards.filter(c => boardLists.some(l => l.id === c.listId) && !c.trashed && !c.archived);
             return (
               <motion.div key={board.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
                 <div className="relative group">

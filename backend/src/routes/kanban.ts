@@ -40,6 +40,14 @@ router.post('/folders', async (req: Request, res: Response) => {
 router.put('/folders/:id', async (req: Request, res: Response) => {
     try {
         const { boards, ...data } = req.body;
+        
+        console.log(`[Folder Update] ID: ${req.params.id}`);
+        if (data.sideImage) {
+            console.log(`[Folder Update] Received sideImage of length: ${data.sideImage.length}`);
+        } else {
+            console.log(`[Folder Update] No sideImage received in payload.`);
+        }
+
         const folder = await prisma.folder.update({ where: { id: req.params.id as string }, data });
         res.json(folder);
     } catch (e: any) {
