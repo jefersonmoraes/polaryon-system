@@ -65,13 +65,15 @@ router.post('/google', async (req: Request, res: Response) => {
         }
 
         // 3. Issue our own internal JWT Session Token
+        // SECURITY/STABILITY: NEVER include 'picture' (which can be a 10KB+ Base64 string) in the JWT!
+        // Nginx has a default 8KB header limit. If the JWT exceeds 8KB, Nginx will return 400 Bad Request
+        // and instantly crash all user syncing.
         const sessionToken = jwt.sign(
             {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                name: user.name,
-                picture: user.picture
+                name: user.name
             },
             JWT_SECRET,
             { expiresIn: '7d' } // 7 Dias logado
