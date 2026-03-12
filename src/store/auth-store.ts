@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { useAuditStore } from './audit-store';
+import api from '@/lib/api';
 
 export type UserRole = 'ADMIN' | 'USER' | 'CONTADOR';
 
@@ -182,6 +183,12 @@ export const useAuthStore = create<AuthState>()(
                         entity: 'USUÁRIO',
                         details: `Atualizou o próprio perfil`
                     });
+
+                    // Fire and forget API call to persist the profile changes to the backend
+                    api.put(`/users/${state.currentUser.id}/profile`, {
+                        name: safeUpdates.name,
+                        picture: safeUpdates.photoURL
+                    }).catch(err => console.error("Failed to update profile to backend:", err));
 
                     return {
                         currentUser: updatedUser,

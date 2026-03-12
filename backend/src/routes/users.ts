@@ -33,7 +33,47 @@ const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
     }
 };
 
-// Apply middleware to all routes in this router
+// Apply middleware to all routes in this router EXCEPT profile
+// Wait, router.use applies to all routes defined AFTER it.
+// So let's define the profile route here first.
+
+// PUT /api/users/:id/profile - Update own user profile
+router.put('/:id/profile', async (req: AuthRequest, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token missing or invalid' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const id = req.params.id as string;
+        
+        // Prevent updating other users' profiles unless admin
+        if (decoded.id !== id && decoded.role !== 'admin') {
+            return res.status(403).json({ error: 'Você só pode alterar seu próprio perfil.' });
+        }
+
+        const { name, picture } = req.body;
+        
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (picture !== undefined) updateData.picture = picture;
+
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: updateData,
+            // @ts-ignore
+            select: { id: true, email: true, name: true, picture: true, role: true, permissions: true }
+        });
+        
+        res.status(200).json(updatedUser);
+    } catch (err) {
+        console.error('Error updating profile:', err);
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+});
+
 router.use(requireAdmin);
 
 // GET /api/users - List all users
