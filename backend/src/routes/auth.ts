@@ -60,7 +60,18 @@ router.post('/google', async (req: Request, res: Response) => {
             // Auto-activate pending user upon first Google login (only if they were registered by admin)
             user = await prisma.user.update({
                 where: { email },
-                data: { role: 'default', name: name || user.name, picture: picture || user.picture, googleId }
+                data: { role: 'user', name: name || user.name, picture: picture || user.picture, googleId }
+            });
+        } else {
+            // STRICT GOOGLE SYNC: Always overwrite the local DB name and picture with Google's payload
+            // This guarantees no massive manual base64 images remain and data is fresh
+            user = await prisma.user.update({
+                where: { email },
+                data: {
+                    name: name || user.name,
+                    picture: picture || user.picture,
+                    googleId
+                }
             });
         }
 

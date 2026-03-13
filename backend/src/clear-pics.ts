@@ -9,16 +9,15 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-    console.log("Connecting to production DB to check large pictures...");
-    const users = await prisma.user.findMany();
+    console.log("Connecting to production DB to clear all manual pictures...");
     
-    for (const user of users) {
-        if (user.picture && user.picture.length > 100) {
-            console.log(`User ${user.email} has picture of length: ${user.picture.length}`);
-        } else {
-            console.log(`User ${user.email} has no picture or very short one: ${user.picture ? user.picture.length : 0}`);
+    const result = await prisma.user.updateMany({
+        data: {
+            picture: ''
         }
-    }
+    });
+
+    console.log(`Successfully cleared profile pictures for ${result.count} users. They will be repopulated from Google on next login.`);
 }
 
 main()
