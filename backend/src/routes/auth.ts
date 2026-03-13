@@ -65,13 +65,13 @@ router.post('/google', async (req: Request, res: Response) => {
                 data: { role: 'user', name: name || user.name, picture: picture || user.picture, googleId }
             });
         } else {
-            // REVERT TO MANUAL PROFILES: Only use Google data if the local DB is empty.
-            // This allows the user to manually edit their profile picture and name in the UI.
+            // STRICT GOOGLE SYNC: Always overwrite the local DB name and picture with Google's payload
+            // This guarantees no massive manual base64 images remain and data is fresh
             user = await prisma.user.update({
                 where: { email },
                 data: {
-                    name: user.name || name || email.split('@')[0], // Priority: 1. Manual DB edit, 2. Google Payload, 3. Email prefix
-                    picture: user.picture || picture,
+                    name: name || user.name,
+                    picture: picture || user.picture,
                     googleId
                 }
             });

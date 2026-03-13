@@ -131,8 +131,8 @@ export default function LoginPage() {
             const systemUser = {
                 id: user.id || existingSystemUser?.id || crypto.randomUUID(),
                 email: user.email,
-                name: existingSystemUser?.name || user.name || user.email.split('@')[0], 
-                photoURL: existingSystemUser?.photoURL || user.picture, 
+                name: user.name || existingSystemUser?.name, // Use freshest name from DB/Google
+                photoURL: user.picture || existingSystemUser?.photoURL, // Use freshest picture from DB/Google
                 role: user.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : (user.role.toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER'),
                 permissions: user.role.toUpperCase() === 'ADMIN'
                     ? { canView: true, canEdit: true, canDownload: true }
