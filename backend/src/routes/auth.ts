@@ -29,6 +29,8 @@ router.post('/google', async (req: Request, res: Response) => {
         if (!payload || !payload.email) {
             return res.status(401).json({ error: 'Invalid Google Token Payload' });
         }
+        
+        console.log("GOOGLE PAYLOAD RECEIVED:", JSON.stringify(payload, null, 2));
 
         const { email, name, picture, sub: googleId } = payload;
 
