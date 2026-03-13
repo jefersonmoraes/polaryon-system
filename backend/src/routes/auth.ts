@@ -12,20 +12,33 @@ const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_dev_7281';
 
 router.post('/google', async (req: Request, res: Response) => {
-    const { credential } = req.body;
+    const { credential, accessToken } = req.body;
 
-    if (!credential) {
-        return res.status(400).json({ error: 'Token (credential) missing from request body' });
+    if (!credential && !accessToken) {
+        return res.status(400).json({ error: 'Token missing from request body' });
     }
 
     try {
-        // 1. Verify the Google Token
-        const ticket = await client.verifyIdToken({
-            idToken: credential,
-            audience: GOOGLE_CLIENT_ID,
-        });
+        let payload: any;
 
-        const payload = ticket.getPayload();
+        if (accessToken) {
+            // Force fetch HD Profile from Google UserInfo API using Access Token
+            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            if (!response.ok) {
+                 return res.status(401).json({ error: 'Invalid Google Access Token' });
+            }
+            payload = await response.json();
+        } else {
+            // 1. Verify the Google Token (Legacy fallback)
+            const ticket = await client.verifyIdToken({
+                idToken: credential,
+                audience: GOOGLE_CLIENT_ID,
+            });
+            payload = ticket.getPayload();
+        }
+
         if (!payload || !payload.email) {
             return res.status(401).json({ error: 'Invalid Google Token Payload' });
         }

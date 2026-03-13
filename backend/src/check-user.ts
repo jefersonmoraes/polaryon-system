@@ -9,16 +9,16 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-    const user = await prisma.user.findUnique({
-        where: { email: 'jefersonmoraes72@gmail.com' }
+    const users = await prisma.user.findMany({
+        where: { email: { in: ['jefersonmoraes72@gmail.com', 'jjcorporation2018@gmail.com'] } }
     });
-    console.log("Database user object:", JSON.stringify(user ? { ...user, picture: user.picture ? `[BASE64 SIZE: ${user.picture.length}]` : null } : null, null, 2));
+    console.log("Database user objects:", JSON.stringify(users.map(user => ({ ...user, picture: user.picture ? `[BASE64 SIZE: ${user.picture.length}]` : null })), null, 2));
     
     // Also simulate the exact query from kanban/sync
-    const users = await prisma.user.findMany({
+    const allUsers = await prisma.user.findMany({
         where: { role: { notIn: ['disabled', 'pending'] } }
     });
-    console.log("Users in kanban sync:", users.map(u => u.email).join(', '));
+    console.log("Users in kanban sync:", allUsers.map(u => u.email).join(', '));
 }
 
 main().finally(() => prisma.$disconnect());
