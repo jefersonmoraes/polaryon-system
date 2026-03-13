@@ -90,8 +90,18 @@ export const useAuthStore = create<AuthState>()(
             jwtToken: null,
 
             loginWithGoogle: (userData: SystemUser, token: string) => {
+                const { systemUsers } = get();
+                const existingIndex = systemUsers.findIndex(u => u.email.toLowerCase() === userData.email.toLowerCase());
+                let newSystemUsers = [...systemUsers];
+                if (existingIndex >= 0) {
+                    newSystemUsers[existingIndex] = { ...newSystemUsers[existingIndex], ...userData };
+                } else {
+                    newSystemUsers.push(userData);
+                }
+
                 set({
                     currentUser: userData,
+                    systemUsers: newSystemUsers,
                     isAuthenticated: true,
                     jwtToken: token
                 });
