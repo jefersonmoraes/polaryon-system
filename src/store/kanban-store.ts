@@ -155,6 +155,22 @@ export const useKanbanStore = create<KanbanState>()(
                 useKanbanStore.setState(s => ({
                     cards: s.cards.map(c => c.id === payload.id ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
                 }));
+            } else if (type === 'REORDER_CARDS') {
+                useKanbanStore.setState(s => ({
+                    cards: s.cards.map(c => {
+                        if (c.listId !== payload.listId) return c;
+                        const idx = payload.cardIds.indexOf(c.id);
+                        return idx >= 0 ? { ...c, position: idx } : c;
+                    })
+                }));
+            } else if (type === 'REORDER_LISTS') {
+                useKanbanStore.setState(s => ({
+                    lists: s.lists.map(l => {
+                        if (l.boardId !== payload.boardId) return l;
+                        const idx = payload.listIds.indexOf(l.id);
+                        return idx >= 0 ? { ...l, position: idx } : l;
+                    })
+                }));
             }
         });
       },
@@ -686,13 +702,16 @@ export const useKanbanStore = create<KanbanState>()(
         });
         api.put(`/kanban/lists/${id}`, { trashed: true }).catch(console.error);
       },
-      reorderLists: (boardId, listIds) => set(s => ({
-        lists: s.lists.map(l => {
-          if (l.boardId !== boardId) return l;
-          const idx = listIds.indexOf(l.id);
-          return idx >= 0 ? { ...l, position: idx } : l;
-        })
-      })),
+      reorderLists: (boardId, listIds) => {
+        set(s => ({
+          lists: s.lists.map(l => {
+            if (l.boardId !== boardId) return l;
+            const idx = listIds.indexOf(l.id);
+            return idx >= 0 ? { ...l, position: idx } : l;
+          })
+        }));
+        socketService.emit('kanban_action', { type: 'REORDER_LISTS', payload: { boardId, listIds } });
+      },
 
       // Cards
       addCard: (listId, title) => {
@@ -839,13 +858,16 @@ export const useKanbanStore = create<KanbanState>()(
         socketService.emit('kanban_action', { type: 'MOVE_CARD', payload: { cardId, toListId, newPosition } });
         api.put(`/kanban/cards/${cardId}`, { listId: toListId, position: newPosition }).catch(console.error);
       },
-      reorderCards: (listId, cardIds) => set(s => ({
-        cards: s.cards.map(c => {
-          if (c.listId !== listId) return c;
-          const idx = cardIds.indexOf(c.id);
-          return idx >= 0 ? { ...c, position: idx } : c;
-        })
-      })),
+      reorderCards: (listId, cardIds) => {
+        set(s => ({
+          cards: s.cards.map(c => {
+            if (c.listId !== listId) return c;
+            const idx = cardIds.indexOf(c.id);
+            return idx >= 0 ? { ...c, position: idx } : c;
+          })
+        }));
+        socketService.emit('kanban_action', { type: 'REORDER_CARDS', payload: { listId, cardIds } });
+      },
       cleanupTrash: () => set(s => {
         const threshold = new Date();
         threshold.setDate(threshold.getDate() - 15);
@@ -1036,5 +1058,21 @@ socketService.on('kanban_sync', (action: any) => {
          useKanbanStore.setState(s => ({
             cards: s.cards.map(c => c.id === payload.id ? { ...c, trashed: true, trashedAt: new Date().toISOString() } : c),
          }));
+    } else if (type === 'REORDER_CARDS') {
+        useKanbanStore.setState(s => ({
+            cards: s.cards.map(c => {
+                if (c.listId !== payload.listId) return c;
+                const idx = payload.cardIds.indexOf(c.id);
+                return idx >= 0 ? { ...c, position: idx } : c;
+            })
+        }));
+    } else if (type === 'REORDER_LISTS') {
+        useKanbanStore.setState(s => ({
+            lists: s.lists.map(l => {
+                if (l.boardId !== payload.boardId) return l;
+                const idx = payload.listIds.indexOf(l.id);
+                return idx >= 0 ? { ...l, position: idx } : l;
+            })
+        }));
     }
 });
