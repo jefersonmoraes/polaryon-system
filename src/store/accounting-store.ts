@@ -154,7 +154,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/entry', newEntry);
                     set(s => ({ entries: [...s.entries, newEntry] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_ENTRY', payload: newEntry });
                 } catch (error) { console.error(error); }
             },
 
@@ -163,7 +162,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/entry/${id}`, data);
                     set(s => ({ entries: s.entries.map(e => e.id === id ? { ...e, ...data, updatedAt: now } : e) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_ENTRY', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -172,7 +170,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/entry/${id}`, { trashed: true, trashedAt: now });
                     set(s => ({ entries: s.entries.map(e => e.id === id ? { ...e, trashedAt: now, trashed: true, updatedAt: now } : e) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_ENTRY', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -181,7 +178,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/entry/${id}`, { trashed: false, trashedAt: null });
                     set(s => ({ entries: s.entries.map(e => e.id === id ? { ...e, trashedAt: undefined, trashed: false, updatedAt: now } : e) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'RESTORE_ENTRY', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -190,7 +186,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/category', newCat);
                     set(s => ({ categories: [...s.categories, newCat] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_CATEGORY', payload: newCat });
                 } catch (error) { console.error(error); }
             },
 
@@ -198,7 +193,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/category/${id}`, data);
                     set(s => ({ categories: s.categories.map(c => c.id === id ? { ...c, ...data } : c) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_CATEGORY', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -206,7 +200,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.delete(`/accounting/category/${id}`);
                     set(s => ({ categories: s.categories.filter(c => c.id !== id) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_CATEGORY', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -215,7 +208,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/bankAccount', newAcc);
                     set(s => ({ bankAccounts: [...s.bankAccounts, newAcc] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_BANK_ACCOUNT', payload: newAcc });
                 } catch (error) { console.error(error); }
             },
 
@@ -223,7 +215,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/bankAccount/${id}`, data);
                     set(s => ({ bankAccounts: s.bankAccounts.map(a => a.id === id ? { ...a, ...data } : a) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_BANK_ACCOUNT', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -231,7 +222,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.delete(`/accounting/bankAccount/${id}`);
                     set(s => ({ bankAccounts: s.bankAccounts.filter(a => a.id !== id) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_BANK_ACCOUNT', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -240,7 +230,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/invoice', newInv);
                     set(s => ({ invoices: [...s.invoices, newInv as Invoice] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_INVOICE', payload: newInv });
                 } catch (error) { console.error(error); }
             },
 
@@ -248,7 +237,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/invoice/${id}`, data);
                     set(s => ({ invoices: s.invoices.map(i => i.id === id ? { ...i, ...data } : i) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_INVOICE', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -257,7 +245,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/invoice/${id}`, { trashed: true, trashedAt: now });
                     set(s => ({ invoices: s.invoices.map(i => i.id === id ? { ...i, trashedAt: now, trashed: true } : i) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_INVOICE', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -265,7 +252,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/invoice/${id}`, { trashed: false, trashedAt: null });
                     set(s => ({ invoices: s.invoices.map(i => i.id === id ? { ...i, trashedAt: undefined, trashed: false } : i) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'RESTORE_INVOICE', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -274,7 +260,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/bankTransaction', newTx);
                     set(s => ({ bankTransactions: [...s.bankTransactions, newTx] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_BANK_TRANSACTION', payload: newTx });
                 } catch (error) { console.error(error); }
             },
 
@@ -291,7 +276,6 @@ export const useAccountingStore = create<AccountingState>()(
                             entries: s.entries.map(e => e.id === entryId ? { ...e, status: 'paid', updatedAt: new Date().toISOString() } : e)
                         };
                     });
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'RECONCILE', payload: { txId, entryId } });
                 } catch (error) { console.error(error); }
             },
 
@@ -303,19 +287,17 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post(`/accounting/settings/${companyId}`, data);
                     set(s => ({ settings: { ...s.settings, [companyId]: { ...s.settings[companyId], ...data, companyId } } }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_SETTINGS', payload: { companyId, data } });
                 } catch (error) { console.error(error); }
             },
 
             payTax: async (id) => {
-                socketService.emit('system_action', { store: 'ACCOUNTING', type: 'PAY_TAX', payload: { id } });
+                // No direct state change here, action is handled by backend
             },
 
             updateTaxObligation: async (id, data) => {
                 try {
                     await api.put(`/accounting/taxObligation/${id}`, data);
                     set(s => ({ taxObligations: s.taxObligations.map(t => t.id === id ? { ...t, ...data } : t) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_TAX', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -324,7 +306,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/taxObligation/${id}`, { trashed: true, trashedAt: now });
                     set(s => ({ taxObligations: s.taxObligations.map(t => t.id === id ? { ...t, trashedAt: now, trashed: true } : t) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_TAX', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -332,7 +313,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/taxObligation/${id}`, { trashed: false, trashedAt: null });
                     set(s => ({ taxObligations: s.taxObligations.map(t => t.id === id ? { ...t, trashedAt: undefined, trashed: false } : t) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'RESTORE_TAX', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -340,7 +320,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/taxObligation', tax);
                     set(s => ({ taxObligations: [tax, ...s.taxObligations] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_TAX', payload: tax });
                 } catch (error) { console.error(error); }
             },
 
@@ -349,7 +328,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/export', newExp);
                     set(s => ({ exports: [...s.exports, newExp] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_EXPORT', payload: newExp });
                 } catch (error) { console.error(error); }
             },
 
@@ -358,7 +336,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/export/${id}`, { trashed: true, trashedAt: now });
                     set(s => ({ exports: s.exports.map(e => e.id === id ? { ...e, trashedAt: now, trashed: true } : e) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_EXPORT', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -366,7 +343,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/export/${id}`, { trashed: false, trashedAt: null });
                     set(s => ({ exports: s.exports.map(e => e.id === id ? { ...e, trashedAt: undefined, trashed: false } : e) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'RESTORE_EXPORT', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 
@@ -375,7 +351,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.post('/accounting/recurringExpense', newExp);
                     set(s => ({ recurringExpenses: [...s.recurringExpenses, newExp] }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'ADD_RECURRING', payload: newExp });
                 } catch (error) { console.error(error); }
             },
 
@@ -383,7 +358,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.put(`/accounting/recurringExpense/${id}`, data);
                     set(s => ({ recurringExpenses: s.recurringExpenses.map(r => r.id === id ? { ...r, ...data } : r) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'UPDATE_RECURRING', payload: { id, data } });
                 } catch (error) { console.error(error); }
             },
 
@@ -391,7 +365,6 @@ export const useAccountingStore = create<AccountingState>()(
                 try {
                     await api.delete(`/accounting/recurringExpense/${id}`);
                     set(s => ({ recurringExpenses: s.recurringExpenses.filter(r => r.id !== id) }));
-                    socketService.emit('system_action', { store: 'ACCOUNTING', type: 'DELETE_RECURRING', payload: { id } });
                 } catch (error) { console.error(error); }
             },
 

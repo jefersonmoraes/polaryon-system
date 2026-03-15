@@ -7,6 +7,7 @@ import CardDetailPanel from '@/components/board/CardDetailPanel';
 import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { socketService } from '@/lib/socket';
 
 export default function GlobalCalendarPage() {
     const { cards, boards, lists, labels, budgets, googleEvents, setGoogleEvents: originalSetGoogleEvents } = useKanbanStore();
@@ -14,15 +15,8 @@ export default function GlobalCalendarPage() {
     const { taxObligations } = useAccountingStore();
     const { currentUser } = useAuthStore();
 
-    // Wrapper function for setGoogleEvents to include the broadcast logic
-    const setGoogleEvents = (events) => {
+    const setGoogleEvents = (events: any[]) => {
         originalSetGoogleEvents(events);
-        // Broadcast sync to others automatically
-        api.post('/kanban/socketproxy', { 
-            store: 'GOOGLE_CALENDAR', 
-            type: 'SYNC_COMPLETE', 
-            payload: events 
-        }).catch(() => {});
     };
 
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -56,16 +50,12 @@ export default function GlobalCalendarPage() {
         // Real-time listener: refresh if anything relevant changes in other users/tabs
         const handleSync = (action: any) => {
             if (action.store === 'GOOGLE_CALENDAR' && action.type === 'SYNC_COMPLETE') {
-                // Already handled by kanban-store, but we might want a local confirmation
+                // Re-reload if needed or just trust the store update
             } else if (['DOCUMENTS', 'ACCOUNTING', 'KANBAN'].includes(action.store)) {
-                // If any core data changes, we should probably check if dates changed
-                // For simplicity, let's just ensure the component re-renders if needed
-                // or just load Google events again in case an automation triggered on backend
-                setTimeout(loadGoogleEvents, 1000); // Small delay to let backend process
+                setTimeout(loadGoogleEvents, 1000);
             }
         };
 
-        const { socketService } = require('@/lib/socket');
         socketService.on('system_sync', handleSync);
         return () => socketService.off('system_sync', handleSync);
     }, []);
