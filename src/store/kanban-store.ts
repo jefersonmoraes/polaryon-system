@@ -254,6 +254,12 @@ export const useKanbanStore = create<KanbanState>()(
                 console.log('kanbanStore - Syncing Essential Docs:', res.data.essentialDocs.length);
                 useEssentialDocumentStore.getState().setModels(res.data.essentialDocs);
             }
+            if (res.data.certificates) {
+                console.log('kanbanStore - Syncing Certificates:', res.data.certificates.length);
+                // Import do store de certificados feito de forma dinâmica para evitar dependência circular
+                const { useCertificateStore } = await import('./certificate-store');
+                useCertificateStore.getState().setCertificates(res.data.certificates);
+            }
 
             set({
               folders: res.data.folders || [],

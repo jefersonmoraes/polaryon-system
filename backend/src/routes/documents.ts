@@ -21,11 +21,31 @@ router.get('/company', async (req: Request, res: Response) => {
 
 router.post('/company', async (req: Request, res: Response) => {
     try {
-        const data = req.body;
-        // Convert strings to Dates if necessary
-        if (data.issueDate) data.issueDate = new Date(data.issueDate);
-        if (data.expirationDate) data.expirationDate = new Date(data.expirationDate);
-        
+        const body = req.body;
+
+        // Filtra apenas os campos que existem no schema do Prisma
+        const data: any = {
+            title: body.title,
+            type: body.type,
+            status: body.status || 'valid',
+        };
+
+        if (body.id) data.id = body.id;
+        if (body.issueDate) data.issueDate = new Date(body.issueDate);
+        if (body.expirationDate) data.expirationDate = new Date(body.expirationDate);
+        if (body.link !== undefined) data.link = body.link;
+        if (body.description !== undefined) data.description = body.description;
+        if (body.observations !== undefined) data.observations = body.observations;
+        if (body.whereToIssue !== undefined) data.whereToIssue = body.whereToIssue;
+        if (body.fileData !== undefined) data.fileData = body.fileData;
+        if (body.fileName !== undefined) data.fileName = body.fileName;
+        if (body.fileSize !== undefined) data.fileSize = body.fileSize;
+        if (body.companyId !== undefined) data.companyId = body.companyId;
+        if (body.attachments !== undefined) data.attachments = body.attachments;
+        if (body.trashed !== undefined) data.trashed = body.trashed;
+        if (body.trashedAt !== undefined) data.trashedAt = body.trashedAt ? new Date(body.trashedAt) : null;
+        if (body.createdAt) data.createdAt = new Date(body.createdAt);
+
         const doc = await prisma.companyDocument.create({ data });
         res.json(doc);
     } catch (e: any) {
@@ -36,9 +56,25 @@ router.post('/company', async (req: Request, res: Response) => {
 
 router.put('/company/:id', async (req: Request, res: Response) => {
     try {
-        const data = req.body;
-        if (data.issueDate) data.issueDate = new Date(data.issueDate);
-        if (data.expirationDate) data.expirationDate = new Date(data.expirationDate);
+        const body = req.body;
+        const data: any = {};
+
+        if (body.title !== undefined) data.title = body.title;
+        if (body.type !== undefined) data.type = body.type;
+        if (body.status !== undefined) data.status = body.status;
+        if (body.issueDate !== undefined) data.issueDate = body.issueDate ? new Date(body.issueDate) : null;
+        if (body.expirationDate !== undefined) data.expirationDate = body.expirationDate ? new Date(body.expirationDate) : null;
+        if (body.link !== undefined) data.link = body.link;
+        if (body.description !== undefined) data.description = body.description;
+        if (body.observations !== undefined) data.observations = body.observations;
+        if (body.whereToIssue !== undefined) data.whereToIssue = body.whereToIssue;
+        if (body.fileData !== undefined) data.fileData = body.fileData;
+        if (body.fileName !== undefined) data.fileName = body.fileName;
+        if (body.fileSize !== undefined) data.fileSize = body.fileSize;
+        if (body.companyId !== undefined) data.companyId = body.companyId;
+        if (body.attachments !== undefined) data.attachments = body.attachments;
+        if (body.trashed !== undefined) data.trashed = body.trashed;
+        if (body.trashedAt !== undefined) data.trashedAt = body.trashedAt ? new Date(body.trashedAt) : null;
 
         const doc = await prisma.companyDocument.update({
             where: { id: req.params.id as string },

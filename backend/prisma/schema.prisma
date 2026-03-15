@@ -290,6 +290,7 @@ model CompanyDocument {
   attachments     Json?
 }
 
+
 model EssentialDocument {
   id           String    @id @default(uuid())
   title        String
@@ -299,4 +300,31 @@ model EssentialDocument {
   trashedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model Certificate {
+  id               String    @id @default(uuid())
+  type             Json      // Array of strings: ['Produto', 'Serviço']
+  suppliedItems    String    @db.Text
+  suppliedQuantity String?
+  kunbunCardId     String?
+  issuingAgency    String
+  executionDate    DateTime
+  description      String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  trashed          Boolean   @default(false)
+  trashedAt        DateTime?
+  attachments      CertificateAttachment[]
+}
+
+model CertificateAttachment {
+  id            String      @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  fileSlot      String      // 'Atestado', 'NF', etc.
+  fileName      String
+  fileSize      Int
+  fileData      String      @db.Text // Base64
+  createdAt     DateTime    @default(now())
 }

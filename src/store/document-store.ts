@@ -48,6 +48,7 @@ interface DocumentStore {
     permanentlyDeleteDocument: (id: string) => Promise<void>;
     validateDocumentStatuses: () => void;
     cleanOldTrash: () => void;
+    syncLocalDataToServer: () => Promise<void>;
     processSystemAction: (action: any) => void;
 }
 
@@ -213,6 +214,37 @@ export const useDocumentStore = create<DocumentStore>()(
                 const toDelete = state.documents.filter(doc => doc.trashedAt && new Date(doc.trashedAt) < thirtyDaysAgo);
                 
                 toDelete.forEach(doc => get().permanentlyDeleteDocument(doc.id));
+            },
+
+            syncLocalDataToServer: async () => {
+                const localDocs = get().documents;
+                if (localDocs.length === 0) return;
+
+                try {
+                    // Busca os docs existentes no servidor para não duplicar
+                    const serverRes = await api.get('/documents/company');
+                    const serverIds = new Set((serverRes.data || []).map((d: any) => d.id));
+                    const docsToSync = localDocs.filter(d => !serverIds.has(d.id) && !d.trashed);
+                    
+                    if (docsToSync.length === 0) {
+                        console.log("Documentos já sincronizados com o servidor.");
+                        return;
+                    }
+                    
+                    console.log(`Sincronizando ${docsToSync.length} documento(s) local(is) com o servidor...`);
+                    for (const doc of docsToSync) {
+                        try {
+                            await api.post('/documents/company', doc);
+                        } catch (e) {
+                            console.error("Falha ao sincronizar doc:", doc.id, e);
+                        }
+                    }
+                    // Após sincronizar, recarrega do servidor para garantir consistência
+                    const updatedRes = await api.get('/documents/company');
+                    if (updatedRes.data) set({ documents: updatedRes.data });
+                } catch (e) {
+                    console.error("Falha na sincronização local->servidor:", e);
+                }
             },
 
             processSystemAction: (action: any) => {

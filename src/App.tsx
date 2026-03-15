@@ -80,6 +80,10 @@ const AppContent = () => {
     cleanEssentialDocsTrash();
     cleanCertificateTrash();
 
+    // Trigger local-to-server sync for docs and certs
+    useDocumentStore.getState().syncLocalDataToServer().catch(console.error);
+    useCertificateStore.getState().syncLocalDataToServer().catch(console.error);
+
     fetchKanbanData();
   }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
 
