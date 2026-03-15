@@ -37,6 +37,18 @@ export const loadTokens = () => {
     return false;
 };
 
+// Auto-save tokens on refresh
+oauth2Client.on('tokens', (tokens) => {
+    try {
+        const existing = fs.existsSync(TOKEN_PATH) ? JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8')) : {};
+        const merged = { ...existing, ...tokens };
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(merged));
+        console.log("🔄 Google Tokens auto-refreshed and saved to disk.");
+    } catch (e) {
+        console.error("❌ Failed to auto-save refreshed tokens:", e);
+    }
+});
+
 // Initialize on start
 loadTokens();
 

@@ -164,17 +164,18 @@ export default function GlobalCalendarPage() {
 
     const safeDateObject = (dateParam: any) => {
         if (!dateParam) return new Date();
-        const str = typeof dateParam === 'string' ? dateParam : new Date(dateParam).toISOString();
-        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (!match) return new Date(dateParam);
-        const [, y, m, d] = match;
-        return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+        const d = new Date(dateParam);
+        // If it's a valid date, return it reset to 00:00:00 of the local day to match grid
+        if (isNaN(d.getTime())) return new Date();
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
     };
 
     // Find upcoming cards (next 7 days)
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset today for comparison
     const nextWeek = new Date(today);
     nextWeek.setDate(today.getDate() + 7);
+    nextWeek.setHours(23, 59, 59, 999);
 
     const upcomingCards = activeCards.filter(c => {
         if (!c.dueDate && (!c.milestones || c.milestones.length === 0)) return false;
@@ -277,11 +278,9 @@ export default function GlobalCalendarPage() {
 
                             const safeDateMatch = (dateParam: any, target: string) => {
                                 if (!dateParam) return false;
-                                const str = typeof dateParam === 'string' ? dateParam : new Date(dateParam).toISOString();
-                                const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                                if (!match) return new Date(dateParam).toDateString() === target;
-                                const [, y, m, d] = match;
-                                return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toDateString() === target;
+                                const d = new Date(dateParam);
+                                if (isNaN(d.getTime())) return false;
+                                return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toDateString() === target;
                             };
 
                             // Tasks

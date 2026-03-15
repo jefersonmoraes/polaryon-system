@@ -148,7 +148,7 @@ export const useKanbanStore = create<KanbanState>()(
         set({ pendingSocketActions: [] });
         
         pendingSocketActions.forEach(action => {
-            const { type, payload } = action;
+            const { type, payload, store } = action;
             if (type === 'ADD_CARD') {
                 useKanbanStore.setState(s => s.cards.find(c => c.id === payload.id) ? s : ({ cards: [...s.cards, payload] }));
             } else if (type === 'MOVE_CARD') {
@@ -235,6 +235,9 @@ export const useKanbanStore = create<KanbanState>()(
                 set(s => ({ lists: s.lists.map(l => l.id === payload.id ? { ...l, ...payload.data, updatedAt: new Date().toISOString() } : l) }));
             } else if (type === 'TRASH_LIST') {
                 set(s => ({ lists: s.lists.map(l => l.id === payload.id ? { ...l, trashed: true, trashedAt: new Date().toISOString() } : l) }));
+            } else if (store === 'GOOGLE_CALENDAR' && type === 'SYNC_COMPLETE') {
+                console.log('socket - Received Google Calendar Sync:', payload.length);
+                set({ googleEvents: payload });
             }
         });
       },
