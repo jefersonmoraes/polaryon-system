@@ -11,7 +11,18 @@ const prisma = new PrismaClient();
 router.get('/', async (req: Request, res: Response) => {
     try {
         const certs = await prisma.certificate.findMany({
-            include: { attachments: true },
+            include: { 
+                attachments: {
+                    select: {
+                        id: true,
+                        fileSlot: true,
+                        fileName: true,
+                        fileSize: true,
+                        certificateId: true
+                        // Excluindo fileData intencionalmente para evitar lentidão
+                    }
+                } 
+            },
             orderBy: { createdAt: 'desc' }
         });
         res.json(certs);
@@ -19,6 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
         res.status(500).json({ error: e.message });
     }
 });
+
 
 router.post('/', async (req: Request, res: Response) => {
     try {
@@ -83,6 +95,23 @@ router.delete('/:id', async (req: Request, res: Response) => {
             where: { id: req.params.id as string }
         });
         res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.get('/attachment/:attachmentId', async (req: Request, res: Response) => {
+    try {
+        const attachment = await prisma.certificateAttachment.findUnique({
+            where: { id: req.params.attachmentId },
+            select: { fileData: true }
+        });
+        
+        if (!attachment) {
+            return res.status(404).json({ error: 'Attachment not found' });
+        }
+        
+        res.json({ fileData: attachment.fileData });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }

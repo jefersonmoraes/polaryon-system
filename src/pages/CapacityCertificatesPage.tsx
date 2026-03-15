@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import CertificateForm from '@/components/documentation/CertificateForm';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
+import api from '@/lib/api';
 
 const CapacityCertificatesPage = () => {
     const { currentUser } = useAuthStore();
@@ -185,15 +186,32 @@ const CapacityCertificatesPage = () => {
                                                         <div className="flex flex-wrap gap-1.5 max-w-[250px]">
                                                             {cert.attachments && cert.attachments.length > 0 ? (
                                                                 cert.attachments.map(att => (
-                                                                    <a
+                                                                    <button
                                                                         key={att.id}
-                                                                        href={att.fileData}
-                                                                        download={att.fileName}
-                                                                        className="text-[10px] px-2 py-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded font-medium transition-colors flex items-center gap-1"
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                // Fetch file data dynamically since it's no longer sent in the initial load
+                                                                                const response = await api.get(`/certificates/attachment/${att.id}`);
+                                                                                if (response.data && response.data.fileData) {
+                                                                                    const link = document.createElement('a');
+                                                                                    link.href = response.data.fileData;
+                                                                                    link.download = att.fileName || 'arquivo';
+                                                                                    document.body.appendChild(link);
+                                                                                    link.click();
+                                                                                    document.body.removeChild(link);
+                                                                                } else {
+                                                                                    alert('Erro: Arquivo não encontrado no servidor.');
+                                                                                }
+                                                                            } catch (e) {
+                                                                                console.error('Failed to download attachment', e);
+                                                                                alert('Ocorreu um erro ao baixar o anexo.');
+                                                                            }
+                                                                        }}
+                                                                        className="text-[10px] px-2 py-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
                                                                         title={`Baixar ${att.fileSlot}: ${att.fileName}`}
                                                                     >
                                                                         {att.fileSlot}
-                                                                    </a>
+                                                                    </button>
                                                                 ))
                                                             ) : (
                                                                 <span className="text-[10px] text-muted-foreground italic">Sem comprovantes</span>

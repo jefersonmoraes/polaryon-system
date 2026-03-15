@@ -127,22 +127,33 @@ export const useCertificateStore = create<CertificateStore>()(
             },
 
             syncLocalDataToServer: async () => {
-                // This checks if we have certificates that only exist locally (e.g. they don't have a DB-like ID format if needed, 
-                // but here we use UUIDs everywhere, so we check against the server if they exist or just push all non-synced)
-                // For simplicity, we'll look for certs that might have been created offline or before persistence was added.
-                // We'll rely on the server handling deduplication or just push what's missing.
                 const localCerts = get().certificates;
                 if (localCerts.length === 0) return;
 
-                console.log("Syncing local certificates to server...");
-                // In a real scenario, we'd fetch from server and compare.
-                // But since we know the server is empty right now, we can push all.
-                for (const cert of localCerts) {
-                    try {
-                        await api.post('/certificates', cert);
-                    } catch (e) {
-                        console.error("Sync failed for cert:", cert.id, e);
+                console.log("Checking and syncing local certificates to server...");
+                try {
+                    // Fetch existing to avoid duplicates
+                    const serverRes = await api.get('/certificates');
+                    const serverIds = new Set((serverRes.data || []).map((c: any) => c.id));
+                    const certsToSync = localCerts.filter(c => !serverIds.has(c.id) && !c.trashed);
+
+                    if (certsToSync.length > 0) {
+                        for (const cert of certsToSync) {
+                            try {
+                                await api.post('/certificates', cert);
+                            } catch (e) {
+                                console.error("Sync failed for cert:", cert.id, e);
+                            }
+                        }
                     }
+
+                    // Reload from server to ensure local state has DB state
+                    const updatedRes = await api.get('/certificates');
+                    if (updatedRes.data) {
+                        set({ certificates: updatedRes.data });
+                    }
+                } catch (e) {
+                    console.error("Failed to sync certificates:", e);
                 }
             },
 
