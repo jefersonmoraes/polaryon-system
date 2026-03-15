@@ -103,7 +103,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/attachment/:attachmentId', async (req: Request, res: Response) => {
     try {
         const attachment = await prisma.certificateAttachment.findUnique({
-            where: { id: req.params.attachmentId },
+            where: { id: req.params.attachmentId as string },
             select: { fileData: true }
         });
         

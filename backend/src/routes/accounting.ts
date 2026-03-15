@@ -64,14 +64,14 @@ router.put('/:entity/:id', async (req: Request, res: Response) => {
     try {
         let result;
         switch(entity) {
-            case 'category': result = await prisma.accountingCategory.update({ where: { id }, data }); break;
-            case 'bankAccount': result = await prisma.bankAccount.update({ where: { id }, data }); break;
-            case 'entry': result = await prisma.accountingEntry.update({ where: { id }, data }); break;
-            case 'recurringExpense': result = await prisma.recurringExpense.update({ where: { id }, data }); break;
-            case 'invoice': result = await prisma.invoice.update({ where: { id }, data }); break;
-            case 'bankTransaction': result = await prisma.bankTransaction.update({ where: { id }, data }); break;
-            case 'taxObligation': result = await prisma.taxObligation.update({ where: { id }, data }); break;
-            case 'export': result = await prisma.accountantExport.update({ where: { id }, data }); break;
+            case 'category': result = await prisma.accountingCategory.update({ where: { id: id as string }, data }); break;
+            case 'bankAccount': result = await prisma.bankAccount.update({ where: { id: id as string }, data }); break;
+            case 'entry': result = await prisma.accountingEntry.update({ where: { id: id as string }, data }); break;
+            case 'recurringExpense': result = await prisma.recurringExpense.update({ where: { id: id as string }, data }); break;
+            case 'invoice': result = await prisma.invoice.update({ where: { id: id as string }, data }); break;
+            case 'bankTransaction': result = await prisma.bankTransaction.update({ where: { id: id as string }, data }); break;
+            case 'taxObligation': result = await prisma.taxObligation.update({ where: { id: id as string }, data }); break;
+            case 'export': result = await prisma.accountantExport.update({ where: { id: id as string }, data }); break;
             default: return res.status(400).json({ error: 'Entidade inválida' });
         }
         res.json(result);
@@ -85,14 +85,14 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
     const { entity, id } = req.params;
     try {
         switch(entity) {
-            case 'category': await prisma.accountingCategory.delete({ where: { id } }); break;
-            case 'bankAccount': await prisma.bankAccount.delete({ where: { id } }); break;
-            case 'entry': await prisma.accountingEntry.delete({ where: { id } }); break;
-            case 'recurringExpense': await prisma.recurringExpense.delete({ where: { id } }); break;
-            case 'invoice': await prisma.invoice.delete({ where: { id } }); break;
-            case 'bankTransaction': await prisma.bankTransaction.delete({ where: { id } }); break;
-            case 'taxObligation': await prisma.taxObligation.delete({ where: { id } }); break;
-            case 'export': await prisma.accountantExport.delete({ where: { id } }); break;
+            case 'category': await prisma.accountingCategory.delete({ where: { id: id as string } }); break;
+            case 'bankAccount': await prisma.bankAccount.delete({ where: { id: id as string } }); break;
+            case 'entry': await prisma.accountingEntry.delete({ where: { id: id as string } }); break;
+            case 'recurringExpense': await prisma.recurringExpense.delete({ where: { id: id as string } }); break;
+            case 'invoice': await prisma.invoice.delete({ where: { id: id as string } }); break;
+            case 'bankTransaction': await prisma.bankTransaction.delete({ where: { id: id as string } }); break;
+            case 'taxObligation': await prisma.taxObligation.delete({ where: { id: id as string } }); break;
+            case 'export': await prisma.accountantExport.delete({ where: { id: id as string } }); break;
             default: return res.status(400).json({ error: 'Entidade inválida' });
         }
         res.json({ success: true });
@@ -108,7 +108,7 @@ router.post('/settings/:companyId', async (req: Request, res: Response) => {
     const data = req.body;
     try {
         const result = await prisma.accountingSettings.upsert({
-            where: { companyId },
+            where: { companyId: companyId as string },
             update: data,
             create: { companyId, ...data }
         });
