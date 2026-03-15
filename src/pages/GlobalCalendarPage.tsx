@@ -162,12 +162,26 @@ export default function GlobalCalendarPage() {
         headerText = `${currentDate.getDate()} de ${monthNames[currentDate.getMonth()]} de ${currentDate.getFullYear()}`;
     }
 
-    const safeDateObject = (dateParam: any) => {
+    const parseSafeDate = (dateParam: any) => {
         if (!dateParam) return new Date();
-        const d = new Date(dateParam);
-        // If it's a valid date, return it reset to 00:00:00 of the local day to match grid
+        if (typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+            const [y, m, d] = dateParam.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+        return new Date(dateParam);
+    };
+
+    const safeDateObject = (dateParam: any) => {
+        const d = parseSafeDate(dateParam);
         if (isNaN(d.getTime())) return new Date();
         return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    };
+
+    const safeDateMatch = (dateParam: any, targetStr: string) => {
+        if (!dateParam) return false;
+        const d = parseSafeDate(dateParam);
+        if (isNaN(d.getTime())) return false;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toDateString() === targetStr;
     };
 
     // Find upcoming cards (next 7 days)
@@ -275,13 +289,6 @@ export default function GlobalCalendarPage() {
                             }
 
                             const dateStr = date.toDateString();
-
-                            const safeDateMatch = (dateParam: any, target: string) => {
-                                if (!dateParam) return false;
-                                const d = new Date(dateParam);
-                                if (isNaN(d.getTime())) return false;
-                                return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toDateString() === target;
-                            };
 
                             // Tasks
                             const dateCards = activeCards.filter(c => {
