@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { socketService } from '@/lib/socket';
+import { fixDateToBRT } from '@/lib/utils';
 
 export default function GlobalCalendarPage() {
     const { cards, boards, lists, labels, budgets, googleEvents, setGoogleEvents: originalSetGoogleEvents } = useKanbanStore();

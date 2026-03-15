@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useState, useMemo, useEffect } from 'react';
 import api from '@/lib/api';
+import { fixDateToBRT } from '@/lib/utils';
 
 const Dashboard = () => {
   const { currentUser, hasScreenAccess } = useAuthStore();
