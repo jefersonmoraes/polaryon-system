@@ -104,7 +104,7 @@ export const useDocumentStore = create<DocumentStore>()(
                         documents: [...state.documents, newDoc],
                     }));
                     
-                    socketService.emit('system_action', { store: 'DOCUMENTS', type: 'ADD_DOC', payload: newDoc });
+                    api.post('/kanban/socketproxy', { store: 'DOCUMENTS', type: 'ADD_DOC', payload: newDoc });
                 } catch (error) {
                     console.error('Failed to add document:', error);
                 }
@@ -132,7 +132,7 @@ export const useDocumentStore = create<DocumentStore>()(
                         documents: state.documents.map((doc) => doc.id === id ? updatedDoc : doc),
                     }));
 
-                    socketService.emit('system_action', { store: 'DOCUMENTS', type: 'UPDATE_DOC', payload: { id, data: updatedFields } });
+                    api.post('/kanban/socketproxy', { store: 'DOCUMENTS', type: 'UPDATE_DOC', payload: { id, data: updatedFields } });
                 } catch (error) {
                     console.error('Failed to update document:', error);
                 }

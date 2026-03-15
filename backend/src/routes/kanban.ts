@@ -639,4 +639,26 @@ router.get('/sync', async (req: Request, res: Response) => {
     }
 });
 
+// SOCKET PROXY (Allows frontend to trigger broadcasts via server)
+router.post('/socketproxy', async (req: Request, res: Response) => {
+    try {
+        const { store, type, payload } = req.body;
+        if (!store || !type) {
+            return res.status(400).json({ error: 'Store and type are required' });
+        }
+
+        const { getIO } = require('../socket');
+        const io = getIO();
+        
+        // Broadcast to all connected clients
+        io.emit('system_sync', { store, type, payload });
+        
+        console.log(`📡 Broadcasted ${type} for store ${store} via proxy.`);
+        res.json({ success: true });
+    } catch (e: any) {
+        console.error("Socket Proxy Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 export default router;

@@ -9,10 +9,21 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function GlobalCalendarPage() {
-    const { cards, boards, lists, labels, budgets, googleEvents, setGoogleEvents } = useKanbanStore();
+    const { cards, boards, lists, labels, budgets, googleEvents, setGoogleEvents: originalSetGoogleEvents } = useKanbanStore();
     const { documents } = useDocumentStore();
     const { taxObligations } = useAccountingStore();
     const { currentUser } = useAuthStore();
+
+    // Wrapper function for setGoogleEvents to include the broadcast logic
+    const setGoogleEvents = (events) => {
+        originalSetGoogleEvents(events);
+        // Broadcast sync to others automatically
+        api.post('/kanban/socketproxy', { 
+            store: 'GOOGLE_CALENDAR', 
+            type: 'SYNC_COMPLETE', 
+            payload: events 
+        }).catch(() => {});
+    };
 
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -41,6 +52,22 @@ export default function GlobalCalendarPage() {
         } else {
             loadGoogleEvents();
         }
+
+        // Real-time listener: refresh if anything relevant changes in other users/tabs
+        const handleSync = (action: any) => {
+            if (action.store === 'GOOGLE_CALENDAR' && action.type === 'SYNC_COMPLETE') {
+                // Already handled by kanban-store, but we might want a local confirmation
+            } else if (['DOCUMENTS', 'ACCOUNTING', 'KANBAN'].includes(action.store)) {
+                // If any core data changes, we should probably check if dates changed
+                // For simplicity, let's just ensure the component re-renders if needed
+                // or just load Google events again in case an automation triggered on backend
+                setTimeout(loadGoogleEvents, 1000); // Small delay to let backend process
+            }
+        };
+
+        const { socketService } = require('@/lib/socket');
+        socketService.on('system_sync', handleSync);
+        return () => socketService.off('system_sync', handleSync);
     }, []);
 
     const loadGoogleEvents = async () => {
@@ -64,30 +91,32 @@ export default function GlobalCalendarPage() {
             toast.loading("Sincronizando com G Agenda do Administrador...", { id: 'gcal' });
 
             // Push active tasks with due dates
-            const eventsToPush = cards.filter(c => !c.archived && !c.trashed && c.dueDate && !c.completed).map(c => ({
+            const cardEvents = cards.filter(c => !c.archived && !c.trashed && c.dueDate && !c.completed).map(c => ({
                 id: c.id,
-                title: `[Polaryon] ${c.title}`,
+                title: `[Tarefa] ${c.title}`, // Changed prefix to be more user friendly
                 date: c.dueDate
             }));
+
+            // Push document expirations
+            const docEvents = documents.filter(d => !d.trashed && d.expirationDate).map(d => ({
+                id: d.id,
+                title: `[Doc] ${d.title}`,
+                date: d.expirationDate
+            }));
+
+            // Push tax obligations
+            const taxEvents = taxObligations.filter(t => !t.trashedAt && t.dueDate && t.status === 'pending').map(t => ({
+                id: t.id,
+                title: `[Imposto] ${t.name}`,
+                date: t.dueDate
+            }));
+
+            const eventsToPush = [...cardEvents, ...docEvents, ...taxEvents];
 
             const res = await api.post('/calendar/sync', { eventsToPush });
 
             if (res.data.success && res.data.events) {
                 setGoogleEvents(res.data.events);
-                // Broadcast the sync to all other users so they get the updated calendar state too
-                api.post('/kanban/socketproxy', { 
-                    store: 'GOOGLE_CALENDAR', 
-                    type: 'SYNC_COMPLETE', 
-                    payload: res.data.events 
-                }).catch(() => {
-                    // Fallback to direct emit if proxy route not available
-                    const { socketService } = require('@/lib/socket');
-                    socketService.emit('system_action', { 
-                        store: 'GOOGLE_CALENDAR', 
-                        type: 'SYNC_COMPLETE', 
-                        payload: res.data.events 
-                    });
-                });
                 toast.success("Conexão e sincronização concluída com sucesso!", { id: 'gcal' });
             }
         } catch (err: any) {

@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { pushEventToGoogle, deleteEventFromGoogle } from '../services/GoogleCalendarService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -51,6 +52,17 @@ router.post('/:entity', async (req: Request, res: Response) => {
             case 'export': result = await prisma.accountantExport.create({ data }); break;
             default: return res.status(400).json({ error: 'Entidade inválida' });
         }
+        if (entity === 'taxObligation') {
+            const tax = result as any;
+            if (tax.dueDate && !tax.trashedAt && tax.status === 'pending') {
+                pushEventToGoogle({
+                    summary: `[Imposto] ${tax.name}`,
+                    description: `*[Gerado pelo Polaryon]*\n\nGuia de imposto pendente para pagamento.`,
+                    start: { date: new Date(tax.dueDate).toISOString().split('T')[0] },
+                    end: { date: new Date(tax.dueDate).toISOString().split('T')[0] }
+                }, tax.id).catch(err => console.error("Tax background sync failed:", err));
+            }
+        }
         res.json(result);
     } catch (error) {
         console.error(`Erro ao criar ${entity}:`, error);
@@ -74,6 +86,19 @@ router.put('/:entity/:id', async (req: Request, res: Response) => {
             case 'export': result = await prisma.accountantExport.update({ where: { id: id as string }, data }); break;
             default: return res.status(400).json({ error: 'Entidade inválida' });
         }
+        if (entity === 'taxObligation') {
+            const tax = result as any;
+            if (tax.trashedAt || tax.status === 'paid') {
+                deleteEventFromGoogle(tax.id).catch(err => console.error("Tax background sync delete failed:", err));
+            } else if (tax.dueDate) {
+                pushEventToGoogle({
+                    summary: `[Imposto] ${tax.name}`,
+                    description: `*[Gerado pelo Polaryon]*\n\nGuia de imposto pendente para pagamento.`,
+                    start: { date: new Date(tax.dueDate).toISOString().split('T')[0] },
+                    end: { date: new Date(tax.dueDate).toISOString().split('T')[0] }
+                }, tax.id).catch(err => console.error("Tax background sync update failed:", err));
+            }
+        }
         res.json(result);
     } catch (error) {
         console.error(`Erro ao atualizar ${entity}:`, error);
@@ -94,6 +119,9 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
             case 'taxObligation': await prisma.taxObligation.delete({ where: { id: id as string } }); break;
             case 'export': await prisma.accountantExport.delete({ where: { id: id as string } }); break;
             default: return res.status(400).json({ error: 'Entidade inválida' });
+        }
+        if (entity === 'taxObligation') {
+            deleteEventFromGoogle(id as string).catch(err => console.error("Tax background sync cleanup failed:", err));
         }
         res.json({ success: true });
     } catch (error) {
