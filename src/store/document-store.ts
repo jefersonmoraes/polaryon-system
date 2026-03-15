@@ -54,16 +54,19 @@ interface DocumentStore {
 
 const checkStatus = (expirationDate: string): DocumentStatus => {
     const expDate = fixDateToBRT(expirationDate);
-    if (!expDate) return 'expired';
+    if (!expDate) return 'valid'; // Or whatever default makes sense for missing dates
     
+    // Normalize to midnight for comparison
+    const target = new Date(expDate.getFullYear(), expDate.getMonth(), expDate.getDate());
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    expDate.setHours(0, 0, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    const diffTime = expDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = target.getTime() - today.getTime();
+    // Use floor for days remaining to be conservative
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) return 'expired';
+    // User wants alert ONLY when 10 days or less are remaining
     if (diffDays <= 10) return 'expiring';
     return 'valid';
 };
@@ -74,8 +77,13 @@ export const useDocumentStore = create<DocumentStore>()(
             documents: [],
 
             setDocuments: (documents) => {
-                console.log('documentStore - Setting Documents:', documents);
-                set({ documents });
+                // Always re-calculate status when loading from server/cache 
+                // to respect the latest business rules (e.g. 10-day threshold)
+                const validatedDocs = documents.map(doc => ({
+                    ...doc,
+                    status: checkStatus(doc.expirationDate)
+                }));
+                set({ documents: validatedDocs });
             },
 
             addDocument: async (doc) => {

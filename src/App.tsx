@@ -176,31 +176,33 @@ const AppContent = () => {
     const CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
     const checkDocs = () => {
       const docStore = useDocumentStore.getState();
-      const uiStore = useKanbanStore.getState();
       const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       docStore.documents.forEach(doc => {
-        if (doc.status !== 'valid') {
-          const expirationDate = fixDateToBRT(doc.expirationDate);
-          if (!expirationDate) return;
-          const diffDays = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (!doc.expirationDate || doc.trashed) return;
 
-          // Determine if we need to notify
-          // e.g. Notify at 30 days, 15 days, 5 days, and when expired
-          const notifyKey = doc.status === 'expired' ? 0 :
-            diffDays <= 5 ? 5 :
-              diffDays <= 15 ? 15 :
-                diffDays <= 30 ? 30 : -1;
+        const expDate = fixDateToBRT(doc.expirationDate);
+        if (!expDate) return;
 
-          if (notifyKey !== -1 && doc.lastNotifiedIndex !== notifyKey) {
-            const isExpired = doc.status === 'expired';
-            useKanbanStore.getState().addNotification(
-              isExpired ? 'Documento Expirado' : 'Documento Vencendo Próximo',
-              `O documento "${doc.title}" ${isExpired ? 'expirou em' : 'vencerá em'} ${expirationDate.toLocaleDateString('pt-BR')}.`,
-              '/documentacao'
-            );
-            docStore.updateDocument(doc.id, { lastNotifiedIndex: notifyKey });
-          }
+        const target = new Date(expDate.getFullYear(), expDate.getMonth(), expDate.getDate());
+        const diffDays = Math.floor((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Only notify if within thresholds (Exactly 10 days, 5 days, or expired)
+        // This prevents spamming notifications every hour
+        let notifyKey = -1;
+        if (diffDays < 0) notifyKey = 0; // Expired
+        else if (diffDays <= 5) notifyKey = 5; // Very soon
+        else if (diffDays <= 10) notifyKey = 10; // Threshold reached
+
+        if (notifyKey !== -1 && doc.lastNotifiedIndex !== notifyKey) {
+          const isExpired = diffDays < 0;
+          useKanbanStore.getState().addNotification(
+            isExpired ? 'Documento Expirado' : 'Documento Vencendo Próximo',
+            `O documento "${doc.title}" ${isExpired ? 'expirou em' : 'vencerá em'} ${target.toLocaleDateString('pt-BR')}.`,
+            '/documentacao'
+          );
+          docStore.updateDocument(doc.id, { lastNotifiedIndex: notifyKey });
         }
       });
     };
