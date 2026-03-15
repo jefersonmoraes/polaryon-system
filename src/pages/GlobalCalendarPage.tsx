@@ -206,9 +206,9 @@ export default function GlobalCalendarPage() {
     // Find upcoming cards (next 7 days)
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset today for comparison
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    nextWeek.setHours(23, 59, 59, 999);
+    const nextLimit = new Date(today);
+    nextLimit.setDate(today.getDate() + 10);
+    nextLimit.setHours(23, 59, 59, 999);
 
     const upcomingCards = activeCards.filter(c => {
         if (!c.dueDate && (!c.milestones || c.milestones.length === 0)) return false;
@@ -216,12 +216,12 @@ export default function GlobalCalendarPage() {
         // Check main due date
         if (c.dueDate) {
             const d = safeDateObject(c.dueDate);
-            if (d >= today && d <= nextWeek) return true;
+            if (d >= today && d <= nextLimit) return true;
         }
 
         // Check milestones
         if (c.milestones) {
-            return c.milestones.some(m => m.dueDate && safeDateObject(m.dueDate) >= today && safeDateObject(m.dueDate) <= nextWeek && !m.completed);
+            return c.milestones.some(m => m.dueDate && safeDateObject(m.dueDate) >= today && safeDateObject(m.dueDate) <= nextLimit && !m.completed);
         }
 
         return false;
@@ -242,15 +242,15 @@ export default function GlobalCalendarPage() {
             }
         });
 
-        documents.filter(d => !d.trashed && safeDateObject(d.expirationDate) >= today && safeDateObject(d.expirationDate) <= nextWeek).forEach(d => {
+        documents.filter(d => !d.trashed && safeDateObject(d.expirationDate) >= today && safeDateObject(d.expirationDate) <= nextLimit).forEach(d => {
             events.push({ id: d.id, title: `Doc Expirando: ${d.title}`, date: safeDateObject(d.expirationDate), type: 'documento' });
         });
 
-        taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && safeDateObject(t.dueDate) >= today && safeDateObject(t.dueDate) <= nextWeek).forEach(t => {
+        taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && safeDateObject(t.dueDate) >= today && safeDateObject(t.dueDate) <= nextLimit).forEach(t => {
             events.push({ id: t.id, title: `Imposto Pendente: ${t.name}`, date: safeDateObject(t.dueDate), type: 'contabil' });
         });
 
-        googleEvents.filter(g => safeDateObject(g.date) >= today && safeDateObject(g.date) <= nextWeek).forEach(g => {
+        googleEvents.filter(g => safeDateObject(g.date) >= today && safeDateObject(g.date) <= nextLimit).forEach(g => {
             if (g.title) {
                 events.push({ id: g.id, title: g.title, date: safeDateObject(g.date), type: 'google' });
             }

@@ -124,7 +124,7 @@ const Dashboard = () => {
     today.setHours(0, 0, 0, 0);
 
     const futureLimit = new Date();
-    futureLimit.setDate(today.getDate() + 15);
+    futureLimit.setDate(today.getDate() + 10);
     futureLimit.setHours(23, 59, 59, 999);
 
     const safeDateObject = (dateParam: any) => {
