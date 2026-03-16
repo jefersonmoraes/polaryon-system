@@ -21,6 +21,10 @@ import certificatesRoutes from './routes/certificates';
 import accountingRoutes from './routes/accounting';
 import auditRoutes from './routes/audit';
 import { initSocket } from './socket';
+import { initComplianceCron } from './services/compliance-service';
+
+// Initialize Scheduled Tasks
+initComplianceCron();
 
 // Security and Parsing Middlewares
 app.use(helmet({

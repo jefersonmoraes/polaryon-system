@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 interface CompanyListPageProps {
@@ -481,7 +481,15 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                 </div>
                                             ) : null}
                                         </div>
-                                        <p className={`text-xs mt-1 truncate ${selectedCompanyId === company.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{company.cnpj}</p>
+                                        <div className="flex justify-between items-center mt-1">
+                                            <p className={`text-xs truncate ${selectedCompanyId === company.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{company.cnpj}</p>
+                                            {company.descricao_situacao_cadastral !== 'ATIVA' && (
+                                                <div className="flex items-center gap-1 text-[10px] font-bold text-red-500 animate-pulse bg-red-500/10 px-1.5 py-0.5 rounded">
+                                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                                    REVISÃO NECESSÁRIA
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
