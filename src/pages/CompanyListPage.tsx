@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 interface CompanyListPageProps {
@@ -50,6 +50,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
     const [tempFilterArea, setTempFilterArea] = useState<string>('');
 
     const [showFilters, setShowFilters] = useState(false);
+    const [editingContactId, setEditingContactId] = useState<string | null>(null);
 
     const applyFilters = () => {
         setFilterFavorite(tempFilterFavorite);
@@ -156,8 +157,10 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
     const handleAddContact = () => {
         if (!selectedCompany) return;
-        const newContacts = [...(selectedCompany.contacts || []), { id: crypto.randomUUID(), label: 'Novo Contato', phone: '', email: '', isWhatsapp: false }];
+        const newId = crypto.randomUUID();
+        const newContacts = [...(selectedCompany.contacts || []), { id: newId, label: 'Novo Contato', phone: '', email: '', isWhatsapp: false, type: 'Telefone' as const }];
         updateCompany(selectedCompany.id, { contacts: newContacts });
+        setEditingContactId(newId);
     };
 
     const handleUpdateContact = (contactId: string, data: Partial<CompanyContact>) => {
@@ -780,55 +783,145 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                         <div className="mt-4 pt-4 border-t border-border/50">
                                             <p className="text-[10px] font-bold text-muted-foreground uppercase mb-3">Contatos Adicionais</p>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {(selectedCompany.contacts || []).map(contact => (
-                                                    <div key={contact.id} className="p-3 bg-muted/20 border border-border rounded-xl space-y-3 relative group">
-                                                        {currentUser?.role !== 'USER' && (
-                                                            <button onClick={() => handleRemoveContact(contact.id)} className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-background rounded-md shadow-sm border border-border">
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                        <div>
-                                                            <input
-                                                                type="text"
-                                                                value={contact.label}
-                                                                onChange={(e) => handleUpdateContact(contact.id, { label: e.target.value })}
-                                                                placeholder="Rótulo (ex: Financeiro)"
-                                                                className="text-sm font-semibold bg-transparent border-none outline-none p-0 focus:ring-0 placeholder:text-muted-foreground/50 w-full"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                                <input
-                                                                    type="text"
-                                                                    value={contact.phone || ''}
-                                                                    onChange={(e) => handleUpdateContact(contact.id, { phone: e.target.value })}
-                                                                    placeholder="Telefone"
-                                                                    className="text-xs bg-background border border-border rounded px-2 py-1 flex-1 outline-none focus:border-primary"
-                                                                />
-                                                                <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                                                {(selectedCompany.contacts || []).map(contact => {
+                                                    const isEditing = editingContactId === contact.id;
+                                                    
+                                                    // Inferred type for legacy data
+                                                    const currentType = contact.type || (contact.email && !contact.phone ? 'Email' : 'Telefone');
+
+                                                    if (isEditing) {
+                                                        return (
+                                                            <div key={contact.id} className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-3 relative">
+                                                                <div className="flex items-center justify-between gap-2">
                                                                     <input
-                                                                        type="checkbox"
-                                                                        checked={contact.isWhatsapp || false}
-                                                                        onChange={(e) => handleUpdateContact(contact.id, { isWhatsapp: e.target.checked })}
-                                                                        className="rounded border-border text-green-500 focus:ring-green-500 h-3 w-3"
+                                                                        type="text"
+                                                                        autoFocus
+                                                                        value={contact.label}
+                                                                        onChange={(e) => handleUpdateContact(contact.id, { label: e.target.value })}
+                                                                        placeholder="Rótulo (ex: Financeiro)"
+                                                                        className="text-sm font-semibold bg-transparent border-none outline-none p-0 focus:ring-0 placeholder:text-muted-foreground/50 w-full"
                                                                     />
-                                                                    WhatsApp
-                                                                </label>
+                                                                    <div className="flex items-center gap-1 bg-background border border-border rounded-lg p-0.5">
+                                                                        <button 
+                                                                            onClick={() => handleUpdateContact(contact.id, { type: 'Telefone' })}
+                                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${currentType === 'Telefone' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                                                                        >
+                                                                            TEL
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleUpdateContact(contact.id, { type: 'Email' })}
+                                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${currentType === 'Email' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                                                                        >
+                                                                            EMAIL
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    {currentType === 'Telefone' ? (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                                            <input
+                                                                                type="text"
+                                                                                value={contact.phone || ''}
+                                                                                onChange={(e) => handleUpdateContact(contact.id, { phone: e.target.value })}
+                                                                                placeholder="Telefone"
+                                                                                className="text-xs bg-background border border-border rounded px-2 py-1 flex-1 outline-none focus:border-primary"
+                                                                            />
+                                                                            <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={contact.isWhatsapp || false}
+                                                                                    onChange={(e) => handleUpdateContact(contact.id, { isWhatsapp: e.target.checked })}
+                                                                                    className="rounded border-border text-green-500 focus:ring-green-500 h-3 w-3"
+                                                                                />
+                                                                                Whats
+                                                                            </label>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                                            <input
+                                                                                type="email"
+                                                                                value={contact.email || ''}
+                                                                                onChange={(e) => handleUpdateContact(contact.id, { email: e.target.value })}
+                                                                                placeholder="E-mail"
+                                                                                className="text-xs bg-background border border-border rounded px-2 py-1 w-full outline-none focus:border-primary"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                
+                                                                <div className="flex justify-end gap-2 pt-1">
+                                                                    <button 
+                                                                        onClick={() => setEditingContactId(null)}
+                                                                        className="text-[10px] font-bold uppercase text-primary bg-primary/10 px-3 py-1 rounded hover:bg-primary/20 transition-colors"
+                                                                    >
+                                                                        Concluir
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                                <input
-                                                                    type="email"
-                                                                    value={contact.email || ''}
-                                                                    onChange={(e) => handleUpdateContact(contact.id, { email: e.target.value })}
-                                                                    placeholder="E-mail"
-                                                                    className="text-xs bg-background border border-border rounded px-2 py-1 w-full outline-none focus:border-primary"
-                                                                />
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div key={contact.id} className="p-4 bg-muted/10 border border-border rounded-xl flex flex-col justify-between group relative hover:border-primary/30 transition-all hover:shadow-sm">
+                                                            <div>
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5">
+                                                                        {currentType === 'Telefone' ? <Phone className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+                                                                        {contact.label}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button 
+                                                                            onClick={() => setEditingContactId(contact.id)}
+                                                                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                                                                        >
+                                                                            <Edit className="h-3 w-3" />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleRemoveContact(contact.id)}
+                                                                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                                                                        >
+                                                                            <Trash2 className="h-3 w-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-sm font-semibold text-foreground break-all">
+                                                                    {currentType === 'Telefone' ? contact.phone : contact.email}
+                                                                    {currentType === 'Telefone' && contact.isWhatsapp && (
+                                                                        <span className="ml-2 text-[8px] bg-green-500/10 text-green-600 px-1 py-0.5 rounded font-bold uppercase tracking-tighter">WhatsApp</span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/50">
+                                                                {currentType === 'Telefone' ? (
+                                                                    <>
+                                                                        {contact.phone && (
+                                                                            <a href={`tel:${contact.phone.replace(/\D/g, '')}`} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 bg-background border border-border rounded shadow-sm text-[10px] font-bold uppercase hover:bg-muted transition-colors">
+                                                                                <Phone className="h-3 w-3" /> Ligar
+                                                                            </a>
+                                                                        )}
+                                                                        {contact.phone && contact.isWhatsapp && (
+                                                                            <a href={`https://wa.me/55${contact.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 bg-green-500/10 text-green-600 border border-transparent rounded shadow-sm text-[10px] font-bold uppercase hover:bg-green-500/20 transition-colors">
+                                                                                WhatsApp
+                                                                            </a>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        {contact.email && (
+                                                                            <a href={`mailto:${contact.email}`} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 bg-primary/10 text-primary border border-transparent rounded shadow-sm text-[10px] font-bold uppercase hover:bg-primary/20 transition-colors">
+                                                                                <Mail className="h-3 w-3" /> E-mail
+                                                                            </a>
+                                                                        )}
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}

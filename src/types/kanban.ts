@@ -1,6 +1,7 @@
 export interface CompanyContact {
   id: string;
   label: string; // e.g., "Financeiro", "Vendas", "Geral"
+  type?: 'Telefone' | 'Email';
   phone?: string;
   email?: string;
   isWhatsapp?: boolean;
