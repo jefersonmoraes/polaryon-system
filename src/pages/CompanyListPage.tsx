@@ -984,9 +984,24 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') {
                                                                 e.preventDefault();
-                                                                const val = e.currentTarget.value.trim().toUpperCase();
-                                                                if (val && !(selectedCompany.areasAtuacao || []).includes(val)) {
-                                                                    handleToggleArea(val);
+                                                                const input = e.currentTarget.value;
+                                                                const areas = input.split(',').map(a => a.trim().toUpperCase()).filter(a => a !== '');
+                                                                
+                                                                if (areas.length > 0) {
+                                                                    const currentAreas = selectedCompany.areasAtuacao || [];
+                                                                    const newAreas = [...currentAreas];
+                                                                    let hasChanges = false;
+                                                                    
+                                                                    areas.forEach(area => {
+                                                                        if (!newAreas.includes(area)) {
+                                                                            newAreas.push(area);
+                                                                            hasChanges = true;
+                                                                        }
+                                                                    });
+                                                                    
+                                                                    if (hasChanges) {
+                                                                        updateCompany(selectedCompany.id, { areasAtuacao: newAreas });
+                                                                    }
                                                                 }
                                                                 e.currentTarget.value = '';
                                                             }
