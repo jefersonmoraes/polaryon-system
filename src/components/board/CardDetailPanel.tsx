@@ -6,7 +6,7 @@ import {
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
   Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck
 } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import BudgetModal from '../budgets/BudgetModal';
