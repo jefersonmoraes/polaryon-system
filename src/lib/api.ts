@@ -33,7 +33,7 @@ api.interceptors.request.use(
     }
 );
 
-// Response Interceptor: Handle 401/403 globally
+// Response Interceptor: Handle 401/403 globally and catch Data Loss errors
 api.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -43,6 +43,19 @@ api.interceptors.response.use(
             // If you want to automatically log out here, you could dispatch an event
             // or call a store method.
         }
+        
+        // Data Loss Protection: Alert user if a write operation failed
+        if (error.config && error.config.method && ['post', 'put', 'delete', 'patch'].includes(error.config.method.toLowerCase())) {
+            console.error('Data persistence failure:', error);
+            // Dynamic import to avoid circular dependency issues at boot
+            import('sonner').then(({ toast }) => {
+                toast.error('Erro de conexão ou servidor. Os últimos dados podem não ter sido salvos. Verifique e tente novamente.', {
+                    duration: 6000,
+                    id: 'global-persistence-error' // Prevent spamming
+                });
+            });
+        }
+        
         return Promise.reject(error);
     }
 );

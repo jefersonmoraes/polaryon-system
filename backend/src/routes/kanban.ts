@@ -330,7 +330,7 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             if (attachments.length > 0) {
                 for (const att of attachments) {
                     // Create one by one to avoid large payload errors or handle them gracefully
-                    await prisma.attachment.create({ data: { ...att, cardId } }).catch(e => console.error("Attachment failed (possibly too large)"));
+                    await prisma.attachment.create({ data: { ...att, cardId } });
                 }
             }
         }
