@@ -292,7 +292,7 @@ const SuppliersPage = () => {
                                                                                     <img 
                                                                                         src={getFaviconUrl(company.customLink)} 
                                                                                         alt=""
-                                                                                        className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm bg-background border border-border"
+                                                                                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-sm shrink-0"
                                                                                         onError={(e) => (e.currentTarget.style.display = 'none')}
                                                                                     />
                                                                                 )}
@@ -369,7 +369,7 @@ const SuppliersPage = () => {
                                                                                     <img 
                                                                                         src={getFaviconUrl(company.customLink)} 
                                                                                         alt=""
-                                                                                        className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm bg-background border border-border"
+                                                                                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-sm shrink-0"
                                                                                         onError={(e) => (e.currentTarget.style.display = 'none')}
                                                                                     />
                                                                                 )}

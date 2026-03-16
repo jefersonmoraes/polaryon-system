@@ -391,10 +391,24 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 <img 
                                     src={getFaviconUrl(supplierParams.customLink)} 
                                     alt=""
-                                    className="w-4 h-4 rounded-sm bg-background border border-border/20 shrink-0"
+                                    className="w-6 h-6 rounded-sm shrink-0"
                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                 />
                             )}
+                            {(() => {
+                                const transporter = companies.find(c => c.id === item.transporterId);
+                                if (transporter?.customLink) {
+                                    return (
+                                        <img 
+                                            src={getFaviconUrl(transporter.customLink)} 
+                                            alt=""
+                                            className="w-6 h-6 rounded-sm shrink-0"
+                                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                                        />
+                                    );
+                                }
+                                return null;
+                            })()}
                             {supplierName}
                         </h4>
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -737,7 +751,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                                 <img 
                                                                     src={getFaviconUrl(c.customLink)} 
                                                                     alt=""
-                                                                    className="w-3.5 h-3.5 rounded-sm bg-background border border-border/20 shrink-0"
+                                                                    className="w-6 h-6 rounded-sm shrink-0"
                                                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                                                 />
                                                             )}
@@ -877,7 +891,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                                 <img 
                                                                     src={getFaviconUrl(c.customLink)} 
                                                                     alt=""
-                                                                    className="w-3.5 h-3.5 rounded-sm bg-background border border-border/20 shrink-0"
+                                                                    className="w-6 h-6 rounded-sm shrink-0"
                                                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                                                 />
                                                             )}
@@ -1536,10 +1550,20 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                             </h3>
                             {supplierProfile ? (
                                 <div className="space-y-4">
-                                    <div>
-                                        <h4 className="font-bold text-foreground text-sm">{supplierProfile.nome_fantasia || supplierProfile.razao_social}</h4>
-                                        <p className="text-xs text-muted-foreground mt-0.5">{supplierProfile.razao_social}</p>
-                                    </div>
+                                        <div className="flex items-center gap-3">
+                                            {supplierProfile.customLink && (
+                                                <img 
+                                                    src={getFaviconUrl(supplierProfile.customLink)} 
+                                                    alt=""
+                                                    className="w-10 h-10 rounded-md shrink-0"
+                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                />
+                                            )}
+                                            <div>
+                                                <h4 className="font-bold text-foreground text-sm">{supplierProfile.nickname || supplierProfile.nome_fantasia || supplierProfile.razao_social}</h4>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{supplierProfile.razao_social}</p>
+                                            </div>
+                                        </div>
                                     
                                     {supplierProfile.customLink && (
                                         <a href={supplierProfile.customLink} target="_blank" rel="noopener noreferrer" className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-colors">
@@ -1845,10 +1869,20 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                             </h3>
                             {transporterProfile ? (
                                 <div className="space-y-4">
-                                    <div>
-                                        <h4 className="font-bold text-foreground text-sm">{transporterProfile.nome_fantasia || transporterProfile.razao_social}</h4>
-                                        <p className="text-xs text-muted-foreground mt-0.5">{transporterProfile.razao_social}</p>
-                                    </div>
+                                        <div className="flex items-center gap-3">
+                                            {transporterProfile.customLink && (
+                                                <img 
+                                                    src={getFaviconUrl(transporterProfile.customLink)} 
+                                                    alt=""
+                                                    className="w-10 h-10 rounded-md shrink-0"
+                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                />
+                                            )}
+                                            <div>
+                                                <h4 className="font-bold text-foreground text-sm">{transporterProfile.nickname || transporterProfile.nome_fantasia || transporterProfile.razao_social}</h4>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{transporterProfile.razao_social}</p>
+                                            </div>
+                                        </div>
                                     
                                     {transporterProfile.customLink && (
                                         <a href={transporterProfile.customLink} target="_blank" rel="noopener noreferrer" className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-colors">

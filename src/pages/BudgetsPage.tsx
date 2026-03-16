@@ -255,7 +255,7 @@ const BudgetsPage = () => {
                                                                 key={sid}
                                                                 src={fav} 
                                                                 alt=""
-                                                                className="w-3.5 h-3.5 rounded-sm bg-background border border-border/50 ring-1 ring-background"
+                                                                className="w-6 h-6 rounded-sm shrink-0 ring-1 ring-background"
                                                                 onError={(e) => (e.currentTarget.style.display = 'none')}
                                                             />
                                                         );

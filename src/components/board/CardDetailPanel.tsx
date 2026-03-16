@@ -675,7 +675,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                                     <img 
                                       src={fav} 
                                       alt=""
-                                      className="w-3 h-3 rounded-sm shrink-0"
+                                      className="w-5 h-5 rounded-sm shrink-0"
                                       onError={(e) => (e.currentTarget.style.display = 'none')}
                                     />
                                   ) : null;

@@ -474,7 +474,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                     <img 
                                                         src={getFaviconUrl(company.customLink)} 
                                                         alt=""
-                                                        className="w-3.5 h-3.5 rounded-sm shrink-0 bg-background border border-border/20"
+                                                        className="w-6 h-6 rounded-sm shrink-0"
                                                         onError={(e) => (e.currentTarget.style.display = 'none')}
                                                     />
                                                 )}
@@ -651,7 +651,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                 <img 
                                                     src={getFaviconUrl(selectedCompany.customLink)} 
                                                     alt=""
-                                                    className="w-8 h-8 rounded-md bg-background border border-border shadow-sm p-1"
+                                                    className="w-12 h-12 rounded-md shrink-0"
                                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                                 />
                                             )}

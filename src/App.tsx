@@ -88,20 +88,20 @@ const AppContent = () => {
     fetchKanbanData();
   }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
 
-  // Background CNPJ Monitor
+  // Background CNPJ Monitor - Checks status every 7 days
   useEffect(() => {
-    const CHECK_INTERVAL = 30000; // Check every 30 seconds to not overwhelm the API
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    const CHECK_INTERVAL = 60000; // Check one company every minute to be very gentle
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     const monitorInterval = setInterval(async () => {
       const store = useKanbanStore.getState();
 
-      // Find one company that hasn't been checked in 24 hours
+      // Find one company that hasn't been checked in 7 days
       const now = new Date();
       const needsCheck = store.companies.find(c => {
         if (!c.lastCnpjCheck) return true;
         const lastCheck = new Date(c.lastCnpjCheck);
-        return (now.getTime() - lastCheck.getTime()) > TWENTY_FOUR_HOURS;
+        return (now.getTime() - lastCheck.getTime()) > SEVEN_DAYS;
       });
 
       if (needsCheck) {
@@ -112,21 +112,40 @@ const AppContent = () => {
             if (response.ok) {
               const data = await response.json();
               const invalidStatuses = ['BAIXADA', 'INAPTA', 'SUSPENSA', 'NULA'];
+              const currentStatus = data.descricao_situacao_cadastral?.toUpperCase();
 
-              if (invalidStatuses.includes(data.descricao_situacao_cadastral?.toUpperCase())) {
-                // If the status became invalid, delete it and notify the user
-                store.permanentlyDeleteCompany(needsCheck.id);
+              if (invalidStatuses.includes(currentStatus)) {
+                // UPDATE status but DONT delete automatically (user requested alert/warning)
+                store.updateCompany(needsCheck.id, { 
+                  descricao_situacao_cadastral: currentStatus,
+                  lastCnpjCheck: new Date().toISOString() 
+                });
+                
                 useKanbanStore.getState().addNotification(
-                  'Empresa Removida Automaticamente',
-                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) foi excluído do sistema pois a situação cadastral na Receita consta como "${data.descricao_situacao_cadastral}".`
+                  '⚠️ ALERTA: Empresa Inativa Detectada',
+                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) consta agora como "${currentStatus}" na Receita Federal. Recomendamos a exclusão manual deste contato.`,
+                  `/suppliers-list?id=${needsCheck.id}`,
+                  'warning'
                 );
               } else {
-                // Otherwise, just timestamp it to prevent re-checking for 24h
-                store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
+                // Otherwise, just timestamp it to prevent re-checking for 7 days
+                store.updateCompany(needsCheck.id, { 
+                  descricao_situacao_cadastral: currentStatus || needsCheck.descricao_situacao_cadastral,
+                  lastCnpjCheck: new Date().toISOString() 
+                });
               }
+            } else if (response.status === 404) {
+                // CNPJ not found anymore?
+                useKanbanStore.getState().addNotification(
+                  '⚠️ ALERTA: CNPJ Não Encontrado',
+                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) não foi retornado pela API. Verifique a validade deste contato.`,
+                  undefined,
+                  'warning'
+                );
+                store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
             } else {
-              // API might be down or rate limited, let's just mark it checked so we move to the next
-              store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
+              // Rate limit or API error, skip for now but mark as checked to circle through others
+              // store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
             }
           }
         } catch (error) {
