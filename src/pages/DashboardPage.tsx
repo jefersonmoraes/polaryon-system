@@ -323,7 +323,10 @@ const Dashboard = () => {
                   Boards Favoritos
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {activeBoards.filter(b => b.isFavorite).map((board, i) => (
+                  {activeBoards
+                    .filter(b => b.isFavorite)
+                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                    .map((board, i) => (
                     <motion.div key={board.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }} className="relative group">
                       <Link to={`/board/${board.id}`}
                         className="block rounded-lg h-24 p-4 relative overflow-hidden transition-transform hover:scale-[1.02] bg-cover bg-center border border-border shadow-sm"
