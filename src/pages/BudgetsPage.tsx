@@ -48,10 +48,24 @@ const BudgetsPage = () => {
             .filter(b => statusFilter === 'Todos' || b.status === statusFilter)
             .filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 b.items?.some(i => {
-                    const c = companies.find(comp => comp.id === i.companyId);
-                    return c?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        c?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        c?.nickname?.toLowerCase().includes(searchQuery.toLowerCase());
+                    const comp = companies.find(c => c.id === i.companyId);
+                    const trans = companies.find(c => c.id === i.transporterId);
+                    
+                    const term = searchQuery.toLowerCase();
+                    
+                    const matchComp = comp && (
+                        comp.razao_social.toLowerCase().includes(term) ||
+                        (comp.nome_fantasia && comp.nome_fantasia.toLowerCase().includes(term)) ||
+                        (comp.nickname && comp.nickname.toLowerCase().includes(term))
+                    );
+
+                    const matchTrans = trans && (
+                        trans.razao_social.toLowerCase().includes(term) ||
+                        (trans.nome_fantasia && trans.nome_fantasia.toLowerCase().includes(term)) ||
+                        (trans.nickname && trans.nickname.toLowerCase().includes(term))
+                    );
+
+                    return matchComp || matchTrans;
                 }))
             .sort((a, b) => {
                 const dateA = new Date(a.createdAt).getTime();

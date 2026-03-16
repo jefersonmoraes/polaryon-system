@@ -86,14 +86,16 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (!supplierSearch) return true;
 
             const term = supplierSearch.toLowerCase();
-            const matchesText = c.nickname?.toLowerCase().includes(term) ||
-                c.nome_fantasia?.toLowerCase().includes(term) ||
+            const numericTerm = supplierSearch.replace(/\D/g, '');
+            
+            const matchesText = (c.nickname && c.nickname.toLowerCase().includes(term)) ||
+                (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(term)) ||
                 c.razao_social.toLowerCase().includes(term) ||
-                c.cnpj?.includes(supplierSearch.replace(/\D/g, '')) ||
-                c.municipio?.toLowerCase().includes(term) ||
-                c.uf?.toLowerCase().includes(term);
+                (numericTerm !== '' && c.cnpj?.includes(numericTerm)) ||
+                (c.municipio && c.municipio.toLowerCase().includes(term)) ||
+                (c.uf && c.uf.toLowerCase().includes(term));
 
-            const matchesAreas = c.areasAtuacao?.some(area => area.toLowerCase().includes(term)) || false;
+            const matchesAreas = (c.areasAtuacao || []).some(area => area.toLowerCase().includes(term));
 
             return matchesText || matchesAreas;
         })
@@ -125,12 +127,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (!transporterSearch) return true;
 
             const term = transporterSearch.toLowerCase();
-            const matchesText = c.nickname?.toLowerCase().includes(term) ||
-                c.nome_fantasia?.toLowerCase().includes(term) ||
+            const numericTerm = transporterSearch.replace(/\D/g, '');
+
+            const matchesText = (c.nickname && c.nickname.toLowerCase().includes(term)) ||
+                (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(term)) ||
                 c.razao_social.toLowerCase().includes(term) ||
-                c.cnpj?.includes(transporterSearch.replace(/\D/g, '')) ||
-                c.municipio?.toLowerCase().includes(term) ||
-                c.uf?.toLowerCase().includes(term);
+                (numericTerm !== '' && c.cnpj?.includes(numericTerm)) ||
+                (c.municipio && c.municipio.toLowerCase().includes(term)) ||
+                (c.uf && c.uf.toLowerCase().includes(term));
 
             const transporterRoutes = routes.filter(r => r.transporterIds.includes(c.id)).map(r => r.name);
             const matchesRoutes = transporterRoutes.some(area => area.toLowerCase().includes(term));
