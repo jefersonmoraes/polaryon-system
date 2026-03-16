@@ -129,8 +129,8 @@ const SuppliersPage = () => {
             logradouro: result.logradouro,
             numero: result.numero,
             complemento: result.complemento,
-            ddd_telefone_1: result.ddd_telefone_1,
-            ddd_telefone_2: result.ddd_telefone_2,
+            ddd_telefone_1: result.ddd_telefone_1?.replace(/\D/g, '') || '',
+            ddd_telefone_2: result.ddd_telefone_2?.replace(/\D/g, '') || '',
             email: result.email || '',
 
             // Initialize new fields

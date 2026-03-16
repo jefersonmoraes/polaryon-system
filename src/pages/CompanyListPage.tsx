@@ -851,7 +851,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                                             <input
                                                                                 type="text"
                                                                                 value={contact.phone || ''}
-                                                                                onChange={(e) => handleUpdateContact(contact.id, { phone: e.target.value })}
+                                                                                onChange={(e) => handleUpdateContact(contact.id, { phone: e.target.value.replace(/\D/g, '') })}
                                                                                 placeholder="Telefone"
                                                                                 className="text-xs bg-background border border-border rounded px-2 py-1 flex-1 outline-none focus:border-primary"
                                                                             />
