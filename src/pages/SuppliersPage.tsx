@@ -4,6 +4,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
+import { getFaviconUrl } from '@/lib/utils';
 
 interface CnpjResult {
     cnpj: string;
@@ -283,8 +284,18 @@ const SuppliersPage = () => {
                                                                 <Link to={`/suppliers-list?id=${company.id}`} key={company.id} className="group p-4 bg-muted/30 border border-border/50 rounded-xl hover:bg-accent/50 hover:border-border transition-all flex flex-col relative overflow-hidden">
                                                                     <div className="flex items-start justify-between mb-3">
                                                                         <div className="flex items-center gap-2">
-                                                                            <div className="p-1.5 bg-blue-500/10 text-blue-500 rounded-md">
-                                                                                <Building2 className="h-4 w-4" />
+                                                                            <div className="relative shrink-0">
+                                                                                <div className="p-1.5 bg-blue-500/10 text-blue-500 rounded-md">
+                                                                                    <Building2 className="h-4 w-4" />
+                                                                                </div>
+                                                                                {company.customLink && (
+                                                                                    <img 
+                                                                                        src={getFaviconUrl(company.customLink)} 
+                                                                                        alt=""
+                                                                                        className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm bg-background border border-border"
+                                                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                                    />
+                                                                                )}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nome_fantasia || company.razao_social}</p>
@@ -350,8 +361,18 @@ const SuppliersPage = () => {
                                                                 <Link to={`/transporters-list?id=${company.id}`} key={company.id} className="group p-4 bg-muted/30 border border-border/50 rounded-xl hover:bg-accent/50 hover:border-border transition-all flex flex-col relative overflow-hidden">
                                                                     <div className="flex items-start justify-between mb-3">
                                                                         <div className="flex items-center gap-2">
-                                                                            <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-md">
-                                                                                <Truck className="h-4 w-4" />
+                                                                            <div className="relative shrink-0">
+                                                                                <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-md">
+                                                                                    <Truck className="h-4 w-4" />
+                                                                                </div>
+                                                                                {company.customLink && (
+                                                                                    <img 
+                                                                                        src={getFaviconUrl(company.customLink)} 
+                                                                                        alt=""
+                                                                                        className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm bg-background border border-border"
+                                                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                                    />
+                                                                                )}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nome_fantasia || company.razao_social}</p>
