@@ -11,7 +11,11 @@ interface Props {
 }
 
 export const BoardListView = ({ boardId, onCardClick, sortBy }: Props) => {
-    const { cards, lists, members, labels } = useKanbanStore();
+    const { cards, lists, members: allMembers, labels } = useKanbanStore();
+    const members = (allMembers || []).filter(m => 
+        !m.email?.toLowerCase().includes('jjcorporation') && 
+        !m.name?.toLowerCase().includes('jjcorporation')
+    );
 
     const boardLists = lists.filter(l => l.boardId === boardId && !l.archived && !l.trashed);
     const boardCards = cards.filter(c => boardLists.some(l => l.id === c.listId) && !c.archived && !c.trashed);

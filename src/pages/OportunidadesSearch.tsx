@@ -191,7 +191,10 @@ export default function OportunidadesSearch() {
     const folders = useKanbanStore(state => state?.folders) || [];
     const boards = useKanbanStore(state => state?.boards) || [];
     const lists = useKanbanStore(state => state?.lists) || [];
-    const currentUser = useKanbanStore(state => state?.members?.[0] || null);
+    const currentUser = useKanbanStore(state => (state?.members || []).filter(m => 
+        !m.email?.toLowerCase().includes('jjcorporation') && 
+        !m.name?.toLowerCase().includes('jjcorporation')
+    )[0] || null);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [exportFolderId, setExportFolderId] = useState('');
     const [exportBoardId, setExportBoardId] = useState('');
