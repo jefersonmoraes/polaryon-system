@@ -202,6 +202,7 @@ model Company {
   cnpj                         String
   razao_social                 String
   nome_fantasia                String
+  nickname                     String?
   descricao_situacao_cadastral String
   cnae_fiscal_descricao        String
   cep                          String
