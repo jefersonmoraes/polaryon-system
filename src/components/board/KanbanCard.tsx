@@ -13,8 +13,8 @@ interface Props {
 const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
   const { labels, members: allMembers, updateCard } = useKanbanStore();
   const members = (allMembers || []).filter(m => 
-    !m.email?.toLowerCase().includes('jjcorporation') && 
-    !m.name?.toLowerCase().includes('jjcorporation')
+    !(m.email || '').toLowerCase().includes('jjcorporation') && 
+    !(m.name || '').toLowerCase().includes('jjcorporation')
   );
   const { currentUser } = useAuthStore();
   const cardLabels = labels.filter(l => card.labels.includes(l.id));

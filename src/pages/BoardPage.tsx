@@ -21,8 +21,8 @@ const BoardPage = () => {
   const folders = useKanbanStore(state => state.folders);
   const cards = useKanbanStore(state => state.cards);
   const members = useKanbanStore(state => (state.members || []).filter(m => 
-    !m.email?.toLowerCase().includes('jjcorporation') && 
-    !m.name?.toLowerCase().includes('jjcorporation')
+    !(m.email || '').toLowerCase().includes('jjcorporation') && 
+    !(m.name || '').toLowerCase().includes('jjcorporation')
   ));
   const addList = useKanbanStore(state => state.addList);
   const updateList = useKanbanStore(state => state.updateList);
