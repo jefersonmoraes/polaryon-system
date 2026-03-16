@@ -3,7 +3,7 @@ import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Chec
 import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface CnpjResult {
     cnpj: string;
@@ -28,6 +28,7 @@ const SuppliersPage = () => {
     const [cnpj, setCnpj] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<CnpjResult | null>(null);
+    const navigate = useNavigate();
 
     const [filterRegiao, setFilterRegiao] = useState('');
     const [filterArea, setFilterArea] = useState('');
@@ -113,7 +114,7 @@ const SuppliersPage = () => {
             return;
         }
 
-        addCompany({
+        const newId = addCompany({
             type,
             cnpj: result.cnpj,
             razao_social: result.razao_social,
@@ -144,6 +145,10 @@ const SuppliersPage = () => {
         toast.success(`Salvo como ${type} com sucesso!`);
         setCnpj('');
         setResult(null);
+
+        // Auto-open the profile
+        const targetPath = type === 'Fornecedor' ? '/suppliers-list' : '/transporters-list';
+        navigate(`${targetPath}?id=${newId}`);
     };
 
     // Format CNPJ as user types

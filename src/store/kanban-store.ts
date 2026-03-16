@@ -42,7 +42,7 @@ interface KanbanState {
   addRecentMilestoneTitle: (title: string) => void;
   removeRecentMilestoneTitle: (title: string) => void;
   // companies
-  addCompany: (companyData: Omit<Company, 'id' | 'createdAt'>) => void;
+  addCompany: (companyData: Omit<Company, 'id' | 'createdAt'>) => string;
   removeCompany: (id: string) => void;
   updateCompany: (id: string, data: Partial<Company>) => void;
   restoreCompany: (id: string) => void;
@@ -442,6 +442,7 @@ export const useKanbanStore = create<KanbanState>()(
         });
         api.post('/kanban/companies', { ...companyData, id, createdAt }).catch(console.error);
         socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_COMPANY', payload: { ...companyData, id, createdAt } });
+        return id;
       },
       removeCompany: (id) => {
         set(s => ({
