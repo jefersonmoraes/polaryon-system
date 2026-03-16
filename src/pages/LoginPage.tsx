@@ -178,7 +178,7 @@ export default function LoginPage() {
 
 
             // Save to Zustand and Session
-            loginWithGoogle(systemUser as any, token);
+            loginWithGoogle(systemUser as any, token, rememberMe);
             useUserPrefsStore.getState().loadPreferences(systemUser.id);
 
             toast.success("Autenticação Google concluída com sucesso!");

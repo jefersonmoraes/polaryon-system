@@ -38,7 +38,7 @@ interface AuthState {
 
     // Actions
     login: (email: string, rememberMe?: boolean) => boolean;
-    loginWithGoogle: (userData: SystemUser, token: string) => void;
+    loginWithGoogle: (userData: SystemUser, token: string, rememberMe?: boolean) => void;
     logout: () => void;
     updateProfile: (updates: Partial<SystemUser>) => void;
 
@@ -91,8 +91,8 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             jwtToken: null,
 
-            loginWithGoogle: (userData: SystemUser, token: string) => {
-                const { systemUsers, updateUser } = get();
+            loginWithGoogle: (userData: SystemUser, token: string, rememberMe = false) => {
+                const { systemUsers } = get();
                 const normalizedEmail = userData.email.toLowerCase().trim();
                 const isAdminEmail = AUTO_ADMIN_EMAILS.includes(normalizedEmail);
 
@@ -120,6 +120,12 @@ export const useAuthStore = create<AuthState>()(
                     finalUserData = mergedUser;
                 } else {
                     newSystemUsers.push(finalUserData);
+                }
+
+                if (rememberMe) {
+                    localStorage.setItem('rememberMe', 'true');
+                } else {
+                    localStorage.removeItem('rememberMe');
                 }
 
                 set({
