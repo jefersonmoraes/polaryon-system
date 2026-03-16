@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import {
@@ -55,8 +56,14 @@ const BudgetsPage = () => {
             });
     }, [budgets, typeFilter, statusFilter, searchQuery, companies, sortOrder]);
 
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    const getCompanyFavicon = (id?: string) => {
+        if (!id) return undefined;
+        const c = companies.find(c => c.id === id);
+        return c?.customLink ? getFaviconUrl(c.customLink) : undefined;
+    };
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     };
 
     const handleEdit = (budget: Budget) => {
@@ -233,12 +240,27 @@ const BudgetsPage = () => {
 
                                         return (
                                             <>
-                                                <div className="flex items-center gap-1 line-clamp-1" title={suppliers.map(getCompanyName).join(', ')}>
-                                                    <Building2 className="h-3.5 w-3.5 shrink-0" />
-                                                    {suppliers.length > 0 ? (
-                                                        <span>{suppliers.length} Fornecedor{suppliers.length > 1 ? 'es' : ''} ({suppliers.slice(0, 2).map(getCompanyName).join(', ')}{suppliers.length > 2 ? '...' : ''})</span>
-                                                    ) : 'Sem Fornecedores'}
+                                                <div className="flex items-center gap-1.5 min-w-0" title={suppliers.map(getCompanyName).join(', ')}>
+                                                <Building2 className="h-3 w-3 shrink-0" />
+                                                <div className="flex -space-x-1 overflow-hidden shrink-0">
+                                                    {suppliers.slice(0, 3).map(sid => {
+                                                        const fav = getCompanyFavicon(sid);
+                                                        if (!fav) return null;
+                                                        return (
+                                                            <img 
+                                                                key={sid}
+                                                                src={fav} 
+                                                                alt=""
+                                                                className="w-3.5 h-3.5 rounded-sm bg-background border border-border/50 ring-1 ring-background"
+                                                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                            />
+                                                        );
+                                                    })}
                                                 </div>
+                                                {suppliers.length > 0 ? (
+                                                    <span className="truncate">{suppliers.length} Fornecedor{suppliers.length > 1 ? 'es' : ''}</span>
+                                                ) : 'Sem Fornecedor'}
+                                            </div>
                                                 {transporters.length > 0 && (
                                                     <div className="flex items-center gap-1 line-clamp-1 text-primary/80" title={transporters.map(getCompanyName).join(', ')}>
                                                         <Truck className="h-3.5 w-3.5 shrink-0" />

@@ -8,6 +8,7 @@ import {
     Phone, Mail, MessageCircle, ExternalLink
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
+import { getFaviconUrl } from '@/lib/utils';
 
 interface BudgetModalProps {
     budget?: Budget;
@@ -384,7 +385,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             >
                                 ★
                             </button>
-                            <Building2 className="h-4 w-4 text-primary" />
+                             {supplierParams?.customLink && (
+                                <img 
+                                    src={getFaviconUrl(supplierParams.customLink)} 
+                                    alt=""
+                                    className="w-4 h-4 rounded-sm bg-background border border-border/20 shrink-0"
+                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                />
+                            )}
                             {supplierName}
                         </h4>
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -722,9 +730,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     className={`w-full text-left px-3 py-2 rounded-md transition-all hover:bg-primary/5 border border-transparent hover:border-primary/20 flex flex-col gap-0.5 group ${c.isFavorite ? 'bg-primary/5 border-primary/10' : ''}`}
                                                 >
                                                     <div className="flex justify-between items-start w-full gap-2">
-                                                        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
-                                                            {c.nome_fantasia || c.razao_social}
-                                                        </span>
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            {c.customLink && (
+                                                                <img 
+                                                                    src={getFaviconUrl(c.customLink)} 
+                                                                    alt=""
+                                                                    className="w-3.5 h-3.5 rounded-sm bg-background border border-border/20 shrink-0"
+                                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                />
+                                                            )}
+                                                            <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                                                {c.nome_fantasia || c.razao_social}
+                                                            </span>
+                                                        </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             {c.isFavorite && <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Destaque</span>}
                                                             {c.rating ? (
@@ -852,9 +870,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     className={`w-full text-left px-3 py-2 rounded-md transition-all hover:bg-primary/5 border border-transparent hover:border-primary/20 flex flex-col gap-0.5 group ${c.isFavorite ? 'bg-primary/5 border-primary/10' : ''}`}
                                                 >
                                                     <div className="flex justify-between items-start w-full gap-2">
-                                                        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
-                                                            {c.nome_fantasia || c.razao_social}
-                                                        </span>
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            {c.customLink && (
+                                                                <img 
+                                                                    src={getFaviconUrl(c.customLink)} 
+                                                                    alt=""
+                                                                    className="w-3.5 h-3.5 rounded-sm bg-background border border-border/20 shrink-0"
+                                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                />
+                                                            )}
+                                                            <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                                                {c.nome_fantasia || c.razao_social}
+                                                            </span>
+                                                        </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             {c.isFavorite && <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Destaque</span>}
                                                             {c.rating ? (

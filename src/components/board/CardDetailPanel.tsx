@@ -13,6 +13,7 @@ import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
+import { getFaviconUrl } from '@/lib/utils';
 
 const statusStyles: Record<BudgetStatus, string> = {
   Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
@@ -59,6 +60,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const members = useKanbanStore(state => state.members);
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
+
+  const getCompanyFavicon = (id?: string) => {
+    if (!id) return undefined;
+    const c = companies.find(c => c.id === id);
+    return c?.customLink ? getFaviconUrl(c.customLink) : undefined;
+  };
 
   const getCompanyName = (id?: string) => {
     if (!id) return '';
@@ -661,7 +668,18 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                               <span className="text-xs font-bold text-green-600 dark:text-green-400">
                                 {(winningQuotation.totalPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </span>
-                              <span className="text-[9px] text-muted-foreground max-w-[120px] truncate" title={getCompanyName(winningQuotation.companyId)}>
+                              <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={getCompanyName(winningQuotation.companyId)}>
+                                {(() => {
+                                  const fav = getCompanyFavicon(winningQuotation.companyId);
+                                  return fav ? (
+                                    <img 
+                                      src={fav} 
+                                      alt=""
+                                      className="w-3 h-3 rounded-sm shrink-0"
+                                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                                    />
+                                  ) : null;
+                                })()}
                                 {getCompanyName(winningQuotation.companyId)}
                               </span>
                             </div>

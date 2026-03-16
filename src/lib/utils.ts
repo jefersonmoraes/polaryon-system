@@ -25,3 +25,16 @@ export function fixDateToBRT(dateStr: string | null | undefined): Date | null {
 
     return d;
 }
+export function getFaviconUrl(url?: string): string | undefined {
+    if (!url) return undefined;
+    try {
+        let domain = url.trim();
+        if (!domain.startsWith('http')) {
+            domain = 'https://' + domain;
+        }
+        const urlObj = new URL(domain);
+        return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
+    } catch (e) {
+        return undefined;
+    }
+}
