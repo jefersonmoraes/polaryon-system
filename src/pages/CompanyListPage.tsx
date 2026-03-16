@@ -127,6 +127,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
             return (
                 c.razao_social.toLowerCase().includes(searchLower) ||
                 (c.nome_fantasia && c.nome_fantasia.toLowerCase().includes(searchLower)) ||
+                (c.nickname && c.nickname.toLowerCase().includes(searchLower)) ||
                 c.cnpj.includes(searchTerm)
             );
         });
