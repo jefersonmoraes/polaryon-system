@@ -298,7 +298,7 @@ const SuppliersPage = () => {
                                                                                 )}
                                                                             </div>
                                                                             <div>
-                                                                                <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nome_fantasia || company.razao_social}</p>
+                                                                                <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nickname || company.nome_fantasia || company.razao_social}</p>
                                                                                 <p className="text-[10px] text-muted-foreground">{company.cnpj}</p>
                                                                             </div>
                                                                         </div>

@@ -86,7 +86,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (!supplierSearch) return true;
 
             const term = supplierSearch.toLowerCase();
-            const matchesText = c.nome_fantasia?.toLowerCase().includes(term) ||
+            const matchesText = c.nickname?.toLowerCase().includes(term) ||
+                c.nome_fantasia?.toLowerCase().includes(term) ||
                 c.razao_social.toLowerCase().includes(term) ||
                 c.cnpj?.includes(supplierSearch.replace(/\D/g, '')) ||
                 c.municipio?.toLowerCase().includes(term) ||
@@ -107,8 +108,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (ratingA !== ratingB) return ratingB - ratingA;
 
             // 3. Alphabetical order last
-            const nameA = a.nome_fantasia || a.razao_social;
-            const nameB = b.nome_fantasia || b.razao_social;
+            const nameA = a.nickname || a.nome_fantasia || a.razao_social;
+            const nameB = b.nickname || b.nome_fantasia || b.razao_social;
             return nameA.localeCompare(nameB);
         });
 
@@ -124,7 +125,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (!transporterSearch) return true;
 
             const term = transporterSearch.toLowerCase();
-            const matchesText = c.nome_fantasia?.toLowerCase().includes(term) ||
+            const matchesText = c.nickname?.toLowerCase().includes(term) ||
+                c.nome_fantasia?.toLowerCase().includes(term) ||
                 c.razao_social.toLowerCase().includes(term) ||
                 c.cnpj?.includes(transporterSearch.replace(/\D/g, '')) ||
                 c.municipio?.toLowerCase().includes(term) ||
@@ -146,8 +148,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             if (ratingA !== ratingB) return ratingB - ratingA;
 
             // 3. Alphabetical order last
-            const nameA = a.nome_fantasia || a.razao_social;
-            const nameB = b.nome_fantasia || b.razao_social;
+            const nameA = a.nickname || a.nome_fantasia || a.razao_social;
+            const nameB = b.nickname || b.nome_fantasia || b.razao_social;
             return nameA.localeCompare(nameB);
         });
 
@@ -167,7 +169,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     }, [item.mainCompanyId, defaultAdmin, item.id, updateItem]);
 
     const supplierParams = companies.find(c => c.id === item.companyId);
-    const supplierName = supplierParams ? (supplierParams.nome_fantasia || supplierParams.razao_social) : "Sem fornecedor";
+    const supplierName = supplierParams ? (supplierParams.nickname || supplierParams.nome_fantasia || supplierParams.razao_social) : "Sem fornecedor";
 
     const addSubItem = () => {
         const newSubItem = {
@@ -740,7 +742,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                                 />
                                                             )}
                                                             <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
-                                                                {c.nome_fantasia || c.razao_social}
+                                                                {c.nickname || c.nome_fantasia || c.razao_social}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">

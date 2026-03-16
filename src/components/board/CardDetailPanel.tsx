@@ -70,7 +70,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const getCompanyName = (id?: string) => {
     if (!id) return '';
     const c = companies.find(c => c.id === id);
-    return c ? (c.nome_fantasia || c.razao_social) : 'Empresa Indisponível';
+    return c ? (c.nickname || c.nome_fantasia || c.razao_social) : 'Empresa Indisponível';
   };
 
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {

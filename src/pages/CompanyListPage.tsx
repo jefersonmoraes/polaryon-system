@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 interface CompanyListPageProps {
@@ -440,7 +440,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                         )}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="font-bold text-sm line-clamp-1">{company.nome_fantasia || company.razao_social}</p>
+                                                        <p className="font-bold text-sm line-clamp-1">{company.nickname || company.nome_fantasia || company.razao_social}</p>
                                                         <p className={`text-[10px] truncate ${selectedCompanyId === company.id ? 'text-yellow-100' : 'text-muted-foreground'}`}>{company.cnpj}</p>
                                                     </div>
                                                 </div>
@@ -472,7 +472,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                         onError={(e) => (e.currentTarget.style.display = 'none')}
                                                     />
                                                 )}
-                                                <p className="font-bold text-sm line-clamp-1">{company.nome_fantasia || company.razao_social}</p>
+                                                <p className="font-bold text-sm line-clamp-1">{company.nickname || company.nome_fantasia || company.razao_social}</p>
                                             </div>
                                             {companyRatings[company.id] ? (
                                                 <div className="flex items-center shrink-0" title={`Média das cotações (${companyRatings[company.id]} estrelas)`}>
@@ -564,7 +564,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                                 setSearchParams({});
                                                             }}
                                                         >
-                                                            <p className="text-base font-semibold truncate group-hover:text-primary transition-colors">{t!.nome_fantasia || t!.razao_social}</p>
+                                                            <p className="text-base font-semibold truncate group-hover:text-primary transition-colors">{t!.nickname || t!.nome_fantasia || t!.razao_social}</p>
                                                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                                                                 <span className="truncate">{t!.cnpj}</span>
                                                                 <span className="px-1.5 py-0.5 bg-muted rounded truncate">{t!.logradouro ? `${t!.municipio}/${t!.uf}` : 'Sem Endereço'}</span>
@@ -641,7 +641,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                                 />
                                             )}
-                                            {selectedCompany.nome_fantasia || selectedCompany.razao_social}
+                                            {selectedCompany.nickname || selectedCompany.nome_fantasia || selectedCompany.razao_social}
                                         </h2>
                                     </div>
                                     <p className="text-base font-medium text-muted-foreground mt-1 ml-10">{selectedCompany.razao_social}</p>
@@ -686,6 +686,19 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                 )}
                             </div>
 
+                            {/* Nickname Field */}
+                            <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"><Tag className="h-4 w-4" /> Apelido (Nome Social)</p>
+                                <input
+                                    type="text"
+                                    value={selectedCompany.nickname || ''}
+                                    onChange={(e) => updateCompany(selectedCompany.id, { nickname: e.target.value })}
+                                    placeholder="Defina um apelido para esta empresa..."
+                                    className="w-full bg-muted/20 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                    disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                />
+                            </div>
+
                             {/* Custom Link Setup */}
                             <div className="bg-primary/5 rounded-xl border border-primary/20 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                                 <div className="flex-1 w-full relative">
@@ -720,6 +733,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                     <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"><Briefcase className="h-4 w-4" /> CNPJ</p>
                                     <p className="text-sm font-medium text-foreground">{selectedCompany.cnpj}</p>
                                 </div>
+
 
                                 <div className="space-y-1">
                                     <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"><MapPin className="h-4 w-4" /> Atividade Principal</p>

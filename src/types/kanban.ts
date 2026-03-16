@@ -136,6 +136,7 @@ export interface Company {
   cnpj: string;
   razao_social: string;
   nome_fantasia: string;
+  nickname?: string;
   descricao_situacao_cadastral: string;
   cnae_fiscal_descricao: string;
   cep: string;

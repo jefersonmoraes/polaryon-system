@@ -47,8 +47,12 @@ const BudgetsPage = () => {
             .filter(b => typeFilter === 'Todos' || b.type === typeFilter)
             .filter(b => statusFilter === 'Todos' || b.status === statusFilter)
             .filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                b.items?.some(i => companies.find(c => c.id === i.companyId)?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    companies.find(c => c.id === i.companyId)?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase())))
+                b.items?.some(i => {
+                    const c = companies.find(comp => comp.id === i.companyId);
+                    return c?.razao_social.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        c?.nome_fantasia?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        c?.nickname?.toLowerCase().includes(searchQuery.toLowerCase());
+                }))
             .sort((a, b) => {
                 const dateA = new Date(a.createdAt).getTime();
                 const dateB = new Date(b.createdAt).getTime();
@@ -79,7 +83,7 @@ const BudgetsPage = () => {
     const getCompanyName = (id?: string) => {
         if (!id) return 'Não informada';
         const c = companies.find(c => c.id === id);
-        return c ? (c.nome_fantasia || c.razao_social) : 'Empresa não encontrada';
+        return c ? (c.nickname || c.nome_fantasia || c.razao_social) : 'Empresa não encontrada';
     };
 
     return (
@@ -335,7 +339,10 @@ const BudgetsPage = () => {
                                                         {formatCurrency(winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0)}
                                                     </p>
                                                     <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5">
-                                                        {companies.find(c => c.id === winningQuotation.companyId)?.nome_fantasia || winningQuotation.companyId || 'Sem Empresa'}
+                                                        {(() => {
+                                                            const winComp = companies.find(c => c.id === winningQuotation.companyId);
+                                                            return winComp ? (winComp.nickname || winComp.nome_fantasia || winComp.razao_social) : (winningQuotation.companyId || 'Sem Empresa');
+                                                        })()}
                                                     </span>
                                                 </div>
                                             );
