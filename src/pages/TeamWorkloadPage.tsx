@@ -8,9 +8,9 @@ import { useState, useMemo } from 'react';
 import { Card } from '@/types/kanban';
 
 export default function TeamWorkloadPage() {
-    const members = useKanbanStore(state => state.members.filter(m => 
-        !m.email.toLowerCase().includes('jjcorporation') && 
-        !m.name.toLowerCase().includes('jjcorporation')
+    const members = useKanbanStore(state => (state.members || []).filter(m => 
+        !m.email?.toLowerCase().includes('jjcorporation') && 
+        !m.name?.toLowerCase().includes('jjcorporation')
     ));
     const cards = useKanbanStore(state => state.cards);
     const boards = useKanbanStore(state => state.boards);
