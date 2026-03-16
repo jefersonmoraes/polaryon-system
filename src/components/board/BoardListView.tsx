@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import { Card, KanbanList } from '@/types/kanban';

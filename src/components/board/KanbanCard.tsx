@@ -1,4 +1,5 @@
 import { Card } from '@/types/kanban';
+import { useMemo } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { CheckSquare, Calendar, MessageSquare, Paperclip, Clock, User } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
