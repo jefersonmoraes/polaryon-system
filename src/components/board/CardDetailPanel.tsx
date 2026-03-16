@@ -57,10 +57,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const list = card ? lists.find(l => l.id === card.listId) : null;
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const members = useKanbanStore(state => (state.members || []).filter(m => 
+  const allMembers = useKanbanStore(state => state.members);
+  const members = useMemo(() => (allMembers || []).filter(m => 
+    m &&
     !(m.email || '').toLowerCase().includes('jjcorporation') && 
     !(m.name || '').toLowerCase().includes('jjcorporation')
-  ));
+  ), [allMembers]);
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
 

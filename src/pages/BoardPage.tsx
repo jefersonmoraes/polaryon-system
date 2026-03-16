@@ -20,10 +20,12 @@ const BoardPage = () => {
   const lists = useKanbanStore(state => state.lists);
   const folders = useKanbanStore(state => state.folders);
   const cards = useKanbanStore(state => state.cards);
-  const members = useKanbanStore(state => (state.members || []).filter(m => 
+  const allMembers = useKanbanStore(state => state.members);
+  const members = useMemo(() => (allMembers || []).filter(m => 
+    m &&
     !(m.email || '').toLowerCase().includes('jjcorporation') && 
     !(m.name || '').toLowerCase().includes('jjcorporation')
-  ));
+  ), [allMembers]);
   const addList = useKanbanStore(state => state.addList);
   const updateList = useKanbanStore(state => state.updateList);
   const deleteList = useKanbanStore(state => state.deleteList);
