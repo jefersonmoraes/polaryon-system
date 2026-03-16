@@ -234,9 +234,15 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                             {type === 'Fornecedor' ? <Briefcase className="h-6 w-6" /> : <Truck className="h-6 w-6" />}
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight">Lista de {type === 'Fornecedor' ? 'Fornecedores' : 'Transportadoras'}</h1>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-2xl font-bold tracking-tight">Lista de {type === 'Fornecedor' ? 'Fornecedores' : 'Transportadoras'}</h1>
+                                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 shadow-sm">
+                                    {companies.filter(c => c.type === type && !c.trashed).length} Total
+                                </span>
+                            </div>
                             <p className="text-sm text-muted-foreground mt-1">
                                 Visualização de {type === 'Fornecedor' ? 'fornecedores' : 'transportadoras'} salvos no sistema.
+                                {searchTerm && <span className="ml-1 font-medium text-primary">({filteredCompanies.length} resultados encontrados)</span>}
                             </p>
                         </div>
                     </div>
