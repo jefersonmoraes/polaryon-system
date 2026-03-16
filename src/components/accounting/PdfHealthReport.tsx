@@ -104,7 +104,7 @@ export const PdfHealthReport = React.forwardRef<HTMLDivElement, { activeCompany:
             </main>
 
             <footer className="mt-8 pt-4 border-t border-slate-200 text-center">
-                <p className="text-[10px] text-slate-400 italic">Documento gerado automaticamente pelo Flowtask Pro. Uso exclusivo gerencial. Não substitui demonstrações contábeis oficiais.</p>
+                <p className="text-[10px] text-slate-400 italic">Documento gerado automaticamente pelo Polaryon System. Uso exclusivo gerencial. Não substitui demonstrações contábeis oficiais.</p>
             </footer>
         </div>
     );

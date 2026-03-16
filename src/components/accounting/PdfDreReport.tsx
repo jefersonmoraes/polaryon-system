@@ -69,13 +69,13 @@ export const PdfDreReport = React.forwardRef<HTMLDivElement, { activeCompany: an
                 </table>
                 <div className="mt-8 text-sm text-slate-500 leading-relaxed border p-4 rounded-lg bg-orange-50 border-orange-100">
                     <p className="font-semibold text-orange-800 mb-1">Nota Explicativa:</p>
-                    Este Demonstrativo do Resultado do Exercício (DRE) foi consolidado com base nos registros mantidos pelo sistema Flowtask Pro até a presente data.
+                    Este Demonstrativo do Resultado do Exercício (DRE) foi consolidado com base nos registros mantidos pelo sistema Polaryon System até a presente data.
                     Recomenda-se a revisão criteriosa de todas as entradas pela contabilidade, antes da submissão a órgãos governamentais.
                 </div>
             </main>
 
             <footer className="mt-8 text-center border-t border-slate-200 pt-4">
-                <p className="text-xs text-slate-500 font-medium">FLOWTASK PRO - MÓDULO CONTÁBIL</p>
+                <p className="text-xs text-slate-500 font-medium">POLARYON SYSTEM - MÓDULO CONTÁBIL</p>
             </footer>
         </div>
     );
