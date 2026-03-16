@@ -11,34 +11,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install Frontend Dependencies
-        run: npm install
-
-      - name: Build Frontend
-        run: npm run build
-
-      - name: Deploy Frontend to VPS
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USERNAME || 'root' }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          source: "dist/*"
-          target: "/var/www/polaryon/"
-          strip_components: 0
-
-      - name: Deploy Backend and Restart Service
+      - name: Trigger VPS Deploy Script
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_IP }}
@@ -46,25 +20,4 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www/polaryon
-            git pull origin main
-            
-            # Backend updates
-            cd backend
-            npm install
-            npx prisma generate
-            npm run build
-            
-            # Restart persistent process (Assuming PM2 is used as a standard for VPS)
-            # If PM2 is not found, it will try to restart using a generic name
-            if command -v pm2 &> /dev/null; then
-              pm2 restart polaryon-backend || pm2 start dist/server.js --name polaryon-backend
-              pm2 save
-            else
-              echo "PM2 not found. Please ensure your backend service is running correctly."
-              # Fallback: kill existing node process and start new one (NOT RECOMMENDED FOR PROD)
-              # pkill -f "node dist/server.js" || true
-              # nohup node dist/server.js > /dev/null 2>&1 &
-            fi
-            
-            # Cloudflare / Nginx cache clear (Optional but useful)
-            # sudo systemctl reload nginx
+            bash vps-deploy.sh
