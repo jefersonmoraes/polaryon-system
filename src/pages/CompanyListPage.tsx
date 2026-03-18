@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag, AlertCircle, AlertTriangle, Download } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 interface CompanyListPageProps {
     type: 'Fornecedor' | 'Transportadora';
 }
@@ -192,6 +194,35 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
         updateCompany(selectedCompany.id, { areasAtuacao: newAreas });
     };
 
+    const handleExportODS = () => {
+        const dataToExport = filteredCompanies.map(c => ({
+            'Tipo': c.type,
+            'Razão Social': c.razao_social,
+            'Nome Fantasia': c.nome_fantasia || '',
+            'Apelido': c.nickname || '',
+            'CNPJ': c.cnpj,
+            'UF': c.uf || '',
+            'Município': c.municipio || '',
+            'Logradouro': c.logradouro || '',
+            'Número': c.numero || '',
+            'Complemento': c.complemento || '',
+            'Bairro': c.bairro || '',
+            'CEP': c.cep || '',
+            'Telefone 1': c.ddd_telefone_1 || '',
+            'Telefone 2': c.ddd_telefone_2 || '',
+            'E-mail': c.email || '',
+            'Áreas de Atuação': c.areasAtuacao?.join(', ') || '',
+            'Avaliação (Média)': companyRatings[c.id] || 'N/A'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, type === 'Fornecedor' ? 'Fornecedores' : 'Transportadoras');
+        
+        XLSX.writeFile(workbook, `Polaryon_Lista_${type === 'Fornecedor' ? 'Fornecedores' : 'Transportadoras'}_${new Date().toISOString().split('T')[0]}.ods`);
+        toast.success(`Lista de ${type.toLowerCase()}s exportada para .ods!`);
+    };
+
     const handleCreateRoute = () => {
         if (!newRouteOrigin || !newRouteDest || !newRouteName) return;
 
@@ -272,6 +303,15 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                             <Filter className="h-4 w-4" />
                             Filtros {(filterFavorite || filterMinRating > 0 || filterState || filterArea) ? <span className="flex h-2 w-2 rounded-full bg-primary" /> : null}
                         </button>
+                        {currentUser?.permissions?.canDownload && (
+                            <button
+                                onClick={handleExportODS}
+                                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-all shadow-sm active:scale-95"
+                            >
+                                <Download className="h-4 w-4" />
+                                Exportar .ods
+                            </button>
+                        )}
                     </div>
                 </div>
 

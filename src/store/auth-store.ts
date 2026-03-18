@@ -47,6 +47,8 @@ interface AuthState {
     updateUser: (id: string, updates: Partial<SystemUser>) => void;
     removeUser: (id: string) => void;
     hasScreenAccess: (screenId: string) => boolean;
+    onlineUsers: string[];
+    setOnlineUsers: (userIds: string[]) => void;
 }
 
 const DEFAULT_ADMIN: SystemUser = {
@@ -90,6 +92,9 @@ export const useAuthStore = create<AuthState>()(
             systemUsers: [DEFAULT_ADMIN], // Start with the default admin
             isAuthenticated: false,
             jwtToken: null,
+            onlineUsers: [],
+
+            setOnlineUsers: (userIds) => set({ onlineUsers: userIds }),
 
             loginWithGoogle: (userData: SystemUser, token: string, rememberMe = false) => {
                 const { systemUsers } = get();

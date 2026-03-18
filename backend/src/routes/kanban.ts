@@ -624,7 +624,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.taxObligation.findMany(),
             prisma.accountingSettings.findMany(),
             prisma.accountantExport.findMany(),
-            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 100 })
+            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 5000 })
         ]);
 
         const members = usersDb.map((u: any) => ({

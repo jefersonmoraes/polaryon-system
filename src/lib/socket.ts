@@ -45,6 +45,10 @@ class SocketService {
             this.socket.on('system_sync', (data) => {
                 this.trigger('system_sync', data);
             });
+
+            this.socket.on('online_users', (data) => {
+                this.trigger('online_users', data);
+            });
         }
     }
 

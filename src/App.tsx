@@ -13,6 +13,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import AppSidebar from "@/components/layout/AppSidebar";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { socketService } from '@/lib/socket';
 import LoginPage from "./pages/LoginPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AuditLogPage from "./pages/AuditLogPage";
@@ -44,7 +45,7 @@ import { useCertificateStore } from '@/store/certificate-store';
 
 const AppContent = () => {
   const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany, fetchKanbanData } = useKanbanStore();
-  const { isAuthenticated, currentUser: authUser } = useAuthStore();
+  const { isAuthenticated, currentUser: authUser, setOnlineUsers } = useAuthStore();
   const { uiZoom, isDark } = useUserPrefsStore();
   const { documents, validateDocumentStatuses, cleanOldTrash: cleanDocsTrash } = useDocumentStore();
   const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
@@ -87,6 +88,27 @@ const AppContent = () => {
 
     fetchKanbanData();
   }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
+
+  // Real-time Presence Monitor
+  useEffect(() => {
+    if (!isAuthenticated || !authUser) return;
+
+    const handleOnlineUsers = (userIds: string[]) => {
+      setOnlineUsers(userIds);
+    };
+
+    // Small delay to ensure socket has time to connect (if not already)
+    const timeout = setTimeout(() => {
+        socketService.emit('user_join', authUser.id);
+        socketService.on('online_users', handleOnlineUsers);
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeout);
+      socketService.off('online_users', handleOnlineUsers);
+    };
+  }, [isAuthenticated, authUser, setOnlineUsers]);
+
 
   // Background CNPJ Monitor - Checks status every 7 days
   useEffect(() => {

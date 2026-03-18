@@ -22,7 +22,7 @@ const AVAILABLE_SCREENS = [
 ];
 
 export default function AdminDashboardPage() {
-    const { currentUser, addUser, updateUser, removeUser } = useAuthStore();
+    const { currentUser, addUser, updateUser, removeUser, onlineUsers } = useAuthStore();
     const [systemsUsersDb, setSystemsUsersDb] = useState<SystemUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -286,13 +286,14 @@ export default function AdminDashboardPage() {
                                                 <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-xs shrink-0 truncate overflow-hidden">
                                                     {user.photoURL ? <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-foreground flex items-center gap-2">
-                                                        {user.name}
-                                                        {isMe && <span className="bg-primary/20 text-primary text-[9px] px-1.5 py-0.5 rounded uppercase">Você</span>}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">Adicionado em {new Date(user.createdAt).toLocaleDateString()}</span>
-                                                </div>
+                                                 <div className="flex flex-col">
+                                                     <span className="font-bold text-foreground flex items-center gap-2">
+                                                         <div className={`w-2 h-2 rounded-full shrink-0 ${onlineUsers.includes(user.id) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-slate-500/30'}`} title={onlineUsers.includes(user.id) ? 'Online agora' : 'Offline'} />
+                                                         {user.name}
+                                                         {isMe && <span className="bg-primary/20 text-primary text-[9px] px-1.5 py-0.5 rounded uppercase">Você</span>}
+                                                     </span>
+                                                     <span className="text-xs text-muted-foreground">Adicionado em {new Date(user.createdAt).toLocaleDateString()}</span>
+                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-5 py-4 font-mono text-xs">{user.email}</td>

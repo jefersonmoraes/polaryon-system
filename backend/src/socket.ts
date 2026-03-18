@@ -11,8 +11,24 @@ export const initSocket = (server: HttpServer) => {
         }
     });
 
+    const onlineUsers = new Map<string, string>(); // socket.id -> userId
+
+    const broadcastOnlineUsers = () => {
+        const userIds = Array.from(new Set(onlineUsers.values()));
+        io.emit('online_users', userIds);
+    };
+
     io.on('connection', (socket: Socket) => {
         console.log(`🔌 Client Connected: ${socket.id}`);
+
+        // Handle user identification for presence
+        socket.on('user_join', (userId: string) => {
+            if (userId) {
+                onlineUsers.set(socket.id, userId);
+                broadcastOnlineUsers();
+                console.log(`👤 User ${userId} joined (Socket: ${socket.id})`);
+            }
+        });
 
         socket.on('kanban_action', (data) => {
             // Emits to all OTHER clients
@@ -25,6 +41,10 @@ export const initSocket = (server: HttpServer) => {
         });
 
         socket.on('disconnect', () => {
+            if (onlineUsers.has(socket.id)) {
+                onlineUsers.delete(socket.id);
+                broadcastOnlineUsers();
+            }
             console.log(`🔌 Client Disconnected: ${socket.id}`);
         });
     });
