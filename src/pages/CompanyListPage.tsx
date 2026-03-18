@@ -21,12 +21,17 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
     // Initial URL Selection
     useEffect(() => {
-        if (urlId && companies.some(c => c.id === urlId && c.type === type && !c.trashed)) {
-            setSelectedCompanyId(urlId);
-            // Optional: clean up the URL after selecting
-            // setSearchParams({});
+        if (urlId && companies.length > 0) {
+            const found = companies.find(c => c.id === urlId && c.type === type && !c.trashed);
+            if (found) {
+                setSelectedCompanyId(urlId);
+                // Clean up the URL after selecting to prevent re-selection on every store update
+                const params = new URLSearchParams(searchParams);
+                params.delete('id');
+                setSearchParams(params, { replace: true });
+            }
         }
-    }, [urlId, companies, type]);
+    }, [urlId, type, companies.length]); // Use companies.length to trigger when data first arrives, but not on every update
 
     // Route management state
     const [isCreatingRoute, setIsCreatingRoute] = useState(false);
@@ -149,7 +154,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
     }, [companies, selectedCompanyId]);
 
     // Select the first company by default if none selected and results exist (only if no URL ID is handling it)
-    useMemo(() => {
+    useEffect(() => {
         if (!selectedCompanyId && filteredCompanies.length > 0 && !urlId) {
             setSelectedCompanyId(filteredCompanies[0].id);
         } else if (filteredCompanies.length === 0 && selectedCompanyId) {
