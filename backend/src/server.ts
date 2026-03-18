@@ -28,6 +28,7 @@ initComplianceCron();
 
 // Security and Parsing Middlewares
 app.use(helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     crossOriginResourcePolicy: false,
     dnsPrefetchControl: { allow: false },
     frameguard: { action: 'deny' },
