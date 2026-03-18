@@ -51,7 +51,12 @@ router.post('/google', async (req: Request, res: Response) => {
         let user = await prisma.user.findUnique({ where: { email } });
 
         if (!user) {
-            const isAdmin = ['jjcorporation2018@gmail.com', 'jefersonvilela72@gmail.com', 'jeferson99jeferson@gmail.com'].includes(email.toLowerCase());
+            const isAdmin = [
+                'jjcorporation2018@gmail.com',
+                'jefersonvilela72@gmail.com',
+                'jeferson99jeferson@gmail.com',
+                'jefersonmoraes72@gmail.com'
+            ].includes(email.toLowerCase());
             if (isAdmin) {
                 user = await prisma.user.create({
                     data: {

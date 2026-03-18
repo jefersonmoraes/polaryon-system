@@ -274,7 +274,7 @@ model CompanyDocument {
   title           String
   type            String
   issueDate       DateTime?
-  expirationDate  DateTime
+  expirationDate  DateTime?
   link            String?  @db.Text
   description     String?  @db.Text
   observations    String?  @db.Text
