@@ -297,10 +297,12 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <SidebarProvider>
-            <ConnectionBanner />
-            <AppContent />
-          </SidebarProvider>
+          <div className="h-screen w-screen overflow-hidden flex flex-col bg-background">
+            <SidebarProvider>
+              <ConnectionBanner />
+              <AppContent />
+            </SidebarProvider>
+          </div>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
