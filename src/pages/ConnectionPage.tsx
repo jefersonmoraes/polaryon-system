@@ -65,7 +65,12 @@ const ConnectionPage = () => {
             );
         }
 
-        return base;
+        // Favoritos primeiro, depois por ordem customizada
+        return [...base].sort((a, b) => {
+            if (a.isFavorite && !b.isFavorite) return -1;
+            if (!a.isFavorite && b.isFavorite) return 1;
+            return a.order - b.order;
+        });
     }, [activeLinks, trashedLinks, viewMode, selectedFolderId, searchQuery]);
 
     const getFavicon = (url: string) => {
@@ -81,44 +86,17 @@ const ConnectionPage = () => {
         setLinkDialogOpen(true, link);
     };
 
-    const moveFolder = (folderId: string, direction: 'up' | 'down') => {
-        const folder = folders.find(f => f.id === folderId);
-        if (!folder) return;
-
-        // Reorder only within the same parent
-        const siblings = folders
-            .filter(f => f.parentId === folder.parentId)
-            .sort((a, b) => a.order - b.order);
-        
-        const currentIndex = siblings.findIndex(f => f.id === folderId);
-        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-        
-        if (targetIndex < 0 || targetIndex >= siblings.length) return;
-
-        const newSiblings = [...siblings];
-        const [moved] = newSiblings.splice(currentIndex, 1);
-        newSiblings.splice(targetIndex, 0, moved);
-
-        // Map back to global folders with updated orders ONLY for items that changed
-        const siblingIds = newSiblings.map(s => s.id);
-        const updatedGlobalFolders = folders.map(f => {
-            const siblingIdx = siblingIds.indexOf(f.id);
-            if (siblingIdx !== -1) {
-                return { ...f, order: siblingIdx };
-            }
-            return f;
-        });
-
-        reorderFolders(updatedGlobalFolders);
-    };
-
     const moveLink = (linkId: string, direction: 'up' | 'down') => {
         if (!selectedFolderId || selectedFolderId === 'favorites') return;
         
         const folder = folders.find(f => f.id === selectedFolderId);
         if (!folder) return;
 
-        const linksInFolder = [...folder.links].sort((a, b) => a.order - b.order);
+        const linksInFolder = [...folder.links].sort((a, b) => {
+            if (a.isFavorite && !b.isFavorite) return -1;
+            if (!a.isFavorite && b.isFavorite) return 1;
+            return a.order - b.order;
+        });
         const currentIndex = linksInFolder.findIndex(l => l.id === linkId);
         const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
         
@@ -208,7 +186,7 @@ const ConnectionPage = () => {
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                                         <AnimatePresence mode="popLayout">
-                                            {subfolders.map((folder, idx) => (
+                                            {[...subfolders].sort((a, b) => a.name.localeCompare(b.name)).map((folder, idx) => (
                                                 <motion.div
                                                     layout
                                                     key={folder.id}
@@ -233,12 +211,6 @@ const ConnectionPage = () => {
                                                     </RouterLink>
 
                                                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folder.id, 'up'); }}>
-                                                            <ChevronUp className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folder.id, 'down'); }}>
-                                                            <ChevronDown className="h-3.5 w-3.5" />
-                                                        </Button>
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
                                                                 <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm">

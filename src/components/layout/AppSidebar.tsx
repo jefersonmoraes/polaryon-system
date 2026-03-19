@@ -96,7 +96,7 @@ const AppSidebar = () => {
   const renderConnectionFolders = (parentId: string | null = null, level = 0) => {
     return connectionFolders
       .filter(f => f.parentId === parentId)
-      .sort((a, b) => a.order - b.order)
+      .sort((a, b) => a.name.localeCompare(b.name))
       .map(folder => (
         <div key={folder.id} className="flex flex-col">
           <div className="group flex items-center gap-1 pr-2">
@@ -474,6 +474,15 @@ const AppSidebar = () => {
             <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
               <div className="flex items-center justify-between px-2 mb-1">
                 {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Minhas Pastas</span>}
+                {!isCollapsed && (
+                  <button 
+                    onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: null, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
+                    className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
+                    title="Nova Pasta"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               {!isCollapsed ? (
@@ -484,7 +493,7 @@ const AppSidebar = () => {
                 <div className="flex flex-col items-center gap-3">
                   {connectionFolders
                     .filter(f => !f.parentId)
-                    .sort((a, b) => a.order - b.order)
+                    .sort((a, b) => a.name.localeCompare(b.name))
                     .map(folder => (
                       <TooltipProvider key={folder.id}>
                         <Tooltip>
