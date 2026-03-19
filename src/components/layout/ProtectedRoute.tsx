@@ -67,7 +67,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     }
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <div className="h-screen flex flex-col overflow-hidden bg-background">
             <AppHeader />
             <div className="flex flex-1 overflow-hidden">
                 <AppSidebar />
