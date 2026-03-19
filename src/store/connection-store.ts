@@ -85,7 +85,10 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
     addFolder: async (name, color, parentId) => {
         try {
             const response = await api.post('/connections/folders', { name, color, parentId });
-            set((state) => ({ folders: [...state.folders, { ...response.data, links: [] }] }));
+            set((state) => {
+                if (state.folders.find(f => f.id === response.data.id)) return state;
+                return { folders: [...state.folders, { ...response.data, links: [] }] };
+            });
         } catch (error: any) {
             console.error('Failed to add folder:', error);
         }
@@ -136,14 +139,17 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         }
     },
 
-    addLink: async (linkData) => {
+    addLink: async (data) => {
         try {
-            const response = await api.post('/connections/links', linkData);
-            const newLink = response.data;
+            const response = await api.post('/connections/links', data);
             set((state) => ({
-                folders: state.folders.map((f) => 
-                    f.id === linkData.folderId ? { ...f, links: [...f.links, newLink] } : f
-                )
+                folders: state.folders.map((f) => {
+                    if (f.id === data.folderId) {
+                        if (f.links.find(l => l.id === response.data.id)) return f;
+                        return { ...f, links: [...f.links, response.data] };
+                    }
+                    return f;
+                })
             }));
         } catch (error: any) {
             console.error('Failed to add link:', error);
