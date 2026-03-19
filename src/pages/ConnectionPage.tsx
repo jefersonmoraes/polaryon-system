@@ -81,29 +81,52 @@ const ConnectionPage = () => {
         setLinkDialogOpen(true, link);
     };
 
-    const moveFolder = (index: number, direction: 'up' | 'down') => {
-        const newFolders = [...folders];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        if (targetIndex < 0 || targetIndex >= newFolders.length) return;
+    const moveFolder = (folderId: string, direction: 'up' | 'down') => {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return;
+
+        // Reorder only within the same parent
+        const siblings = folders
+            .filter(f => f.parentId === folder.parentId)
+            .sort((a, b) => a.order - b.order);
         
-        const [moved] = newFolders.splice(index, 1);
-        newFolders.splice(targetIndex, 0, moved);
-        reorderFolders(newFolders);
+        const currentIndex = siblings.findIndex(f => f.id === folderId);
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        
+        if (targetIndex < 0 || targetIndex >= siblings.length) return;
+
+        const newSiblings = [...siblings];
+        const [moved] = newSiblings.splice(currentIndex, 1);
+        newSiblings.splice(targetIndex, 0, moved);
+
+        // Map back to global folders with updated orders for all folders in this sibling group
+        const updatedGlobalFolders = folders.map(f => {
+            const siblingIndex = newSiblings.findIndex(s => s.id === f.id);
+            if (siblingIndex !== -1) {
+                return { ...f, order: siblingIndex };
+            }
+            return f;
+        });
+
+        reorderFolders(updatedGlobalFolders);
     };
 
-    const moveLink = (index: number, direction: 'up' | 'down') => {
+    const moveLink = (linkId: string, direction: 'up' | 'down') => {
         if (!selectedFolderId || selectedFolderId === 'favorites') return;
         
         const folder = folders.find(f => f.id === selectedFolderId);
         if (!folder) return;
 
-        const newLinks = [...folder.links];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        if (targetIndex < 0 || targetIndex >= newLinks.length) return;
+        const linksInFolder = [...folder.links].sort((a, b) => a.order - b.order);
+        const currentIndex = linksInFolder.findIndex(l => l.id === linkId);
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        
+        if (targetIndex < 0 || targetIndex >= linksInFolder.length) return;
 
-        const [moved] = newLinks.splice(index, 1);
-        newLinks.splice(targetIndex, 0, moved);
-        reorderLinks(folder.id, newLinks);
+        const [moved] = linksInFolder.splice(currentIndex, 1);
+        linksInFolder.splice(targetIndex, 0, moved);
+        
+        reorderLinks(folder.id, linksInFolder);
     };
 
     const selectedFolderName = useMemo(() => {
@@ -130,10 +153,10 @@ const ConnectionPage = () => {
                         <Button
                             variant="secondary"
                             onClick={() => setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: selectedFolderId && selectedFolderId !== 'favorites' ? selectedFolderId : null, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
-                            className="h-12 px-6 rounded-2xl gap-2 font-bold"
+                            className="h-12 px-6 rounded-2xl gap-2 font-bold shadow-sm"
                         >
-                            <FolderPlus className="h-5 w-5" />
-                            <span className="hidden sm:inline">Nova Subpasta</span>
+                            <Plus className="h-5 w-5" />
+                            <span className="hidden sm:inline">{selectedFolderId && selectedFolderId !== 'favorites' ? 'Nova Subpasta' : 'Nova Pasta'}</span>
                         </Button>
                         <Button 
                             onClick={() => setLinkDialogOpen(true)} 
@@ -209,10 +232,10 @@ const ConnectionPage = () => {
                                                     </RouterLink>
 
                                                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folders.indexOf(folder), 'up'); }}>
+                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folder.id, 'up'); }}>
                                                             <ChevronUp className="h-3.5 w-3.5" />
                                                         </Button>
-                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folders.indexOf(folder), 'down'); }}>
+                                                        <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur-sm shadow-sm" onClick={(e) => { e.preventDefault(); moveFolder(folder.id, 'down'); }}>
                                                             <ChevronDown className="h-3.5 w-3.5" />
                                                         </Button>
                                                         <DropdownMenu>
@@ -265,7 +288,7 @@ const ConnectionPage = () => {
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.9 }}
-                                                    className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.75rem] p-5 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-4 overflow-hidden h-auto lg:h-[200px]"
+                                                    className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:h-[180px]"
                                                 >
                                                     <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                                                     
@@ -280,10 +303,10 @@ const ConnectionPage = () => {
                                                         </div>
             
                                                         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(idx, 'up')}>
+                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(link.id, 'up')}>
                                                                 <ChevronUp className="h-4 w-4" />
                                                             </Button>
-                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(idx, 'down')}>
+                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(link.id, 'down')}>
                                                                 <ChevronDown className="h-4 w-4" />
                                                             </Button>
                                                             <button 
