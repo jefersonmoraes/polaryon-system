@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Carregar variáveis de ambiente do sistema e NVM
+[ -f ~/.bashrc ] && source ~/.bashrc
+[ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh
+[ -f ~/.profile ] && source ~/.profile
+
 echo "=== [1/9] Atualizando código do repositório ==="
 cd /var/www/polaryon
 git reset --hard HEAD

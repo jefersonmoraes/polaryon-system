@@ -20,4 +20,4 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www/polaryon
-            bash vps-deploy.sh
+            bash -l vps-deploy.sh
