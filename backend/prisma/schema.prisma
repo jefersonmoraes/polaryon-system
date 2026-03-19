@@ -492,6 +492,8 @@ model ConnectionFolder {
   links     ConnectionLink[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  trashed   Boolean  @default(false)
+  trashedAt DateTime?
 }
 
 model ConnectionLink {
@@ -504,4 +506,6 @@ model ConnectionLink {
   folder      ConnectionFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  trashed     Boolean  @default(false)
+  trashedAt   DateTime?
 }

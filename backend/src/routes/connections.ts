@@ -11,8 +11,14 @@ const prisma = new PrismaClient();
 // GET /api/connections/folders
 router.get('/folders', async (req: Request, res: Response) => {
     try {
+        const trashed = req.query.trashed === 'true';
         const folders = await prisma.connectionFolder.findMany({
-            include: { links: true },
+            where: { trashed },
+            include: { 
+                links: {
+                    where: { trashed }
+                } 
+            },
             orderBy: { createdAt: 'asc' }
         });
         res.json(folders);
@@ -50,8 +56,44 @@ router.put('/folders/:id', async (req: Request, res: Response) => {
     }
 });
 
-// DELETE /api/connections/folders/:id
-router.delete('/folders/:id', async (req: Request, res: Response) => {
+// PUT /api/connections/folders/:id/trash
+router.put('/folders/:id/trash', async (req: Request, res: Response) => {
+    try {
+        await prisma.connectionFolder.update({
+            where: { id: String(req.params.id) },
+            data: { trashed: true, trashedAt: new Date() }
+        });
+        // Also trash all links in this folder
+        await prisma.connectionLink.updateMany({
+            where: { folderId: String(req.params.id) },
+            data: { trashed: true, trashedAt: new Date() }
+        });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT /api/connections/folders/:id/restore
+router.put('/folders/:id/restore', async (req: Request, res: Response) => {
+    try {
+        await prisma.connectionFolder.update({
+            where: { id: String(req.params.id) },
+            data: { trashed: false, trashedAt: null }
+        });
+        // Also restore all links in this folder
+        await prisma.connectionLink.updateMany({
+            where: { folderId: String(req.params.id) },
+            data: { trashed: false, trashedAt: null }
+        });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /api/connections/folders/:id/permanent
+router.delete('/folders/:id/permanent', async (req: Request, res: Response) => {
     try {
         await prisma.connectionFolder.delete({
             where: { id: String(req.params.id) }
@@ -109,8 +151,34 @@ router.put('/links/:id', async (req: Request, res: Response) => {
     }
 });
 
-// DELETE /api/connections/links/:id
-router.delete('/links/:id', async (req: Request, res: Response) => {
+// PUT /api/connections/links/:id/trash
+router.put('/links/:id/trash', async (req: Request, res: Response) => {
+    try {
+        await prisma.connectionLink.update({
+            where: { id: String(req.params.id) },
+            data: { trashed: true, trashedAt: new Date() }
+        });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT /api/connections/links/:id/restore
+router.put('/links/:id/restore', async (req: Request, res: Response) => {
+    try {
+        await prisma.connectionLink.update({
+            where: { id: String(req.params.id) },
+            data: { trashed: false, trashedAt: null }
+        });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /api/connections/links/:id/permanent
+router.delete('/links/:id/permanent', async (req: Request, res: Response) => {
     try {
         await prisma.connectionLink.delete({
             where: { id: String(req.params.id) }

@@ -23,28 +23,38 @@ export interface ConnectionFolder {
 
 interface ConnectionStore {
     folders: ConnectionFolder[];
+    trashedFolders: ConnectionFolder[];
     isLoading: boolean;
     error: string | null;
-    fetchFolders: () => Promise<void>;
+    fetchFolders: (trashed?: boolean) => Promise<void>;
     addFolder: (name: string, color?: string) => Promise<void>;
     updateFolder: (id: string, name: string, color?: string) => Promise<void>;
-    deleteFolder: (id: string) => Promise<void>;
+    trashFolder: (id: string) => Promise<void>;
+    restoreFolder: (id: string) => Promise<void>;
+    permanentDeleteFolder: (id: string) => Promise<void>;
     addLink: (data: Omit<ConnectionLink, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
     updateLink: (id: string, data: Partial<Omit<ConnectionLink, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
-    deleteLink: (id: string) => Promise<void>;
+    trashLink: (id: string) => Promise<void>;
+    restoreLink: (id: string) => Promise<void>;
+    permanentDeleteLink: (id: string) => Promise<void>;
     toggleFavorite: (link: ConnectionLink) => Promise<void>;
 }
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => ({
     folders: [],
+    trashedFolders: [],
     isLoading: false,
     error: null,
 
-    fetchFolders: async () => {
+    fetchFolders: async (trashed = false) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await api.get('/connections/folders');
-            set({ folders: response.data, isLoading: false });
+            const response = await api.get(`/connections/folders?trashed=${trashed}`);
+            if (trashed) {
+                set({ trashedFolders: response.data, isLoading: false });
+            } else {
+                set({ folders: response.data, isLoading: false });
+            }
         } catch (error: any) {
             set({ error: error.message, isLoading: false });
         }
@@ -70,12 +80,37 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         }
     },
 
-    deleteFolder: async (id) => {
+    trashFolder: async (id) => {
         try {
-            await api.delete(`/connections/folders/${id}`);
-            set((state) => ({ folders: state.folders.filter((f) => f.id !== id) }));
+            await api.put(`/connections/folders/${id}/trash`);
+            set((state) => ({
+                folders: state.folders.filter((f) => f.id !== id)
+            }));
         } catch (error: any) {
-            console.error('Failed to delete folder:', error);
+            console.error('Failed to trash folder:', error);
+        }
+    },
+
+    restoreFolder: async (id) => {
+        try {
+            await api.put(`/connections/folders/${id}/restore`);
+            set((state) => ({
+                trashedFolders: state.trashedFolders.filter((f) => f.id !== id)
+            }));
+            get().fetchFolders(false); // Refresh active folders
+        } catch (error: any) {
+            console.error('Failed to restore folder:', error);
+        }
+    },
+
+    permanentDeleteFolder: async (id) => {
+        try {
+            await api.delete(`/connections/folders/${id}/permanent`);
+            set((state) => ({
+                trashedFolders: state.trashedFolders.filter((f) => f.id !== id)
+            }));
+        } catch (error: any) {
+            console.error('Failed to permanently delete folder:', error);
         }
     },
 
@@ -108,9 +143,9 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         }
     },
 
-    deleteLink: async (id) => {
+    trashLink: async (id) => {
         try {
-            await api.delete(`/connections/links/${id}`);
+            await api.put(`/connections/links/${id}/trash`);
             set((state) => ({
                 folders: state.folders.map((f) => ({
                     ...f,
@@ -118,7 +153,36 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
                 }))
             }));
         } catch (error: any) {
-            console.error('Failed to delete link:', error);
+            console.error('Failed to trash link:', error);
+        }
+    },
+
+    restoreLink: async (id) => {
+        try {
+            await api.put(`/connections/links/${id}/restore`);
+            set((state) => ({
+                trashedFolders: state.trashedFolders.map((f) => ({
+                    ...f,
+                    links: f.links.filter((l) => l.id !== id)
+                }))
+            }));
+            get().fetchFolders(false); // Refresh active folders
+        } catch (error: any) {
+            console.error('Failed to restore link:', error);
+        }
+    },
+
+    permanentDeleteLink: async (id) => {
+        try {
+            await api.delete(`/connections/links/${id}/permanent`);
+            set((state) => ({
+                trashedFolders: state.trashedFolders.map((f) => ({
+                    ...f,
+                    links: f.links.filter((l) => l.id !== id)
+                }))
+            }));
+        } catch (error: any) {
+            console.error('Failed to permanently delete link:', error);
         }
     },
 
