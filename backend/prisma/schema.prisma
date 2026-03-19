@@ -484,3 +484,24 @@ model AuditLog {
   details   String   @db.Text
   timestamp DateTime @default(now())
 }
+
+model ConnectionFolder {
+  id        String   @id @default(uuid())
+  name      String
+  color     String?
+  links     ConnectionLink[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConnectionLink {
+  id          String   @id @default(uuid())
+  title       String
+  url         String   @db.Text
+  description String?  @db.Text
+  isFavorite  Boolean  @default(false)
+  folderId    String
+  folder      ConnectionFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

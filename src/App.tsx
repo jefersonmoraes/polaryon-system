@@ -38,6 +38,7 @@ import AccountingDashboard from "./pages/AccountingDashboard";
 import AccountingEntries from "./pages/AccountingEntries";
 import { CashflowForecastDash } from "./components/accounting/CashflowForecastDash"; // Added import
 import KunbunPage from "./pages/KunbunPage";
+import ConnectionPage from "./pages/ConnectionPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -285,6 +286,7 @@ const AppContent = () => {
       <Route path="/contabil/fluxo-caixa" element={<ProtectedRoute><CashflowForecastDash /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
       <Route path="/admin/audit" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+      <Route path="/conexao" element={<ProtectedRoute><ConnectionPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

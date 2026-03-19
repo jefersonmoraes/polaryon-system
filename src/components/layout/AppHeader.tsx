@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu, ChevronDown, MoreVertical, Target, Gavel } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu, ChevronDown, MoreVertical, Target, Gavel, Link2 } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useAuthStore } from '@/store/auth-store';
@@ -163,6 +163,14 @@ const AppHeader = () => {
               <span className="uppercase tracking-wider">Contábil</span>
             </Link>
           )}
+          <Link
+            to="/conexao"
+            className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname.startsWith('/conexao') ? 'bg-primary/20 text-white font-bold' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+              }`}
+          >
+            <Link2 className="h-3.5 w-3.5 inline mr-1" />
+            <span className="uppercase tracking-wider">Conexão</span>
+          </Link>
         </div>
 
         {/* Mobile/Tablet Dropdown */}
@@ -214,10 +222,13 @@ const AppHeader = () => {
                   </Link>
                 )}
                 {hasScreenAccess('ACCOUNTING') && (
-                  <Link to="/contabil" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm hover:bg-muted transition-colors ${location.pathname.startsWith('/contabil') ? 'text-emerald-500 font-bold bg-emerald-500/5' : 'text-foreground'}`}>
+                  <Link to="/contabil" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname.startsWith('/contabil') ? 'text-emerald-500 font-bold bg-emerald-500/5' : 'text-foreground'}`}>
                     <div className="p-1.5 rounded bg-emerald-500/10 text-emerald-500"><PiggyBank className="h-4 w-4" /></div> Módulo Contábil
                   </Link>
                 )}
+                <Link to="/conexao" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm hover:bg-muted transition-colors ${location.pathname.startsWith('/conexao') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
+                  <div className="p-1.5 rounded bg-primary/10 text-primary"><Link2 className="h-4 w-4" /></div> Conexão Útil
+                </Link>
               </div>
             </>
           )}

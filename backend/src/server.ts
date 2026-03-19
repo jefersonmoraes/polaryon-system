@@ -21,6 +21,7 @@ import certificatesRoutes from './routes/certificates';
 import accountingRoutes from './routes/accounting';
 import auditRoutes from './routes/audit';
 import sidebarLinksRoutes from './routes/sidebar-links';
+import connectionRoutes from './routes/connections';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 
@@ -80,6 +81,7 @@ app.use('/api/certificates', certificatesRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/sidebar-links', sidebarLinksRoutes);
+app.use('/api/connections', connectionRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {
