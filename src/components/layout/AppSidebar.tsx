@@ -1,16 +1,20 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
+import { useSidebarLinkStore } from '@/store/sidebar-link-store';
+import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star } from 'lucide-react';
 
 const AppSidebar = () => {
   const { mainCompanies } = useKanbanStore();
   const { isMobileMenuOpen, setMobileMenuOpen } = useUserPrefsStore();
   const { currentUser, hasScreenAccess } = useAuthStore();
+  const { links, fetchLinks, deleteLink } = useSidebarLinkStore();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   
   const [currencyQuotes, setCurrencyQuotes] = useState<{ usd: string; eur: string } | null>(null);
 
@@ -53,6 +57,12 @@ const AppSidebar = () => {
   const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
   const isOportunidadesModule = location.pathname.startsWith('/oportunidades');
+
+  useEffect(() => {
+    if (isDocsModule) {
+      fetchLinks('DOCUMENTATION');
+    }
+  }, [isDocsModule]);
 
   const { boards, folders } = useKanbanStore();
   const isKunbunModule = location.pathname.startsWith('/folder/') || location.pathname.startsWith('/board/');
@@ -157,6 +167,61 @@ const AppSidebar = () => {
                 </>
               )}
             </div>
+
+            <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
+              <div className="flex items-center justify-between px-2 mb-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Links Úteis</span>}
+                <button 
+                  onClick={() => setIsLinkDialogOpen(true)}
+                  className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
+                  title="Adicionar Link"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {links.filter(l => l.category === 'DOCUMENTATION').map(link => (
+                <div key={link.id} className="group flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+                  <a 
+                    href={link.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="flex items-center gap-2 truncate flex-1"
+                    title={link.title}
+                  >
+                    <img 
+                      src={`https://www.google.com/s2/favicons?sz=64&domain_url=${new URL(link.url).hostname}`} 
+                      alt="" 
+                      className="h-4 w-4 shrink-0 rounded-sm bg-white"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain_url=google.com";
+                      }}
+                    />
+                    {!isCollapsed && <span className="truncate">{link.title}</span>}
+                    {link.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 shrink-0" />}
+                  </a>
+                  {!isCollapsed && (
+                    <button 
+                      onClick={() => deleteLink(link.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
+                      title="Excluir Link"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {links.filter(l => l.category === 'DOCUMENTATION').length === 0 && !isCollapsed && (
+                <p className="text-[10px] text-muted-foreground italic px-2 py-2">Nenhum link adicionado.</p>
+              )}
+            </div>
+
+            <SidebarLinkDialog 
+              open={isLinkDialogOpen} 
+              onOpenChange={setIsLinkDialogOpen} 
+              category="DOCUMENTATION" 
+            />
           </div>
         ) : isAdminModule ? (
           <div className="flex-1 p-3 mt-6 flex flex-col gap-6">

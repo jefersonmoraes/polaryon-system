@@ -269,6 +269,16 @@ model Notification {
   userId    String?
 }
 
+model SidebarLink {
+  id         String   @id @default(uuid())
+  title      String
+  url        String   @db.Text
+  category   String   // 'DOCUMENTATION', 'KANBAN', etc.
+  isFavorite Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model CompanyDocument {
   id              String   @id @default(uuid())
   title           String
