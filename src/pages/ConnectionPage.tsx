@@ -14,7 +14,8 @@ const ConnectionPage = () => {
     const { 
         folders, trashedFolders, isLoading, fetchFolders, 
         trashLink, restoreLink, permanentDeleteLink,
-        toggleFavorite 
+        toggleFavorite,
+        setFolderDialogOpen, setLinkDialogOpen
     } = useConnectionStore();
 
     const [searchParams, setSearchParams] = useSearchParams();
@@ -24,12 +25,6 @@ const ConnectionPage = () => {
     const viewMode = (searchParams.get('view') as 'active' | 'trash') || 'active';
     const selectedFolderId = searchParams.get('folder') || (viewMode === 'active' ? 'favorites' : null);
     
-    // Dialog states
-    const [folderDialogOpen, setFolderDialogOpen] = useState(false);
-    const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-    const [editingFolder, setEditingFolder] = useState<ConnectionFolder | null>(null);
-    const [editingLink, setEditingLink] = useState<ConnectionLink | null>(null);
-
     useEffect(() => {
         fetchFolders(false);
         fetchFolders(true);
@@ -77,8 +72,7 @@ const ConnectionPage = () => {
     };
 
     const handleEditLink = (link: ConnectionLink) => {
-        setEditingLink(link);
-        setLinkDialogOpen(true);
+        setLinkDialogOpen(true, link);
     };
 
     return (
@@ -99,14 +93,14 @@ const ConnectionPage = () => {
                     <div className="flex items-center gap-3">
                         <Button
                             variant="secondary"
-                            onClick={() => { setEditingFolder(null); setFolderDialogOpen(true); }}
+                            onClick={() => setFolderDialogOpen(true)}
                             className="h-12 px-6 rounded-2xl gap-2 font-bold"
                         >
                             <Plus className="h-5 w-5" />
                             <span className="hidden sm:inline">Nova Pasta</span>
                         </Button>
                         <Button 
-                            onClick={() => { setEditingLink(null); setLinkDialogOpen(true); }} 
+                            onClick={() => setLinkDialogOpen(true)} 
                             className="h-12 px-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold shadow-xl shadow-primary/25 gap-2 transition-all active:scale-95"
                         >
                             <Plus className="h-5 w-5" />
@@ -245,15 +239,8 @@ const ConnectionPage = () => {
             </div>
 
             {/* Dialogs */}
-            <ConnectionFolderDialog 
-                open={folderDialogOpen} 
-                onOpenChange={setFolderDialogOpen} 
-                editingFolder={editingFolder}
-            />
+            <ConnectionFolderDialog />
             <ConnectionLinkDialog 
-                open={linkDialogOpen} 
-                onOpenChange={setLinkDialogOpen} 
-                editingLink={editingLink}
                 defaultFolderId={selectedFolderId !== 'favorites' ? selectedFolderId || undefined : (folders.length > 0 ? folders[0].id : undefined)}
             />
         </div>

@@ -6,23 +6,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ConnectionLink, useConnectionStore } from '@/store/connection-store';
+import { useConnectionStore } from '@/store/connection-store';
 
 interface ConnectionLinkDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    editingLink: ConnectionLink | null;
     defaultFolderId?: string;
 }
 
-const ConnectionLinkDialog: React.FC<ConnectionLinkDialogProps> = ({ open, onOpenChange, editingLink, defaultFolderId }) => {
+const ConnectionLinkDialog: React.FC<ConnectionLinkDialogProps> = ({ defaultFolderId }) => {
     const [title, setTitle] = useState('');
     const [url, setUrl] = useState('');
     const [description, setDescription] = useState('');
     const [isFavorite, setIsFavorite] = useState(false);
     const [folderId, setFolderId] = useState('');
 
-    const { folders, addLink, updateLink } = useConnectionStore();
+    const { 
+        folders, addLink, updateLink, 
+        isLinkDialogOpen, setLinkDialogOpen, editingLink 
+    } = useConnectionStore();
 
     useEffect(() => {
         if (editingLink) {
@@ -38,7 +38,7 @@ const ConnectionLinkDialog: React.FC<ConnectionLinkDialogProps> = ({ open, onOpe
             setIsFavorite(false);
             setFolderId(defaultFolderId || (folders.length > 0 ? folders[0].id : ''));
         }
-    }, [editingLink, open, defaultFolderId, folders]);
+    }, [editingLink, isLinkDialogOpen, defaultFolderId, folders]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -57,11 +57,11 @@ const ConnectionLinkDialog: React.FC<ConnectionLinkDialogProps> = ({ open, onOpe
         } else {
             await addLink(data);
         }
-        onOpenChange(false);
+        setLinkDialogOpen(false);
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={isLinkDialogOpen} onOpenChange={(open) => setLinkDialogOpen(open)}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>{editingLink ? 'Editar Link' : 'Novo Link'}</DialogTitle>
@@ -123,7 +123,7 @@ const ConnectionLinkDialog: React.FC<ConnectionLinkDialogProps> = ({ open, onOpe
                     </div>
 
                     <DialogFooter className="pt-4">
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={!title.trim() || !url.trim() || !folderId}>

@@ -6,7 +6,9 @@ import { useSidebarLinkStore } from '@/store/sidebar-link-store';
 import { useConnectionStore, ConnectionFolder } from '@/store/connection-store';
 import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const AppSidebar = () => {
   const { mainCompanies } = useKanbanStore();
@@ -96,15 +98,36 @@ const AppSidebar = () => {
       .filter(f => f.parentId === parentId)
       .map(folder => (
         <div key={folder.id} className="flex flex-col">
-          <Link
-            to={`/conexao?folder=${folder.id}`}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes(`folder=${folder.id}`) ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
-            style={{ paddingLeft: `${(level * 12) + 8}px` }}
-            title={folder.name}
-          >
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            <span className="truncate">{folder.name}</span>
-          </Link>
+          <div className="group flex items-center gap-1 pr-2">
+            <Link
+              to={`/conexao?folder=${folder.id}`}
+              className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes(`folder=${folder.id}`) ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+              style={{ paddingLeft: `${(level * 12) + 8}px` }}
+              title={folder.name}
+            >
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <span className="truncate">{folder.name}</span>
+            </Link>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1 opacity-0 group-hover:opacity-100 hover:bg-sidebar-accent rounded-md transition-all text-sidebar-foreground/50">
+                  <MoreVertical className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, folder)} className="gap-2">
+                  <Edit2 className="h-3.5 w-3.5" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => useConnectionStore.getState().trashFolder(folder.id)} className="text-destructive gap-2">
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: folder.id, links: [], createdAt: '', updatedAt: '' } as any)} className="gap-2">
+                  <FolderPlus className="h-3.5 w-3.5" /> Subpasta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {renderConnectionFolders(folder.id, level + 1)}
         </div>
       ));
@@ -457,8 +480,26 @@ const AppSidebar = () => {
                   {renderConnectionFolders()}
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <FolderOpen className="h-4 w-4 text-muted-foreground opacity-50" />
+                <div className="flex flex-col items-center gap-3">
+                  {connectionFolders
+                    .filter(f => !f.parentId)
+                    .map(folder => (
+                      <TooltipProvider key={folder.id}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to={`/conexao?folder=${folder.id}`}
+                              className={`p-2 rounded-md transition-colors ${location.search.includes(`folder=${folder.id}`) ? 'bg-primary text-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                            >
+                              <FolderOpen className="h-4 w-4 shrink-0" />
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            {folder.name}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
                 </div>
               )}
             </div>

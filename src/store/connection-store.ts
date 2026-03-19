@@ -39,6 +39,14 @@ interface ConnectionStore {
     restoreLink: (id: string) => Promise<void>;
     permanentDeleteLink: (id: string) => Promise<void>;
     toggleFavorite: (link: ConnectionLink) => Promise<void>;
+    
+    // Dialog state
+    isFolderDialogOpen: boolean;
+    isLinkDialogOpen: boolean;
+    editingFolder: ConnectionFolder | null;
+    editingLink: ConnectionLink | null;
+    setFolderDialogOpen: (open: boolean, folder?: ConnectionFolder | null) => void;
+    setLinkDialogOpen: (open: boolean, link?: ConnectionLink | null) => void;
 }
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => ({
@@ -46,6 +54,13 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
     trashedFolders: [],
     isLoading: false,
     error: null,
+    isFolderDialogOpen: false,
+    isLinkDialogOpen: false,
+    editingFolder: null,
+    editingLink: null,
+    
+    setFolderDialogOpen: (open, folder = null) => set({ isFolderDialogOpen: open, editingFolder: folder }),
+    setLinkDialogOpen: (open, link = null) => set({ isLinkDialogOpen: open, editingLink: link }),
 
     fetchFolders: async (trashed = false) => {
         set({ isLoading: true, error: null });

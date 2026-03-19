@@ -3,20 +3,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ConnectionFolder, useConnectionStore } from '@/store/connection-store';
+import { useConnectionStore } from '@/store/connection-store';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface ConnectionFolderDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    editingFolder: ConnectionFolder | null;
-}
-
-const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, onOpenChange, editingFolder }) => {
+const ConnectionFolderDialog: React.FC = () => {
     const [name, setName] = useState('');
     const [color, setColor] = useState('#3b82f6');
     const [parentId, setParentId] = useState<string | 'none'>('none');
-    const { folders, addFolder, updateFolder } = useConnectionStore();
+    const { 
+        folders, addFolder, updateFolder, 
+        isFolderDialogOpen, setFolderDialogOpen, editingFolder 
+    } = useConnectionStore();
 
     useEffect(() => {
         if (editingFolder) {
@@ -28,7 +25,7 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
             setColor('#3b82f6');
             setParentId('none');
         }
-    }, [editingFolder, open]);
+    }, [editingFolder, isFolderDialogOpen]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,12 +33,12 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
 
         const pId = parentId === 'none' ? null : parentId;
 
-        if (editingFolder) {
+        if (editingFolder && editingFolder.id) {
             await updateFolder(editingFolder.id, name, color, pId);
         } else {
             await addFolder(name, color, pId);
         }
-        onOpenChange(false);
+        setFolderDialogOpen(false);
     };
 
     const colorOptions = [
@@ -52,10 +49,10 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
     const availableFolders = folders.filter(f => f.id !== editingFolder?.id);
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={isFolderDialogOpen} onOpenChange={(open) => setFolderDialogOpen(open)}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>{editingFolder ? 'Editar Pasta' : 'Nova Pasta'}</DialogTitle>
+                    <DialogTitle>{(editingFolder && editingFolder.id) ? 'Editar Pasta' : 'Nova Pasta'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
@@ -102,11 +99,11 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
                         </div>
                     </div>
                     <DialogFooter className="pt-4">
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" onClick={() => setFolderDialogOpen(false)}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={!name.trim()}>
-                            {editingFolder ? 'Salvar Alterações' : 'Criar Pasta'}
+                            {(editingFolder && editingFolder.id) ? 'Salvar Alterações' : 'Criar Pasta'}
                         </Button>
                     </DialogFooter>
                 </form>
