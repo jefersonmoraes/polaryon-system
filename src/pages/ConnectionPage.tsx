@@ -73,6 +73,32 @@ const ConnectionPage = () => {
         });
     }, [activeLinks, trashedLinks, viewMode, selectedFolderId, searchQuery]);
 
+    const groupedFavorites = useMemo(() => {
+        if (selectedFolderId !== 'favorites' || viewMode !== 'active') return null;
+        
+        const groups: { [folderId: string]: { id: string; name: string; color: string; links: any[] } } = {};
+        
+        displayLinks.forEach(link => {
+            const folderId = link.folderId || 'uncategorized';
+            if (!groups[folderId]) {
+                groups[folderId] = {
+                    id: folderId,
+                    name: link.folderName || 'Sem Pasta',
+                    color: link.folderColor || '#94a3b8',
+                    links: []
+                };
+            }
+            groups[folderId].links.push(link);
+        });
+        
+        // Sort groups by name
+        return Object.values(groups).sort((a, b) => {
+            if (a.id === 'uncategorized') return 1;
+            if (b.id === 'uncategorized') return -1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [displayLinks, selectedFolderId, viewMode]);
+
     const getFavicon = (url: string) => {
         try {
             const hostname = new URL(url).hostname;
@@ -90,6 +116,93 @@ const ConnectionPage = () => {
         if (selectedFolderId === 'favorites') return 'Meus Favoritos';
         return folders.find(f => f.id === selectedFolderId)?.name || 'Todos os Links';
     }, [folders, selectedFolderId]);
+
+    const RenderLink = ({ link }: { link: ConnectionLink & { folderName?: string, folderColor?: string } }) => (
+        <motion.div
+            layout
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
+        >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            
+            <div className="flex items-start justify-between relative z-10">
+                <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
+                    <img 
+                        src={getFavicon(link.url)} 
+                        alt={link.title} 
+                        className="w-full h-full object-contain filter drop-shadow-sm"
+                        onError={(e) => { (e.target as any).src = 'https://www.google.com/s2/favicons?domain=google.com&sz=128' }}
+                    />
+                </div>
+                            
+                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <button 
+                        onClick={() => toggleFavorite(link)} 
+                        className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
+                    >
+                        <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
+                    </button>
+                    
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="p-2 rounded-xl bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
+                                <MoreVertical className="h-4 w-4" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 p-2 rounded-2xl shadow-2xl border-border/40">
+                            {viewMode === 'active' ? (
+                                <>
+                                    <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
+                                        <Edit2 className="h-4 w-4 text-primary" /> Editar Link
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm focus:bg-destructive/10 focus:text-destructive">
+                                        <Trash2 className="h-4 w-4" /> Mover p/ Lixeira
+                                    </DropdownMenuItem>
+                                </>
+                            ) : (
+                                <>
+                                    <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-3 p-3 rounded-xl cursor-pointer text-emerald-500 focus:text-emerald-500 font-bold text-sm">
+                                        <RotateCcw className="h-4 w-4" /> Restaurar Link
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive font-bold text-sm">
+                                        <XCircle className="h-4 w-4" /> Excluir para sempre
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            </div>
+    
+            <div className="flex-1 space-y-1 relative z-10 min-w-0">
+                <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors duration-500">{link.title}</h4>
+                <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">
+                    {(() => {
+                        try {
+                            return new URL(link.url).hostname.replace('www.', '');
+                        } catch (e) {
+                            return link.url;
+                        }
+                    })()}
+                </p>
+                {link.description && <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mt-2 opacity-80">{link.description}</p>}
+            </div>
+    
+            <div className="relative z-10 mt-auto pt-2">
+                <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full h-12 flex items-center justify-center gap-3 rounded-2xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[12px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
+                >
+                    ABRIR CONEXÃO
+                    <ExternalLink className="h-4 w-4" />
+                </a>
+            </div>
+        </motion.div>
+    );
 
     return (
         <div className="flex flex-col h-full bg-background animate-in fade-in duration-500 overflow-hidden">
@@ -220,7 +333,6 @@ const ConnectionPage = () => {
                                     </h2>
                                     <div className="h-px flex-1 bg-border/40 mx-6" />
                                 </div>
-                                
                                 {displayLinks.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center bg-card/30 border-2 border-dashed border-border/40 rounded-[2.5rem]">
                                          <div className="w-20 h-20 bg-muted/40 rounded-[2rem] flex items-center justify-center mb-6">
@@ -229,87 +341,36 @@ const ConnectionPage = () => {
                                          <h3 className="text-lg font-black text-foreground">Nenhum link por aqui</h3>
                                          <p className="text-muted-foreground text-sm max-w-xs mx-auto mt-1">Crie seu primeiro link clicando no botão "Adicionar Link" acima.</p>
                                     </div>
+                                ) : groupedFavorites ? (
+                                    <div className="space-y-12">
+                                        {groupedFavorites.map((group) => (
+                                            <div key={group.id} className="space-y-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
+                                                        <Folder className="h-4 w-4" />
+                                                    </div>
+                                                    <h3 className="font-black text-base tracking-tight text-foreground/80">{group.name}</h3>
+                                                    <div className="h-px flex-1 bg-border/40" />
+                                                    <Badge variant="secondary" className="font-bold rounded-lg px-3 py-0.5 bg-muted/50 border-none">
+                                                        {group.links.length} {group.links.length === 1 ? 'favorito' : 'favoritos'}
+                                                    </Badge>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
+                                                    <AnimatePresence mode="popLayout">
+                                                        {group.links.map((link) => (
+                                                            <RenderLink key={link.id} link={link} />
+                                                        ))}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
                                         <AnimatePresence mode="popLayout">
-                                            {displayLinks.map((link, idx) => (
-                                                <motion.div
-                                                    layout
-                                                    key={link.id}
-                                                    initial={{ opacity: 0, scale: 0.95 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    exit={{ opacity: 0, scale: 0.9 }}
-                                                    className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
-                                                >
-                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                                                    
-                                                    <div className="flex items-start justify-between relative z-10">
-                                                        <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
-                                                            <img 
-                                                                src={getFavicon(link.url)} 
-                                                                alt={link.title} 
-                                                                className="w-full h-full object-contain filter drop-shadow-sm"
-                                                                onError={(e) => { (e.target as any).src = 'https://www.google.com/s2/favicons?domain=google.com&sz=128' }}
-                                                            />
-                                                        </div>
-            
-                                                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                                            <button 
-                                                                onClick={() => toggleFavorite(link)} 
-                                                                className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
-                                                            >
-                                                                <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
-                                                            </button>
-                                                            
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <button className="p-2 rounded-xl bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
-                                                                        <MoreVertical className="h-4 w-4" />
-                                                                    </button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end" className="w-52 p-2 rounded-2xl shadow-2xl border-border/40">
-                                                                    {viewMode === 'active' ? (
-                                                                        <>
-                                                                            <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
-                                                                                <Edit2 className="h-4 w-4 text-primary" /> Editar Link
-                                                                            </DropdownMenuItem>
-                                                                            <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm focus:bg-destructive/10 focus:text-destructive">
-                                                                                <Trash2 className="h-4 w-4" /> Mover p/ Lixeira
-                                                                            </DropdownMenuItem>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-3 p-3 rounded-xl cursor-pointer text-emerald-500 focus:text-emerald-500 font-bold text-sm">
-                                                                                <RotateCcw className="h-4 w-4" /> Restaurar Link
-                                                                            </DropdownMenuItem>
-                                                                            <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive font-bold text-sm">
-                                                                                <XCircle className="h-4 w-4" /> Excluir para sempre
-                                                                            </DropdownMenuItem>
-                                                                        </>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </div>
-                                                    </div>
-            
-                                                    <div className="flex-1 space-y-1 relative z-10 min-w-0">
-                                                        <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors duration-500">{link.title}</h4>
-                                                        <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">{(new URL(link.url)).hostname.replace('www.', '')}</p>
-                                                        {link.description && <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mt-2 opacity-80">{link.description}</p>}
-                                                    </div>
-            
-                                                    <div className="relative z-10 mt-auto pt-2">
-                                                        <a
-                                                            href={link.url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="w-full h-12 flex items-center justify-center gap-3 rounded-2xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[12px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
-                                                        >
-                                                            ABRIR CONEXÃO
-                                                            <ExternalLink className="h-4 w-4" />
-                                                        </a>
-                                                    </div>
-                                                </motion.div>
+                                            {displayLinks.map((link) => (
+                                                <RenderLink key={link.id} link={link} />
                                             ))}
                                         </AnimatePresence>
                                     </div>
