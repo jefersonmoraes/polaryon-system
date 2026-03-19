@@ -65,11 +65,11 @@ const ConnectionPage = () => {
             );
         }
 
-        // Favoritos primeiro, depois por ordem customizada
+        // Favoritos primeiro, depois por nome (alfabético)
         return [...base].sort((a, b) => {
             if (a.isFavorite && !b.isFavorite) return -1;
             if (!a.isFavorite && b.isFavorite) return 1;
-            return a.order - b.order;
+            return a.title.localeCompare(b.title);
         });
     }, [activeLinks, trashedLinks, viewMode, selectedFolderId, searchQuery]);
 
@@ -84,28 +84,6 @@ const ConnectionPage = () => {
 
     const handleEditLink = (link: ConnectionLink) => {
         setLinkDialogOpen(true, link);
-    };
-
-    const moveLink = (linkId: string, direction: 'up' | 'down') => {
-        if (!selectedFolderId || selectedFolderId === 'favorites') return;
-        
-        const folder = folders.find(f => f.id === selectedFolderId);
-        if (!folder) return;
-
-        const linksInFolder = [...folder.links].sort((a, b) => {
-            if (a.isFavorite && !b.isFavorite) return -1;
-            if (!a.isFavorite && b.isFavorite) return 1;
-            return a.order - b.order;
-        });
-        const currentIndex = linksInFolder.findIndex(l => l.id === linkId);
-        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-        
-        if (targetIndex < 0 || targetIndex >= linksInFolder.length) return;
-
-        const [moved] = linksInFolder.splice(currentIndex, 1);
-        linksInFolder.splice(targetIndex, 0, moved);
-        
-        reorderLinks(folder.id, linksInFolder);
     };
 
     const selectedFolderName = useMemo(() => {
@@ -276,12 +254,6 @@ const ConnectionPage = () => {
                                                         </div>
             
                                                         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(link.id, 'up')}>
-                                                                <ChevronUp className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl bg-background/80 backdrop-blur-sm" onClick={() => moveLink(link.id, 'down')}>
-                                                                <ChevronDown className="h-4 w-4" />
-                                                            </Button>
                                                             <button 
                                                                 onClick={() => toggleFavorite(link)} 
                                                                 className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
