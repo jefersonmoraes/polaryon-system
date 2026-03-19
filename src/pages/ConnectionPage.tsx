@@ -10,6 +10,115 @@ import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 
+const getFavicon = (url: string) => {
+    try {
+        const hostname = new URL(url).hostname;
+        return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+    } catch (e) {
+        return `https://www.google.com/s2/favicons?domain=google.com&sz=128`;
+    }
+};
+
+interface RenderLinkProps {
+    link: ConnectionLink & { folderName?: string, folderColor?: string };
+    viewMode: 'active' | 'trash';
+    toggleFavorite: (link: ConnectionLink) => void;
+    handleEditLink: (link: ConnectionLink) => void;
+    trashLink: (id: string) => void;
+    restoreLink: (id: string) => void;
+    permanentDeleteLink: (id: string) => void;
+}
+
+const RenderLink = ({ 
+    link, viewMode, toggleFavorite, handleEditLink, 
+    trashLink, restoreLink, permanentDeleteLink 
+}: RenderLinkProps) => (
+    <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
+    >
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+        
+        <div className="flex items-start justify-between relative z-10">
+            <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
+                <img 
+                    src={getFavicon(link.url)} 
+                    alt={link.title} 
+                    className="w-full h-full object-contain filter drop-shadow-sm"
+                    onError={(e) => { (e.target as any).src = 'https://www.google.com/s2/favicons?domain=google.com&sz=128' }}
+                />
+            </div>
+                        
+            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <button 
+                    onClick={() => toggleFavorite(link)} 
+                    className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
+                >
+                    <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
+                </button>
+                
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button className="p-2 rounded-xl bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
+                            <MoreVertical className="h-4 w-4" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52 p-2 rounded-2xl shadow-2xl border-border/40">
+                        {viewMode === 'active' ? (
+                            <>
+                                <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
+                                    <Edit2 className="h-4 w-4 text-primary" /> Editar Link
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm focus:bg-destructive/10 focus:text-destructive">
+                                    <Trash2 className="h-4 w-4" /> Mover p/ Lixeira
+                                </DropdownMenuItem>
+                            </>
+                        ) : (
+                            <>
+                                <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-3 p-3 rounded-xl cursor-pointer text-emerald-500 focus:text-emerald-500 font-bold text-sm">
+                                    <RotateCcw className="h-4 w-4" /> Restaurar Link
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive font-bold text-sm">
+                                    <XCircle className="h-4 w-4" /> Excluir para sempre
+                                </DropdownMenuItem>
+                            </>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        </div>
+
+        <div className="flex-1 space-y-1 relative z-10 min-w-0">
+            <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors duration-500">{link.title}</h4>
+            <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">
+                {(() => {
+                    try {
+                        return new URL(link.url).hostname.replace('www.', '');
+                    } catch (e) {
+                        return link.url;
+                    }
+                })()}
+            </p>
+            {link.description && <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mt-2 opacity-80">{link.description}</p>}
+        </div>
+
+        <div className="relative z-10 mt-auto pt-2">
+            <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-12 flex items-center justify-center gap-3 rounded-2xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[12px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
+            >
+                ABRIR CONEXÃO
+                <ExternalLink className="h-4 w-4" />
+            </a>
+        </div>
+    </motion.div>
+);
+
 const ConnectionPage = () => {
     const { 
         folders, trashedFolders, isLoading, fetchFolders, 
@@ -99,14 +208,6 @@ const ConnectionPage = () => {
         });
     }, [displayLinks, selectedFolderId, viewMode]);
 
-    const getFavicon = (url: string) => {
-        try {
-            const hostname = new URL(url).hostname;
-            return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-        } catch (e) {
-            return `https://www.google.com/s2/favicons?domain=google.com&sz=128`;
-        }
-    };
 
     const handleEditLink = (link: ConnectionLink) => {
         setLinkDialogOpen(true, link);
@@ -117,92 +218,6 @@ const ConnectionPage = () => {
         return folders.find(f => f.id === selectedFolderId)?.name || 'Todos os Links';
     }, [folders, selectedFolderId]);
 
-    const RenderLink = ({ link }: { link: ConnectionLink & { folderName?: string, folderColor?: string } }) => (
-        <motion.div
-            layout
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
-        >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-            
-            <div className="flex items-start justify-between relative z-10">
-                <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
-                    <img 
-                        src={getFavicon(link.url)} 
-                        alt={link.title} 
-                        className="w-full h-full object-contain filter drop-shadow-sm"
-                        onError={(e) => { (e.target as any).src = 'https://www.google.com/s2/favicons?domain=google.com&sz=128' }}
-                    />
-                </div>
-                            
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                    <button 
-                        onClick={() => toggleFavorite(link)} 
-                        className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
-                    >
-                        <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
-                    </button>
-                    
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button className="p-2 rounded-xl bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
-                                <MoreVertical className="h-4 w-4" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52 p-2 rounded-2xl shadow-2xl border-border/40">
-                            {viewMode === 'active' ? (
-                                <>
-                                    <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
-                                        <Edit2 className="h-4 w-4 text-primary" /> Editar Link
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm focus:bg-destructive/10 focus:text-destructive">
-                                        <Trash2 className="h-4 w-4" /> Mover p/ Lixeira
-                                    </DropdownMenuItem>
-                                </>
-                            ) : (
-                                <>
-                                    <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-3 p-3 rounded-xl cursor-pointer text-emerald-500 focus:text-emerald-500 font-bold text-sm">
-                                        <RotateCcw className="h-4 w-4" /> Restaurar Link
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive font-bold text-sm">
-                                        <XCircle className="h-4 w-4" /> Excluir para sempre
-                                    </DropdownMenuItem>
-                                </>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </div>
-    
-            <div className="flex-1 space-y-1 relative z-10 min-w-0">
-                <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors duration-500">{link.title}</h4>
-                <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">
-                    {(() => {
-                        try {
-                            return new URL(link.url).hostname.replace('www.', '');
-                        } catch (e) {
-                            return link.url;
-                        }
-                    })()}
-                </p>
-                {link.description && <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mt-2 opacity-80">{link.description}</p>}
-            </div>
-    
-            <div className="relative z-10 mt-auto pt-2">
-                <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-12 flex items-center justify-center gap-3 rounded-2xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[12px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
-                >
-                    ABRIR CONEXÃO
-                    <ExternalLink className="h-4 w-4" />
-                </a>
-            </div>
-        </motion.div>
-    );
 
     return (
         <div className="flex flex-col h-full bg-background animate-in fade-in duration-500 overflow-hidden">
@@ -359,7 +374,16 @@ const ConnectionPage = () => {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
                                                     <AnimatePresence mode="popLayout">
                                                         {group.links.map((link) => (
-                                                            <RenderLink key={link.id} link={link} />
+                                                            <RenderLink 
+                                                                key={link.id} 
+                                                                link={link}
+                                                                viewMode={viewMode}
+                                                                toggleFavorite={toggleFavorite}
+                                                                handleEditLink={handleEditLink}
+                                                                trashLink={trashLink}
+                                                                restoreLink={restoreLink}
+                                                                permanentDeleteLink={permanentDeleteLink}
+                                                            />
                                                         ))}
                                                     </AnimatePresence>
                                                 </div>
@@ -370,7 +394,16 @@ const ConnectionPage = () => {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
                                         <AnimatePresence mode="popLayout">
                                             {displayLinks.map((link) => (
-                                                <RenderLink key={link.id} link={link} />
+                                                <RenderLink 
+                                                    key={link.id} 
+                                                    link={link}
+                                                    viewMode={viewMode}
+                                                    toggleFavorite={toggleFavorite}
+                                                    handleEditLink={handleEditLink}
+                                                    trashLink={trashLink}
+                                                    restoreLink={restoreLink}
+                                                    permanentDeleteLink={permanentDeleteLink}
+                                                />
                                             ))}
                                         </AnimatePresence>
                                     </div>
