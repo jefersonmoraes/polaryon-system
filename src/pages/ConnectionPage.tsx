@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Star, ExternalLink, MoreVertical, Trash2, Edit2, Folder, RotateCcw, XCircle, ChevronUp, ChevronDown, FolderPlus, FolderOpen } from 'lucide-react';
+import { Plus, Search, Star, ExternalLink, MoreVertical, Trash2, Edit2, Folder, RotateCcw, XCircle, ChevronUp, ChevronDown, FolderPlus, FolderOpen, LayoutGrid } from 'lucide-react';
 import { useConnectionStore, ConnectionLink, ConnectionFolder } from '@/store/connection-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,8 +122,8 @@ const RenderLink = ({
 const ConnectionPage = () => {
     const { 
         folders, trashedFolders, isLoading, fetchFolders, 
-        trashLink, restoreLink, permanentDeleteLink,
-        toggleFavorite, trashFolder,
+        addFolder, updateFolder, trashFolder,
+        trashLink, restoreLink, permanentDeleteLink, toggleFavorite,
         setFolderDialogOpen, setLinkDialogOpen,
         reorderFolders, reorderLinks,
         setupSocket
@@ -132,9 +132,8 @@ const ConnectionPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Sync view mode and folder from URL
     const viewMode = (searchParams.get('view') as 'active' | 'trash') || 'active';
-    const selectedFolderId = searchParams.get('folder') || (viewMode === 'active' ? 'favorites' : null);
+    const selectedFolderId = searchParams.get('folder') || (viewMode === 'active' ? 'all' : null);
     
     useEffect(() => {
         fetchFolders(viewMode === 'trash');
@@ -147,84 +146,168 @@ const ConnectionPage = () => {
         return folders.flatMap(f => f.links.map(l => ({ ...l, folderName: f.name, folderColor: f.color })));
     }, [folders]);
 
-    const trashedLinks = useMemo(() => {
-        return trashedFolders.flatMap(f => f.links.map(l => ({ ...l, folderName: f.name, folderColor: f.color })));
-    }, [trashedFolders]);
-
-    const subfolders = useMemo(() => {
-        if (viewMode === 'trash' || selectedFolderId === 'favorites') return [];
-        return folders.filter(f => f.parentId === selectedFolderId);
-    }, [folders, selectedFolderId, viewMode]);
-
     const displayLinks = useMemo(() => {
-        let base = viewMode === 'active' ? activeLinks : trashedLinks;
+        let filtered = viewMode === 'trash'
+            ? trashedFolders.flatMap(f => f.links.map(l => ({ ...l, folderName: f.name, folderColor: f.color })))
+            : activeLinks;
 
-        if (viewMode === 'active') {
-            if (selectedFolderId === 'favorites') {
-                base = base.filter(l => l.isFavorite);
-            } else if (selectedFolderId) {
-                base = base.filter(l => l.folderId === selectedFolderId);
-            }
+        if (selectedFolderId === 'favorites') {
+            filtered = filtered.filter(l => l.isFavorite);
+        } else if (selectedFolderId && selectedFolderId !== 'all' && viewMode === 'active') {
+            filtered = filtered.filter(l => l.folderId === selectedFolderId);
         }
 
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            base = base.filter(l => 
+            filtered = filtered.filter(l => 
                 l.title.toLowerCase().includes(query) || 
-                (l.description && l.description.toLowerCase().includes(query)) ||
-                l.url.toLowerCase().includes(query)
+                l.url.toLowerCase().includes(query) || 
+                (l.description && l.description.toLowerCase().includes(query))
             );
         }
 
-        // Favoritos primeiro, depois por nome (alfabético)
-        return [...base].sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             if (a.isFavorite && !b.isFavorite) return -1;
             if (!a.isFavorite && b.isFavorite) return 1;
             return a.title.localeCompare(b.title);
         });
-    }, [activeLinks, trashedLinks, viewMode, selectedFolderId, searchQuery]);
+    }, [viewMode, selectedFolderId, searchQuery, activeLinks, trashedFolders]);
+
+    const subfolders = useMemo(() => {
+        if (viewMode === 'trash' || selectedFolderId === 'favorites') return [];
+        return folders.filter(f => f.parentId === (selectedFolderId === 'all' ? null : selectedFolderId));
+    }, [folders, selectedFolderId, viewMode]);
 
     const groupedFavorites = useMemo(() => {
         if (selectedFolderId !== 'favorites' || viewMode !== 'active') return null;
         
-        const groups: { [folderId: string]: { id: string; name: string; color: string; links: any[] } } = {};
+        const groups: { [folderId: string]: { id: string; name: string; color: string; links: ConnectionLink[] } } = {};
         
         displayLinks.forEach(link => {
             const folderId = link.folderId || 'uncategorized';
             if (!groups[folderId]) {
+                const folder = folders.find(f => f.id === folderId);
                 groups[folderId] = {
                     id: folderId,
-                    name: link.folderName || 'Sem Pasta',
-                    color: link.folderColor || '#94a3b8',
+                    name: folder?.name || 'Sem Pasta',
+                    color: folder?.color || '#94a3b8',
                     links: []
                 };
             }
             groups[folderId].links.push(link);
         });
         
-        // Sort groups by name
         return Object.values(groups).sort((a, b) => {
             if (a.id === 'uncategorized') return 1;
             if (b.id === 'uncategorized') return -1;
             return a.name.localeCompare(b.name);
         });
-    }, [displayLinks, selectedFolderId, viewMode]);
-
+    }, [displayLinks, selectedFolderId, folders, viewMode]);
 
     const handleEditLink = (link: ConnectionLink) => {
         setLinkDialogOpen(true, link);
     };
 
     const selectedFolderName = useMemo(() => {
+        if (viewMode === 'trash') return 'Lixeira';
         if (selectedFolderId === 'favorites') return 'Meus Favoritos';
+        if (!selectedFolderId || selectedFolderId === 'all') return 'Todos os Links';
         return folders.find(f => f.id === selectedFolderId)?.name || 'Todos os Links';
-    }, [folders, selectedFolderId]);
+    }, [folders, selectedFolderId, viewMode]);
 
+    const renderFavoritesBarItems = () => {
+        const rootFolders = folders.filter(f => !f.parentId).sort((a, b) => a.name.localeCompare(b.name));
+        
+        return (
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-2 px-1">
+                {/* Todos os Links */}
+                <button
+                    onClick={() => setSearchParams({})}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${!searchParams.get('folder') && !searchParams.get('view') ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+                >
+                    <LayoutGrid className="h-4 w-4" />
+                    Todos
+                </button>
+
+                {/* Favoritos */}
+                <button
+                    onClick={() => setSearchParams({ folder: 'favorites' })}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedFolderId === 'favorites' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+                >
+                    <Star className={`h-4 w-4 ${selectedFolderId === 'favorites' ? 'fill-current' : ''}`} />
+                    Favoritos
+                </button>
+
+                <div className="h-4 w-px bg-border/40 mx-2 shrink-0" />
+
+                {/* Pastas */}
+                {rootFolders.map(folder => (
+                    <div key={folder.id} className="flex items-center gap-1 group">
+                        <button
+                            onClick={() => setSearchParams({ folder: folder.id })}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedFolderId === folder.id ? 'bg-primary/10 text-primary border border-primary/20' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+                        >
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: folder.color || '#3b82f6' }} />
+                            {folder.name}
+                        </button>
+                        
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-muted rounded-lg transition-all text-muted-foreground">
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48 p-2 rounded-2xl shadow-2xl border-border/40">
+                                <DropdownMenuItem onClick={() => setFolderDialogOpen(true, folder)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
+                                    <Edit2 className="h-4 w-4 text-primary" /> Editar Pasta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: folder.id, links: [], createdAt: '', updatedAt: '', order: 0 } as any)} className="gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm">
+                                    <FolderPlus className="h-4 w-4 text-emerald-500" /> Nova Subpasta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => trashFolder(folder.id)} className="text-destructive gap-3 p-3 rounded-xl cursor-pointer font-bold text-sm focus:bg-destructive/10 focus:text-destructive">
+                                    <Trash2 className="h-4 w-4" /> Mover p/ Lixeira
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                ))}
+
+                <div className="h-4 w-px bg-border/40 mx-2 shrink-0" />
+
+                {/* Botão Nova Pasta */}
+                <button
+                    onClick={() => setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: null, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-primary hover:bg-primary/5 transition-all whitespace-nowrap"
+                >
+                    <FolderPlus className="h-4 w-4" />
+                    Nova Pasta
+                </button>
+
+                <div className="flex-1" />
+
+                {/* Lixeira */}
+                <button
+                    onClick={() => setSearchParams({ view: 'trash' })}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${viewMode === 'trash' ? 'bg-destructive/10 text-destructive border border-destructive/20' : 'hover:bg-destructive/5 text-muted-foreground hover:text-destructive'}`}
+                >
+                    <Trash2 className="h-4 w-4" />
+                    Lixeira
+                </button>
+            </div>
+        );
+    };
 
     return (
         <div className="flex flex-col h-full bg-background animate-in fade-in duration-500 overflow-hidden">
+            {/* Barra de Favoritos (Navegação Horizontal) */}
+            <nav className="px-6 py-2 border-b border-border/40 bg-background/80 backdrop-blur-md z-20">
+                <div className="max-w-[1600px] mx-auto">
+                    {renderFavoritesBarItems()}
+                </div>
+            </nav>
+
             {/* Header com Busca e Ações */}
-            <header className="p-6 border-b border-border/40 bg-background/50 backdrop-blur-md sticky top-0 z-10">
+            <header className="px-6 py-4 border-b border-border/40 bg-background/50 backdrop-blur-md sticky top-0 z-10">
                 <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-6">
                     <div className="flex-1 max-w-2xl relative group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -237,20 +320,24 @@ const ConnectionPage = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <Button
-                            variant="secondary"
-                            onClick={() => setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: selectedFolderId && selectedFolderId !== 'favorites' ? selectedFolderId : null, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
-                            className="h-12 px-6 rounded-2xl gap-2 font-bold shadow-sm"
-                        >
-                            <Plus className="h-5 w-5" />
-                            <span className="hidden sm:inline">{selectedFolderId && selectedFolderId !== 'favorites' ? 'Nova Subpasta' : 'Nova Pasta'}</span>
-                        </Button>
+                        {/* Ações Rápidas baseadas no contexto */}
+                        {selectedFolderId && selectedFolderId !== 'favorites' && selectedFolderId !== 'all' && viewMode !== 'trash' && (
+                            <Button
+                                variant="outline"
+                                onClick={() => setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: selectedFolderId, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
+                                className="h-12 px-6 rounded-2xl gap-2 font-bold shadow-sm border-dashed"
+                            >
+                                <Plus className="h-5 w-5" />
+                                <span className="hidden sm:inline">Subpasta</span>
+                            </Button>
+                        )}
+                        
                         <Button 
                             onClick={() => setLinkDialogOpen(true)} 
                             className="h-12 px-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold shadow-xl shadow-primary/25 gap-2 transition-all active:scale-95"
                         >
                             <Plus className="h-5 w-5" />
-                            <span className="hidden sm:inline">Adicionar Link</span>
+                            <span className="hidden sm:inline">Novo Link</span>
                         </Button>
                     </div>
                 </div>

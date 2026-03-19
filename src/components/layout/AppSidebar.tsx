@@ -462,57 +462,13 @@ const AppSidebar = () => {
             <div className="flex flex-col gap-1">
               {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Conexão</span>}
               
-              <Link to="/conexao" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.pathname === '/conexao' && !location.search ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Favoritos">
-                <Star className={`h-4 w-4 shrink-0 ${location.pathname === '/conexao' && !location.search ? 'fill-current' : ''}`} /> {!isCollapsed && <span>Favoritos</span>}
+              <Link to="/conexao" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.pathname === '/conexao' && !location.search ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Links">
+                <LayoutGrid className={`h-4 w-4 shrink-0`} /> {!isCollapsed && <span>Todos os Links</span>}
               </Link>
 
-              <Link to="/conexao?view=trash" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes('view=trash') ? 'bg-destructive text-destructive-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Lixeira">
-                <Trash2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Lixeira</span>}
+              <Link to="/conexao?folder=favorites" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes('folder=favorites') ? 'bg-amber-500/10 text-amber-500 font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Meus Favoritos">
+                <Star className={`h-4 w-4 shrink-0 ${location.search.includes('folder=favorites') ? 'fill-current' : ''}`} /> {!isCollapsed && <span>Meus Favoritos</span>}
               </Link>
-            </div>
-
-            <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
-              <div className="flex items-center justify-between px-2 mb-1">
-                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Minhas Pastas</span>}
-                {!isCollapsed && (
-                  <button 
-                    onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: null, links: [], createdAt: '', updatedAt: '', order: 0 } as any)}
-                    className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
-                    title="Nova Pasta"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {!isCollapsed ? (
-                <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1">
-                  {renderConnectionFolders()}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3">
-                  {connectionFolders
-                    .filter(f => !f.parentId)
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(folder => (
-                      <TooltipProvider key={folder.id}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Link
-                              to={`/conexao?folder=${folder.id}`}
-                              className={`p-2 rounded-md transition-colors ${location.search.includes(`folder=${folder.id}`) ? 'bg-primary text-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
-                            >
-                              <FolderOpen className="h-4 w-4 shrink-0" />
-                            </Link>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">
-                            {folder.name}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ))}
-                </div>
-              )}
             </div>
           </div>
         ) : (
