@@ -1,30 +1,33 @@
 #!/bin/bash
 set -e
-echo "=== Atualizando código do repositório ==="
+
+echo "=== [1/9] Atualizando código do repositório ==="
 cd /var/www/polaryon
 git reset --hard HEAD
 git pull origin main
 
-echo "=== Instalando dependências do frontend (root) ==="
-npm install
+echo "=== [2/9] Instalando dependências do frontend ==="
+npm install --no-audit --no-fund
 
-echo "=== Compilando frontend (Vite) ==="
-npm run build
+echo "=== [3/9] Compilando frontend (Vite) ==="
+npm run build || { echo "ERRO: Falha no build do frontend"; exit 1; }
 
-echo "=== Instalando dependências do backend ==="
+echo "=== [4/9] Entrando na pasta do backend ==="
 cd /var/www/polaryon/backend
-npm install
 
-echo "=== Gerando Prisma Client ==="
-npx prisma generate
+echo "=== [5/9] Instalando dependências do backend ==="
+npm install --no-audit --no-fund
 
-echo "=== Compilando backend (TypeScript) ==="
-npm run build
+echo "=== [6/9] Gerando Prisma Client ==="
+npx prisma generate || { echo "ERRO: Falha no prisma generate"; exit 1; }
 
-echo "=== Sincronizando schema do banco de dados ==="
-npx prisma db push --accept-data-loss
+echo "=== [7/9] Compilando backend (TypeScript) ==="
+npm run build || { echo "ERRO: Falha no build do backend (tsc)"; exit 1; }
 
-echo "=== Reiniciando backend ==="
-pm2 restart polaryon-backend
+echo "=== [8/9] Sincronizando schema do banco de dados ==="
+npx prisma db push --accept-data-loss || { echo "ERRO: Falha no prisma db push"; exit 1; }
 
-echo "=== Deploy concluído com sucesso! ==="
+echo "=== [9/9] Reiniciando processos no PM2 ==="
+pm2 restart polaryon-backend || pm2 start dist/server.js --name polaryon-backend
+
+echo "=== DEPLOY CONCLUÍDO COM SUCESSO! ==="

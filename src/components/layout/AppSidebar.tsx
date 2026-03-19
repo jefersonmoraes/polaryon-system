@@ -194,7 +194,7 @@ const AppSidebar = () => {
                         try {
                           return new URL(link.url).hostname;
                         } catch (e) {
-                          return "google.com";
+                          return 'google.com';
                         }
                       })()}`} 
                       alt="" 
