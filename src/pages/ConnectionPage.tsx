@@ -92,7 +92,7 @@ const RenderLink = ({
         </div>
 
         <div className="flex-1 space-y-1 relative z-10 min-w-0">
-            <h4 className="text-[13px] font-black tracking-tight text-foreground/90 line-clamp-2 group-hover:text-primary transition-colors duration-500 leading-tight">{link.title}</h4>
+            <h4 className="text-[13px] font-black tracking-tight text-foreground/90 line-clamp-3 group-hover:text-primary transition-colors duration-500 leading-tight">{link.title}</h4>
             <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">
                 {(() => {
                     try {
