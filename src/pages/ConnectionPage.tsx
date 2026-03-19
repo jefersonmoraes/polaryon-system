@@ -38,12 +38,12 @@ const RenderLink = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
+        className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.25rem] p-3 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-2 overflow-hidden h-auto lg:min-h-[190px]"
     >
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
         
         <div className="flex items-start justify-between relative z-10">
-            <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
+            <div className="w-7 h-7 rounded-lg bg-muted/40 p-1 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
                 <img 
                     src={getFavicon(link.url)} 
                     alt={link.title} 
@@ -55,15 +55,15 @@ const RenderLink = ({
             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
                 <button 
                     onClick={() => toggleFavorite(link)} 
-                    className={`p-2 rounded-xl transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
+                    className={`p-1.5 rounded-lg transition-all duration-500 shadow-sm ${link.isFavorite ? 'bg-amber-500/20 text-amber-500' : 'bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-amber-500'}`}
                 >
-                    <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
+                    <Star className={`h-3.5 w-3.5 ${link.isFavorite ? 'fill-current' : ''}`} />
                 </button>
                 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <button className="p-2 rounded-xl bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
-                            <MoreVertical className="h-4 w-4" />
+                        <button className="p-1.5 rounded-lg bg-background/80 backdrop-blur-sm text-muted-foreground/40 hover:text-foreground transition-all shadow-sm">
+                            <MoreVertical className="h-3.5 w-3.5" />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52 p-2 rounded-2xl shadow-2xl border-border/40">
@@ -92,7 +92,7 @@ const RenderLink = ({
         </div>
 
         <div className="flex-1 space-y-1 relative z-10 min-w-0">
-            <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors duration-500">{link.title}</h4>
+            <h4 className="text-[13px] font-black tracking-tight text-foreground/90 line-clamp-2 group-hover:text-primary transition-colors duration-500 leading-tight">{link.title}</h4>
             <p className="text-[11px] text-muted-foreground/60 font-black tracking-widest uppercase truncate">
                 {(() => {
                     try {
@@ -102,7 +102,7 @@ const RenderLink = ({
                     }
                 })()}
             </p>
-            {link.description && <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mt-2 opacity-80">{link.description}</p>}
+            {link.description && <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed mt-1 opacity-80">{link.description}</p>}
         </div>
 
         <div className="relative z-10 mt-auto pt-2">
@@ -110,10 +110,10 @@ const RenderLink = ({
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full h-12 flex items-center justify-center gap-3 rounded-2xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[12px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
+                className="w-full h-9 flex items-center justify-center gap-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[10px] font-black transition-all duration-500 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-xl group-hover:shadow-primary/30"
             >
                 ABRIR CONEXÃO
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-3 w-3" />
             </a>
         </div>
     </motion.div>
@@ -124,6 +124,7 @@ const ConnectionPage = () => {
         folders, trashedFolders, isLoading, fetchFolders, 
         addFolder, updateFolder, trashFolder,
         trashLink, restoreLink, permanentDeleteLink, toggleFavorite,
+        restoreFolder, permanentDeleteFolder,
         setFolderDialogOpen, setLinkDialogOpen,
         reorderFolders, reorderLinks,
         setupSocket
@@ -356,7 +357,7 @@ const ConnectionPage = () => {
                                     {viewMode === 'trash' ? 'Lixeira' : selectedFolderName}
                                 </h1>
                                 <p className="text-sm font-bold text-muted-foreground/70 flex items-center gap-2">
-                                    {displayLinks.length + subfolders.length} itens no total
+                                    {displayLinks.length + (viewMode === 'trash' ? trashedFolders.length : subfolders.length)} itens no total
                                     {searchQuery && <Badge variant="secondary" className="font-bold rounded-lg px-3 py-1 bg-primary/10 text-primary border-none">Busca: {searchQuery}</Badge>}
                                 </p>
                             </div>
@@ -367,6 +368,92 @@ const ConnectionPage = () => {
                         <div className="flex flex-col items-center justify-center h-96 gap-4">
                             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-12 h-12 border-4 border-primary/10 border-t-primary rounded-full shadow-xl" />
                             <p className="text-sm font-black text-muted-foreground animate-pulse">SINCRONIZANDO SISTEMA...</p>
+                        </div>
+                    ) : viewMode === 'trash' ? (
+                        <div className="space-y-12">
+                            {/* SEÇÃO DE PASTAS EXCLUÍDAS */}
+                            <section className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-sm font-black text-destructive/60 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Folder className="h-4 w-4" /> Pastas Excluídas ({trashedFolders.length})
+                                    </h2>
+                                    <div className="h-px flex-1 bg-border/40 mx-6" />
+                                </div>
+                                {trashedFolders.length === 0 ? (
+                                    <p className="text-center py-8 text-muted-foreground/50 text-xs font-bold italic">Nenhuma pasta na lixeira</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+                                        <AnimatePresence mode="popLayout">
+                                            {trashedFolders.map((folder) => (
+                                                <motion.div
+                                                    layout
+                                                    key={folder.id}
+                                                    initial={{ opacity: 0, scale: 0.9 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    className="group relative bg-destructive/5 border border-destructive/10 rounded-2xl p-4 transition-all hover:bg-destructive/10"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <Folder className="h-5 w-5 text-destructive/40" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-bold text-sm truncate text-destructive/80">{folder.name}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Button 
+                                                            variant="secondary" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 rounded-lg hover:bg-emerald-500 hover:text-white transition-colors"
+                                                            onClick={() => restoreFolder(folder.id)}
+                                                            title="Restaurar Pasta"
+                                                        >
+                                                            <RotateCcw className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="secondary" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 rounded-lg hover:bg-destructive hover:text-white transition-colors"
+                                                            onClick={() => permanentDeleteFolder(folder.id)}
+                                                            title="Excluir Permanentemente"
+                                                        >
+                                                            <XCircle className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* SEÇÃO DE LINKS EXCLUÍDOS */}
+                            <section className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-sm font-black text-destructive/60 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Star className="h-4 w-4" /> Links Excluídos ({displayLinks.length})
+                                    </h2>
+                                    <div className="h-px flex-1 bg-border/40 mx-6" />
+                                </div>
+                                {displayLinks.length === 0 ? (
+                                    <p className="text-center py-8 text-muted-foreground/50 text-xs font-bold italic">Nenhum link na lixeira</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+                                        <AnimatePresence mode="popLayout">
+                                            {displayLinks.map((link) => (
+                                                <RenderLink 
+                                                    key={link.id} 
+                                                    link={link}
+                                                    viewMode="trash"
+                                                    toggleFavorite={toggleFavorite}
+                                                    handleEditLink={handleEditLink}
+                                                    trashLink={trashLink}
+                                                    restoreLink={restoreLink}
+                                                    permanentDeleteLink={permanentDeleteLink}
+                                                />
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+                            </section>
                         </div>
                     ) : (
                         <div className="space-y-12">
@@ -379,9 +466,9 @@ const ConnectionPage = () => {
                                         </h2>
                                         <div className="h-px flex-1 bg-border/40 mx-6" />
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
                                         <AnimatePresence mode="popLayout">
-                                            {[...subfolders].sort((a, b) => a.name.localeCompare(b.name)).map((folder, idx) => (
+                                            {[...subfolders].sort((a, b) => a.name.localeCompare(b.name)).map((folder) => (
                                                 <motion.div
                                                     layout
                                                     key={folder.id}
@@ -445,7 +532,7 @@ const ConnectionPage = () => {
                                          <h3 className="text-lg font-black text-foreground">Nenhum link por aqui</h3>
                                          <p className="text-muted-foreground text-sm max-w-xs mx-auto mt-1">Crie seu primeiro link clicando no botão "Adicionar Link" acima.</p>
                                     </div>
-                                ) : groupedFavorites ? (
+                                ) : groupedFavorites && groupedFavorites.length > 0 ? (
                                     <div className="space-y-12">
                                         {groupedFavorites.map((group) => (
                                             <div key={group.id} className="space-y-6">
@@ -460,13 +547,13 @@ const ConnectionPage = () => {
                                                     </Badge>
                                                 </div>
                                                 
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
                                                     <AnimatePresence mode="popLayout">
                                                         {group.links.map((link) => (
                                                             <RenderLink 
                                                                 key={link.id} 
                                                                 link={link}
-                                                                viewMode={viewMode}
+                                                                viewMode="active"
                                                                 toggleFavorite={toggleFavorite}
                                                                 handleEditLink={handleEditLink}
                                                                 trashLink={trashLink}
@@ -480,13 +567,13 @@ const ConnectionPage = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-1">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
                                         <AnimatePresence mode="popLayout">
                                             {displayLinks.map((link) => (
                                                 <RenderLink 
                                                     key={link.id} 
                                                     link={link}
-                                                    viewMode={viewMode}
+                                                    viewMode="active"
                                                     toggleFavorite={toggleFavorite}
                                                     handleEditLink={handleEditLink}
                                                     trashLink={trashLink}
