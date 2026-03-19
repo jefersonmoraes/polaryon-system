@@ -224,13 +224,13 @@ const ConnectionPage = () => {
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.9 }}
-                                        className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-3xl p-5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 flex flex-col gap-4 overflow-hidden h-[240px]"
+                                        className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-2xl p-4 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 flex flex-col gap-3 overflow-hidden h-[185px]"
                                     >
                                         {/* Efeito Visual de Fundo */}
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                                         
                                         <div className="flex items-start justify-between relative z-10">
-                                            <div className="w-14 h-14 rounded-2xl bg-muted/30 p-2.5 border border-border/40 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                                            <div className="w-12 h-12 rounded-xl bg-muted/30 p-2 border border-border/40 shadow-sm group-hover:scale-105 transition-transform duration-500">
                                                 <img 
                                                     src={getFavicon(link.url)} 
                                                     alt={link.title} 
@@ -239,37 +239,37 @@ const ConnectionPage = () => {
                                                 />
                                             </div>
 
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1">
                                                 <button 
                                                     onClick={() => toggleFavorite(link)} 
-                                                    className={`p-2 rounded-xl transition-all duration-300 ${link.isFavorite ? 'bg-amber-500/10 text-amber-500' : 'text-muted-foreground/40 hover:bg-muted hover:text-foreground'}`}
+                                                    className={`p-1.5 rounded-lg transition-all duration-300 ${link.isFavorite ? 'bg-amber-500/10 text-amber-500' : 'text-muted-foreground/30 hover:bg-muted hover:text-foreground'}`}
                                                 >
-                                                    <Star className={`h-4.5 w-4.5 ${link.isFavorite ? 'fill-current' : ''}`} />
+                                                    <Star className={`h-4 w-4 ${link.isFavorite ? 'fill-current' : ''}`} />
                                                 </button>
                                                 
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <button className="p-2 rounded-xl text-muted-foreground/40 hover:bg-muted hover:text-foreground transition-all">
-                                                            <MoreVertical className="h-4.5 w-4.5" />
+                                                        <button className="p-1.5 rounded-lg text-muted-foreground/40 hover:bg-muted hover:text-foreground transition-all">
+                                                            <MoreVertical className="h-4 w-4" />
                                                         </button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl">
+                                                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
                                                         {viewMode === 'active' ? (
                                                             <>
-                                                                <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-2.5 p-3 rounded-xl cursor-pointer">
-                                                                    <Edit2 className="h-4 w-4" /> Editar Link
+                                                                <DropdownMenuItem onClick={() => handleEditLink(link)} className="gap-2 p-2 rounded-lg cursor-pointer">
+                                                                    <Edit2 className="h-3.5 w-3.5" /> Editar
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-2.5 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive">
-                                                                    <Trash2 className="h-4 w-4" /> Mover para Lixeira
+                                                                <DropdownMenuItem onClick={() => trashLink(link.id)} className="text-destructive gap-2 p-2 rounded-lg cursor-pointer focus:bg-destructive/10 focus:text-destructive">
+                                                                    <Trash2 className="h-3.5 w-3.5" /> Excluir
                                                                 </DropdownMenuItem>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-2.5 p-3 rounded-xl cursor-pointer text-emerald-500 focus:text-emerald-500">
-                                                                    <RotateCcw className="h-4 w-4" /> Restaurar
+                                                                <DropdownMenuItem onClick={() => restoreLink(link.id)} className="gap-2 p-2 rounded-lg cursor-pointer text-emerald-500 focus:text-emerald-500">
+                                                                    <RotateCcw className="h-3.5 w-3.5" /> Restaurar
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-2.5 p-3 rounded-xl cursor-pointer focus:bg-destructive/10 focus:text-destructive">
-                                                                    <XCircle className="h-4 w-4" /> Excluir Permanentemente
+                                                                <DropdownMenuItem onClick={() => permanentDeleteLink(link.id)} className="text-destructive gap-2 p-2 rounded-lg cursor-pointer focus:bg-destructive/10 focus:text-destructive">
+                                                                    <XCircle className="h-3.5 w-3.5" /> Excluir permanentemente
                                                                 </DropdownMenuItem>
                                                             </>
                                                         )}
@@ -278,23 +278,20 @@ const ConnectionPage = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex-1 space-y-2 relative z-10">
-                                            <h4 className="text-lg font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors">{link.title}</h4>
-                                            <p className="text-xs text-muted-foreground/60 font-bold tracking-tighter uppercase mb-2">{(new URL(link.url)).hostname.replace('www.', '')}</p>
-                                            <p className="text-sm text-muted-foreground/80 line-clamp-2 leading-relaxed h-[2.5rem] font-medium italic opacity-70">
-                                                {link.description || 'Nenhuma descrição detalhada fornecida.'}
-                                            </p>
+                                        <div className="flex-1 space-y-1 relative z-10 min-w-0">
+                                            <h4 className="text-base font-black tracking-tight text-foreground/90 line-clamp-1 group-hover:text-primary transition-colors">{link.title}</h4>
+                                            <p className="text-[10px] text-muted-foreground/60 font-bold tracking-tight uppercase line-clamp-1">{(new URL(link.url)).hostname.replace('www.', '')}</p>
                                         </div>
 
-                                        <div className="relative z-10 pt-2">
+                                        <div className="relative z-10 mt-auto">
                                             <a
                                                 href={link.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl bg-accent/80 group-hover:bg-primary text-foreground group-hover:text-white text-sm font-black transition-all duration-500 shadow-sm group-hover:shadow-lg group-hover:shadow-primary/30"
+                                                className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white text-[11px] font-black transition-all duration-300 shadow-sm border border-primary/20 hover:border-transparent group-hover:shadow-lg group-hover:shadow-primary/25"
                                             >
-                                                ACESSAR AGORA
-                                                <ChevronRight className="h-4 w-4 transition-transform duration-500 group-hover:translate-x-1" />
+                                                ACESSAR LINK
+                                                <ExternalLink className="h-3 w-3" />
                                             </a>
                                         </div>
                                     </motion.div>
