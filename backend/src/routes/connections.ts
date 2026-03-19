@@ -105,7 +105,7 @@ router.put('/folders/reorder', async (req: Request, res: Response) => {
     try {
         const { folders } = req.body; // Array of { id: string, order: number }
         
-        await Promise.all(
+        await prisma.$transaction(
             folders.map((f: { id: string, order: number }) => 
                 prisma.connectionFolder.update({
                     where: { id: f.id },
@@ -210,7 +210,7 @@ router.put('/links/reorder', async (req: Request, res: Response) => {
     try {
         const { links } = req.body; // Array of { id: string, order: number }
         
-        await Promise.all(
+        await prisma.$transaction(
             links.map((l: { id: string, order: number }) => 
                 prisma.connectionLink.update({
                     where: { id: l.id },
