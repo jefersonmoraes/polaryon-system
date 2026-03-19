@@ -187,11 +187,37 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
     const handleToggleArea = (area: string) => {
         if (!selectedCompany) return;
         const upperArea = area.trim().toUpperCase();
+        if (upperArea === '') return;
+        
         const currentAreas = selectedCompany.areasAtuacao || [];
         const newAreas = currentAreas.includes(upperArea)
             ? currentAreas.filter(a => a !== upperArea)
             : [...currentAreas, upperArea];
         updateCompany(selectedCompany.id, { areasAtuacao: newAreas });
+    };
+
+    const handleAddAreas = (input: string) => {
+        if (!selectedCompany) return false;
+        const areas = input.split(/[,;]/).map(a => a.trim().toUpperCase()).filter(a => a !== '');
+        
+        if (areas.length > 0) {
+            const currentAreas = selectedCompany.areasAtuacao || [];
+            const newAreas = [...currentAreas];
+            let hasChanges = false;
+            
+            areas.forEach(area => {
+                if (!newAreas.includes(area)) {
+                    newAreas.push(area);
+                    hasChanges = true;
+                }
+            });
+            
+            if (hasChanges) {
+                updateCompany(selectedCompany.id, { areasAtuacao: newAreas });
+                return true;
+            }
+        }
+        return false;
     };
 
     const handleExportODS = () => {
@@ -1058,26 +1084,21 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') {
                                                                 e.preventDefault();
-                                                                const input = e.currentTarget.value;
-                                                                const areas = input.split(',').map(a => a.trim().toUpperCase()).filter(a => a !== '');
-                                                                
-                                                                if (areas.length > 0) {
-                                                                    const currentAreas = selectedCompany.areasAtuacao || [];
-                                                                    const newAreas = [...currentAreas];
-                                                                    let hasChanges = false;
-                                                                    
-                                                                    areas.forEach(area => {
-                                                                        if (!newAreas.includes(area)) {
-                                                                            newAreas.push(area);
-                                                                            hasChanges = true;
-                                                                        }
-                                                                    });
-                                                                    
-                                                                    if (hasChanges) {
-                                                                        updateCompany(selectedCompany.id, { areasAtuacao: newAreas });
-                                                                    }
+                                                                if (handleAddAreas(e.currentTarget.value)) {
+                                                                    e.currentTarget.value = '';
+                                                                } else if (e.currentTarget.value.trim() !== '') {
+                                                                    // Clear even if no changes (e.g. already exists)
+                                                                    e.currentTarget.value = '';
                                                                 }
-                                                                e.currentTarget.value = '';
+                                                            }
+                                                        }}
+                                                        onInput={(e) => {
+                                                            const val = e.currentTarget.value.trim().toUpperCase();
+                                                            // Se o valor digitado corresponde exatamente a uma sugestão existente
+                                                            if (val !== '' && allUniqueAreas.includes(val)) {
+                                                                if (handleAddAreas(val)) {
+                                                                    e.currentTarget.value = '';
+                                                                }
                                                             }
                                                         }}
                                                     />
