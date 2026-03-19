@@ -3,6 +3,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useSidebarLinkStore } from '@/store/sidebar-link-store';
+import { useConnectionStore, ConnectionFolder } from '@/store/connection-store';
 import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
 import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star } from 'lucide-react';
@@ -57,6 +58,7 @@ const AppSidebar = () => {
   const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
   const isOportunidadesModule = location.pathname.startsWith('/oportunidades');
+  const isConnectionModule = location.pathname.startsWith('/conexao');
 
   useEffect(() => {
     if (isDocsModule) {
@@ -78,6 +80,35 @@ const AppSidebar = () => {
   }
   const activeKunbunFolder = folders.find(f => f.id === kunbunFolderId && !f.trashed && !f.archived);
   const activeKunbunBoards = boards.filter(b => b.folderId === kunbunFolderId && !b.trashed && !b.archived);
+
+  // Connection module logic
+  const { folders: connectionFolders, fetchFolders } = useConnectionStore();
+  
+  // Effect to load connections when module is active
+  useEffect(() => {
+    if (isConnectionModule) {
+      fetchFolders(false);
+    }
+  }, [isConnectionModule]);
+
+  const renderConnectionFolders = (parentId: string | null = null, level = 0) => {
+    return connectionFolders
+      .filter(f => f.parentId === parentId)
+      .map(folder => (
+        <div key={folder.id} className="flex flex-col">
+          <Link
+            to={`/conexao?folder=${folder.id}`}
+            className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes(`folder=${folder.id}`) ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+            style={{ paddingLeft: `${(level * 12) + 8}px` }}
+            title={folder.name}
+          >
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            <span className="truncate">{folder.name}</span>
+          </Link>
+          {renderConnectionFolders(folder.id, level + 1)}
+        </div>
+      ));
+  };
 
   return (
     <>
@@ -400,6 +431,36 @@ const AppSidebar = () => {
               <Link to="/" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50`} title="Sair da Pasta">
                 <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Tela Inicial</span>}
               </Link>
+            </div>
+          </div>
+        ) : isConnectionModule ? (
+          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Conexão</span>}
+              
+              <Link to="/conexao" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.pathname === '/conexao' && !location.search ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Favoritos">
+                <Star className={`h-4 w-4 shrink-0 ${location.pathname === '/conexao' && !location.search ? 'fill-current' : ''}`} /> {!isCollapsed && <span>Favoritos</span>}
+              </Link>
+
+              <Link to="/conexao?view=trash" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes('view=trash') ? 'bg-destructive text-destructive-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Lixeira">
+                <Trash2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Lixeira</span>}
+              </Link>
+            </div>
+
+            <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
+              <div className="flex items-center justify-between px-2 mb-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Minhas Pastas</span>}
+              </div>
+
+              {!isCollapsed ? (
+                <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1">
+                  {renderConnectionFolders()}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-muted-foreground opacity-50" />
+                </div>
+              )}
             </div>
           </div>
         ) : (

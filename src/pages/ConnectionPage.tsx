@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Star, ExternalLink, MoreVertical, Trash2, Edit2, FolderPlus, Folder, Filter, Hash, RotateCcw, XCircle, ChevronRight } from 'lucide-react';
+import { Plus, Search, Star, ExternalLink, MoreVertical, Trash2, Edit2, Folder, RotateCcw, XCircle } from 'lucide-react';
 import { useConnectionStore, ConnectionLink, ConnectionFolder } from '@/store/connection-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,18 +8,21 @@ import ConnectionLinkDialog from '@/components/connection/ConnectionLinkDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 
 const ConnectionPage = () => {
     const { 
         folders, trashedFolders, isLoading, fetchFolders, 
-        trashFolder, restoreFolder, permanentDeleteFolder,
         trashLink, restoreLink, permanentDeleteLink,
         toggleFavorite 
     } = useConnectionStore();
 
+    const [searchParams, setSearchParams] = useSearchParams();
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState<'active' | 'trash'>('active');
-    const [selectedFolderId, setSelectedFolderId] = useState<string | 'favorites'>('favorites');
+    
+    // Sync view mode and folder from URL
+    const viewMode = (searchParams.get('view') as 'active' | 'trash') || 'active';
+    const selectedFolderId = searchParams.get('folder') || (viewMode === 'active' ? 'favorites' : null);
     
     // Dialog states
     const [folderDialogOpen, setFolderDialogOpen] = useState(false);
@@ -29,7 +32,7 @@ const ConnectionPage = () => {
 
     useEffect(() => {
         fetchFolders(false);
-        fetchFolders(true); // Load trash in background
+        fetchFolders(true);
     }, [fetchFolders]);
 
     // Derived data
@@ -47,7 +50,7 @@ const ConnectionPage = () => {
         if (viewMode === 'active') {
             if (selectedFolderId === 'favorites') {
                 base = base.filter(l => l.isFavorite);
-            } else {
+            } else if (selectedFolderId) {
                 base = base.filter(l => l.folderId === selectedFolderId);
             }
         }
@@ -73,108 +76,48 @@ const ConnectionPage = () => {
         }
     };
 
-    const handleEditFolder = (folder: ConnectionFolder) => {
-        setEditingFolder(folder);
-        setFolderDialogOpen(true);
-    };
-
     const handleEditLink = (link: ConnectionLink) => {
         setEditingLink(link);
         setLinkDialogOpen(true);
     };
 
     return (
-        <div className="flex h-full bg-background/95 animate-in fade-in duration-500">
-            {/* Sidebar Modernizada */}
-            <aside className="w-72 border-r border-border/50 bg-card/10 backdrop-blur-md flex flex-col p-6 space-y-8 hidden lg:flex">
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4 opacity-50">Navegação</h3>
-                    
-                    <button
-                        onClick={() => { setViewMode('active'); setSelectedFolderId('favorites'); }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all duration-300 ${viewMode === 'active' && selectedFolderId === 'favorites' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'hover:bg-accent text-muted-foreground'}`}
-                    >
-                        <Star className={`h-4 w-4 ${viewMode === 'active' && selectedFolderId === 'favorites' ? 'fill-current' : ''}`} />
-                        <span className="font-bold">Favoritos</span>
-                    </button>
-
-                    <button
-                        onClick={() => setViewMode('trash')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all duration-300 ${viewMode === 'trash' ? 'bg-destructive text-destructive-foreground shadow-lg shadow-destructive/20' : 'hover:bg-destructive/10 text-muted-foreground hover:text-destructive'}`}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="font-bold">Lixeira</span>
-                    </button>
-                </div>
-
-                <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Minhas Pastas</h3>
-                        <button onClick={() => { setEditingFolder(null); setFolderDialogOpen(true); }} className="p-1 hover:bg-primary/10 text-primary rounded-md transition-colors">
-                            <Plus className="h-4 w-4" />
-                        </button>
+        <div className="flex flex-col h-full bg-background animate-in fade-in duration-500 overflow-hidden">
+            {/* Header com Busca e Ações */}
+            <header className="p-6 border-b border-border/40 bg-background/50 backdrop-blur-md sticky top-0 z-10">
+                <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-6">
+                    <div className="flex-1 max-w-2xl relative group">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input
+                            placeholder="Pesquisar em suas conexões..."
+                            className="pl-12 h-12 bg-muted/20 border-border/50 rounded-2xl focus-visible:ring-primary/20 focus-visible:border-primary/50 text-base"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
                     </div>
 
-                    <div className="space-y-1.5 overflow-y-auto pr-2 custom-scrollbar">
-                        {folders.map(folder => (
-                            <div key={folder.id} className="group relative">
-                                <button
-                                    onClick={() => { setViewMode('active'); setSelectedFolderId(folder.id); }}
-                                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-300 border-l-4 ${viewMode === 'active' && selectedFolderId === folder.id ? 'bg-card border-l-primary shadow-sm text-foreground' : 'hover:bg-accent/50 text-muted-foreground border-l-transparent'}`}
-                                >
-                                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: folder.color || '#3b82f6' }} />
-                                    <span className={`truncate ${viewMode === 'active' && selectedFolderId === folder.id ? 'font-bold' : 'font-medium'}`}>{folder.name}</span>
-                                    <span className="ml-auto text-[10px] opacity-40">{folder.links.length}</span>
-                                </button>
-                                
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <button className="p-1.5 hover:bg-muted rounded-lg"><MoreVertical className="h-3.5 w-3.5" /></button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-40">
-                                            <DropdownMenuItem onClick={() => handleEditFolder(folder)} className="gap-2">
-                                                <Edit2 className="h-3.5 w-3.5" /> Editar
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => trashFolder(folder.id)} className="text-destructive gap-2">
-                                                <Trash2 className="h-3.5 w-3.5" /> Excluir
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="secondary"
+                            onClick={() => { setEditingFolder(null); setFolderDialogOpen(true); }}
+                            className="h-12 px-6 rounded-2xl gap-2 font-bold"
+                        >
+                            <Plus className="h-5 w-5" />
+                            <span className="hidden sm:inline">Nova Pasta</span>
+                        </Button>
+                        <Button 
+                            onClick={() => { setEditingLink(null); setLinkDialogOpen(true); }} 
+                            className="h-12 px-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold shadow-xl shadow-primary/25 gap-2 transition-all active:scale-95"
+                        >
+                            <Plus className="h-5 w-5" />
+                            <span className="hidden sm:inline">Adicionar Link</span>
+                        </Button>
                     </div>
                 </div>
-            </aside>
+            </header>
 
-            {/* Conteúdo Principal */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-                <header className="p-6 border-b border-border/40 bg-background/50 backdrop-blur-md sticky top-0 z-10">
-                    <div className="flex items-center justify-between gap-6">
-                        <div className="flex-1 max-w-2xl relative group">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                            <Input
-                                placeholder="O que você está procurando hoje?"
-                                className="pl-12 h-12 bg-muted/20 border-border/50 rounded-2xl focus-visible:ring-primary/20 focus-visible:border-primary/50 text-base"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <Button 
-                                onClick={() => { setEditingLink(null); setLinkDialogOpen(true); }} 
-                                className="h-12 px-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold shadow-xl shadow-primary/25 gap-2 transition-all active:scale-95"
-                            >
-                                <Plus className="h-5 w-5" />
-                                <span className="hidden sm:inline">Adicionar Link</span>
-                            </Button>
-                        </div>
-                    </div>
-                </header>
-
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 custom-scrollbar bg-accent/5">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-accent/5">
+                <div className="max-w-[1600px] mx-auto space-y-8">
                     {/* Breadcrumb / Title area */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -186,7 +129,7 @@ const ConnectionPage = () => {
                                     {viewMode === 'trash' ? 'Lixeira' : selectedFolderId === 'favorites' ? 'Meus Favoritos' : folders.find(f => f.id === selectedFolderId)?.name || 'Todos os Links'}
                                 </h1>
                                 <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                    {displayLinks.length} {displayLinks.length === 1 ? 'item' : 'itens'} encontrados
+                                    {displayLinks.length} {displayLinks.length === 1 ? 'item' : 'itens'} {viewMode === 'trash' ? 'na lixeira' : 'encontrados'}
                                     {searchQuery && <Badge variant="secondary" className="font-normal">Filtro: {searchQuery}</Badge>}
                                 </p>
                             </div>
@@ -215,7 +158,7 @@ const ConnectionPage = () => {
                              </p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                             <AnimatePresence mode="popLayout">
                                 {displayLinks.map((link) => (
                                     <motion.div
@@ -226,7 +169,6 @@ const ConnectionPage = () => {
                                         exit={{ opacity: 0, scale: 0.9 }}
                                         className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-2xl p-4 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 flex flex-col gap-3 overflow-hidden h-[185px]"
                                     >
-                                        {/* Efeito Visual de Fundo */}
                                         <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                                         
                                         <div className="flex items-start justify-between relative z-10">
@@ -300,7 +242,7 @@ const ConnectionPage = () => {
                         </div>
                     )}
                 </div>
-            </main>
+            </div>
 
             {/* Dialogs */}
             <ConnectionFolderDialog 
@@ -312,7 +254,7 @@ const ConnectionPage = () => {
                 open={linkDialogOpen} 
                 onOpenChange={setLinkDialogOpen} 
                 editingLink={editingLink}
-                defaultFolderId={selectedFolderId !== 'favorites' ? selectedFolderId : (folders.length > 0 ? folders[0].id : undefined)}
+                defaultFolderId={selectedFolderId !== 'favorites' ? selectedFolderId || undefined : (folders.length > 0 ? folders[0].id : undefined)}
             />
         </div>
     );

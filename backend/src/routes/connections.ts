@@ -13,7 +13,14 @@ router.get('/folders', async (req: Request, res: Response) => {
     try {
         const trashed = req.query.trashed === 'true';
         const folders = await prisma.connectionFolder.findMany({
-            where: { trashed },
+            where: trashed 
+                ? { 
+                    OR: [
+                        { trashed: true },
+                        { links: { some: { trashed: true } } }
+                    ]
+                }
+                : { trashed: false },
             include: { 
                 links: {
                     where: { trashed }
@@ -30,11 +37,11 @@ router.get('/folders', async (req: Request, res: Response) => {
 // POST /api/connections/folders
 router.post('/folders', async (req: Request, res: Response) => {
     try {
-        const { name, color } = req.body;
+        const { name, color, parentId } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
 
         const folder = await prisma.connectionFolder.create({
-            data: { name, color }
+            data: { name, color, parentId }
         });
         res.json(folder);
     } catch (e: any) {
@@ -45,10 +52,10 @@ router.post('/folders', async (req: Request, res: Response) => {
 // PUT /api/connections/folders/:id
 router.put('/folders/:id', async (req: Request, res: Response) => {
     try {
-        const { name, color } = req.body;
+        const { name, color, parentId } = req.body;
         const folder = await prisma.connectionFolder.update({
             where: { id: String(req.params.id) },
-            data: { name, color }
+            data: { name, color, parentId }
         });
         res.json(folder);
     } catch (e: any) {

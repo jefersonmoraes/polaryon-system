@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ConnectionFolder, useConnectionStore } from '@/store/connection-store';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ConnectionFolderDialogProps {
     open: boolean;
@@ -14,15 +15,18 @@ interface ConnectionFolderDialogProps {
 const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, onOpenChange, editingFolder }) => {
     const [name, setName] = useState('');
     const [color, setColor] = useState('#3b82f6');
-    const { addFolder, updateFolder } = useConnectionStore();
+    const [parentId, setParentId] = useState<string | 'none'>('none');
+    const { folders, addFolder, updateFolder } = useConnectionStore();
 
     useEffect(() => {
         if (editingFolder) {
             setName(editingFolder.name);
             setColor(editingFolder.color || '#3b82f6');
+            setParentId(editingFolder.parentId || 'none');
         } else {
             setName('');
             setColor('#3b82f6');
+            setParentId('none');
         }
     }, [editingFolder, open]);
 
@@ -30,10 +34,12 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
         e.preventDefault();
         if (!name.trim()) return;
 
+        const pId = parentId === 'none' ? null : parentId;
+
         if (editingFolder) {
-            await updateFolder(editingFolder.id, name, color);
+            await updateFolder(editingFolder.id, name, color, pId);
         } else {
-            await addFolder(name, color);
+            await addFolder(name, color, pId);
         }
         onOpenChange(false);
     };
@@ -41,6 +47,9 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
     const colorOptions = [
         '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#71717a'
     ];
+
+    // Filter out current folder and its children when editing
+    const availableFolders = folders.filter(f => f.id !== editingFolder?.id);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -59,6 +68,24 @@ const ConnectionFolderDialog: React.FC<ConnectionFolderDialogProps> = ({ open, o
                             autoFocus
                         />
                     </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="parent">Pasta Superior (Opcional)</Label>
+                        <Select value={parentId} onValueChange={setParentId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione uma pasta pai" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Nenhuma (Pasta Principal)</SelectItem>
+                                {availableFolders.map(folder => (
+                                    <SelectItem key={folder.id} value={folder.id}>
+                                        {folder.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="space-y-2">
                         <Label>Cor da Categoria</Label>
                         <div className="flex flex-wrap gap-2 pt-1">

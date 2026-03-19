@@ -16,6 +16,7 @@ export interface ConnectionFolder {
     id: string;
     name: string;
     color: string | null;
+    parentId?: string | null;
     links: ConnectionLink[];
     createdAt: string;
     updatedAt: string;
@@ -27,8 +28,8 @@ interface ConnectionStore {
     isLoading: boolean;
     error: string | null;
     fetchFolders: (trashed?: boolean) => Promise<void>;
-    addFolder: (name: string, color?: string) => Promise<void>;
-    updateFolder: (id: string, name: string, color?: string) => Promise<void>;
+    addFolder: (name: string, color?: string, parentId?: string | null) => Promise<void>;
+    updateFolder: (id: string, name: string, color?: string, parentId?: string | null) => Promise<void>;
     trashFolder: (id: string) => Promise<void>;
     restoreFolder: (id: string) => Promise<void>;
     permanentDeleteFolder: (id: string) => Promise<void>;
@@ -60,18 +61,18 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         }
     },
 
-    addFolder: async (name, color) => {
+    addFolder: async (name, color, parentId) => {
         try {
-            const response = await api.post('/connections/folders', { name, color });
+            const response = await api.post('/connections/folders', { name, color, parentId });
             set((state) => ({ folders: [...state.folders, { ...response.data, links: [] }] }));
         } catch (error: any) {
             console.error('Failed to add folder:', error);
         }
     },
 
-    updateFolder: async (id, name, color) => {
+    updateFolder: async (id, name, color, parentId) => {
         try {
-            const response = await api.put(`/connections/folders/${id}`, { name, color });
+            const response = await api.put(`/connections/folders/${id}`, { name, color, parentId });
             set((state) => ({
                 folders: state.folders.map((f) => f.id === id ? { ...f, ...response.data } : f)
             }));
