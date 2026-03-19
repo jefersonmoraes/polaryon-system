@@ -229,7 +229,7 @@ export default function CompanyProfilePage() {
                     bairro: data.bairro || prev.bairro,
                     municipio: data.municipio || prev.municipio,
                     telefone: data.ddd_telefone_1 || prev.telefone,
-                    email: data.email || prev.email,
+                    email: data.email || data.correio_eletronico || data.correioEletronico || prev.email,
                     cnaes: cnaes,
                     porte: porte,
                     taxRegime: newRegime,

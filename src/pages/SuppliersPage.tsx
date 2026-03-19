@@ -22,7 +22,9 @@ interface CnpjResult {
     complemento: string;
     ddd_telefone_1: string;
     ddd_telefone_2: string;
-    email: string;
+    email?: string;
+    correio_eletronico?: string;
+    correioEletronico?: string;
 }
 
 const SuppliersPage = () => {
@@ -86,7 +88,14 @@ const SuppliersPage = () => {
             const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
             if (!response.ok) throw new Error('Falha ao buscar CNPJ');
             const data = await response.json();
-            setResult(data);
+            
+            // Normalize data - ensure email is captured from different possible fields
+            const normalizedData = {
+                ...data,
+                email: data.email || data.correio_eletronico || data.correioEletronico || ''
+            };
+            
+            setResult(normalizedData);
             toast.success('Empresa encontrada!');
         } catch {
             toast.error('Erro ao consultar CNPJ. Verifique se o número está correto.');
@@ -135,7 +144,7 @@ const SuppliersPage = () => {
             complemento: result.complemento,
             ddd_telefone_1: result.ddd_telefone_1?.replace(/\D/g, '') || '',
             ddd_telefone_2: result.ddd_telefone_2?.replace(/\D/g, '') || '',
-            email: result.email || '',
+            email: result.email || result.correio_eletronico || result.correioEletronico || '',
 
             // Initialize new fields
             contacts: [],
