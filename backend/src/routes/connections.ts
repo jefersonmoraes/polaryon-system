@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { getIO } from '../socket';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -44,6 +45,9 @@ router.post('/folders', async (req: Request, res: Response) => {
         const folder = await prisma.connectionFolder.create({
             data: { name, color, parentId }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'ADD_FOLDER', payload: folder });
+
         res.json(folder);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -58,6 +62,9 @@ router.put('/folders/:id', async (req: Request, res: Response) => {
             where: { id: String(req.params.id) },
             data: { name, color, parentId }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'UPDATE_FOLDER', payload: { id: req.params.id, data: { name, color, parentId } } });
+
         res.json(folder);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -76,6 +83,9 @@ router.put('/folders/:id/trash', async (req: Request, res: Response) => {
             where: { folderId: String(req.params.id) },
             data: { trashed: true, trashedAt: new Date() }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'TRASH_FOLDER', payload: { id: req.params.id } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -94,6 +104,9 @@ router.put('/folders/:id/restore', async (req: Request, res: Response) => {
             where: { folderId: String(req.params.id) },
             data: { trashed: false, trashedAt: null }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'RESTORE_FOLDER', payload: { id: req.params.id } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -114,6 +127,8 @@ router.put('/folders/reorder', async (req: Request, res: Response) => {
             )
         );
         
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'REORDER_FOLDERS', payload: { folders } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -126,6 +141,9 @@ router.delete('/folders/:id/permanent', async (req: Request, res: Response) => {
         await prisma.connectionFolder.delete({
             where: { id: String(req.params.id) }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'DELETE_FOLDER', payload: { id: req.params.id } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -153,6 +171,9 @@ router.post('/links', async (req: Request, res: Response) => {
                 folderId 
             }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'ADD_LINK', payload: link });
+
         res.json(link);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -173,6 +194,9 @@ router.put('/links/:id', async (req: Request, res: Response) => {
                 folderId 
             }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'UPDATE_LINK', payload: { id: req.params.id, data: { title, url, description, isFavorite, folderId } } });
+
         res.json(link);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -186,6 +210,9 @@ router.put('/links/:id/trash', async (req: Request, res: Response) => {
             where: { id: String(req.params.id) },
             data: { trashed: true, trashedAt: new Date() }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'TRASH_LINK', payload: { id: req.params.id } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -199,6 +226,9 @@ router.put('/links/:id/restore', async (req: Request, res: Response) => {
             where: { id: String(req.params.id) },
             data: { trashed: false, trashedAt: null }
         });
+
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'RESTORE_LINK', payload: { id: req.params.id } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -219,6 +249,8 @@ router.put('/links/reorder', async (req: Request, res: Response) => {
             )
         );
         
+        getIO().emit('system_sync', { store: 'CONNECTION', type: 'REORDER_LINKS', payload: { links } });
+
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });

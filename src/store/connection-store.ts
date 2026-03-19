@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
+import { socketService } from '@/lib/socket';
 
 export interface ConnectionLink {
     id: string;
@@ -43,6 +44,7 @@ interface ConnectionStore {
     toggleFavorite: (link: ConnectionLink) => Promise<void>;
     reorderFolders: (newFolders: ConnectionFolder[]) => Promise<void>;
     reorderLinks: (folderId: string, newLinks: ConnectionLink[]) => Promise<void>;
+    setupSocket: () => () => void;
     
     // Dialog state
     isFolderDialogOpen: boolean;
@@ -273,5 +275,78 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
             console.error('Failed to reorder links:', error);
             set({ folders: oldFolders }); // Rollback
         }
+    },
+
+    setupSocket: () => {
+        const handler = (data: any) => {
+            if (data.store !== 'CONNECTION') return;
+
+            const { type, payload } = data;
+            const state = get();
+
+            switch (type) {
+                case 'ADD_FOLDER':
+                    if (!state.folders.find(f => f.id === payload.id)) {
+                        set(s => ({ folders: [...s.folders, { ...payload, links: [] }] }));
+                    }
+                    break;
+                case 'UPDATE_FOLDER':
+                    set(s => ({
+                        folders: s.folders.map(f => f.id === payload.id ? { ...f, ...payload.data } : f)
+                    }));
+                    break;
+                case 'TRASH_FOLDER':
+                    set(s => ({
+                        folders: s.folders.filter(f => f.id !== payload.id)
+                    }));
+                    break;
+                case 'RESTORE_FOLDER':
+                    state.fetchFolders(false);
+                    break;
+                case 'DELETE_FOLDER':
+                    set(s => ({
+                        trashedFolders: s.trashedFolders.filter(f => f.id !== payload.id)
+                    }));
+                    break;
+                case 'REORDER_FOLDERS':
+                    // We only reorder if the payload has the new array or just refresh
+                    state.fetchFolders(false);
+                    break;
+                case 'ADD_LINK':
+                    set(s => ({
+                        folders: s.folders.map(f => 
+                            f.id === payload.folderId 
+                                ? { ...f, links: f.links.find(l => l.id === payload.id) ? f.links : [...f.links, payload] } 
+                                : f
+                        )
+                    }));
+                    break;
+                case 'UPDATE_LINK':
+                    set(s => ({
+                        folders: s.folders.map(f => ({
+                            ...f,
+                            links: f.links.map(l => l.id === payload.id ? { ...l, ...payload.data } : l)
+                        }))
+                    }));
+                    break;
+                case 'TRASH_LINK':
+                    set(s => ({
+                        folders: s.folders.map(f => ({
+                            ...f,
+                            links: f.links.filter(l => l.id !== payload.id)
+                        }))
+                    }));
+                    break;
+                case 'RESTORE_LINK':
+                    state.fetchFolders(false);
+                    break;
+                case 'REORDER_LINKS':
+                    state.fetchFolders(false);
+                    break;
+            }
+        };
+
+        socketService.on('system_sync', handler);
+        return () => socketService.off('system_sync', handler);
     }
 }));

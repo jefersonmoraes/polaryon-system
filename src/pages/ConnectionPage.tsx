@@ -125,7 +125,8 @@ const ConnectionPage = () => {
         trashLink, restoreLink, permanentDeleteLink,
         toggleFavorite, trashFolder,
         setFolderDialogOpen, setLinkDialogOpen,
-        reorderFolders, reorderLinks
+        reorderFolders, reorderLinks,
+        setupSocket
     } = useConnectionStore();
 
     const [searchParams, setSearchParams] = useSearchParams();
@@ -136,9 +137,10 @@ const ConnectionPage = () => {
     const selectedFolderId = searchParams.get('folder') || (viewMode === 'active' ? 'favorites' : null);
     
     useEffect(() => {
-        fetchFolders(false);
-        fetchFolders(true);
-    }, [fetchFolders]);
+        fetchFolders(viewMode === 'trash');
+        const cleanup = setupSocket();
+        return () => cleanup();
+    }, [fetchFolders, viewMode, setupSocket]);
 
     // Derived data
     const activeLinks = useMemo(() => {
