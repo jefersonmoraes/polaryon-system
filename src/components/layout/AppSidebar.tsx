@@ -190,7 +190,13 @@ const AppSidebar = () => {
                     title={link.title}
                   >
                     <img 
-                      src={`https://www.google.com/s2/favicons?sz=64&domain_url=${new URL(link.url).hostname}`} 
+                      src={`https://www.google.com/s2/favicons?sz=64&domain_url=${(() => {
+                        try {
+                          return new URL(link.url).hostname;
+                        } catch (e) {
+                          return "google.com";
+                        }
+                      })()}`} 
                       alt="" 
                       className="h-4 w-4 shrink-0 rounded-sm bg-white"
                       onError={(e) => {

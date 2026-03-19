@@ -15,11 +15,11 @@ echo "=== Instalando dependências do backend ==="
 cd /var/www/polaryon/backend
 npm install
 
-echo "=== Compilando backend (TypeScript) ==="
-npm run build
-
 echo "=== Gerando Prisma Client ==="
 npx prisma generate
+
+echo "=== Compilando backend (TypeScript) ==="
+npm run build
 
 echo "=== Sincronizando schema do banco de dados ==="
 npx prisma db push --accept-data-loss
