@@ -298,16 +298,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <SidebarProvider>
-              <div className="flex h-screen w-screen overflow-hidden bg-background">
-                  <ConnectionBanner />
-                  <AppSidebar />
-                  <div className="flex flex-col flex-1 overflow-hidden">
-                      <AppHeader /> {/* Assuming AppHeader is still needed inside the main content area */}
-                      <main className="flex-1 overflow-y-auto">
-                          <AppContent />
-                      </main>
-                  </div>
-              </div>
+            <ConnectionBanner />
+            <AppContent />
           </SidebarProvider>
         </BrowserRouter>
       </TooltipProvider>
