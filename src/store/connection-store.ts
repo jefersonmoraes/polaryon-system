@@ -8,6 +8,7 @@ export interface ConnectionLink {
     description: string | null;
     isFavorite: boolean;
     folderId: string;
+    order: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -18,6 +19,7 @@ export interface ConnectionFolder {
     color: string | null;
     parentId?: string | null;
     links: ConnectionLink[];
+    order: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -39,6 +41,8 @@ interface ConnectionStore {
     restoreLink: (id: string) => Promise<void>;
     permanentDeleteLink: (id: string) => Promise<void>;
     toggleFavorite: (link: ConnectionLink) => Promise<void>;
+    reorderFolders: (newFolders: ConnectionFolder[]) => Promise<void>;
+    reorderLinks: (folderId: string, newLinks: ConnectionLink[]) => Promise<void>;
     
     // Dialog state
     isFolderDialogOpen: boolean;
@@ -214,6 +218,43 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
             }));
         } catch (error: any) {
             console.error('Failed to toggle favorite:', error);
+        }
+    },
+
+    reorderFolders: async (newFolders) => {
+        // Optimistic update
+        const oldFolders = get().folders;
+        const reordered = newFolders.map((f, i) => ({ ...f, order: i }));
+        set({ folders: reordered });
+
+        try {
+            await api.put('/connections/folders/reorder', {
+                folders: reordered.map((f) => ({ id: f.id, order: f.order }))
+            });
+        } catch (error: any) {
+            console.error('Failed to reorder folders:', error);
+            set({ folders: oldFolders }); // Rollback
+        }
+    },
+
+    reorderLinks: async (folderId, newLinks) => {
+        // Optimistic update
+        const oldFolders = get().folders;
+        const reorderedLinks = newLinks.map((l, i) => ({ ...l, order: i }));
+        
+        set((state) => ({
+            folders: state.folders.map((f) => 
+                f.id === folderId ? { ...f, links: reorderedLinks } : f
+            )
+        }));
+
+        try {
+            await api.put('/connections/links/reorder', {
+                links: reorderedLinks.map((l) => ({ id: l.id, order: l.order }))
+            });
+        } catch (error: any) {
+            console.error('Failed to reorder links:', error);
+            set({ folders: oldFolders }); // Rollback
         }
     }
 }));

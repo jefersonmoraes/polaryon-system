@@ -497,6 +497,7 @@ model ConnectionFolder {
   updatedAt DateTime @updatedAt
   trashed   Boolean  @default(false)
   trashedAt DateTime?
+  order     Int      @default(0)
 }
 
 model ConnectionLink {
@@ -511,4 +512,5 @@ model ConnectionLink {
   updatedAt   DateTime @updatedAt
   trashed     Boolean  @default(false)
   trashedAt   DateTime?
+  order       Int      @default(0)
 }

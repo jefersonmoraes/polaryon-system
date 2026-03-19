@@ -96,6 +96,7 @@ const AppSidebar = () => {
   const renderConnectionFolders = (parentId: string | null = null, level = 0) => {
     return connectionFolders
       .filter(f => f.parentId === parentId)
+      .sort((a, b) => a.order - b.order)
       .map(folder => (
         <div key={folder.id} className="flex flex-col">
           <div className="group flex items-center gap-1 pr-2">
@@ -122,7 +123,7 @@ const AppSidebar = () => {
                 <DropdownMenuItem onClick={() => useConnectionStore.getState().trashFolder(folder.id)} className="text-destructive gap-2">
                   <Trash2 className="h-3.5 w-3.5" /> Excluir
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: folder.id, links: [], createdAt: '', updatedAt: '' } as any)} className="gap-2">
+                <DropdownMenuItem onClick={() => useConnectionStore.getState().setFolderDialogOpen(true, { id: '', name: '', color: '#3b82f6', parentId: folder.id, links: [], createdAt: '', updatedAt: '', order: 0 } as any)} className="gap-2">
                   <FolderPlus className="h-3.5 w-3.5" /> Subpasta
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -483,6 +484,7 @@ const AppSidebar = () => {
                 <div className="flex flex-col items-center gap-3">
                   {connectionFolders
                     .filter(f => !f.parentId)
+                    .sort((a, b) => a.order - b.order)
                     .map(folder => (
                       <TooltipProvider key={folder.id}>
                         <Tooltip>

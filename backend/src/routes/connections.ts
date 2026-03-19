@@ -23,10 +23,11 @@ router.get('/folders', async (req: Request, res: Response) => {
                 : { trashed: false },
             include: { 
                 links: {
-                    where: { trashed }
+                    where: { trashed },
+                    orderBy: { order: 'asc' }
                 } 
             },
-            orderBy: { createdAt: 'asc' }
+            orderBy: { order: 'asc' }
         });
         res.json(folders);
     } catch (e: any) {
@@ -93,6 +94,26 @@ router.put('/folders/:id/restore', async (req: Request, res: Response) => {
             where: { folderId: String(req.params.id) },
             data: { trashed: false, trashedAt: null }
         });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT /api/connections/folders/reorder
+router.put('/folders/reorder', async (req: Request, res: Response) => {
+    try {
+        const { folders } = req.body; // Array of { id: string, order: number }
+        
+        await Promise.all(
+            folders.map((f: { id: string, order: number }) => 
+                prisma.connectionFolder.update({
+                    where: { id: f.id },
+                    data: { order: f.order }
+                })
+            )
+        );
+        
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -184,12 +205,20 @@ router.put('/links/:id/restore', async (req: Request, res: Response) => {
     }
 });
 
-// DELETE /api/connections/links/:id/permanent
-router.delete('/links/:id/permanent', async (req: Request, res: Response) => {
+// PUT /api/connections/links/reorder
+router.put('/links/reorder', async (req: Request, res: Response) => {
     try {
-        await prisma.connectionLink.delete({
-            where: { id: String(req.params.id) }
-        });
+        const { links } = req.body; // Array of { id: string, order: number }
+        
+        await Promise.all(
+            links.map((l: { id: string, order: number }) => 
+                prisma.connectionLink.update({
+                    where: { id: l.id },
+                    data: { order: l.order }
+                })
+            )
+        );
+        
         res.json({ success: true });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
