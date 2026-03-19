@@ -9,8 +9,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fixDateToBRT } from "@/lib/utils";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { SidebarProvider } from '@/components/ui/sidebar';
 import AppHeader from "@/components/layout/AppHeader";
 import AppSidebar from "@/components/layout/AppSidebar";
+import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
+import api from '@/lib/api';
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { socketService } from '@/lib/socket';
@@ -45,7 +48,7 @@ import { useCertificateStore } from '@/store/certificate-store';
 
 const AppContent = () => {
   const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany, fetchKanbanData } = useKanbanStore();
-  const { isAuthenticated, currentUser: authUser, setOnlineUsers } = useAuthStore();
+  const { isAuthenticated, currentUser: authUser, setOnlineUsers, setSocketConnected } = useAuthStore();
   const { uiZoom, isDark } = useUserPrefsStore();
   const { documents, validateDocumentStatuses, cleanOldTrash: cleanDocsTrash } = useDocumentStore();
   const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
@@ -65,11 +68,10 @@ const AppContent = () => {
   }, [isDark]);
 
   useEffect(() => {
-    const authUser = useAuthStore.getState().currentUser;
     if (authUser) {
       useUserPrefsStore.getState().loadPreferences(authUser.id);
     }
-  }, []);
+  }, [authUser]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -89,25 +91,29 @@ const AppContent = () => {
     fetchKanbanData();
   }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
 
-  // Real-time Presence Monitor
+  // Real-time Presence and Connection Monitor
   useEffect(() => {
     if (!isAuthenticated || !authUser) return;
 
-    const handleOnlineUsers = (userIds: string[]) => {
-      setOnlineUsers(userIds);
+    const handleOnlineUsers = (ids: string[]) => {
+        setOnlineUsers(ids);
     };
 
-    // Small delay to ensure socket has time to connect (if not already)
-    const timeout = setTimeout(() => {
-        socketService.emit('user_join', authUser.id);
-        socketService.on('online_users', handleOnlineUsers);
-    }, 1000);
+    const handleConnectionChange = (connected: boolean) => {
+        setSocketConnected(connected);
+    };
+
+    socketService.on('online_users', handleOnlineUsers);
+    socketService.on('connection_change', handleConnectionChange);
+
+    // Emit join event
+    socketService.emit('user_join', authUser.id);
 
     return () => {
-      clearTimeout(timeout);
       socketService.off('online_users', handleOnlineUsers);
+      socketService.off('connection_change', handleConnectionChange);
     };
-  }, [isAuthenticated, authUser, setOnlineUsers]);
+  }, [isAuthenticated, authUser, setOnlineUsers, setSocketConnected]);
 
 
   // Background CNPJ Monitor - Checks status every 7 days
@@ -291,7 +297,18 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <AppContent />
+          <SidebarProvider>
+              <div className="flex h-screen w-screen overflow-hidden bg-background">
+                  <ConnectionBanner />
+                  <AppSidebar />
+                  <div className="flex flex-col flex-1 overflow-hidden">
+                      <AppHeader /> {/* Assuming AppHeader is still needed inside the main content area */}
+                      <main className="flex-1 overflow-y-auto">
+                          <AppContent />
+                      </main>
+                  </div>
+              </div>
+          </SidebarProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

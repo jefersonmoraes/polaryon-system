@@ -49,6 +49,20 @@ class SocketService {
             this.socket.on('online_users', (data) => {
                 this.trigger('online_users', data);
             });
+
+            this.socket.on('connect', () => {
+                console.log('🔗 Connected to realtime server');
+                this.trigger('connection_change', true);
+            });
+
+            this.socket.on('disconnect', () => {
+                console.log('❌ Disconnected from realtime server');
+                this.trigger('connection_change', false);
+            });
+
+            this.socket.on('connect_error', () => {
+                this.trigger('connection_change', false);
+            });
         }
     }
 

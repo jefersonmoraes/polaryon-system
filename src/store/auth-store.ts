@@ -49,6 +49,8 @@ interface AuthState {
     hasScreenAccess: (screenId: string) => boolean;
     onlineUsers: string[];
     setOnlineUsers: (userIds: string[]) => void;
+    isSocketConnected: boolean;
+    setSocketConnected: (connected: boolean) => void;
 }
 
 const DEFAULT_ADMIN: SystemUser = {
@@ -93,8 +95,10 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             jwtToken: null,
             onlineUsers: [],
+            isSocketConnected: true,
 
             setOnlineUsers: (userIds) => set({ onlineUsers: userIds }),
+            setSocketConnected: (connected) => set({ isSocketConnected: connected }),
 
             loginWithGoogle: (userData: SystemUser, token: string, rememberMe = false) => {
                 const { systemUsers } = get();

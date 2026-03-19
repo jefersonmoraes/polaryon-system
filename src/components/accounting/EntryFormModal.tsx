@@ -55,6 +55,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurrenceFrequency, setRecurrenceFrequency] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
     const [recurrenceCount, setRecurrenceCount] = useState(2);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (open) {
@@ -98,6 +99,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                 setIsRecurring(false);
                 setRecurrenceFrequency('monthly');
                 setRecurrenceCount(2);
+                setErrors({});
             }
         }
     }, [open, existingEntryId, type, categories]);
@@ -145,17 +147,22 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
             return;
         }
 
-        if (!formData.title || !formData.amount || !formData.categoryId) {
-            toast.error('Preencha os campos obrigatórios');
-            return;
-        }
+        const newErrors: Record<string, string> = {};
+        if (!formData.title) newErrors.title = 'Título é obrigatório';
+        if (!formData.amount) newErrors.amount = 'Valor é obrigatório';
+        if (!formData.categoryId) newErrors.categoryId = 'Categoria é obrigatória';
 
         // Convert BRL format to number (e.g. 1.234,56 -> 1234.56)
         const cleanAmount = formData.amount.replace(/\./g, '').replace(',', '.');
         const numericAmount = parseFloat(cleanAmount);
 
         if (isNaN(numericAmount) || numericAmount <= 0) {
-            toast.error('Valor inválido');
+            newErrors.amount = 'Valor inválido ou menor que zero';
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            toast.error('Corrija os erros no formulário');
             return;
         }
 
@@ -245,10 +252,14 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 required
                                 autoFocus
                                 value={formData.title}
-                                onChange={(e) => setFormData(p => ({ ...p, title: e.target.value }))}
+                                onChange={(e) => {
+                                    setFormData(p => ({ ...p, title: e.target.value }));
+                                    if (errors.title) setErrors(prev => ({ ...prev, title: '' }));
+                                }}
                                 placeholder={isRevenue ? "Ex: Venda Produto X" : "Ex: Conta de Luz"}
-                                className="w-full bg-secondary/50 border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
+                                className={`w-full bg-secondary/50 border rounded px-3 py-2 text-sm outline-none transition-colors ${errors.title ? 'border-destructive focus:border-destructive animate-shake' : 'border-border focus:border-primary'}`}
                             />
+                            {errors.title && <span className="text-[10px] text-destructive font-bold uppercase">{errors.title}</span>}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -260,10 +271,12 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/[^0-9,]/g, '');
                                         setFormData(p => ({ ...p, amount: val }));
+                                        if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
                                     }}
                                     placeholder="0,00"
-                                    className="w-full bg-secondary/50 border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors font-mono"
+                                    className={`w-full bg-secondary/50 border rounded px-3 py-2 text-sm outline-none transition-colors font-mono ${errors.amount ? 'border-destructive focus:border-destructive animate-shake' : 'border-border focus:border-primary'}`}
                                 />
+                                {errors.amount && <span className="text-[10px] text-destructive font-bold uppercase">{errors.amount}</span>}
                             </div>
 
                             <div className="space-y-2">
@@ -271,14 +284,18 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 <select
                                     required
                                     value={formData.categoryId}
-                                    onChange={(e) => setFormData(p => ({ ...p, categoryId: e.target.value }))}
-                                    className="w-full bg-background text-foreground border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
+                                    onChange={(e) => {
+                                        setFormData(p => ({ ...p, categoryId: e.target.value }));
+                                        if (errors.categoryId) setErrors(prev => ({ ...prev, categoryId: '' }));
+                                    }}
+                                    className={`w-full bg-background text-foreground border rounded px-3 py-2 text-sm outline-none transition-colors cursor-pointer ${errors.categoryId ? 'border-destructive focus:border-destructive animate-shake shadow-[0_0_0_1px_rgba(239,68,68,0.5)]' : 'border-border focus:border-primary'}`}
                                 >
                                     <option className="bg-background text-foreground" value="" disabled>Selecione uma categoria...</option>
                                     {typeCategories.map(cat => (
                                         <option className="bg-background text-foreground" key={cat.id} value={cat.id}>{cat.name}</option>
                                     ))}
                                 </select>
+                                {errors.categoryId && <span className="text-[10px] text-destructive font-bold uppercase">{errors.categoryId}</span>}
                             </div>
                         </div>
                     </div>

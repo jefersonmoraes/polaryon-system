@@ -201,12 +201,21 @@ export default function OportunidadesSearch() {
     const [exportFolderId, setExportFolderId] = useState('');
     const [exportBoardId, setExportBoardId] = useState('');
     const [exportListId, setExportListId] = useState('');
+    const [exportErrors, setExportErrors] = useState<Record<string, boolean>>({});
 
     const handleExportToKunbun = () => {
-        if (!exportListId || !selectedItem) {
-            toast.error("Por favor, selecione uma pasta, quadro e lista de destino.");
+        const newErrors: Record<string, boolean> = {};
+        if (!exportFolderId) newErrors.folder = true;
+        if (!exportBoardId) newErrors.board = true;
+        if (!exportListId) newErrors.list = true;
+
+        if (Object.keys(newErrors).length > 0) {
+            setExportErrors(newErrors);
+            toast.error("Por favor, selecione o destino completo para exportação.");
             return;
         }
+
+        if (!selectedItem) return;
 
         const board = boards.find(b => b.id === exportBoardId);
         if (!board) return;
@@ -936,12 +945,14 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                             setExportFolderId(e.target.value);
                                                             setExportBoardId('');
                                                             setExportListId('');
+                                                            setExportErrors(prev => ({ ...prev, folder: false }));
                                                         }}
-                                                        className="w-full h-9 bg-muted border border-border rounded px-2 text-sm focus:ring-1 focus:ring-primary"
+                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all ${exportErrors.folder ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                                     >
                                                         <option value="">Selecione uma pasta...</option>
                                                         {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                                                     </select>
+                                                    {exportErrors.folder && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                                 </div>
 
                                                 <div className="space-y-1">
@@ -951,30 +962,36 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                         onChange={(e) => {
                                                             setExportBoardId(e.target.value);
                                                             setExportListId('');
+                                                            setExportErrors(prev => ({ ...prev, board: false }));
                                                         }}
                                                         disabled={!exportFolderId}
-                                                        className="w-full h-9 bg-muted border border-border rounded px-2 text-sm focus:ring-1 focus:ring-primary disabled:opacity-50"
+                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 ${exportErrors.board ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                                     >
                                                         <option value="">Selecione um quadro...</option>
                                                         {boards.filter(b => b.folderId === exportFolderId).map(b => (
                                                             <option key={b.id} value={b.id}>{b.name}</option>
                                                         ))}
                                                     </select>
+                                                    {exportErrors.board && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                                 </div>
 
                                                 <div className="space-y-1">
                                                     <label className="text-[11px] font-bold uppercase text-muted-foreground">3. Escolha a Coluna Principal</label>
                                                     <select
                                                         value={exportListId}
-                                                        onChange={(e) => setExportListId(e.target.value)}
+                                                        onChange={(e) => {
+                                                            setExportListId(e.target.value);
+                                                            setExportErrors(prev => ({ ...prev, list: false }));
+                                                        }}
                                                         disabled={!exportBoardId}
-                                                        className="w-full h-9 bg-muted border border-border rounded px-2 text-sm focus:ring-1 focus:ring-primary disabled:opacity-50"
+                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 ${exportErrors.list ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                                     >
                                                         <option value="">Selecione a Lista de Destino...</option>
                                                         {lists.filter(l => l.boardId === exportBoardId).map(l => (
                                                             <option key={l.id} value={l.id}>{l.title}</option>
                                                         ))}
                                                     </select>
+                                                    {exportErrors.list && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                                 </div>
                                             </div>
 
@@ -987,8 +1004,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                 </button>
                                                 <button
                                                     onClick={handleExportToKunbun}
-                                                    disabled={!exportListId}
-                                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+                                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm"
                                                 >
                                                     Adicionar Cartão
                                                 </button>

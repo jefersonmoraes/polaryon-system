@@ -29,6 +29,7 @@ const SuppliersPage = () => {
     const [cnpj, setCnpj] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<CnpjResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     const [filterRegiao, setFilterRegiao] = useState('');
@@ -71,9 +72,12 @@ const SuppliersPage = () => {
         const cleanCnpj = cnpj.replace(/\D/g, '');
 
         if (cleanCnpj.length !== 14) {
-            toast.error('CNPJ inválido. Digite 14 números.');
+            setError('CNPJ deve conter 14 dígitos');
+            toast.error('CNPJ inválido');
             return;
         }
+
+        setError(null);
 
         setLoading(true);
         setResult(null);
@@ -169,6 +173,7 @@ const SuppliersPage = () => {
         }
 
         setCnpj(value);
+        if (error) setError(null);
     };
 
     return (
@@ -211,14 +216,15 @@ const SuppliersPage = () => {
                                         <input
                                             type="text"
                                             placeholder="Digite o CNPJ (apenas números)"
-                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                                            className={`w-full pl-10 pr-4 py-2.5 rounded-lg border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all ${error ? 'border-destructive focus:ring-destructive animate-shake shadow-[0_0_0_1px_rgba(239,68,68,0.5)]' : 'border-border focus:ring-primary'}`}
                                             value={cnpj}
                                             onChange={handleCnpjChange}
                                             maxLength={18} // Max length for formatted CNPJ
                                             disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
                                         />
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${error ? 'text-destructive' : 'text-muted-foreground'}`} />
                                     </div>
+                                    {error && <p className="text-[10px] text-destructive font-bold uppercase mt-1 animate-in fade-in slide-in-from-top-1">{error}</p>}
                                     <button
                                         type="submit"
                                         disabled={loading || cnpj.replace(/\D/g, '').length !== 14 || (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit)}
