@@ -227,9 +227,16 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
         const reordered = newFolders.map((f, i) => ({ ...f, order: i }));
         set({ folders: reordered });
 
+        // Only send items whose order actually changed (optimization)
+        const changedItems = reordered
+            .filter((f, i) => f.order !== oldFolders.find(old => old.id === f.id)?.order)
+            .map(f => ({ id: f.id, order: f.order }));
+
+        if (changedItems.length === 0) return;
+
         try {
             await api.put('/connections/folders/reorder', {
-                folders: reordered.map((f) => ({ id: f.id, order: f.order }))
+                folders: changedItems
             });
         } catch (error: any) {
             console.error('Failed to reorder folders:', error);
@@ -248,9 +255,19 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
             )
         }));
 
+        // Find which links actually changed order
+        const folder = oldFolders.find(f => f.id === folderId);
+        if (!folder) return;
+
+        const changedItems = reorderedLinks
+            .filter((l, i) => l.order !== folder.links.find(old => old.id === l.id)?.order)
+            .map(l => ({ id: l.id, order: l.order }));
+
+        if (changedItems.length === 0) return;
+
         try {
             await api.put('/connections/links/reorder', {
-                links: reorderedLinks.map((l) => ({ id: l.id, order: l.order }))
+                links: changedItems
             });
         } catch (error: any) {
             console.error('Failed to reorder links:', error);

@@ -289,12 +289,12 @@ const ConnectionPage = () => {
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.9 }}
-                                                    className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[220px]"
+                                                    className="group relative bg-card border border-border/50 hover:border-primary/40 rounded-[1.5rem] p-4 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/10 flex flex-col gap-3 overflow-hidden h-auto lg:min-h-[240px]"
                                                 >
                                                     <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                                                     
                                                     <div className="flex items-start justify-between relative z-10">
-                                                        <div className="w-10 h-10 rounded-xl bg-muted/40 p-2 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
+                                                        <div className="w-8 h-8 rounded-lg bg-muted/40 p-1.5 border border-border/20 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-700">
                                                             <img 
                                                                 src={getFavicon(link.url)} 
                                                                 alt={link.title} 
