@@ -56,7 +56,8 @@ export default function TeamWorkloadPage() {
 
         const targetMember = members.find(m => m.id === memberId);
         const memberCards = activeCards.filter(c => {
-            return c.assignee === memberId || (targetMember?.email && c.assignee === targetMember.email);
+            return c.assignee === memberId || 
+                   (targetMember?.email && c.assignee && targetMember.email.toLowerCase() === c.assignee.toLowerCase());
 
             // Check if card belongs to the period based on its dates or completed status
             // Time entries within the period could also be checked, but we'll use due/start/completion dates
@@ -83,7 +84,10 @@ export default function TeamWorkloadPage() {
     };
 
     const unassignedCards = activeCards.filter(c => {
-        const hasAssignee = c.assignee && members.some(m => m.id === c.assignee || (m.email && m.email === c.assignee));
+        const hasAssignee = c.assignee && members.some(m => 
+            m.id === c.assignee || 
+            (m.email && c.assignee && m.email.toLowerCase() === c.assignee.toLowerCase())
+        );
         return !hasAssignee && !c.completed && c.listId && lists.some(l => l.id === c.listId);
     });
 

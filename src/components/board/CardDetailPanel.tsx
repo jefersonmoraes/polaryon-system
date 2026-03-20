@@ -417,7 +417,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           </div>
         );
       case 'assignee': {
-        const assignedMember = members.find(m => m.id === assignee || (m.email && m.email === assignee));
+        const assignedMember = members.find(m => 
+          m.id === assignee || 
+          (m.email && assignee && m.email.toLowerCase() === assignee.toLowerCase())
+        );
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
