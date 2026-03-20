@@ -70,13 +70,21 @@ const Dashboard = () => {
     }
     if (filterStatus === 'completed') result = result.filter(c => c.completed);
     if (filterStatus === 'pending') result = result.filter(c => !c.completed);
-    if (filterStatus === 'overdue') result = result.filter(c => c.dueDate && new Date(c.dueDate) < new Date() && !c.completed);
+    if (filterStatus === 'overdue') result = result.filter(c => {
+      if (!c.dueDate || c.completed) return false;
+      const dDate = fixDateToBRT(c.dueDate);
+      return dDate && dDate < new Date();
+    });
     return result;
   }, [activeCards, activeLists, filterBoard, filterLabel, filterStatus]);
 
   const totalCards = filteredCards.length;
   const completedCards = filteredCards.filter(c => c.completed).length;
-  const overdueCards = filteredCards.filter(c => c.dueDate && new Date(c.dueDate) < new Date() && !c.completed).length;
+  const overdueCards = filteredCards.filter(c => {
+    if (!c.dueDate || c.completed) return false;
+    const dDate = fixDateToBRT(c.dueDate);
+    return dDate && dDate < new Date();
+  }).length;
   const totalTime = filteredCards.reduce((acc, c) => acc + c.timeEntries.reduce((t, e) => t + e.duration, 0), 0);
   const avgTimeMinutes = totalCards > 0 ? Math.round(totalTime / totalCards / 60) : 0;
 
@@ -89,7 +97,11 @@ const Dashboard = () => {
 
   const upcomingCards = filteredCards
     .filter(c => c.dueDate && !c.completed)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .sort((a, b) => {
+      const dateA = fixDateToBRT(a.dueDate!)?.getTime() || 0;
+      const dateB = fixDateToBRT(b.dueDate!)?.getTime() || 0;
+      return dateA - dateB;
+    })
     .slice(0, 8);
 
   // Cards grouped by board
@@ -117,7 +129,11 @@ const Dashboard = () => {
   const pendingBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando').length;
   const expiringDocs = documents.filter(d => !d.trashed && d.status === 'expiring').length;
   const expiredDocs = documents.filter(d => !d.trashed && d.status === 'expired').length;
-  const overdueTaxes = taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && new Date(t.dueDate) < new Date()).length;
+  const overdueTaxes = taxObligations.filter(t => {
+    if (t.trashedAt || t.status !== 'pending' || !t.dueDate) return false;
+    const tDate = fixDateToBRT(t.dueDate);
+    return tDate && tDate < new Date();
+  }).length;
 
   // Aggregate all upcoming events (next 15 days)
   const allUpcomingEvents = useMemo(() => {
@@ -409,7 +425,11 @@ const Dashboard = () => {
                   if (!board) return null;
                   const pending = boardCards.filter(c => !c.completed).length;
                   const done = boardCards.filter(c => c.completed).length;
-                  const overdue = boardCards.filter(c => c.dueDate && new Date(c.dueDate) < new Date() && !c.completed).length;
+                  const overdue = boardCards.filter(c => {
+                    if (!c.dueDate || c.completed) return false;
+                    const dDate = fixDateToBRT(c.dueDate);
+                    return dDate && dDate < new Date();
+                  }).length;
                   return (
                     <Link key={boardId} to={`/board/${boardId}`}
                       className="bg-card rounded-lg border border-border p-4 hover:border-primary/50 transition-colors">

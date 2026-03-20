@@ -4,7 +4,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { CheckSquare, Calendar, MessageSquare, Paperclip, Clock, User } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { hexToRgba } from '@/lib/utils';
+import { hexToRgba, fixDateToBRT } from '@/lib/utils';
 
 interface Props {
   card: Card;
@@ -23,15 +23,24 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
   );
   const checkDone = (card.checklist || []).filter(i => i.completed).length;
   const checkTotal = (card.checklist || []).length;
-  const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && !card.completed;
-  const hasOverdueMilestone = card.milestones && card.milestones.some(m => !m.completed && m.dueDate && new Date(m.dueDate) < new Date());
+  const dueDateObj = fixDateToBRT(card.dueDate);
+  const isOverdue = dueDateObj && dueDateObj < new Date() && !card.completed;
+  const hasOverdueMilestone = card.milestones && card.milestones.some(m => {
+    if (m.completed || !m.dueDate) return false;
+    const msDate = fixDateToBRT(m.dueDate);
+    return msDate && msDate < new Date();
+  });
 
   if (card.archived || card.trashed) return null;
 
   // Find nearest incomplete milestone
   const nearestMilestone = card.milestones
     ?.filter(m => !m.completed && m.dueDate)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())[0];
+    .sort((a, b) => {
+        const dateA = fixDateToBRT(a.dueDate!)?.getTime() || 0;
+        const dateB = fixDateToBRT(b.dueDate!)?.getTime() || 0;
+        return dateA - dateB;
+    })[0];
 
   const cardStyle = listColor ? {
     backgroundColor: hexToRgba(listColor, 0.08), // softer background 
@@ -69,17 +78,17 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
       {/* Dates & Nearest Milestone */}
       <div className="flex flex-col gap-1.5 mt-2">
         {nearestMilestone && (
-          <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${new Date(nearestMilestone.dueDate!) < new Date() ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+          <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${fixDateToBRT(nearestMilestone.dueDate!)! < new Date() ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'}`}>
             <Calendar className="h-3 w-3" />
             <span className="truncate max-w-[120px]">{nearestMilestone.title}</span>
-            <span className="ml-auto flex-shrink-0 opacity-90">{new Date(nearestMilestone.dueDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+            <span className="ml-auto flex-shrink-0 opacity-90">{fixDateToBRT(nearestMilestone.dueDate!)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
           </div>
         )}
 
         {!nearestMilestone && card.dueDate && (
           <div className={`flex items-center w-max gap-1 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${card.completed ? 'bg-label-green text-white' : isOverdue ? 'bg-red-500 text-white' : 'bg-secondary text-foreground'}`}>
             <Calendar className="h-3 w-3" />
-            Entrega: {new Date(card.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+            Entrega: {dueDateObj?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
           </div>
         )}
       </div>

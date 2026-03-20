@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { Card, KanbanList } from '@/types/kanban';
 import { Clock, MessageSquare, Paperclip, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
+import { fixDateToBRT } from '@/lib/utils';
 
 interface Props {
     boardId: string;
@@ -33,7 +34,9 @@ export const BoardListView = ({ boardId, onCardClick, sortBy }: Props) => {
             if (!a.dueDate && !b.dueDate) return a.createdAt.localeCompare(b.createdAt);
             if (!a.dueDate) return 1;
             if (!b.dueDate) return -1;
-            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            const dateA = fixDateToBRT(a.dueDate)?.getTime() || 0;
+            const dateB = fixDateToBRT(b.dueDate)?.getTime() || 0;
+            return dateA - dateB;
         }
         if (sortBy === 'assignee') {
             if (!a.assignee && !b.assignee) return a.createdAt.localeCompare(b.createdAt);
@@ -119,7 +122,7 @@ export const BoardListView = ({ boardId, onCardClick, sortBy }: Props) => {
                                                     {card.dueDate ? (
                                                         <span className="flex items-center gap-1 text-muted-foreground">
                                                             <Clock className="w-3.5 h-3.5" />
-                                                            {new Date(card.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                                                            {fixDateToBRT(card.dueDate)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                                                         </span>
                                                     ) : '-'}
                                                 </td>

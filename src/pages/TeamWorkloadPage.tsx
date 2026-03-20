@@ -6,6 +6,7 @@ import { Users, CheckCircle2, Clock, AlertCircle, FileText, PiggyBank, Calculato
 import CardDetailPanel from '@/components/board/CardDetailPanel';
 import { useState, useMemo } from 'react';
 import { Card } from '@/types/kanban';
+import { fixDateToBRT } from '@/lib/utils';
 
 export default function TeamWorkloadPage() {
     const allMembers = useKanbanStore(state => state.members);
@@ -61,15 +62,19 @@ export default function TeamWorkloadPage() {
             // Check if card belongs to the period based on its dates or completed status
             // Time entries within the period could also be checked, but we'll use due/start/completion dates
             let cardDate = new Date(c.createdAt || Date.now());
-            if (c.dueDate) cardDate = new Date(c.dueDate);
-            else if (c.startDate) cardDate = new Date(c.startDate);
+            if (c.dueDate) cardDate = fixDateToBRT(c.dueDate) || cardDate;
+            else if (c.startDate) cardDate = fixDateToBRT(c.startDate) || cardDate;
 
             return cardDate >= startOfPeriod;
         });
 
         const completed = memberCards.filter(c => c.completed).length;
         const pending = memberCards.length - completed;
-        const overdue = memberCards.filter(c => !c.completed && c.dueDate && new Date(c.dueDate) < new Date()).length;
+        const overdue = memberCards.filter(c => {
+            if (c.completed || !c.dueDate) return false;
+            const dDate = fixDateToBRT(c.dueDate);
+            return dDate && dDate < new Date();
+        }).length;
         const completionRate = memberCards.length > 0 ? Math.round((completed / memberCards.length) * 100) : 0;
 
         return {
@@ -246,8 +251,8 @@ export default function TeamWorkloadPage() {
                                                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
                                                         <span className="truncate max-w-[120px] bg-secondary px-1.5 py-0.5 rounded text-foreground font-medium">{board?.name}</span>
                                                         {card.dueDate && (
-                                                            <span className={`flex items-center gap-1 ml-auto font-medium ${card.completed ? '' : (new Date(card.dueDate) < new Date() ? 'text-destructive' : 'text-primary')}`}>
-                                                                <Clock className="w-3 h-3" /> {new Date(card.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                                                            <span className={`flex items-center gap-1 ml-auto font-medium ${card.completed ? '' : ((fixDateToBRT(card.dueDate) || new Date()) < new Date() ? 'text-destructive' : 'text-primary')}`}>
+                                                                <Clock className="w-3 h-3" /> {fixDateToBRT(card.dueDate)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                                                             </span>
                                                         )}
                                                     </div>
