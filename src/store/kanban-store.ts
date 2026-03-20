@@ -830,7 +830,7 @@ export const useKanbanStore = create<KanbanState>()(
         set(s => ({
           boards: s.boards.map(b => b.id === id ? { ...b, ...data, updatedAt: new Date().toISOString() } : b)
         }));
-        api.put(`/kanban/boards/${id}`, { ...data, updatedAt: new Date().toISOString() }).catch(console.error);
+        api.put(`/kanban/boards/${id}`, data).catch(console.error);
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_BOARD', payload: { id, data } });
       },
       deleteBoard: (id) => {
@@ -892,7 +892,7 @@ export const useKanbanStore = create<KanbanState>()(
         set(s => ({
           lists: s.lists.map(l => l.id === id ? { ...l, ...data, updatedAt: new Date().toISOString() } : l)
         }));
-        api.put(`/kanban/lists/${id}`, { ...data, updatedAt: new Date().toISOString() }).catch(console.error);
+        api.put(`/kanban/lists/${id}`, data).catch(console.error);
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_LIST', payload: { id, data } });
       },
       deleteList: (id) => {
