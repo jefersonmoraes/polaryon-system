@@ -58,10 +58,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const allMembers = useKanbanStore(state => state.members);
-  const members = useMemo(() => (allMembers || []).filter(m => 
-    m &&
-    !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
-  ), [allMembers]);
+  const members = allMembers || [];
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
 

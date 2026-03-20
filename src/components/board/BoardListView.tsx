@@ -13,10 +13,7 @@ interface Props {
 
 export const BoardListView = ({ boardId, onCardClick, sortBy }: Props) => {
     const { cards, lists, members: allMembers, labels } = useKanbanStore();
-    const members = useMemo(() => (allMembers || []).filter(m => 
-        m &&
-        !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
-    ), [allMembers]);
+    const members = allMembers || [];
 
     const boardLists = lists.filter(l => l.boardId === boardId && !l.archived && !l.trashed);
     const boardCards = cards.filter(c => boardLists.some(l => l.id === c.listId) && !c.archived && !c.trashed);

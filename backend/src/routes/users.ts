@@ -174,10 +174,11 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     try {
-        await prisma.user.delete({
-            where: { id }
+        await prisma.user.update({
+            where: { id },
+            data: { role: 'disabled' }
         });
-        res.status(200).json({ message: 'User deleted successfully' });
+        res.status(200).json({ message: 'User disabled successfully (Soft-delete)' });
     } catch (error) {
         console.error('Error deleting user:', error);
         res.status(500).json({ error: 'Could not delete user' });

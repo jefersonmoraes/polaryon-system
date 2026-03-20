@@ -631,12 +631,14 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 5000 })
         ]);
 
-        const members = usersDb.map((u: any) => ({
-            id: u.id,
-            name: u.name || u.email.split('@')[0],
-            email: u.email,
-            avatar: u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email.split('@')[0])}&background=random`
-        }));
+        const members = usersDb
+            .filter((u: any) => u.email !== 'jjcorporation2018@gmail.com')
+            .map((u: any) => ({
+                id: u.id,
+                name: u.name || u.email.split('@')[0],
+                email: u.email,
+                avatar: u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email.split('@')[0])}&background=random`
+            }));
 
         const formattedCards = cards.map((c: any) => ({
             ...c,

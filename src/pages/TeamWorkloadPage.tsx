@@ -9,10 +9,9 @@ import { Card } from '@/types/kanban';
 
 export default function TeamWorkloadPage() {
     const allMembers = useKanbanStore(state => state.members);
-    const members = useMemo(() => (allMembers || []).filter(m => 
-        m && 
-        !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
-    ), [allMembers]);
+    // DEBUG: Remove filter to verify visibility
+    const members = allMembers || [];
+    console.log('DEBUG - TeamWorkloadPage members:', members);
     
     // Add additional safety for systemStats
     const systemMembers = members; 
