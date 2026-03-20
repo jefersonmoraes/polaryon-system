@@ -1193,8 +1193,8 @@ export const useKanbanStore = create<KanbanState>()(
        */
       partialize: (state) => ({
         googleEvents: state.googleEvents,
-        folders: state.folders.map(f => ({ ...f, sideImage: undefined })),
-        boards: state.boards.map(b => ({ ...b, backgroundImage: undefined })),
+        folders: state.folders,
+        boards: state.boards,
         lists: state.lists,
         companies: state.companies,
         routes: state.routes,
@@ -1209,7 +1209,7 @@ export const useKanbanStore = create<KanbanState>()(
 
 // Initialize theme on load
 const initTheme = () => {
-  const stored = localStorage.getItem('jj-kanban-store');
+  const stored = localStorage.getItem('jj-kanban-v2');
   if (stored) {
     const parsed = JSON.parse(stored);
     if (parsed.state?.isDark) {
