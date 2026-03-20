@@ -417,7 +417,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           </div>
         );
       case 'assignee': {
-        const assignedMember = members.find(m => m.id === assignee);
+        const assignedMember = members.find(m => m.id === assignee || (m.email && m.email === assignee));
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -428,7 +428,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <img src={assignedMember.avatar} alt={assignedMember.name} className="w-8 h-8 rounded-full border border-border object-cover" />
               )}
               <select
-                value={assignee}
+                value={assignedMember?.id || ''}
                 onChange={e => handleSetAssignee(e.target.value)}
                 disabled={!canEdit}
                 className="flex-1 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"

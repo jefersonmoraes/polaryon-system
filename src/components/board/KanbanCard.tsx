@@ -20,7 +20,7 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
   ), [allMembers]);
   const { currentUser } = useAuthStore();
   const cardLabels = labels.filter(l => card.labels.includes(l.id));
-  const assignedMember = members.find(m => m.id === card.assignee);
+  const assignedMember = members.find(m => m.id === card.assignee || (m.email && m.email === card.assignee));
   const checkDone = (card.checklist || []).filter(i => i.completed).length;
   const checkTotal = (card.checklist || []).length;
   const isOverdue = card.dueDate && new Date(card.dueDate) < new Date() && !card.completed;

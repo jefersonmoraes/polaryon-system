@@ -54,8 +54,9 @@ export default function TeamWorkloadPage() {
             startOfPeriod.setHours(0, 0, 0, 0);
         }
 
+        const targetMember = members.find(m => m.id === memberId);
         const memberCards = activeCards.filter(c => {
-            if (c.assignee !== memberId) return false;
+            return c.assignee === memberId || (targetMember?.email && c.assignee === targetMember.email);
 
             // Check if card belongs to the period based on its dates or completed status
             // Time entries within the period could also be checked, but we'll use due/start/completion dates
@@ -81,7 +82,10 @@ export default function TeamWorkloadPage() {
         };
     };
 
-    const unassignedCards = activeCards.filter(c => !c.assignee && !c.completed && c.listId && lists.some(l => l.id === c.listId));
+    const unassignedCards = activeCards.filter(c => {
+        const hasAssignee = c.assignee && members.some(m => m.id === c.assignee || (m.email && m.email === c.assignee));
+        return !hasAssignee && !c.completed && c.listId && lists.some(l => l.id === c.listId);
+    });
 
     // Global System Stats
     const systemStats = useMemo(() => {
