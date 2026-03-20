@@ -11,7 +11,7 @@ import api from '@/lib/api';
 
 const AVAILABLE_SCREENS = [
     { id: 'DASHBOARD', label: 'Painel Inicial' },
-    { id: 'KUNBUN', label: 'Quadros Kanban' },
+    { id: 'KANBAN', label: 'Quadros Kanban' },
     { id: 'OPORTUNIDADES', label: 'Oportunidades' },
     { id: 'CALENDAR', label: 'Agenda Global' },
     { id: 'TEAM', label: 'Equipe' },
@@ -53,7 +53,7 @@ export default function AdminDashboardPage() {
                     ? { canView: true, canEdit: true, canDownload: true, allowedScreens: ['ALL'] }
                     : (u.role === 'contador'
                         ? { canView: true, canEdit: false, canDownload: true, allowedScreens: ['ACCOUNTING'] }
-                        : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KUNBUN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] })),
+                        : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KANBAN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] })),
                 status: u.role === 'disabled' ? 'disabled' : (u.role === 'pending' ? 'invited' : 'active'),
                 createdAt: u.createdAt
             }));

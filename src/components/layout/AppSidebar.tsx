@@ -69,19 +69,19 @@ const AppSidebar = () => {
   }, [isDocsModule]);
 
   const { boards, folders } = useKanbanStore();
-  const isKunbunModule = location.pathname.startsWith('/folder/') || location.pathname.startsWith('/board/');
-  let kunbunFolderId = null;
-  if (isKunbunModule) {
+  const isKanbanModule = location.pathname.startsWith('/folder/') || location.pathname.startsWith('/board/');
+  let kanbanFolderId = null;
+  if (isKanbanModule) {
     if (location.pathname.startsWith('/folder/')) {
-      kunbunFolderId = location.pathname.split('/')[2];
+      kanbanFolderId = location.pathname.split('/')[2];
     } else if (location.pathname.startsWith('/board/')) {
       const boardId = location.pathname.split('/')[2];
       const board = boards.find(b => b.id === boardId && !b.trashed && !b.archived);
-      if (board) kunbunFolderId = board.folderId;
+      if (board) kanbanFolderId = board.folderId;
     }
   }
-  const activeKunbunFolder = folders.find(f => f.id === kunbunFolderId && !f.trashed && !f.archived);
-  const activeKunbunBoards = boards.filter(b => b.folderId === kunbunFolderId && !b.trashed && !b.archived);
+  const activeKanbanFolder = folders.find(f => f.id === kanbanFolderId && !f.trashed && !f.archived);
+  const activeKanbanBoards = boards.filter(b => b.folderId === kanbanFolderId && !b.trashed && !b.archived);
 
   // Connection module logic
   const { folders: connectionFolders, fetchFolders } = useConnectionStore();
@@ -419,20 +419,20 @@ const AppSidebar = () => {
               </a>
             </div>
           </div>
-        ) : isKunbunModule && activeKunbunFolder ? (
+        ) : isKanbanModule && activeKanbanFolder ? (
           <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
             <div className="flex flex-col gap-1 text-sidebar-foreground/80">
               {!isCollapsed && (
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 truncate">Pasta: {activeKunbunFolder.name}</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 truncate">Pasta: {activeKanbanFolder.name}</span>
                 </div>
               )}
               
-              <Link to={`/folder/${activeKunbunFolder.id}`} className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === `/folder/${activeKunbunFolder.id}` ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Visão Geral da Pasta">
+              <Link to={`/folder/${activeKanbanFolder.id}`} className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === `/folder/${activeKanbanFolder.id}` ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Visão Geral da Pasta">
                 <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
               </Link>
 
-              {activeKunbunBoards.map(board => (
+              {activeKanbanBoards.map(board => (
                 <Link
                   key={board.id}
                   to={`/board/${board.id}`}
@@ -446,7 +446,7 @@ const AppSidebar = () => {
                 </Link>
               ))}
 
-              {activeKunbunBoards.length === 0 && !isCollapsed && (
+              {activeKanbanBoards.length === 0 && !isCollapsed && (
                 <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhum quadro nesta pasta.</p>
               )}
             </div>

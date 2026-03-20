@@ -4,7 +4,7 @@ import { Plus, LayoutGrid, Search, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/store/auth-store';
-const KunbunPage = () => {
+const KanbanPage = () => {
     const { currentUser } = useAuthStore();
     const { folders, boards, addFolder } = useKanbanStore();
     const navigate = useNavigate();
@@ -47,7 +47,7 @@ const KunbunPage = () => {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
                             <LayoutGrid className="h-6 w-6 text-primary" />
-                            KUNBUN
+                            KANBAN
                         </h1>
                         <p className="text-sm text-muted-foreground mt-1">
                             Gerencie suas pastas e quadros de projeto de forma unificada.
@@ -213,4 +213,4 @@ const KunbunPage = () => {
     );
 };
 
-export default KunbunPage;
+export default KanbanPage;

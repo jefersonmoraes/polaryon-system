@@ -1199,12 +1199,9 @@ export const useKanbanStore = create<KanbanState>()(
         companies: state.companies,
         routes: state.routes,
         budgets: state.budgets,
-        cards: state.cards.map(c => ({ 
-          ...c, 
-          attachments: [], 
-          comments: [] 
-        })),
-        members: [] 
+        labels: state.labels,
+        members: state.members,
+        cards: state.cards
       })
     }
   )

@@ -100,7 +100,7 @@ const AuditLogPage = () => {
                         const encodedUri = encodeURI(csvContent);
                         const link = document.createElement("a");
                         link.setAttribute("href", encodedUri);
-                        link.setAttribute("download", `auditoria_kunbun_${format(new Date(), 'dd_MM_yyyy')}.csv`);
+                        link.setAttribute("download", `auditoria_kanban_${format(new Date(), 'dd_MM_yyyy')}.csv`);
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);

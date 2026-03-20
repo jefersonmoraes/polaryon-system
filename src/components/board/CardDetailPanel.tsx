@@ -246,7 +246,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     setEditLabelId(label.id); setLabelName(label.name); setLabelColor(label.color); setLabelHex(label.color); setLabelIcon(label.icon); setEditingLabel(true);
   };
   const handleColorHexChange = (hex: string) => {
-    setLabelHex(hex);
+    let formattedHex = hex;
+    if (!hex.startsWith('#') && (hex.length === 3 || hex.length === 6)) {
+      formattedHex = '#' + hex;
+    }
+    setLabelHex(formattedHex);
+    if (formattedHex.length === 4 || formattedHex.length === 7) {
+      setLabelColor(formattedHex);
+    }
   };
   const execCommand = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);

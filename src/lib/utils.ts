@@ -38,3 +38,27 @@ export function getFaviconUrl(url?: string): string | undefined {
         return undefined;
     }
 }
+
+export function hexToRgba(hex: string | undefined, alpha: number): string {
+    if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+    if (hex.startsWith('rgba')) return hex;
+
+    let r = 0, g = 0, b = 0;
+    
+    // Remove # if present
+    const cleanHex = hex.startsWith('#') ? hex.slice(1) : hex;
+
+    if (cleanHex.length === 3) {
+        r = parseInt(cleanHex[0] + cleanHex[0], 16);
+        g = parseInt(cleanHex[1] + cleanHex[1], 16);
+        b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    } else if (cleanHex.length === 6) {
+        r = parseInt(cleanHex.slice(0, 2), 16);
+        g = parseInt(cleanHex.slice(2, 4), 16);
+        b = parseInt(cleanHex.slice(4, 6), 16);
+    } else {
+        return `rgba(0, 0, 0, ${alpha})`;
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

@@ -211,9 +211,14 @@ const FolderPage = () => {
                       </div>
                       <div className="flex gap-2 items-center mb-2">
                         <label className="text-[10px] text-muted-foreground">Cor HEX:</label>
-                        <input defaultValue={board.backgroundColor} maxLength={7}
-                          onBlur={e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) { updateBoard(board.id, { backgroundColor: e.target.value }); } }}
-                          onKeyDown={e => { if (e.key === 'Enter' && /^#[0-9a-fA-F]{6}$/.test((e.target as HTMLInputElement).value)) { updateBoard(board.id, { backgroundColor: (e.target as HTMLInputElement).value }); setEditingBoardId(null); } }}
+                        <input value={board.backgroundColor || ''} maxLength={7}
+                          onChange={e => {
+                            let val = e.target.value;
+                            if (val && !val.startsWith('#') && (val.length === 3 || val.length === 6)) {
+                              val = '#' + val;
+                            }
+                            updateBoard(board.id, { backgroundColor: val });
+                          }}
                           className="w-20 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border font-mono" />
                       </div>
                       <div className="pt-2 border-t border-border">

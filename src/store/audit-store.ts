@@ -70,7 +70,7 @@ export const useAuditStore = create<AuditState>()(
             }
         }),
         {
-            name: 'kunbun-audit-storage',
+            name: 'kanban-audit-storage',
             storage: createJSONStorage(() => localStorage),
         }
     )

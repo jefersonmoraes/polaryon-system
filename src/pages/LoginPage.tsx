@@ -170,7 +170,7 @@ export default function LoginPage() {
                     ? { canView: true, canEdit: true, canDownload: true, allowedScreens: ['ALL'] }
                     : (user.role.toUpperCase() === 'CONTADOR'
                         ? { canView: true, canEdit: false, canDownload: true, allowedScreens: ['ACCOUNTING', 'DOCUMENTATION'] }
-                        : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KUNBUN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] })),
+                        : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KANBAN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] })),
                 status: 'active',
                 createdAt: existingSystemUser?.createdAt || new Date().toISOString()
             };

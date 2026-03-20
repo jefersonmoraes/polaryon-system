@@ -10,6 +10,7 @@ import { BOARD_COLORS } from '@/types/kanban';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
+import { hexToRgba } from '@/lib/utils';
 
 interface Props {
   list: KanbanList;
@@ -99,12 +100,6 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
     }
   };
 
-  const hexToRgba = (hex: string, alpha: number) => {
-    if (!hex) return '';
-    if (hex.startsWith('rgba')) return hex;
-    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
 
   const listStyle: React.CSSProperties = list.color
     ? { background: isDark ? hexToRgba(list.color, 0.1) : hexToRgba(list.color, 0.15), minWidth: 280, maxWidth: 280, backdropFilter: 'blur(12px)', borderColor: hexToRgba(list.color, isDark ? 0.2 : 0.4), borderWidth: '1px' }

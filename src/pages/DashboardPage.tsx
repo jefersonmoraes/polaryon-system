@@ -14,7 +14,7 @@ const Dashboard = () => {
   const { currentUser, hasScreenAccess } = useAuthStore();
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  const canKunbun = hasScreenAccess('KUNBUN');
+  const canKanban = hasScreenAccess('KANBAN');
   const canBudgets = hasScreenAccess('BUDGETS');
   const canDocs = hasScreenAccess('DOCUMENTATION');
   const canAccounting = hasScreenAccess('ACCOUNTING');
@@ -136,7 +136,7 @@ const Dashboard = () => {
     const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string }[] = [];
 
     // 1. Kanban Cards
-    if (canKunbun) {
+    if (canKanban) {
       upcomingCards.forEach(c => {
         if (c.dueDate) {
           const list = activeLists.find(l => l.id === c.listId);
@@ -209,7 +209,7 @@ const Dashboard = () => {
     });
 
     return events.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [upcomingCards, budgets, documents, taxObligations, canKunbun, canBudgets, canDocs, canAccounting, googleEvents]);
+  }, [upcomingCards, budgets, documents, taxObligations, canKanban, canBudgets, canDocs, canAccounting, googleEvents]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -293,7 +293,7 @@ const Dashboard = () => {
           )}
         </div>
 
-        {canKunbun && (
+        {canKanban && (
           <>
             {/* Kanban Stats */}
             <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">

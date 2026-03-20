@@ -318,7 +318,7 @@ model Certificate {
   type             Json      // Array of strings: ['Produto', 'Serviço']
   suppliedItems    String    @db.Text
   suppliedQuantity String?
-  kunbunCardId     String?
+  kanbanCardId     String?
   issuingAgency    String
   executionDate    DateTime
   description      String?   @db.Text

@@ -144,7 +144,7 @@ const CapacityCertificatesPage = () => {
                                         </tr>
                                     ) : (
                                         filteredCerts.map((cert) => {
-                                            const linkedCard = cards.find(c => c.id === cert.kunbunCardId);
+                                            const linkedCard = cards.find(c => c.id === cert.kanbanCardId);
 
                                             return (
                                                 <tr key={cert.id} className="border-b border-border/10 hover:bg-muted/10 transition-colors">

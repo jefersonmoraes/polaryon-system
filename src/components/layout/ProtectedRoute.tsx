@@ -45,9 +45,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
             '/transporters-list': 'SUPPLIERS',
             '/documentacao': 'DOCUMENTATION',
             '/oportunidades': 'OPORTUNIDADES',
-            '/kunbun': 'KUNBUN',
-            '/folder': 'KUNBUN',
-            '/board': 'KUNBUN',
+            '/kanban': 'KANBAN',
+            '/folder': 'KANBAN',
+            '/board': 'KANBAN',
             '/calendar': 'CALENDAR',
             '/team': 'TEAM',
             '/contabil': 'ACCOUNTING'

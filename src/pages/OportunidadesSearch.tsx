@@ -187,7 +187,7 @@ export default function OportunidadesSearch() {
         fetchFiles();
     }, [selectedItem]);
 
-    // --- Kunbun Export States ---
+    // --- Kanban Export States ---
     const folders = useKanbanStore(state => state?.folders) || [];
     const boards = useKanbanStore(state => state?.boards) || [];
     const lists = useKanbanStore(state => state?.lists) || [];
@@ -203,7 +203,7 @@ export default function OportunidadesSearch() {
     const [exportListId, setExportListId] = useState('');
     const [exportErrors, setExportErrors] = useState<Record<string, boolean>>({});
 
-    const handleExportToKunbun = () => {
+    const handleExportToKanban = () => {
         const newErrors: Record<string, boolean> = {};
         if (!exportFolderId) newErrors.folder = true;
         if (!exportBoardId) newErrors.board = true;
@@ -298,7 +298,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         }));
         api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
 
-        toast.success("Oportunidade exportada! Cartão criado no Kunbun.");
+        toast.success("Oportunidade exportada! Cartão criado no Kanban.");
         setIsExportDialogOpen(false);
     };
 
@@ -874,7 +874,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                         <div className="flex items-center gap-3 overflow-hidden">
                                                             <input
                                                                 type="checkbox"
-                                                                title="Exportar para o Kunbun"
+                                                                title="Exportar para o Kanban"
                                                                 checked={selectedFilesToExport.some(f => f.url === file.url)}
                                                                 onChange={(e) => {
                                                                     if (e.target.checked) setSelectedFilesToExport(prev => [...prev, file]);
@@ -904,7 +904,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     onClick={() => setIsExportDialogOpen(true)}
                                     className="px-4 py-2 bg-foreground text-background text-sm font-bold rounded-md hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 shadow-sm mr-auto"
                                 >
-                                    <KanbanSquare className="h-4 w-4" /> Exportar p/ Kunbun
+                                    <KanbanSquare className="h-4 w-4" /> Exportar p/ Kanban
                                 </button>
                                 <DialogClose asChild>
                                     <button className="px-4 py-2 border border-border bg-background hover:bg-muted text-foreground text-sm font-medium rounded-md transition-colors">
@@ -921,7 +921,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </a>
                             </div>
 
-                            {/* Export to Kunbun Internal Dialog */}
+                            {/* Export to Kanban Internal Dialog */}
                             <AnimatePresence>
                                 {isExportDialogOpen && (
                                     <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
@@ -929,7 +929,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                             <DialogHeader className="mb-4">
                                                 <DialogTitle className="flex items-center gap-2 text-lg">
                                                     <KanbanSquare className="h-5 w-5 text-primary" />
-                                                    Exportar para o Kunbun (Kanban)
+                                                    Exportar para o Kanban
                                                 </DialogTitle>
                                                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                                                     Escolha a pasta, o quadro e a coluna onde este edital deverá ser inserido como um novo Cartão de tarefa.
@@ -1003,7 +1003,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                     Cancelar
                                                 </button>
                                                 <button
-                                                    onClick={handleExportToKunbun}
+                                                    onClick={handleExportToKanban}
                                                     className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm"
                                                 >
                                                     Adicionar Cartão

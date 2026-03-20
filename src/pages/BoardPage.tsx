@@ -13,6 +13,7 @@ import { ConfirmAction } from '@/components/ui/ConfirmAction';
 import ReactDOM from 'react-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
+import { hexToRgba } from '@/lib/utils';
 
 const BoardPage = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -196,14 +197,6 @@ const BoardPage = () => {
       });
     }
   };
-
-  const hexToRgba = (hex: string | undefined, alpha: number) => {
-    if (!hex) return 'rgba(0,0,0,0)';
-    if (hex.startsWith('rgba')) return hex;
-    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
   const boardStyle = {
     background: isDark
       ? `linear-gradient(to bottom right, ${hexToRgba(board.backgroundColor, 0.2)}, rgba(0,0,0,0.9))`

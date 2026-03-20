@@ -16,7 +16,7 @@ export interface CapacityCertificate {
     type: ('Produto' | 'Serviço')[];
     suppliedItems: string;
     suppliedQuantity?: string;
-    kunbunCardId?: string; // Reference to a card if applicable
+    kanbanCardId?: string; // Reference to a card if applicable
     issuingAgency: string;
     executionDate: string;
     description: string;

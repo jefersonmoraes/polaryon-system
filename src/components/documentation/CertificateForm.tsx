@@ -33,7 +33,7 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
         type: editingCert?.type || ['Serviço'],
         suppliedItems: editingCert?.suppliedItems || '',
         suppliedQuantity: editingCert?.suppliedQuantity || '',
-        kunbunCardId: editingCert?.kunbunCardId || '',
+        kanbanCardId: editingCert?.kanbanCardId || '',
         issuingAgency: editingCert?.issuingAgency || '',
         executionDate: editingCert?.executionDate?.split('T')[0] || '',
         description: editingCert?.description || '',
@@ -249,13 +249,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                     </label>
                                     <input
                                         type="text"
-                                        list="kunbun-cards"
+                                        list="kanban-cards"
                                         placeholder="Digite ou selecione um cartão..."
                                         className="w-full p-2 bg-background border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/30"
-                                        value={formData.kunbunCardId}
-                                        onChange={(e) => setFormData({ ...formData, kunbunCardId: e.target.value })}
+                                        value={formData.kanbanCardId}
+                                        onChange={(e) => setFormData({ ...formData, kanbanCardId: e.target.value })}
                                     />
-                                    <datalist id="kunbun-cards">
+                                    <datalist id="kanban-cards">
                                         {cards.filter(c => !c.archived && !c.trashed).map(card => (
                                             <option key={card.id} value={card.id}>
                                                 {card.title}

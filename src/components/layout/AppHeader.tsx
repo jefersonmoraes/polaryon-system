@@ -93,14 +93,14 @@ const AppHeader = () => {
             <LayoutDashboard className="h-3.5 w-3.5 inline mr-1" />
             <span className="uppercase tracking-wider">Tarefas</span>
           </Link>
-          {hasScreenAccess('KUNBUN') && (
+          {hasScreenAccess('KANBAN') && (
             <Link
-              to="/kunbun"
-              className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname === '/kunbun' || location.pathname.startsWith('/folder') || location.pathname.startsWith('/board') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+              to="/kanban"
+              className={`px-2 sm:px-3 py-1.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${location.pathname === '/kanban' || location.pathname.startsWith('/folder') || location.pathname.startsWith('/board') ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
                 }`}
             >
               <LayoutGrid className="h-3.5 w-3.5 inline mr-1" />
-              <span className="uppercase tracking-wider">Kunbun</span>
+              <span className="uppercase tracking-wider">Kanban</span>
             </Link>
           )}
           {hasScreenAccess('OPORTUNIDADES') && (
@@ -191,9 +191,9 @@ const AppHeader = () => {
                 <Link to="/" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/' ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
                   <div className="p-1.5 rounded bg-primary/10 text-primary"><LayoutDashboard className="h-4 w-4" /></div> Tarefas Principais
                 </Link>
-                {hasScreenAccess('KUNBUN') && (
-                  <Link to="/kunbun" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/kunbun' || location.pathname.startsWith('/folder') || location.pathname.startsWith('/board') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
-                    <div className="p-1.5 rounded bg-primary/10 text-primary"><LayoutGrid className="h-4 w-4" /></div> Kunbun (Projetos)
+                {hasScreenAccess('KANBAN') && (
+                  <Link to="/kanban" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/kanban' || location.pathname.startsWith('/folder') || location.pathname.startsWith('/board') ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
+                    <div className="p-1.5 rounded bg-primary/10 text-primary"><LayoutGrid className="h-4 w-4" /></div> Kanban (Projetos)
                   </Link>
                 )}
                 {hasScreenAccess('OPORTUNIDADES') && (
