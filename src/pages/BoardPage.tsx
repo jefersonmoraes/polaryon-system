@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { Plus, ArrowLeft, Undo2, Archive as ArchiveIcon, Trash2, Clock, User, Star } from 'lucide-react';
@@ -56,7 +56,21 @@ const BoardPage = () => {
   const [showArchiveViewer, setShowArchiveViewer] = useState<'archived' | 'trashed' | null>(null);
   const [archiveTab, setArchiveTab] = useState<'cards' | 'lists'>('cards');
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlCardId = searchParams.get('cardId');
+
   const prefs = boardId ? (boardPreferences[boardId] || { viewMode: 'kanban', sortBy: 'default' }) : { viewMode: 'kanban', sortBy: 'default' };
+
+  // Handle cardId from URL
+  useEffect(() => {
+    if (urlCardId) {
+      setSelectedCardId(urlCardId);
+      // Clean up URL after opening
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('cardId');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [urlCardId, searchParams, setSearchParams]);
 
   // Auto-dismiss undo after 5 seconds
   useEffect(() => {

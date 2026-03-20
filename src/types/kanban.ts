@@ -107,6 +107,7 @@ export interface Budget {
   id: string;
   title: string;
   address?: string;
+  deliveryTime?: string;
   type: BudgetType;
   userId?: string;
   status: BudgetStatus;

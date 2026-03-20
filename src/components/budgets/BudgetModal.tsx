@@ -1324,6 +1324,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
         address: '',
+        deliveryTime: '',
         type: 'Produto',
         status: 'Aguardando',
         cardId: '',
@@ -1361,6 +1362,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             const initialData: Omit<Budget, 'id' | 'createdAt'> = {
                 title: formData.title || 'Novo Orçamento',
                 address: formData.address || '',
+                deliveryTime: formData.deliveryTime || '',
                 type: formData.type as BudgetType || 'Produto',
                 status: formData.status as BudgetStatus || 'Aguardando',
                 cardId: formData.cardId || undefined,
@@ -1731,9 +1733,12 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                     onClick={() => {
                                                         const card = cards.find(c => c.id === formData.cardId);
                                                         if (card) {
-                                                            // Close modal and navigate
-                                                            onClose();
-                                                            navigate(`/board/board?cardId=${card.id}`);
+                                                            const list = lists.find(l => l.id === card.listId);
+                                                            if (list) {
+                                                                // Close modal and navigate
+                                                                onClose();
+                                                                navigate(`/board/${list.boardId}?cardId=${card.id}`);
+                                                            }
                                                         }
                                                     }}
                                                     className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-bold flex items-center gap-1"
@@ -1825,6 +1830,20 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                 onChange={e => handleUpdateField('address', e.target.value)}
                                                 disabled={!canEdit}
                                                 placeholder="Endereço para entrega ou referência..."
+                                                className="w-full bg-secondary border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prazo de Entrega</label>
+                                        <div className="relative">
+                                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+                                            <input
+                                                value={formData.deliveryTime || ''}
+                                                onChange={e => handleUpdateField('deliveryTime', e.target.value)}
+                                                disabled={!canEdit}
+                                                placeholder="Ex: 5 dias úteis, Imediato, etc."
                                                 className="w-full bg-secondary border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                             />
                                         </div>

@@ -247,6 +247,7 @@ model Budget {
   id         String   @id @default(uuid())
   title      String
   address    String?
+  deliveryTime String?
   type       String
   userId     String?
   status     String
