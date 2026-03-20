@@ -24,8 +24,7 @@ const BoardPage = () => {
   const allMembers = useKanbanStore(state => state.members);
   const members = useMemo(() => (allMembers || []).filter(m => 
     m &&
-    !(m.email || '').toLowerCase().includes('jjcorporation') && 
-    !(m.name || '').toLowerCase().includes('jjcorporation')
+    !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
   ), [allMembers]);
   const addList = useKanbanStore(state => state.addList);
   const updateList = useKanbanStore(state => state.updateList);

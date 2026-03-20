@@ -11,8 +11,7 @@ export default function TeamWorkloadPage() {
     const allMembers = useKanbanStore(state => state.members);
     const members = useMemo(() => (allMembers || []).filter(m => 
         m && 
-        !(m.email || '').toLowerCase().includes('jjcorporation') && 
-        !(m.name || '').toLowerCase().includes('jjcorporation')
+        !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
     ), [allMembers]);
     
     // Add additional safety for systemStats

@@ -194,8 +194,7 @@ export default function OportunidadesSearch() {
     const allMembers = useKanbanStore(state => state?.members);
     const currentUser = useMemo(() => (allMembers || []).filter(m => 
         m &&
-        !(m.email || '').toLowerCase().includes('jjcorporation') && 
-        !(m.name || '').toLowerCase().includes('jjcorporation')
+        !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
     )[0] || null, [allMembers]);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [exportFolderId, setExportFolderId] = useState('');

@@ -288,7 +288,7 @@ export const useKanbanStore = create<KanbanState>()(
               lists: res.data.lists || [],
               cards: res.data.cards || [],
               members: res.data.members || [],
-              labels: res.data.labels && res.data.labels.length > 0 ? res.data.labels : [...DEFAULT_LABELS],
+              labels: (res.data.labels && res.data.labels.length > 0) ? res.data.labels : (get().labels.length > 0 ? get().labels : [...DEFAULT_LABELS]),
               companies: res.data.companies || [],
               mainCompanies: res.data.mainCompanies || [],
               routes: res.data.routes || [],

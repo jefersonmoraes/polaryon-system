@@ -15,8 +15,7 @@ export const BoardListView = ({ boardId, onCardClick, sortBy }: Props) => {
     const { cards, lists, members: allMembers, labels } = useKanbanStore();
     const members = useMemo(() => (allMembers || []).filter(m => 
         m &&
-        !(m.email || '').toLowerCase().includes('jjcorporation') && 
-        !(m.name || '').toLowerCase().includes('jjcorporation')
+        !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
     ), [allMembers]);
 
     const boardLists = lists.filter(l => l.boardId === boardId && !l.archived && !l.trashed);

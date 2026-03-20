@@ -60,8 +60,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const allMembers = useKanbanStore(state => state.members);
   const members = useMemo(() => (allMembers || []).filter(m => 
     m &&
-    !(m.email || '').toLowerCase().includes('jjcorporation') && 
-    !(m.name || '').toLowerCase().includes('jjcorporation')
+    !(m.email || '').toLowerCase().includes('jjcorporation2018@gmail.com')
   ), [allMembers]);
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
@@ -246,13 +245,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     setEditLabelId(label.id); setLabelName(label.name); setLabelColor(label.color); setLabelHex(label.color); setLabelIcon(label.icon); setEditingLabel(true);
   };
   const handleColorHexChange = (hex: string) => {
-    let formattedHex = hex;
-    if (!hex.startsWith('#') && (hex.length === 3 || hex.length === 6)) {
-      formattedHex = '#' + hex;
-    }
-    setLabelHex(formattedHex);
-    if (formattedHex.length === 4 || formattedHex.length === 7) {
-      setLabelColor(formattedHex);
+    let val = hex;
+    if (val && !val.startsWith('#')) val = '#' + val;
+    setLabelHex(val);
+    
+    // Only update the actual color state if it's a valid 3, 4, 6 or 7 char hex
+    const isValidHex = /^#([0-9A-F]{3}){1,2}$/i.test(val);
+    if (isValidHex) {
+      setLabelColor(val);
     }
   };
   const execCommand = (cmd: string, value?: string) => {
