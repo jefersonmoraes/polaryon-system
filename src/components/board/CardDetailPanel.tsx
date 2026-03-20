@@ -791,7 +791,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className={`relative w-full ${showChat ? 'max-w-5xl' : 'max-w-3xl'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[90vh] transition-all duration-300`}
+          className={`relative w-full ${showChat ? 'max-w-[95vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[95vh] transition-all duration-300`}
         >
           {/* Main content scrollable area */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
