@@ -40,6 +40,7 @@ router.post('/folders', async (req: Request, res: Response) => {
 router.put('/folders/:id', async (req: Request, res: Response) => {
     try {
         const { boards, ...data } = req.body;
+        delete (data as any).updatedAt;
         
         console.log(`[Folder Update] ID: ${req.params.id}`);
         console.log(`[Folder Update] Received keys:`, Object.keys(req.body));
@@ -91,6 +92,7 @@ router.post('/boards', async (req: Request, res: Response) => {
 router.put('/boards/:id', async (req: Request, res: Response) => {
     try {
         const { lists, ...data } = req.body;
+        delete (data as any).updatedAt;
         const board = await prisma.board.update({ where: { id: req.params.id as string }, data });
         res.json(board);
     } catch (e: any) {
@@ -132,6 +134,7 @@ router.post('/lists', async (req: Request, res: Response) => {
 router.put('/lists/:id', async (req: Request, res: Response) => {
     try {
         const { cards, ...data } = req.body;
+        delete (data as any).updatedAt;
         const list = await prisma.kanbanList.update({ where: { id: req.params.id as string }, data });
         res.json(list);
     } catch (e: any) {
@@ -259,6 +262,7 @@ router.post('/cards', async (req: Request, res: Response) => {
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
         const { labels, checklist, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        delete (data as any).updatedAt;
         const cardId = req.params.id as string;
 
         if (data.dueDate === '') data.dueDate = null;
