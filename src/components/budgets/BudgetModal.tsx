@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company, MainCompanyProfile } from '@/types/kanban';
@@ -58,6 +59,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const [isUfOpen, setIsUfOpen] = useState(false);
     const [isTaxTooltipOpen, setIsTaxTooltipOpen] = useState(false); // Novo state para o balão de impostos
     const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
+    const [isNotesExpanded, setIsNotesExpanded] = useState(false); // Estado para expandir/recolher observações
 
     const supRef = useRef<HTMLDivElement>(null);
     const transRef = useRef<HTMLDivElement>(null);
@@ -1264,16 +1266,30 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                     {/* Notes Field */}
                     <div className="space-y-2 mt-2">
-                        <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5 text-muted-foreground">
+                        <button 
+                            type="button"
+                            onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                            className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors mb-1"
+                        >
+                            {isNotesExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                             Observações Específicas
-                        </label>
-                        <textarea
-                            value={item.notes || ''}
-                            onChange={e => updateItem(item.id, 'notes', e.target.value)}
-                            placeholder="Condições de frete, impostos aplicáveis ou isenções..."
-                            rows={1}
-                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-y custom-scrollbar min-h-[40px]"
-                        />
+                        </button>
+                        
+                        {isNotesExpanded && (
+                            <textarea
+                                value={item.notes || ''}
+                                onChange={e => updateItem(item.id, 'notes', e.target.value)}
+                                placeholder="Condições de frete, impostos aplicáveis ou isenções..."
+                                rows={3}
+                                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-y custom-scrollbar min-h-[80px] animate-in slide-in-from-top-2 duration-200"
+                            />
+                        )}
+                        
+                        {!isNotesExpanded && item.notes && (
+                            <p className="text-xs text-muted-foreground px-2 py-1 bg-secondary/30 rounded border border-border/10 truncate cursor-pointer hover:bg-secondary/50" onClick={() => setIsNotesExpanded(true)}>
+                                {item.notes}
+                            </p>
+                        )}
                     </div>
 
                     {/* Danger Zone Actions */}
@@ -1307,12 +1323,15 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
+        address: '',
         type: 'Produto',
         status: 'Aguardando',
         cardId: '',
         items: [],
         totalValue: 0
     });
+
+    const navigate = useNavigate();
 
     const { cards, lists, boards, routes } = useKanbanStore();
     const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
@@ -1341,6 +1360,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             const newId = crypto.randomUUID();
             const initialData: Omit<Budget, 'id' | 'createdAt'> = {
                 title: formData.title || 'Novo Orçamento',
+                address: formData.address || '',
                 type: formData.type as BudgetType || 'Produto',
                 status: formData.status as BudgetStatus || 'Aguardando',
                 cardId: formData.cardId || undefined,
@@ -1704,7 +1724,24 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     </h3>
 
                                     <div className="space-y-2 relative" ref={cardDropdownRef}>
-                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cartão Referente (opcional)</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cartão Referente (opcional)</label>
+                                            {formData.cardId && (
+                                                <button
+                                                    onClick={() => {
+                                                        const card = cards.find(c => c.id === formData.cardId);
+                                                        if (card) {
+                                                            // Close modal and navigate
+                                                            onClose();
+                                                            navigate(`/board/board?cardId=${card.id}`);
+                                                        }
+                                                    }}
+                                                    className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-bold flex items-center gap-1"
+                                                >
+                                                    <ExternalLink className="h-2.5 w-2.5" /> ACESSAR CARTÃO
+                                                </button>
+                                            )}
+                                        </div>
                                         <button
                                             onClick={() => setIsCardDropdownOpen(!isCardDropdownOpen)}
                                             disabled={!canEdit}
@@ -1777,6 +1814,20 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                             placeholder="Ex: Aquisição de Computadores Desktop"
                                             className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Endereço</label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+                                            <input
+                                                value={formData.address || ''}
+                                                onChange={e => handleUpdateField('address', e.target.value)}
+                                                disabled={!canEdit}
+                                                placeholder="Endereço para entrega ou referência..."
+                                                className="w-full bg-secondary border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
