@@ -19,6 +19,7 @@ import api from '@/lib/api';
 import logo from '@/assets/sem-fundo.svg';
 import jef from '@/assets/jef.svg';
 import belt from '@/assets/belt.svg';
+import whatsappQR from '@/assets/whatsapp-qr.png';
 
 // Custom Scroll Hook for Parallax
 const ScrollParaCard = ({ children, offset = 50 }: { children: React.ReactNode, offset?: number }) => {
@@ -339,23 +340,45 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-col gap-8">
-              <Link to="/login" className="group glass-card p-12 rounded-[3.5rem] flex flex-col justify-between hover:bg-white/10 transition-all min-h-[300px]">
-                <div className="space-y-4">
-                  <h3 className="text-3xl font-anton uppercase tracking-tighter">Portal de Acesso</h3>
-                  <p className="text-white/20 text-[10px] font-bold uppercase tracking-[0.3em]">Ambiente seguro para gestores e parceiros.</p>
+              <div className="glass-card p-12 rounded-[3.5rem] flex flex-col md:flex-row items-center gap-10">
+                <div className="flex-1 space-y-6">
+                  <h3 className="text-3xl font-anton uppercase tracking-tighter">Atendimento Direto</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 text-white/60">
+                      <Phone size={20} className="text-blue-500" />
+                      <span className="text-lg font-bold tracking-wider">(61) 98488-6822</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-white/60">
+                      <Phone size={20} className="text-blue-500" />
+                      <span className="text-lg font-bold tracking-wider">(61) 98245-4298</span>
+                    </div>
+                  </div>
+                  <p className="text-white/20 text-[10px] font-bold uppercase tracking-[0.3em] pt-4 border-t border-white/5">
+                    Escaneie para iniciar conversa no WhatsApp
+                  </p>
                 </div>
-                <div className="flex justify-end pt-12">
-                  <ArrowRight size={32} className="text-white/20 group-hover:text-blue-600 group-hover:translate-x-4 transition-all" />
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-blue-600/20 blur-2xl group-hover:bg-blue-600/40 transition-all" />
+                  <img 
+                    src={whatsappQR} 
+                    alt="WhatsApp QR Code" 
+                    className="w-32 h-32 rounded-2xl relative z-10 border border-white/10"
+                  />
                 </div>
-              </Link>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Minimal Footer */}
-      <footer className="py-10 px-10 border-t border-white/5 text-center text-white/20 text-[10px] uppercase font-bold tracking-[0.5em] z-10 relative">
-        &copy; 2026 POLARYON SYSTEM — DESENVOLVIDO PELA JJ CORPORATION
+      <footer className="py-10 px-10 border-t border-white/5 z-10 relative">
+        <div className="max-w-[1800px] mx-auto flex justify-between items-center text-white/20 text-[10px] uppercase font-bold tracking-[0.5em]">
+          <span>&copy; 2026 POLARYON SYSTEM — DESENVOLVIDO PELA JJ CORPORATION</span>
+          <Link to="/login" className="hover:text-white transition-colors">
+            ÁREA RESTRITA
+          </Link>
+        </div>
       </footer>
     </div>
   );
