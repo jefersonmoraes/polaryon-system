@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { toast } from 'sonner';
-import { LogIn, Lock, RefreshCcw, Mail } from 'lucide-react';
-import { GoogleOAuthProvider, GoogleLogin, useGoogleLogin } from '@react-oauth/google';
+import { Lock, RefreshCcw, Mail, ArrowLeft } from 'lucide-react';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import api from '@/lib/api';
 import logo from '@/assets/logo.png';
 
@@ -22,15 +22,15 @@ const CustomGoogleLoginButton = ({ onSuccess, onError, disabled }: { onSuccess: 
         <button
             onClick={() => login()}
             disabled={disabled}
-            className={`w-full bg-[#1A1A1A] border border-neutral-700 text-white font-medium py-[10px] rounded-full flex items-center justify-center gap-3 hover:bg-neutral-800 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`w-full bg-blue-600 text-white font-anton uppercase tracking-[0.2em] py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all transform active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.3)] ${disabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
         >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="white"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="white" opacity="0.8"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="white" opacity="0.6"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="white" opacity="0.9"/>
             </svg>
-            Continuar com o Google
+            Entrar com o Google
         </button>
     );
 };
@@ -76,10 +76,10 @@ export default function LoginPage() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Background noise
-        ctx.fillStyle = '#171717'; // neutral-900
+        ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Security against OCR: Use confusing characters, avoid I, 1, O, 0.
+        // Security against OCR
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let text = '';
         for (let i = 0; i < 5; i++) {
@@ -87,9 +87,9 @@ export default function LoginPage() {
         }
         setCaptchaText(text);
 
-        // Draw noise lines to confuse simple AI/OCR
+        // Draw noise lines
         for (let i = 0; i < 7; i++) {
-            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`;
+            ctx.strokeStyle = `rgba(37, 99, 235, ${Math.random() * 0.4 + 0.1})`;
             ctx.lineWidth = Math.random() * 2 + 1;
             ctx.beginPath();
             ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
@@ -97,15 +97,7 @@ export default function LoginPage() {
             ctx.stroke();
         }
 
-        // Draw noise dots
-        for (let i = 0; i < 40; i++) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`;
-            ctx.beginPath();
-            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Draw Text with varying rotation, size, and slight offset
+        // Draw Text
         ctx.font = 'bold 28px monospace';
         ctx.textBaseline = 'middle';
         for (let i = 0; i < text.length; i++) {
@@ -113,8 +105,8 @@ export default function LoginPage() {
             const x = 20 + i * 22;
             const y = canvas.height / 2 + (Math.random() - 0.5) * 12;
             ctx.translate(x, y);
-            ctx.rotate((Math.random() - 0.5) * 0.6); // Random rotation to confuse OCR tools
-            ctx.fillStyle = `hsl(${Math.random() * 360}, 50%, 80%)`; // Slight color variation
+            ctx.rotate((Math.random() - 0.5) * 0.6);
+            ctx.fillStyle = `hsl(215, 100%, ${70 + Math.random() * 20}%)`;
             ctx.fillText(text[i], 0, 0);
             ctx.restore();
         }
@@ -142,24 +134,19 @@ export default function LoginPage() {
         setIsLoading(true);
 
         try {
-            // Send the Google Access Token to our Backend for validation and user creation
             const res = await api.post('/auth/google', {
                 accessToken: tokenResponse.access_token
             });
 
             const { token, user } = res.data;
-
-            // Check if local systemUser already exists to preserve non-Google fields
             const existingSystemUser = useAuthStore.getState().systemUsers.find(u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
 
-            // Security Interceptor for Auto-Admin Emails
             const isAdminEmail = [
                 'jjcorporation2018@gmail.com',
                 'jefersonvilela72@gmail.com',
                 'jeferson99jeferson@gmail.com'
             ].includes(user.email.toLowerCase());
 
-            // Map the backend DB user to the frontend SystemUser structure
             const systemUser = {
                 id: user.id || existingSystemUser?.id || crypto.randomUUID(),
                 email: user.email,
@@ -175,20 +162,14 @@ export default function LoginPage() {
                 createdAt: existingSystemUser?.createdAt || new Date().toISOString()
             };
 
-
-
-            // Save to Zustand and Session
             loginWithGoogle(systemUser as any, token, rememberMe);
             useUserPrefsStore.getState().loadPreferences(systemUser.id);
 
-            toast.success("Autenticação Google concluída com sucesso!");
+            toast.success("Autenticação Google concluída!");
             navigate(from, { replace: true });
         } catch (error: any) {
             console.error('Login error:', error);
-            toast.error(
-                error.response?.data?.error || "Falha na autenticação do Google. O servidor não respondeu.",
-                { description: "Por favor, tente novamente mais tarde." }
-            );
+            toast.error(error.response?.data?.error || "Falha na autenticação do Google.");
             generateCaptcha();
         } finally {
             setIsLoading(false);
@@ -196,153 +177,134 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 relative overflow-hidden font-oswald antialiased">
+            {/* Dynamic Font Import */}
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@200;400;700&display=swap');
+                .font-anton { font-family: 'Anton', sans-serif; }
+                .font-oswald { font-family: 'Oswald', sans-serif; }
+            `}</style>
 
-            <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl overflow-hidden z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="p-8 pb-6 flex flex-col items-center">
-                    <div className="w-48 h-24 flex items-center justify-center mb-6">
-                        <img src={logo} alt="Polaryon Logo" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
-                    </div>
-                    <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400 text-center mb-3 tracking-[0.2em] uppercase">
-                        POLARYON
+            {/* Background Ambience */}
+            <div className="absolute inset-0 bg-[url('/polaryon_hero_bg_1774099790662.png')] bg-cover bg-center opacity-20 filter blur-sm scale-110" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black via-black/80 to-black/40" />
+            
+            <div className="absolute top-[20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[150px] rounded-full" />
+            <div className="absolute bottom-[20%] right-[-10%] w-[50%] h-[50%] bg-blue-400/5 blur-[150px] rounded-full" />
+
+            <Link to="/" className="absolute top-10 left-10 flex items-center gap-2 text-white/40 hover:text-white transition-all group z-20">
+                <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em]">Voltar</span>
+            </Link>
+
+            <div className="w-full max-w-lg z-10 animate-in fade-in zoom-in-95 duration-1000">
+                <div className="text-center mb-12">
+                    <img src={logo} alt="Polaryon" className="w-24 h-24 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(37,99,235,0.4)]" />
+                    <h1 className="text-7xl lg:text-8xl font-anton text-white tracking-tighter uppercase leading-none mb-4">
+                        Acesso <br />
+                        <span className="text-blue-600">Restrito.</span>
                     </h1>
-                    <p className="text-neutral-400 text-sm text-center mb-8">
-                        Seu fluxo de trabalho centralizado e protegido.
-                    </p>
+                    <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
+                </div>
 
-                    {/* Honeypot field (hidden from real users, attractive to spam bots) */}
+                <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
+                    {/* Security Overlay for Bots */}
                     <input
                         type="text"
                         name="email_secondary_verification"
-                        className="opacity-0 absolute -z-50 w-0 h-0"
+                        className="fixed -top-100 -left-100 opacity-0 pointer-events-none"
                         tabIndex={-1}
                         value={honeypot}
                         onChange={(e) => setHoneypot(e.target.value)}
                         autoComplete="off"
                     />
 
-                    <div className="w-full space-y-6">
-                        {/* Captcha Section */}
-                        <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 shadow-inner">
-                            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3 flex items-center justify-between">
-                                <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Segurança Anti-Bot Avançada</span>
+                    <div className="space-y-8">
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/40 mb-4 block flex items-center gap-2">
+                                <Lock size={12} className="text-blue-600" /> Verificação de Identidade
                             </label>
-
-                            <div className="flex flex-col gap-3">
-                                <div className="flex gap-3 items-center">
-                                    <div className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex items-center justify-center relative h-[60px]">
-                                        <canvas
-                                            ref={canvasRef}
-                                            width="150"
-                                            height="60"
-                                            className="w-full h-full object-cover"
-                                        />
-                                        {!captchaText && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-neutral-900">
-                                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                            </div>
-                                        )}
+                            
+                            <div className="bg-black/40 rounded-2xl p-6 border border-white/5 space-y-4">
+                                <div className="flex gap-4 items-center">
+                                    <div className="flex-1 bg-black rounded-xl overflow-hidden h-[60px] border border-white/10">
+                                        <canvas ref={canvasRef} width="150" height="60" className="w-full h-full object-center opacity-80" />
                                     </div>
-
                                     <button
                                         onClick={generateCaptcha}
-                                        className="p-3 h-[60px] text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg transition-colors flex items-center justify-center"
-                                        title="Gerar novo desafio"
+                                        className="w-12 h-[60px] flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-xl transition-all text-white/40 hover:text-white"
                                     >
-                                        <RefreshCcw className="w-5 h-5" />
+                                        <RefreshCcw size={20} />
                                     </button>
                                 </div>
-
                                 <input
                                     type="text"
                                     value={captchaAnswer}
                                     onChange={handleCaptchaChange}
                                     maxLength={5}
-                                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-center text-lg font-bold font-mono text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700 uppercase tracking-[0.5em]"
-                                    placeholder="DIGITE O CÓDIGO"
+                                    className="w-full bg-transparent border-b-2 border-white/10 focus:border-blue-600 px-4 py-4 text-center text-3xl font-anton text-white outline-none transition-all placeholder:text-white/5 tracking-[0.5em]"
+                                    placeholder="CÓDIGO"
                                 />
                             </div>
                         </div>
 
-                        {/* Remember Me Checkbox */}
-                        <label className="flex items-center justify-center gap-3 cursor-pointer group mt-2">
-                            <div className="relative flex items-center justify-center w-5 h-5">
+                        <div className="flex items-center justify-center gap-4">
+                            <label className="flex items-center gap-3 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="peer appearance-none w-5 h-5 bg-neutral-950 border-2 border-neutral-700 rounded-md checked:bg-primary checked:border-primary transition-all cursor-pointer"
+                                    className="w-5 h-5 bg-black/40 border-2 border-white/10 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer appearance-none"
                                     checked={rememberMe}
                                     onChange={(e) => setRememberMe(e.target.checked)}
                                 />
-                                <svg className="absolute w-3.5 h-3.5 text-neutral-900 pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" viewBox="0 0 14 14" fill="none">
-                                    <path d="M3 8L6 11L11 3.5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" stroke="currentColor" />
-                                </svg>
-                            </div>
-                            <span className="text-sm font-medium text-neutral-400 group-hover:text-white transition-colors select-none">
-                                Lembrar-me neste navegador
-                            </span>
-                        </label>
-
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-neutral-800"></div>
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-neutral-900 px-2 text-neutral-500 font-semibold tracking-wider">
-                                    Identificação Segura
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
+                                    Lembrar dispositivo
                                 </span>
-                            </div>
+                            </label>
                         </div>
 
                         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-                            <div className="mt-4 flex justify-center w-full min-h-[44px] relative">
+                            <div className="relative group">
                                 {!isCaptchaValid && window.location.hostname !== 'localhost' && (
                                     <div
-                                        className="absolute inset-0 z-10 cursor-not-allowed bg-transparent"
-                                        onClick={() => toast.error("Por favor, digite o CÓDIGO de segurança corretamente para liberar o login.", { position: 'top-center' })}
-                                        title="Resolva o CAPTCHA primeiro"
+                                        className="absolute inset-0 z-20 cursor-not-allowed"
+                                        onClick={() => toast.error("Digite o código de segurança para liberar o acesso.")}
                                     />
                                 )}
-                                <div className={`w-full flex justify-center transition-opacity duration-300 ${!isCaptchaValid && window.location.hostname !== 'localhost' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                                <div className={!isCaptchaValid && window.location.hostname !== 'localhost' ? 'opacity-20 grayscale' : 'opacity-100'}>
                                     <CustomGoogleLoginButton 
                                         onSuccess={handleGoogleSuccess} 
-                                        onError={() => toast.error('O Google recusou a conexão ou o Popup foi fechado.')}
+                                        onError={() => toast.error('Falha na conexão com Google.')}
                                         disabled={!isCaptchaValid && window.location.hostname !== 'localhost'}
                                     />
                                 </div>
                             </div>
                         </GoogleOAuthProvider>
 
-                        {/* Auto-Login for Localhost only */}
                         {window.location.hostname === 'localhost' && (
                             <button
                                 onClick={() => {
                                     const defaultAdmin = useAuthStore.getState().systemUsers[0];
                                     if (defaultAdmin) {
                                         useAuthStore.getState().login(defaultAdmin.email, rememberMe);
-                                        toast.success("Login automático (Localhost)");
                                         navigate(from, { replace: true });
                                     }
                                 }}
-                                className="mt-4 w-full bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 text-xs font-bold py-3 rounded-xl transition-colors"
+                                className="w-full py-3 text-[10px] font-bold uppercase tracking-widest text-blue-500/50 hover:text-blue-500 transition-colors border border-blue-500/10 rounded-xl"
                             >
-                                Bypass Login (Localhost)
+                                Bypass Dev Mode
                             </button>
                         )}
-
                     </div>
                 </div>
 
-                <div className="bg-neutral-800/50 p-4 border-t border-neutral-800 flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-neutral-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-neutral-400 leading-relaxed">
-                        Apenas e-mails autorizados pelo administrador possuem acesso. Solicite convite ao gestor do sistema.
+                <div className="mt-10 flex items-start gap-4 px-10">
+                    <Mail size={16} className="text-blue-600 shrink-0 mt-1" />
+                    <p className="text-[10px] font-medium text-white/20 uppercase leading-relaxed tracking-widest">
+                        Acesso exclusivo para colaboradores autorizados. <br />
+                        Entre em contato com o administrador para habilitar seu e-mail corporativo.
                     </p>
                 </div>
             </div>
         </div>
     );
 }
-
