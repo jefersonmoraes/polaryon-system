@@ -116,24 +116,38 @@ export default function LandingPage() {
       <section className="relative h-screen flex items-center justify-center pt-20 overflow-hidden z-10">
         <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/40 to-black z-1" />
         
-        <div className="relative z-10 text-center max-w-6xl px-4">
+        <div className="relative z-10 text-center max-w-[95vw] px-4">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
           >
-            <h1 className="text-[12rem] lg:text-[16rem] font-anton text-white leading-[0.85] tracking-tighter uppercase mb-6 opacity-80">
-              POLA<br />RYON
-            </h1>
-            <p className="text-blue-500 text-lg font-bold tracking-[0.5em] uppercase mb-12">
-              Futuro & Excelência em Licitações
-            </p>
-            <div className="flex justify-center gap-10">
-              <a href="#about" className="group flex items-center gap-4 text-white/50 hover:text-white transition-all">
-                <span className="text-xs font-bold uppercase tracking-[0.3em]">Nossa História</span>
-                <div className="w-10 h-[1px] bg-white/20 group-hover:w-20 group-hover:bg-blue-600 transition-all" />
-              </a>
-            </div>
+            <motion.h1 
+              initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
+              animate={{ letterSpacing: "-0.05em", opacity: 1, filter: "blur(0px)" }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              className="text-[12vw] font-anton text-white leading-none tracking-tighter uppercase mb-2 drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]"
+            >
+              POLARYON
+            </motion.h1>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1, duration: 0.8 }}
+              className="flex flex-col items-center gap-6"
+            >
+              <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
+              <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
+                A solução em contratos Públicos
+              </p>
+              <div className="flex justify-center gap-10 mt-8">
+                <a href="#about" className="group flex items-center gap-4 text-white/50 hover:text-white transition-all">
+                  <span className="text-xs font-bold uppercase tracking-[0.3em]">Nossa História</span>
+                  <div className="w-10 h-[1px] bg-white/20 group-hover:w-20 group-hover:bg-blue-600 transition-all" />
+                </a>
+              </div>
+            </motion.div>
           </motion.div>
         </div>
 
