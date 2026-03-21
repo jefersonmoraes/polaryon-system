@@ -58,7 +58,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
             : null;
 
         if (requiredScreen && !hasScreenAccess(requiredScreen)) {
-            navigate('/', { replace: true });
+            navigate('/tarefas', { replace: true });
         }
     }, [isAuthenticated, currentUser, navigate, location]);
 

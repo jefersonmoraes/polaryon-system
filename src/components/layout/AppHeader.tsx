@@ -77,7 +77,7 @@ const AppHeader = () => {
         <Menu className="h-5 w-5" />
       </button>
 
-      <Link to="/" className="flex items-center gap-2 shrink-0">
+      <Link to="/tarefas" className="flex items-center gap-2 shrink-0">
         <img src={logo} alt="JJ Corporation" className="h-6 w-6 md:h-7 md:w-7 rounded-full" />
         <span className="font-bold text-sm tracking-tight hidden lg:block">POLARYON</span>
       </Link>
@@ -86,8 +86,8 @@ const AppHeader = () => {
         {/* Desktop Browser View */}
         <div className="hidden lg:flex items-center gap-1 overflow-x-auto scrollbar-hide">
           <Link
-            to="/"
-            className={`flex-shrink-0 whitespace-nowrap px-2 md:px-3 py-1.5 rounded text-[10px] md:text-xs font-medium transition-colors ${location.pathname === '/' ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
+            to="/tarefas"
+            className={`flex-shrink-0 whitespace-nowrap px-2 md:px-3 py-1.5 rounded text-[10px] md:text-xs font-medium transition-colors ${location.pathname === '/tarefas' ? 'bg-primary/20 text-white' : 'hover:bg-primary/10 text-white/80 hover:text-white'
               }`}
           >
             <LayoutDashboard className="h-3.5 w-3.5 inline mr-1" />
@@ -188,7 +188,7 @@ const AppHeader = () => {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowNavDropdown(false)} />
               <div className="absolute top-full left-0 mt-2 w-64 bg-card border border-border shadow-xl rounded-lg overflow-hidden z-50 animate-in slide-in-from-top-2 flex flex-col">
-                <Link to="/" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/' ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
+                <Link to="/tarefas" onClick={() => setShowNavDropdown(false)} className={`px-4 py-3 flex items-center gap-3 text-sm border-b border-border/50 hover:bg-muted transition-colors ${location.pathname === '/tarefas' ? 'text-primary font-bold bg-primary/5' : 'text-foreground'}`}>
                   <div className="p-1.5 rounded bg-primary/10 text-primary"><LayoutDashboard className="h-4 w-4" /></div> Tarefas Principais
                 </Link>
                 {hasScreenAccess('KANBAN') && (

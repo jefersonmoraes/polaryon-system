@@ -452,7 +452,7 @@ const AppSidebar = () => {
             </div>
             {/* Voltar para a Home */}
             <div className="mt-auto border-t border-sidebar-border/50 pt-4">
-              <Link to="/" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50`} title="Sair da Pasta">
+              <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50`} title="Sair da Pasta">
                 <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Tela Inicial</span>}
               </Link>
             </div>
@@ -474,7 +474,7 @@ const AppSidebar = () => {
         ) : (
           <>
             <div className="p-3 border-b border-sidebar-border space-y-1 mt-6">
-              <Link to="/" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
+              <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/tarefas' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
                 <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Principal</span>}
               </Link>
               {hasScreenAccess('CALENDAR') && (
