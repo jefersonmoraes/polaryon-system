@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 import api from '@/lib/api';
-import logo from '@/assets/logo.png';
+import logo from '@/assets/logo-polaryon.svg';
 
 // Import Google Fonts in a style tag or via a link in index.html. 
 // For this component, we'll assume they are loaded.

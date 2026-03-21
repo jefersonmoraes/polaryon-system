@@ -3,7 +3,7 @@ import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, Zoo
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useAuthStore } from '@/store/auth-store';
-import logo from '@/assets/logo.png';
+import logo from '@/assets/logo-polaryon.svg';
 import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
 import CompanyArchiveViewer from './CompanyArchiveViewer';

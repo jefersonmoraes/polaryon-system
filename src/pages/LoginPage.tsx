@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Lock, RefreshCcw, Mail, ArrowLeft } from 'lucide-react';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import api from '@/lib/api';
-import logo from '@/assets/logo.png';
+import logo from '@/assets/logo-polaryon.svg';
 
 // Change this to your actual Google Client ID from Google Cloud Console
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'sua-chave-do-google-aqui.apps.googleusercontent.com';
