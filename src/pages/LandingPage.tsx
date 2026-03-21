@@ -85,6 +85,20 @@ export default function LandingPage() {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
+
+        .metallic-text {
+          background: linear-gradient(
+            to bottom,
+            #ffffff 0%,
+            #e2e8f0 40%,
+            #94a3b8 50%,
+            #475569 55%,
+            #94a3b8 100%
+          );
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          filter: drop-shadow(0 0 20px rgba(255,255,255,0.1));
+        }
       `}</style>
 
       {/* FIXED NEON SMOKE BACKGROUND */}
@@ -149,7 +163,7 @@ export default function LandingPage() {
               className="flex flex-col items-center justify-center gap-4 mb-2"
             >
               <img src={logo} alt="" className="w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
-              <h1 className="text-[10vw] font-['Montserrat'] font-[900] text-white leading-none tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+              <h1 className="text-[10vw] font-['Montserrat'] font-[900] leading-none tracking-tighter uppercase metallic-text">
                 POLARYON
               </h1>
             </motion.div>
