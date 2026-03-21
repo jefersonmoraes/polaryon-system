@@ -90,14 +90,31 @@ export default function LandingPage() {
           background: linear-gradient(
             to bottom,
             #ffffff 0%,
-            #e2e8f0 40%,
-            #94a3b8 50%,
-            #475569 55%,
-            #94a3b8 100%
+            #e2e8f0 35%,
+            #94a3b8 48%,
+            #1e293b 50%,
+            #475569 52%,
+            #94a3b8 65%,
+            #f8fafc 100%
           );
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-          filter: drop-shadow(0 0 20px rgba(255,255,255,0.1));
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)) drop-shadow(0 0 20px rgba(59,130,246,0.2));
+          text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+          position: relative;
+        }
+
+        .metallic-text::after {
+          content: 'POLARYON';
+          position: absolute;
+          left: 0;
+          top: 0;
+          z-index: -1;
+          background: none;
+          -webkit-text-fill-color: initial;
+          text-shadow: 
+            2px 2px 0px #1e293b,
+            -1px -1px 0px #ffffff40;
         }
       `}</style>
 
