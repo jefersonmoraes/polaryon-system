@@ -142,14 +142,17 @@ export default function LandingPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
           >
-            <motion.h1 
+            <motion.div
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
               animate={{ letterSpacing: "-0.05em", opacity: 1, filter: "blur(0px)" }}
               transition={{ duration: 1.5, ease: "easeOut" }}
-              className="text-[12vw] font-anton text-white leading-none tracking-tighter uppercase mb-2 drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]"
+              className="flex items-center justify-center gap-6 mb-2"
             >
-              POLARYON
-            </motion.h1>
+              <img src={logo} alt="" className="w-[10vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <h1 className="text-[10vw] font-['Montserrat'] font-[900] text-white leading-none tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+                POLARYON
+              </h1>
+            </motion.div>
             
             <motion.div
               initial={{ opacity: 0, y: 20 }}
