@@ -17,6 +17,8 @@ import {
 
 import api from '@/lib/api';
 import logo from '@/assets/logo-polaryon.svg';
+import jef from '@/assets/jef.svg';
+import belt from '@/assets/belt.svg';
 
 // Custom Scroll Hook for Parallax
 const ScrollParaCard = ({ children, offset = 50 }: { children: React.ReactNode, offset?: number }) => {
@@ -112,10 +114,28 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center pt-20 overflow-hidden z-10">
         <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/40 to-black z-1" />
         
+        {/* Side Images - Floating behind text */}
+        <motion.div
+          initial={{ x: -200, opacity: 0 }}
+          animate={{ x: 0, opacity: 0.15 }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
+        >
+          <img src={jef} alt="" className="w-full h-auto grayscale brightness-150" />
+        </motion.div>
+
+        <motion.div
+          initial={{ x: 200, opacity: 0 }}
+          animate={{ x: 0, opacity: 0.15 }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
+        >
+          <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
+        </motion.div>
+
         <div className="relative z-10 text-center max-w-[95vw] px-4">
           <motion.div
             initial={{ opacity: 0 }}
