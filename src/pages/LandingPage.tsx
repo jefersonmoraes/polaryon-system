@@ -148,7 +148,7 @@ export default function LandingPage() {
               transition={{ duration: 1.5, ease: "easeOut" }}
               className="flex flex-col items-center justify-center gap-4 mb-2"
             >
-              <img src={logo} alt="" className="w-[12vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <img src={logo} alt="" className="w-[16vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
               <h1 className="text-[10vw] font-['Montserrat'] font-[900] text-white leading-none tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
                 POLARYON
               </h1>
@@ -284,16 +284,19 @@ export default function LandingPage() {
                   <div className="flex items-start gap-6">
                     <MapPin className="text-blue-600 shrink-0" size={24} />
                     <span className="text-sm font-bold uppercase tracking-widest text-white/60">Curitiba, PR — Brasil</span>
-                  </div>
-                  <div className="flex items-start gap-6">
                     <Mail className="text-blue-600 shrink-0" size={24} />
                     <a href="mailto:contato@polaryon.com.br" className="text-sm font-bold uppercase tracking-widest hover:text-blue-500 transition-colors">contato@polaryon.com.br</a>
                   </div>
-                  <div className="pt-8 border-t border-white/10 flex gap-6">
-                    <a href="#" className="p-4 bg-white/5 rounded-2xl hover:bg-blue-600 transition-all transform hover:-translate-y-1"><Instagram size={20} /></a>
-                    <a href="#" className="p-4 bg-white/5 rounded-2xl hover:bg-blue-600 transition-all transform hover:-translate-y-1"><Linkedin size={20} /></a>
-                    <a href="#" className="p-4 bg-white/5 rounded-2xl hover:bg-blue-600 transition-all transform hover:-translate-y-1"><Facebook size={20} /></a>
-                  </div>
+                  <div className="flex items-center gap-4 mt-8 pt-8 border-t border-white/5">
+            <a 
+              href="https://www.instagram.com/polaryonlicitacoes/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-3 rounded-xl bg-white/5 text-zinc-400 hover:bg-blue-500/20 hover:text-blue-400 transition-all duration-300"
+            >
+              <Instagram size={20} />
+            </a>
+          </div>
                 </div>
               </motion.div>
             </div>
@@ -302,15 +305,17 @@ export default function LandingPage() {
               <Link to="/login" className="group glass-card p-12 rounded-[3.5rem] flex flex-col justify-between hover:bg-white/10 transition-all">
                 <div className="space-y-4">
                   <h3 className="text-3xl font-anton uppercase tracking-tighter">Portal de Acesso</h3>
-                  <p className="text-white/20 text-[10px] font-bold uppercase tracking-[0.3em]">Ambiente seguro para gestores e parceiros.</p>
-                </div>
-                <div className="flex justify-end pt-12">
-                  <ArrowRight size={32} className="text-white/20 group-hover:text-blue-600 group-hover:translate-x-4 transition-all" />
-                </div>
-              </Link>
+                  <p className="text-zinc-500 mb-8 max-w-md mx-auto lg:mx-0">
+            Conecte-se conosco para parcerias e vencer licitações para a sua empresa.
+          </p>
+
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 text-zinc-400 group cursor-default">
+              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 transition-colors">
+                <MapPin size={20} />
+              </div>
+              <span className="text-sm">Brasília, DF (Atendemos a todo o território nacional)</span>
             </div>
-          </div>
-        </div>
       </section>
 
       {/* Minimal Footer */}
