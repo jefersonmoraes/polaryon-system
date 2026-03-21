@@ -122,7 +122,7 @@ export default function LandingPage() {
           initial={{ x: -200, opacity: 0 }}
           animate={{ x: 0, opacity: 0.15 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
+          className="absolute left-0 top-[35%] -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
         >
           <img src={jef} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
@@ -131,7 +131,7 @@ export default function LandingPage() {
           initial={{ x: 200, opacity: 0 }}
           animate={{ x: 0, opacity: 0.15 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
+          className="absolute right-0 top-[35%] -translate-y-1/2 w-[35vw] h-auto pointer-events-none z-0"
         >
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
