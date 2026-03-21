@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import api from '@/lib/api';
-import logo from '@/assets/logo-polaryon.svg';
+import logo from '@/assets/sem-fundo.svg';
 import jef from '@/assets/jef.svg';
 import belt from '@/assets/belt.svg';
 
