@@ -146,9 +146,9 @@ export default function LandingPage() {
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
               animate={{ letterSpacing: "-0.05em", opacity: 1, filter: "blur(0px)" }}
               transition={{ duration: 1.5, ease: "easeOut" }}
-              className="flex items-center justify-center gap-6 mb-2"
+              className="flex flex-col items-center justify-center gap-4 mb-2"
             >
-              <img src={logo} alt="" className="w-[10vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <img src={logo} alt="" className="w-[12vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
               <h1 className="text-[10vw] font-['Montserrat'] font-[900] text-white leading-none tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
                 POLARYON
               </h1>
