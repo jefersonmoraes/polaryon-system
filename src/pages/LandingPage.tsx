@@ -14,6 +14,9 @@ import {
   Facebook
 } from 'lucide-react';
 
+import api from '@/lib/api';
+import logo from '@/assets/logo.png';
+
 // Import Google Fonts in a style tag or via a link in index.html. 
 // For this component, we'll assume they are loaded.
 
@@ -92,7 +95,8 @@ const LandingPage = () => {
       {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-black/80 backdrop-blur-md py-4' : 'bg-transparent py-8'}`}>
         <div className="max-w-[1800px] mx-auto px-10 flex justify-between items-center text-xs font-bold tracking-[0.2em] uppercase">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_10px_rgba(37,99,235,0.5)]" />
             <span className="text-blue-500 font-oswald text-xl tracking-tighter">POLARYON</span>
             <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
             <span className="text-white/40 hidden md:block">Sistema de Licitações Premium</span>
@@ -223,7 +227,10 @@ const LandingPage = () => {
       <footer id="contact" className="py-20 px-10 border-t border-white/5 bg-black">
         <div className="max-w-[1800px] mx-auto flex flex-col md:flex-row justify-between items-start gap-12">
           <div className="space-y-6">
-            <h2 className="text-4xl font-anton uppercase tracking-tighter">Polaryon</h2>
+            <div className="flex items-center gap-4">
+              <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
+              <h2 className="text-4xl font-anton uppercase tracking-tighter">Polaryon</h2>
+            </div>
             <p className="max-w-xs text-white/30 text-xs font-bold leading-relaxed tracking-widest uppercase">
               Excelência em Licitações Públicas. <br />
               Um produto JJ Corporation.
