@@ -148,7 +148,7 @@ export default function LandingPage() {
               transition={{ duration: 1.5, ease: "easeOut" }}
               className="flex flex-col items-center justify-center gap-4 mb-2"
             >
-              <img src={logo} alt="" className="w-[16vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <img src={logo} alt="" className="w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
               <h1 className="text-[10vw] font-['Montserrat'] font-[900] text-white leading-none tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
                 POLARYON
               </h1>
