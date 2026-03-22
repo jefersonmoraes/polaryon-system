@@ -170,13 +170,13 @@ export default function LandingPage() {
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
 
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen w-full px-4 text-center py-20">
-          {/* Main Brand Block */}
+        {/* Main Content - Positioned moderately above center for better balance */}
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[95vw] px-4 z-10">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="flex flex-col items-center gap-6 mb-24"
+            className="flex flex-col items-center text-center gap-16 md:gap-24"
           >
             <motion.div
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
@@ -189,36 +189,36 @@ export default function LandingPage() {
                 POLARYON
               </h1>
             </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1, duration: 0.8 }}
+              className="flex flex-col items-center gap-8"
+            >
+              <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
+              <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
+                A solução em contratos Públicos
+              </p>
+            </motion.div>
           </motion.div>
+        </div>
 
-          {/* Subtitle Block */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1, duration: 0.8 }}
-            className="flex flex-col items-center gap-8 mb-32"
-          >
-            <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
-            <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
-              A solução em contratos Públicos
-            </p>
-          </motion.div>
-
-          {/* Navigation Link - Nossa História */}
+        {/* Nossa História - Centered in the lower gap */}
+        <div className="absolute bottom-[22%] inset-x-0 flex justify-center z-10">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.5, duration: 1 }}
-            className="mt-8"
           >
-            <a href="#about" className="group flex flex-col items-center gap-4 text-white/50 hover:text-white transition-all">
+            <a href="#about" className="group flex flex-col items-center gap-3 text-white/50 hover:text-white transition-all">
               <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Nossa História</span>
               <div className="w-12 h-[1px] bg-white/20 group-hover:w-24 group-hover:bg-blue-600 transition-all duration-500 mx-auto" />
             </a>
           </motion.div>
         </div>
 
-        {/* Bouncing Arrow - Fixed Bottom */}
+        {/* Bouncing Arrow - Standard Bottom Position */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-20 z-10">
           <ChevronDown size={30} />
         </div>
