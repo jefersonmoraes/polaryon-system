@@ -170,55 +170,55 @@ export default function LandingPage() {
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
 
-        {/* Hero Content - Centered */}
-        <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[95vw] px-4 z-10">
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen w-full px-4 text-center py-20">
+          {/* Main Brand Block */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="flex flex-col items-center text-center gap-16 md:gap-24"
+            className="flex flex-col items-center gap-6 mb-24"
           >
             <motion.div
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
               animate={{ letterSpacing: "-0.05em", opacity: 1, filter: "blur(0px)" }}
               transition={{ duration: 1.5, ease: "easeOut" }}
-              className="flex flex-col items-center gap-8"
+              className="flex flex-col items-center gap-4"
             >
               <img src={logo} alt="" className="w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
               <h1 className="text-[10vw] font-['Montserrat'] font-[900] leading-none tracking-tighter uppercase metallic-text">
                 POLARYON
               </h1>
             </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1, duration: 0.8 }}
-              className="flex flex-col items-center gap-8"
-            >
-              <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
-              <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
-                A solução em contratos Públicos
-              </p>
-            </motion.div>
           </motion.div>
-        </div>
 
-        {/* Nossa História - Positioned in the gap */}
-        <div className="absolute bottom-32 inset-x-0 flex justify-center z-10">
+          {/* Subtitle Block */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 0.8 }}
+            className="flex flex-col items-center gap-8 mb-32"
+          >
+            <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
+            <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
+              A solução em contratos Públicos
+            </p>
+          </motion.div>
+
+          {/* Navigation Link - Nossa História */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.5, duration: 1 }}
+            className="mt-8"
           >
-            <a href="#about" className="group flex flex-col items-center gap-3 text-white/50 hover:text-white transition-all">
+            <a href="#about" className="group flex flex-col items-center gap-4 text-white/50 hover:text-white transition-all">
               <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Nossa História</span>
               <div className="w-12 h-[1px] bg-white/20 group-hover:w-24 group-hover:bg-blue-600 transition-all duration-500 mx-auto" />
             </a>
           </motion.div>
         </div>
 
-        {/* Bouncing Arrow - Bottom */}
+        {/* Bouncing Arrow - Fixed Bottom */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-20 z-10">
           <ChevronDown size={30} />
         </div>
