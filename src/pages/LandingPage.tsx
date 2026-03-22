@@ -170,21 +170,21 @@ export default function LandingPage() {
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
 
-        {/* Main Content - Positioned moderately above center for better balance */}
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[95vw] px-4 z-10">
+        {/* Main Content - Lifted to top-[35%] to avoid overlap with lower elements */}
+        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[95vw] px-4 z-10">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="flex flex-col items-center text-center gap-16 md:gap-24"
+            className="flex flex-col items-center text-center gap-12 md:gap-16"
           >
             <motion.div
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
               animate={{ letterSpacing: "-0.05em", opacity: 1, filter: "blur(0px)" }}
               transition={{ duration: 1.5, ease: "easeOut" }}
-              className="flex flex-col items-center gap-4"
+              className="flex flex-col items-center gap-6"
             >
-              <img src={logo} alt="" className="w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <img src={logo} alt="" className="w-[18vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
               <h1 className="text-[10vw] font-['Montserrat'] font-[900] leading-none tracking-tighter uppercase metallic-text">
                 POLARYON
               </h1>
@@ -194,7 +194,7 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1, duration: 0.8 }}
-              className="flex flex-col items-center gap-8"
+              className="flex flex-col items-center gap-6"
             >
               <div className="h-[2px] w-24 bg-blue-600 animate-pulse" />
               <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
@@ -204,7 +204,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* Nossa História - Centered in the lower gap */}
+        {/* Nossa História - Centered in the middle of the lower gap */}
         <div className="absolute bottom-[22%] inset-x-0 flex justify-center z-10">
           <motion.div
             initial={{ opacity: 0 }}
@@ -218,11 +218,12 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* Bouncing Arrow - Standard Bottom Position */}
+        {/* Bouncing Arrow - Fixed Bottom Position */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-20 z-10">
           <ChevronDown size={30} />
         </div>
       </section>
+ion>
 
       {/* Vertical Cards with Movement */}
       <section className="relative py-40 px-6 z-10">
