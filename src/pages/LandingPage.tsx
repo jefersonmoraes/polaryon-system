@@ -223,7 +223,6 @@ export default function LandingPage() {
           <ChevronDown size={30} />
         </div>
       </section>
-ion>
 
       {/* Vertical Cards with Movement */}
       <section className="relative py-40 px-6 z-10">
