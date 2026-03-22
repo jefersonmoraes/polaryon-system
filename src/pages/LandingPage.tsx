@@ -20,6 +20,8 @@ import logo from '@/assets/sem-fundo.svg';
 import jef from '@/assets/jef.svg';
 import belt from '@/assets/belt.svg';
 import whatsappQR from '@/assets/whatsapp-qr.png';
+import qrJef from '@/assets/qr-jef.svg';
+import qrBelt from '@/assets/qr-belt.svg';
 
 // Custom Scroll Hook for Parallax
 const ScrollParaCard = ({ children, offset = 50 }: { children: React.ReactNode, offset?: number }) => {
@@ -315,7 +317,7 @@ export default function LandingPage() {
                 <div className="space-y-8 relative z-10">
                   <div className="flex items-start gap-6">
                     <MapPin className="text-blue-600 shrink-0" size={24} />
-                    <span className="text-sm font-bold uppercase tracking-widest text-white/60">
+                    <span className="text-sm font-bold uppercase tracking-widest text-white">
                       Brasília, DF (Atendemos a todo o território nacional)
                     </span>
                   </div>
@@ -325,7 +327,7 @@ export default function LandingPage() {
                       contato@polaryon.com.br
                     </a>
                   </div>
-                  <div className="pt-8 border-t border-white/10 flex gap-6">
+                  <div className="pt-8 border-t border-white/10 flex items-center gap-6">
                     <a 
                       href="https://www.instagram.com/polaryonlicitacoes/" 
                       target="_blank" 
@@ -334,36 +336,36 @@ export default function LandingPage() {
                     >
                       <Instagram size={20} />
                     </a>
+                    <span className="text-sm font-anton tracking-widest text-white/40 uppercase">@polaryonlicitacoes</span>
                   </div>
                 </div>
               </motion.div>
             </div>
 
             <div className="flex flex-col gap-8">
-              <div className="glass-card p-12 rounded-[3.5rem] flex flex-col md:flex-row items-center gap-10">
-                <div className="flex-1 space-y-6">
-                  <h3 className="text-3xl font-anton uppercase tracking-tighter">Atendimento Direto</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 text-white/60">
-                      <Phone size={20} className="text-blue-500" />
-                      <span className="text-lg font-bold tracking-wider">(61) 98488-6822</span>
+              <div className="glass-card p-12 rounded-[3.5rem] flex flex-col items-center gap-10">
+                <div className="w-full space-y-6 text-center md:text-left">
+                  <h3 className="text-3xl font-anton uppercase tracking-tighter">Mande uma mensagem</h3>
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-6 group">
+                      <div className="flex-1 flex items-center gap-4 text-white">
+                        <Instagram size={24} className="text-blue-500" />
+                        <span className="text-lg font-bold tracking-wider">(61) 98488-6822</span>
+                      </div>
+                      <img src={qrJef} alt="QR Jef" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white/5" />
                     </div>
-                    <div className="flex items-center gap-4 text-white/60">
-                      <Phone size={20} className="text-blue-500" />
-                      <span className="text-lg font-bold tracking-wider">(61) 98245-4298</span>
+                    
+                    <div className="flex items-center gap-6 group">
+                      <div className="flex-1 flex items-center gap-4 text-white">
+                        <Instagram size={24} className="text-blue-500" />
+                        <span className="text-lg font-bold tracking-wider">(61) 98245-4298</span>
+                      </div>
+                      <img src={qrBelt} alt="QR Belt" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white/5" />
                     </div>
                   </div>
                   <p className="text-white/20 text-[10px] font-bold uppercase tracking-[0.3em] pt-4 border-t border-white/5">
-                    Escaneie para iniciar conversa no WhatsApp
+                    Consulte um de nossos especialistas via WhatsApp.
                   </p>
-                </div>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-blue-600/20 blur-2xl group-hover:bg-blue-600/40 transition-all" />
-                  <img 
-                    src={whatsappQR} 
-                    alt="WhatsApp QR Code" 
-                    className="w-32 h-32 rounded-2xl relative z-10 border border-white/10"
-                  />
                 </div>
               </div>
             </div>
@@ -374,7 +376,7 @@ export default function LandingPage() {
       {/* Minimal Footer */}
       <footer className="py-10 px-10 border-t border-white/5 z-10 relative">
         <div className="max-w-[1800px] mx-auto flex justify-between items-center text-white/20 text-[10px] uppercase font-bold tracking-[0.5em]">
-          <span>&copy; 2026 POLARYON SYSTEM — DESENVOLVIDO PELA JJ CORPORATION</span>
+          <span>© {new Date().getFullYear()} POLARYON / 65.516.785/0001-03 — TODOS OS DIREITOS RESERVADOS.</span>
           <Link to="/login" className="hover:text-white transition-colors">
             ÁREA RESTRITA
           </Link>
