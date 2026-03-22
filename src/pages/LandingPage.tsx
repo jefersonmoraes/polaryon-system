@@ -277,16 +277,28 @@ export default function LandingPage() {
               </p>
             </ScrollParaCard>
             
-            <div className="grid md:grid-cols-2 gap-12 pt-20">
-              <div className="glass-card p-10 rounded-3xl">
-                <h4 className="text-2xl font-anton uppercase mb-4">Visão</h4>
-                <p className="text-white/40 text-sm leading-relaxed tracking-widest uppercase">
-                  Ser a principal referência em fornecimento especializado para o setor público, unindo agilidade e confiança.
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 pt-20">
+              <div className="glass-card p-8 rounded-3xl border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.05)]">
+                <h4 className="text-4xl font-anton text-blue-500 uppercase mb-2">R$ 900B</h4>
+                <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest leading-relaxed">
+                  Volume anual médio movimentado em licitações e contratos públicos no Brasil. O Governo é o maior comprador do país.
                 </p>
               </div>
-              <div className="glass-card p-10 rounded-3xl">
-                <h4 className="text-2xl font-anton uppercase mb-4">Valores</h4>
-                <p className="text-white/40 text-sm leading-relaxed tracking-widest uppercase">
+              <div className="glass-card p-8 rounded-3xl border-blue-500/10">
+                <h4 className="text-xl font-anton uppercase mb-4">Escala Nacional</h4>
+                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
+                  Oportunidades em +5.500 municípios, abrangendo tecnologia, saúde, infraestrutura e serviços essenciais.
+                </p>
+              </div>
+              <div className="glass-card p-8 rounded-3xl">
+                <h4 className="text-xl font-anton uppercase mb-4 text-blue-400">Visão Estratégica</h4>
+                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
+                  Ser a inteligência definitiva que conecta empresas ao setor público, transformando licitações complexas em contratos de sucesso com segurança jurídica.
+                </p>
+              </div>
+              <div className="glass-card p-8 rounded-3xl">
+                <h4 className="text-xl font-anton uppercase mb-4">Valores</h4>
+                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
                   Integridade absoluta, foco no resultado e inovação constante em cada etapa dos processos licitatórios.
                 </p>
               </div>
