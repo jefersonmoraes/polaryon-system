@@ -352,7 +352,7 @@ export default function LandingPage() {
                         <Instagram size={24} className="text-blue-500" />
                         <span className="text-lg font-bold tracking-wider">(61) 98488-6822</span>
                       </div>
-                      <img src={qrJef} alt="QR Jef" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white/5" />
+                      <img src={qrJef} alt="QR Jef" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white" />
                     </div>
                     
                     <div className="flex items-center gap-6 group">
@@ -360,7 +360,7 @@ export default function LandingPage() {
                         <Instagram size={24} className="text-blue-500" />
                         <span className="text-lg font-bold tracking-wider">(61) 98245-4298</span>
                       </div>
-                      <img src={qrBelt} alt="QR Belt" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white/5" />
+                      <img src={qrBelt} alt="QR Belt" className="w-16 h-16 rounded-lg border border-white/10 p-1 bg-white" />
                     </div>
                   </div>
                   <p className="text-white/20 text-[10px] font-bold uppercase tracking-[0.3em] pt-4 border-t border-white/5">
