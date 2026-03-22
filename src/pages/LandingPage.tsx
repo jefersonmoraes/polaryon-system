@@ -170,12 +170,11 @@ export default function LandingPage() {
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
 
-        <div className="relative z-10 flex flex-col items-center h-full w-full pt-40 px-4">
+        <div className="relative z-10 text-center max-w-[95vw] px-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="flex-1 flex flex-col items-center justify-center text-center"
           >
             <motion.div
               initial={{ letterSpacing: "1em", opacity: 0, filter: "blur(20px)" }}
@@ -201,29 +200,24 @@ export default function LandingPage() {
               </p>
             </motion.div>
           </motion.div>
+        </div>
 
-          {/* Bottom Controls Area */}
-          <div className="pb-10 flex flex-col items-center gap-16 w-full">
-            {/* Nossa História - Centered between content and arrow */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.5, duration: 1 }}
-            >
-              <a href="#about" className="group flex flex-col items-center gap-3 text-white/50 hover:text-white transition-all">
-                <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Nossa História</span>
-                <div className="w-12 h-[1px] bg-white/20 group-hover:w-24 group-hover:bg-blue-600 transition-all duration-500 mx-auto" />
-              </a>
-            </motion.div>
+        {/* Nossa História - Positioned between text and arrow */}
+        <div className="absolute inset-x-0 bottom-24 flex justify-center z-10">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 1 }}
+          >
+            <a href="#about" className="group flex flex-col items-center gap-3 text-white/50 hover:text-white transition-all">
+              <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Nossa História</span>
+              <div className="w-12 h-[1px] bg-white/20 group-hover:w-24 group-hover:bg-blue-600 transition-all duration-500 mx-auto" />
+            </a>
+          </motion.div>
+        </div>
 
-            <motion.div 
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="opacity-20"
-            >
-              <ChevronDown size={30} />
-            </motion.div>
-          </div>
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-20">
+          <ChevronDown size={30} />
         </div>
       </section>
 
