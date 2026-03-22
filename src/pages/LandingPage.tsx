@@ -198,13 +198,21 @@ export default function LandingPage() {
               <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
                 A solução em contratos Públicos
               </p>
-              <div className="flex justify-center gap-10 mt-8">
-                <a href="#about" className="group flex items-center gap-4 text-white/50 hover:text-white transition-all">
-                  <span className="text-xs font-bold uppercase tracking-[0.3em]">Nossa História</span>
-                  <div className="w-10 h-[1px] bg-white/20 group-hover:w-20 group-hover:bg-blue-600 transition-all" />
-                </a>
-              </div>
             </motion.div>
+          </motion.div>
+        </div>
+
+        {/* Nossa História - Centered between content and arrow */}
+        <div className="absolute inset-x-0 bottom-32 flex justify-center z-10">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 1 }}
+          >
+            <a href="#about" className="group flex flex-col items-center gap-3 text-white/50 hover:text-white transition-all">
+              <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Nossa História</span>
+              <div className="w-12 h-[1px] bg-white/20 group-hover:w-24 group-hover:bg-blue-600 transition-all duration-500 mx-auto" />
+            </a>
           </motion.div>
         </div>
 
