@@ -303,9 +303,9 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="glass-card p-10 rounded-3xl hover:bg-white/5 transition-colors">
-              <h4 className="text-2xl font-anton uppercase mb-6">Valores</h4>
+              <h4 className="text-2xl font-anton uppercase mb-6 text-emerald-500">Compliance 100%</h4>
               <p className="text-white/40 text-xs leading-relaxed tracking-widest uppercase">
-                Integridade absoluta, foco no resultado e inovação constante em cada etapa dos processos licitatórios.
+                Integridade absoluta e governança rigorosa em cada etapa. Processos auditáveis alinhados à Nova Lei de Licitações para segurança total do seu negócio.
               </p>
             </div>
           </div>
