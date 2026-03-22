@@ -198,7 +198,7 @@ export default function LandingPage() {
               <p className="text-blue-500 text-xl md:text-2xl font-oswald font-light tracking-[0.4em] uppercase">
                 A solução em contratos Públicos
               </p>
-              <div className="flex justify-center gap-10 mt-8 -translate-y-[5vh]">
+              <div className="flex justify-center gap-10 mt-8 -translate-y-[3vh]">
                 <a href="#about" className="group flex items-center gap-4 text-white/50 hover:text-white transition-all">
                   <span className="text-xs font-bold uppercase tracking-[0.3em]">Nossa História</span>
                   <div className="w-10 h-[1px] bg-white/20 group-hover:w-20 group-hover:bg-blue-600 transition-all" />
