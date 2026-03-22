@@ -260,48 +260,53 @@ export default function LandingPage() {
 
       {/* About Section */}
       <section id="about" className="py-40 px-10 relative z-10">
-        <div className="max-w-[1800px] mx-auto grid lg:grid-cols-2 gap-20">
-          <div className="sticky top-40 h-fit">
-            <h2 className="text-8xl lg:text-9xl font-anton uppercase leading-tight tracking-[0.05em] mb-12">
-              SOBRE A <br />
-              <span className="text-blue-600">POLARYON.</span>
-            </h2>
-            <div className="w-32 h-2 bg-blue-600" />
-          </div>
-          
-          <div className="space-y-24">
-            <ScrollParaCard offset={40}>
-              <p className="text-7xl font-anton text-white opacity-80 uppercase leading-none tracking-tight">
-                Nós não apenas participamos de licitações. <br />
-                <span className="text-white/20">Nós redefinimos o sucesso nelas.</span>
-              </p>
-            </ScrollParaCard>
+        <div className="max-w-[1800px] mx-auto">
+          <div className="grid lg:grid-cols-2 gap-20 mb-24">
+            <div className="sticky top-40 h-fit">
+              <h2 className="text-8xl lg:text-9xl font-anton uppercase leading-tight tracking-[0.05em] mb-12">
+                SOBRE A <br />
+                <span className="text-blue-600">POLARYON.</span>
+              </h2>
+              <div className="w-32 h-2 bg-blue-600" />
+            </div>
             
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 pt-20">
-              <div className="glass-card p-8 rounded-3xl border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.05)]">
-                <h4 className="text-4xl font-anton text-blue-500 uppercase mb-2">R$ 900B</h4>
-                <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest leading-relaxed">
-                  Volume anual médio movimentado em licitações e contratos públicos no Brasil. O Governo é o maior comprador do país.
+            <div className="space-y-12">
+              <ScrollParaCard offset={40}>
+                <p className="text-7xl font-anton text-white opacity-80 uppercase leading-none tracking-tight">
+                  Nós não apenas participamos de licitações. <br />
+                  <span className="text-white/20">Nós redefinimos o sucesso nelas.</span>
                 </p>
-              </div>
-              <div className="glass-card p-8 rounded-3xl border-blue-500/10">
-                <h4 className="text-xl font-anton uppercase mb-4">Escala Nacional</h4>
-                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
-                  Oportunidades em +5.500 municípios, abrangendo tecnologia, saúde, infraestrutura e serviços essenciais.
-                </p>
-              </div>
-              <div className="glass-card p-8 rounded-3xl">
-                <h4 className="text-xl font-anton uppercase mb-4 text-blue-400">Visão Estratégica</h4>
-                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
-                  Ser a inteligência definitiva que conecta empresas ao setor público, transformando licitações complexas em contratos de sucesso com segurança jurídica.
-                </p>
-              </div>
-              <div className="glass-card p-8 rounded-3xl">
-                <h4 className="text-xl font-anton uppercase mb-4">Valores</h4>
-                <p className="text-white/40 text-[10px] leading-relaxed tracking-widest uppercase">
-                  Integridade absoluta, foco no resultado e inovação constante em cada etapa dos processos licitatórios.
-                </p>
-              </div>
+              </ScrollParaCard>
+              <p className="text-white/40 text-lg leading-relaxed tracking-widest uppercase max-w-2xl">
+                A Polaryon é a inteligência estratégica que transforma o complexo deserto burocrático em um terreno fértil de oportunidades reais para a sua empresa.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 pt-20 border-t border-white/5">
+            <div className="glass-card p-10 rounded-3xl border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.05)] hover:bg-white/5 transition-colors">
+              <h4 className="text-5xl font-anton text-blue-500 uppercase mb-4">R$ 900B</h4>
+              <p className="text-white/40 text-xs uppercase font-bold tracking-widest leading-relaxed">
+                Volume anual médio movimentado em licitações e contratos públicos no Brasil. O Governo é o maior comprador do país.
+              </p>
+            </div>
+            <div className="glass-card p-10 rounded-3xl border-blue-500/10 hover:bg-white/5 transition-colors">
+              <h4 className="text-2xl font-anton uppercase mb-6">Escala Nacional</h4>
+              <p className="text-white/40 text-xs leading-relaxed tracking-widest uppercase">
+                Oportunidades em +5.500 municípios, abrangendo tecnologia, saúde, infraestrutura e serviços essenciais.
+              </p>
+            </div>
+            <div className="glass-card p-10 rounded-3xl hover:bg-white/5 transition-colors">
+              <h4 className="text-2xl font-anton uppercase mb-6 text-blue-400">Visão Estratégica</h4>
+              <p className="text-white/40 text-xs leading-relaxed tracking-widest uppercase">
+                Ser a inteligência definitiva que conecta empresas ao setor público, transformando licitações complexas em contratos de sucesso com segurança jurídica.
+              </p>
+            </div>
+            <div className="glass-card p-10 rounded-3xl hover:bg-white/5 transition-colors">
+              <h4 className="text-2xl font-anton uppercase mb-6">Valores</h4>
+              <p className="text-white/40 text-xs leading-relaxed tracking-widest uppercase">
+                Integridade absoluta, foco no resultado e inovação constante em cada etapa dos processos licitatórios.
+              </p>
             </div>
           </div>
         </div>
