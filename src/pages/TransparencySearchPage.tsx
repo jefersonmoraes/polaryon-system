@@ -110,7 +110,7 @@ export default function TransparencySearchPage() {
     useEffect(() => {
         const end = new Date();
         const start = new Date();
-        start.setFullYear(end.getFullYear() - 2);
+        start.setFullYear(end.getFullYear() - 1);
         
         setDataFinal(end.toISOString().split('T')[0]);
         setDataInicial(start.toISOString().split('T')[0]);

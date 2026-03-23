@@ -4,7 +4,7 @@ import axios from 'axios';
 const router = express.Router();
 
 const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
-const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search';
+const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search/';
 
 const COMMON_BRANDS = [
     'DELL', 'HP', 'LENOVO', 'APPLE', 'SAMSUNG', 'LG', 'ASUS', 'ACER', 'POSITIVO', 'MULTILASER',
@@ -41,7 +41,13 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         const sit = (situacao === 'todas' || !situacao) ? '' : situacao;
         if (sit) url += `&situacao=${sit}`;
 
-        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
+        const response = await axios.get(url, { 
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            }, 
+            timeout: 15000 
+        });
         const data: any = response.data;
         
         // CORREÇÃO: PNCP retorna o total no campo "total"
@@ -90,7 +96,13 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
             try {
-                const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
+                const searchRes = await axios.get(searchUrl, { 
+                    headers: { 
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'application/json, text/plain, */*'
+                    }, 
+                    timeout: 10000 
+                });
                 if (searchRes.data && searchRes.data.items) {
                     allProcesses.push(...searchRes.data.items);
                     if (searchRes.data.items.length < 100) break;
