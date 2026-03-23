@@ -134,9 +134,8 @@ const AppSidebar = () => {
       ));
   };
 
-  // Logic to hide sidebar on specific pages
-  const isHideSidebarPage = location.pathname === '/documentacao' || location.pathname === '/oportunidades';
-  if (isHideSidebarPage) return null;
+  // Logic to hide only the links on specific pages
+  const isHideLinksPage = location.pathname === '/documentacao' || location.pathname === '/oportunidades';
 
   return (
     <>
@@ -176,323 +175,325 @@ const AppSidebar = () => {
           </div>
         </div>
 
-        {isCompanyModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
-              <Link to="/suppliers" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Pesquisa CNPJ">
-                <Building2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa CNPJ</span>}
-              </Link>
-              <Link to="/suppliers-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Fornecedores">
-                <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fornecedores</span>}
-              </Link>
-              <Link to="/transporters-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && !location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Transportadoras">
-                <Truck className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Transportadoras</span>}
-              </Link>
-              <Link to="/transporters-list?tab=routes" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Rotas de Atuação">
-                <MapPin className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Rotas de Atuação</span>}
-              </Link>
-            </div>
-          </div>
-        ) : isBudgetModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Finanças</span>}
-              <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
-                <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
-              </Link>
-            </div>
-          </div>
-        ) : isDocsModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Documentos Internos</span>}
-
-              {hasScreenAccess('DOCUMENTATION') && (
-                <Link to="/documentacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Gestão de Documentos">
-                  <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Documentos</span>}
+        {!isHideLinksPage && (
+          isCompanyModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
+                <Link to="/suppliers" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Pesquisa CNPJ">
+                  <Building2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa CNPJ</span>}
                 </Link>
-              )}
-
-              {hasScreenAccess('DOCUMENTATION') && (
-                <>
-                  <Link to="/documentacao/atestados" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/atestados' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Atestados de Capacidade Técnica">
-                    <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Acervo Técnico</span>}
-                  </Link>
-
-                  <Link to="/documentacao/modelos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/modelos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Modelos de Doc. Essenciais">
-                    <FileText className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Modelos de Doc. Essenciais</span>}
-                  </Link>
-                </>
-              )}
+                <Link to="/suppliers-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/suppliers-list' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Fornecedores">
+                  <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fornecedores</span>}
+                </Link>
+                <Link to="/transporters-list" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && !location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Transportadoras">
+                  <Truck className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Transportadoras</span>}
+                </Link>
+                <Link to="/transporters-list?tab=routes" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transporters-list' && location.search.includes('tab=routes') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Rotas de Atuação">
+                  <MapPin className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Rotas de Atuação</span>}
+                </Link>
+              </div>
             </div>
+          ) : isBudgetModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Finanças</span>}
+                <Link to="/budgets" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/budgets' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Orçamentos">
+                  <Calculator className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Todos os Orçamentos</span>}
+                </Link>
+              </div>
+            </div>
+          ) : isDocsModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Documentos Internos</span>}
 
-            <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
-              <div className="flex items-center justify-between px-2 mb-1">
-                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Links Úteis</span>}
-                <button 
-                  onClick={() => setIsLinkDialogOpen(true)}
-                  className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
-                  title="Adicionar Link"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
+                {hasScreenAccess('DOCUMENTATION') && (
+                  <Link to="/documentacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Gestão de Documentos">
+                    <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Documentos</span>}
+                  </Link>
+                )}
+
+                {hasScreenAccess('DOCUMENTATION') && (
+                  <>
+                    <Link to="/documentacao/atestados" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/atestados' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Atestados de Capacidade Técnica">
+                      <Briefcase className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Acervo Técnico</span>}
+                    </Link>
+
+                    <Link to="/documentacao/modelos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/documentacao/modelos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Modelos de Doc. Essenciais">
+                      <FileText className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Modelos de Doc. Essenciais</span>}
+                    </Link>
+                  </>
+                )}
               </div>
 
-              {links.filter(l => l.category === 'DOCUMENTATION').map(link => (
-                <div key={link.id} className="group flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
-                  <a 
-                    href={link.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex items-center gap-2 truncate flex-1"
-                    title={link.title}
+              <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
+                <div className="flex items-center justify-between px-2 mb-1">
+                  {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Links Úteis</span>}
+                  <button 
+                    onClick={() => setIsLinkDialogOpen(true)}
+                    className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
+                    title="Adicionar Link"
                   >
-                    <img 
-                      src={`https://www.google.com/s2/favicons?sz=64&domain_url=${(() => {
-                        try {
-                          return new URL(link.url).hostname;
-                        } catch (e) {
-                          return 'google.com';
-                        }
-                      })()}`} 
-                      alt="" 
-                      className="h-4 w-4 shrink-0 rounded-sm bg-white"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain_url=google.com";
-                      }}
-                    />
-                    {!isCollapsed && <span className="truncate">{link.title}</span>}
-                    {link.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 shrink-0" />}
-                  </a>
-                  {!isCollapsed && (
-                    <button 
-                      onClick={() => deleteLink(link.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
-                      title="Excluir Link"
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {links.filter(l => l.category === 'DOCUMENTATION').map(link => (
+                  <div key={link.id} className="group flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+                    <a 
+                      href={link.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="flex items-center gap-2 truncate flex-1"
+                      title={link.title}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              {links.filter(l => l.category === 'DOCUMENTATION').length === 0 && !isCollapsed && (
-                <p className="text-[10px] text-muted-foreground italic px-2 py-2">Nenhum link adicionado.</p>
-              )}
-            </div>
-
-            <SidebarLinkDialog 
-              open={isLinkDialogOpen} 
-              onOpenChange={setIsLinkDialogOpen} 
-              category="DOCUMENTATION" 
-            />
-          </div>
-        ) : isAdminModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1 text-sidebar-foreground/80">
-              {!isCollapsed && (
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
-                </div>
-              )}
-
-              {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
-                <>
-                  <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
-                    <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
-                  </Link>
-                  <Link to="/admin/audit" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin/audit' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Histórico de Ações">
-                    <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Histórico de Ações</span>}
-                  </Link>
-                </>
-              )}
-
-              <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
-                <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
-              </Link>
-
-              {mainCompanies.map(company => (
-                <Link
-                  key={company.id}
-                  to={`/company?id=${company.id}`}
-                  className={`flex items-center justify-between gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/company' && location.search.includes(`id=${company.id}`) ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
-                  title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
-                    {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
+                      <img 
+                        src={`https://www.google.com/s2/favicons?sz=64&domain_url=${(() => {
+                          try {
+                            return new URL(link.url).hostname;
+                          } catch (e) {
+                            return 'google.com';
+                          }
+                        })()}`} 
+                        alt="" 
+                        className="h-4 w-4 shrink-0 rounded-sm bg-white"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain_url=google.com";
+                        }}
+                      />
+                      {!isCollapsed && <span className="truncate">{link.title}</span>}
+                      {link.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 shrink-0" />}
+                    </a>
+                    {!isCollapsed && (
+                      <button 
+                        onClick={() => deleteLink(link.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
+                        title="Excluir Link"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                  {!isCollapsed && company.isDefault && (
-                    <span className="text-[8px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/20 shrink-0">Padrão</span>
-                  )}
-                </Link>
-              ))}
+                ))}
 
-              {mainCompanies.length === 0 && !isCollapsed && (
-                <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
-              )}
+                {links.filter(l => l.category === 'DOCUMENTATION').length === 0 && !isCollapsed && (
+                  <p className="text-[10px] text-muted-foreground italic px-2 py-2">Nenhum link adicionado.</p>
+                )}
+              </div>
+
+              <SidebarLinkDialog 
+                open={isLinkDialogOpen} 
+                onOpenChange={setIsLinkDialogOpen} 
+                category="DOCUMENTATION" 
+              />
             </div>
-          </div>
-        ) : isAccountingModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
-
-              {useAuthStore.getState().currentUser?.role !== 'CONTADOR' && (
-                <>
-                  <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && !location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
-                    <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
-                  </Link>
-
-                  <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
-                    <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
-                  </Link>
-
-                  <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
-                    <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
-                  </Link>
-                </>
-              )}
-
-              <Link to="/contabil?tab=exportacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'} w-full text-left`} title="Relatórios e Exportação">
-                <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}
-              </Link>
-            </div>
-          </div>
-        ) : isOportunidadesModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1 border-b border-sidebar-border/50 pb-4">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Oportunidades</span>}
-
-              <Link to="/oportunidades" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Dashboard Oportunidades">
-                <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Dashboard de Licitações</span>}
-              </Link>
-
-              <Link to="/oportunidades/busca" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/busca' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Busca Exata PNCP">
-                <Target className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa no PNCP</span>}
-              </Link>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Links Úteis</span>}
-              
-              <a href="https://www3.comprasnet.gov.br/sicaf-web/index.jsf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="SICAF">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="SICAF" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>SICAF</span>}
-              </a>
-
-              <a href="https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Compras.gov">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="Compras.gov" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Compras.gov</span>}
-              </a>
-
-              <a href="https://pncp.gov.br/app/editais?q=&status=recebendo_proposta&pagina=1" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="PNCP">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://pncp.gov.br" alt="PNCP" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Portal PNCP</span>}
-              </a>
-
-              <a href="https://www.tesourotransparente.gov.br/temas/estados-e-municipios/capacidade-de-pagamento-capag" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="CAPAG">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://tesourotransparente.gov.br" alt="CAPAG" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>CAPAG</span>}
-              </a>
-
-              <a href="https://paineldeprecos.planejamento.gov.br/analise-materiais" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Preços">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldeprecos.planejamento.gov.br" alt="Painel de Preços" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Painel de Preços</span>}
-              </a>
-
-              <a href="https://paineldecompras.economia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Compras">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldecompras.economia.gov.br" alt="Painel de Compras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Painel de Compras</span>}
-              </a>
-
-              <a href="https://portaldatransparencia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Portal da Transparência">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://portaldatransparencia.gov.br" alt="Portal da Transparência" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Transparência</span>}
-              </a>
-
-              <a href="https://prefeiturasdobrasil.org/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Prefeituras do Brasil">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://prefeiturasdobrasil.org" alt="Prefeituras do Brasil" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Prefeituras Br</span>}
-              </a>
-
-              <a href="https://www.transvias.com.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Transportadoras">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.transvias.com.br" alt="Transportadoras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                {!isCollapsed && <span>Transportadoras</span>}
-              </a>
-            </div>
-          </div>
-        ) : isKanbanModule && activeKanbanFolder ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1 text-sidebar-foreground/80">
-              {!isCollapsed && (
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 truncate">Pasta: {activeKanbanFolder.name}</span>
-                </div>
-              )}
-              
-              <Link to={`/folder/${activeKanbanFolder.id}`} className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === `/folder/${activeKanbanFolder.id}` ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Visão Geral da Pasta">
-                <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
-              </Link>
-
-              {activeKanbanBoards.map(board => (
-                <Link
-                  key={board.id}
-                  to={`/board/${board.id}`}
-                  className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === `/board/${board.id}` ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
-                  title={board.name}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: board.backgroundColor }}></div>
-                    {!isCollapsed && <span className="truncate">{board.name}</span>}
+          ) : isAdminModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1 text-sidebar-foreground/80">
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Administradoras</span>
                   </div>
-                </Link>
-              ))}
+                )}
 
-              {activeKanbanBoards.length === 0 && !isCollapsed && (
-                <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhum quadro nesta pasta.</p>
-              )}
-            </div>
-            {/* Voltar para a Home */}
-            <div className="mt-auto border-t border-sidebar-border/50 pt-4">
-              <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50`} title="Sair da Pasta">
-                <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Tela Inicial</span>}
-              </Link>
-            </div>
-          </div>
-        ) : isConnectionModule ? (
-          <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-              {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Conexão</span>}
-              
-              <Link to="/conexao" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.pathname === '/conexao' && !location.search ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Links">
-                <LayoutGrid className={`h-4 w-4 shrink-0`} /> {!isCollapsed && <span>Todos os Links</span>}
-              </Link>
+                {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
+                  <>
+                    <Link to="/admin" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive border border-destructive/20'}`} title="Gestão de Acessos">
+                      <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Gestão de Acessos (Admin)</span>}
+                    </Link>
+                    <Link to="/admin/audit" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin/audit' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Histórico de Ações">
+                      <ShieldAlert className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Histórico de Ações</span>}
+                    </Link>
+                  </>
+                )}
 
-              <Link to="/conexao?folder=favorites" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes('folder=favorites') ? 'bg-amber-500/10 text-amber-500 font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Meus Favoritos">
-                <Star className={`h-4 w-4 shrink-0 ${location.search.includes('folder=favorites') ? 'fill-current' : ''}`} /> {!isCollapsed && <span>Meus Favoritos</span>}
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="p-3 border-b border-sidebar-border space-y-1 mt-6">
-              <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/tarefas' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
-                <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Principal</span>}
-              </Link>
-              {hasScreenAccess('CALENDAR') && (
-                <Link to="/calendar" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/calendar' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Calendário">
-                  <Calendar className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Calendário</span>}
+                <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
+                  <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
                 </Link>
-              )}
-              {hasScreenAccess('TEAM') && (
-                <Link to="/team" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/team' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Equipe e Fluxo">
-                  <Users className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Equipe e Fluxo</span>}
-                </Link>
-              )}
+
+                {mainCompanies.map(company => (
+                  <Link
+                    key={company.id}
+                    to={`/company?id=${company.id}`}
+                    className={`flex items-center justify-between gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/company' && location.search.includes(`id=${company.id}`) ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                    title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
+                      {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
+                    </div>
+                    {!isCollapsed && company.isDefault && (
+                      <span className="text-[8px] uppercase font-bold bg-yellow-500/10 text-yellow-600 px-1.5 py-0.5 rounded border border-yellow-500/20 shrink-0">Padrão</span>
+                    )}
+                  </Link>
+                ))}
+
+                {mainCompanies.length === 0 && !isCollapsed && (
+                  <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhuma administradora cadastrada.</p>
+                )}
+              </div>
             </div>
-          </>
+          ) : isAccountingModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Contábil</span>}
+
+                {useAuthStore.getState().currentUser?.role !== 'CONTADOR' && (
+                  <>
+                    <Link to="/contabil" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && !location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Visão Geral">
+                      <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
+                    </Link>
+
+                    <Link to="/contabil/lancamentos" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/lancamentos' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Entradas e Saídas">
+                      <ArrowLeftRight className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Entradas e Saídas</span>}
+                    </Link>
+
+                    <Link to="/contabil/fluxo-caixa" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil/fluxo-caixa' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Simulador Fluxo de Caixa">
+                      <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Fluxo de Caixa</span>}
+                    </Link>
+                  </>
+                )}
+
+                <Link to="/contabil?tab=exportacao" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/contabil' && location.search.includes('tab=exportacao') ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'} w-full text-left`} title="Relatórios e Exportação">
+                  <FileBarChart className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Relatórios Contábeis</span>}
+                </Link>
+              </div>
+            </div>
+          ) : isOportunidadesModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1 border-b border-sidebar-border/50 pb-4">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Módulo Oportunidades</span>}
+
+                <Link to="/oportunidades" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Dashboard Oportunidades">
+                  <LayoutDashboard className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Dashboard de Licitações</span>}
+                </Link>
+
+                <Link to="/oportunidades/busca" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/busca' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Busca Exata PNCP">
+                  <Target className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa no PNCP</span>}
+                </Link>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Links Úteis</span>}
+                
+                <a href="https://www3.comprasnet.gov.br/sicaf-web/index.jsf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="SICAF">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="SICAF" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>SICAF</span>}
+                </a>
+
+                <a href="https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Compras.gov">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="Compras.gov" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Compras.gov</span>}
+                </a>
+
+                <a href="https://pncp.gov.br/app/editais?q=&status=recebendo_proposta&pagina=1" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="PNCP">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://pncp.gov.br" alt="PNCP" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Portal PNCP</span>}
+                </a>
+
+                <a href="https://www.tesourotransparente.gov.br/temas/estados-e-municipios/capacidade-de-pagamento-capag" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="CAPAG">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://tesourotransparente.gov.br" alt="CAPAG" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>CAPAG</span>}
+                </a>
+
+                <a href="https://paineldeprecos.planejamento.gov.br/analise-materiais" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Preços">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldeprecos.planejamento.gov.br" alt="Painel de Preços" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Painel de Preços</span>}
+                </a>
+
+                <a href="https://paineldecompras.economia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Compras">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldecompras.economia.gov.br" alt="Painel de Compras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Painel de Compras</span>}
+                </a>
+
+                <a href="https://portaldatransparencia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Portal da Transparência">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://portaldatransparencia.gov.br" alt="Portal da Transparência" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Transparência</span>}
+                </a>
+
+                <a href="https://prefeiturasdobrasil.org/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Prefeituras do Brasil">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://prefeiturasdobrasil.org" alt="Prefeituras do Brasil" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Prefeituras Br</span>}
+                </a>
+
+                <a href="https://www.transvias.com.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Transportadoras">
+                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.transvias.com.br" alt="Transportadoras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
+                  {!isCollapsed && <span>Transportadoras</span>}
+                </a>
+              </div>
+            </div>
+          ) : isKanbanModule && activeKanbanFolder ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1 text-sidebar-foreground/80">
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 truncate">Pasta: {activeKanbanFolder.name}</span>
+                  </div>
+                )}
+                
+                <Link to={`/folder/${activeKanbanFolder.id}`} className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === `/folder/${activeKanbanFolder.id}` ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Visão Geral da Pasta">
+                  <FolderOpen className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Visão Geral</span>}
+                </Link>
+
+                {activeKanbanBoards.map(board => (
+                  <Link
+                    key={board.id}
+                    to={`/board/${board.id}`}
+                    className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === `/board/${board.id}` ? 'bg-sidebar-accent text-sidebar-foreground font-medium border border-border' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                    title={board.name}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: board.backgroundColor }}></div>
+                      {!isCollapsed && <span className="truncate">{board.name}</span>}
+                    </div>
+                  </Link>
+                ))}
+
+                {activeKanbanBoards.length === 0 && !isCollapsed && (
+                  <p className="text-[10px] text-muted-foreground italic px-2 py-4 text-center">Nenhum quadro nesta pasta.</p>
+                )}
+              </div>
+              {/* Voltar para a Home */}
+              <div className="mt-auto border-t border-sidebar-border/50 pt-4">
+                <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50`} title="Sair da Pasta">
+                  <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Tela Inicial</span>}
+                </Link>
+              </div>
+            </div>
+          ) : isConnectionModule ? (
+            <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Conexão</span>}
+                
+                <Link to="/conexao" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.pathname === '/conexao' && !location.search ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Todos os Links">
+                  <LayoutGrid className={`h-4 w-4 shrink-0`} /> {!isCollapsed && <span>Todos os Links</span>}
+                </Link>
+
+                <Link to="/conexao?folder=favorites" className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${location.search.includes('folder=favorites') ? 'bg-amber-500/10 text-amber-500 font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Meus Favoritos">
+                  <Star className={`h-4 w-4 shrink-0 ${location.search.includes('folder=favorites') ? 'fill-current' : ''}`} /> {!isCollapsed && <span>Meus Favoritos</span>}
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="p-3 border-b border-sidebar-border space-y-1 mt-6">
+                <Link to="/tarefas" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/tarefas' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Principal">
+                  <LayoutGrid className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Principal</span>}
+                </Link>
+                {hasScreenAccess('CALENDAR') && (
+                  <Link to="/calendar" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/calendar' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Calendário">
+                    <Calendar className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Calendário</span>}
+                  </Link>
+                )}
+                {hasScreenAccess('TEAM') && (
+                  <Link to="/team" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/team' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'}`} title="Equipe e Fluxo">
+                    <Users className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Equipe e Fluxo</span>}
+                  </Link>
+                )}
+              </div>
+            </>
+          )
         )}
 
         {currencyQuotes && (
