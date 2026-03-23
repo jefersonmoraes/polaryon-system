@@ -56,10 +56,10 @@ const AppSidebar = () => {
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
-  const isDocsModule = location.pathname.startsWith('/documentacao');
+  const isDocsModule = location.pathname.startsWith('/documentacao') && location.pathname !== '/documentacao';
   const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
-  const isOportunidadesModule = location.pathname.startsWith('/oportunidades');
+  const isOportunidadesModule = location.pathname.startsWith('/oportunidades') && location.pathname !== '/oportunidades';
   const isConnectionModule = location.pathname.startsWith('/conexao');
 
   useEffect(() => {
@@ -134,8 +134,6 @@ const AppSidebar = () => {
       ));
   };
 
-  // Logic to hide only the links on specific pages
-  const isHideLinksPage = location.pathname === '/documentacao' || location.pathname === '/oportunidades';
 
   return (
     <>
@@ -175,8 +173,7 @@ const AppSidebar = () => {
           </div>
         </div>
 
-        {!isHideLinksPage && (
-          isCompanyModule ? (
+        {isCompanyModule ? (
             <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
               <div className="flex flex-col gap-1">
                 {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Navegação</span>}
@@ -494,7 +491,7 @@ const AppSidebar = () => {
               </div>
             </>
           )
-        )}
+        }
 
         {currencyQuotes && (
           <div className={`mt-auto border-t border-sidebar-border/50 shrink-0 bg-sidebar-accent/10 ${isCollapsed ? 'p-2 py-4 flex flex-col items-center gap-3' : 'p-4'}`}>
