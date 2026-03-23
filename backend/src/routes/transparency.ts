@@ -37,7 +37,7 @@ const extractBrand = (text: string): string => {
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
-        const { pagina = '1', termo, dataInicial, dataFinal, situacao = 'concluido', tam_pagina = '20' } = req.query;
+        const { pagina = '1', termo, dataInicial, dataFinal, situacao = 'concluido', tam_pagina = '50' } = req.query;
         
         let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=${tam_pagina}`;
         
@@ -58,7 +58,7 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         });
 
         const data: any = response.data;
-        const totalElements = data.total_items || data.total_elements || data.totalItems || data.totalElements || 0;
+        const totalElements = data.total_items || data.total_elements || 0;
 
         const results = (data.items || []).map((item: any) => ({
             id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
@@ -92,21 +92,22 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const { termo } = req.query;
         if (!termo) return res.status(400).json({ error: 'Termo de busca é obrigatório' });
 
-        const searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=30&situacao=concluido`;
+        const searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=100&situacao=concluido`;
         const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const processes = searchRes.data.items || [];
 
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         const keywords = termo.toString().toLowerCase().split(' ');
 
-        await Promise.all(processes.slice(0, 10).map(async (proc: any) => {
+        // Increase limit for better global analytics
+        await Promise.all(processes.slice(0, 20).map(async (proc: any) => {
             try {
                 const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`);
                 const items = itemsRes.data;
                 (items || []).forEach((item: any) => {
-                    const desc = (item.description || '').toLowerCase();
+                    const desc = (item.description || item.descricao || '').toLowerCase();
                     if (keywords.every(k => desc.includes(k))) {
-                        const brand = extractBrand(item.description);
+                        const brand = extractBrand(item.description || item.descricao);
                         if (brand !== 'N/A') {
                             if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
                             brandCounts[brand].value++;
@@ -120,7 +121,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
             .sort((a, b) => b.value - a.value)
-            .slice(0, 15);
+            .slice(0, 20);
 
         res.json(results);
     } catch (error: any) {
@@ -135,40 +136,44 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res:
     try {
         const { cnpj, ano, sequencial } = req.params;
         const { termo } = req.query;
-        const keywords = termo ? termo.toString().toLowerCase().split(' ') : [];
+        const keywords = (termo || '').toString().toLowerCase().split(' ').filter(k => k.length > 2);
 
         const response = await axios.get(`${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens`);
         const items: any = response.data;
 
         const filteredItems = (items || []).filter((item: any) => {
             if (keywords.length === 0) return true;
-            const desc = (item.description || '').toLowerCase();
+            const desc = (item.descricao || item.description || '').toLowerCase();
+            // Match any keyword if many, or all if few - let's stick to ALL but be more flexible
             return keywords.every(k => desc.includes(k));
         });
 
         const detailedItems = await Promise.all(filteredItems.map(async (item: any) => {
             let vencedor = null;
-            let marca = extractBrand(item.description);
+            let marca = extractBrand(item.descricao || item.description);
 
-            if (item.temResultado) {
-                try {
-                    const resUrl = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
-                    const resResponse = await axios.get(resUrl);
-                    const resultados: any = resResponse.data;
-                    if (resultados && resultados.length > 0) {
-                        const winner = resultados[0];
-                        vencedor = {
-                            nome: winner.nomeRazaoSocialFornecedor,
-                            cnpj: winner.niFornecedor,
-                            valor: winner.valorTotalHomologado
-                        };
+            // Fetch results for EVERYTHING if possible, or only if temResultado
+            try {
+                const resUrl = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
+                const resResponse = await axios.get(resUrl);
+                const resultados: any = resResponse.data;
+                if (resultados && resultados.length > 0) {
+                    const winner = resultados[0];
+                    vencedor = {
+                        nome: winner.nomeRazaoSocialFornecedor,
+                        cnpj: winner.niFornecedor,
+                        valor: winner.valorTotalHomologado
+                    };
+                    // Try to extract brand from winner info if not in item description
+                    if (marca === 'N/A' && winner.marcaFornecedor) {
+                        marca = winner.marcaFornecedor.toUpperCase();
                     }
-                } catch (e) {}
-            }
+                }
+            } catch (e) {}
 
             return {
                 numero: item.numeroItem,
-                descricao: item.descricao,
+                descricao: item.descricao || item.description,
                 quantidade: item.quantidade,
                 valorUnitario: item.valorUnitarioEstimado,
                 vencedor,
@@ -188,7 +193,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res:
 router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, res: Response) => {
     try {
         const { cnpj, ano, sequencial } = req.params;
-        const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=50`;
+        const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
         const response = await axios.get(url);
         const data: any = response.data;
         
@@ -198,10 +203,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
             url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}/documento`,
             originalUrl: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}`,
             dataPublicacao: file.dataPublicacao,
-            documentoVencedor: file.titulo.toLowerCase().includes('proposta') || 
-                               file.titulo.toLowerCase().includes('vencedor') || 
-                               file.titulo.toLowerCase().includes('habilitacao') ||
-                               file.titulo.toLowerCase().includes('lance')
+            documentoVencedor: /proposta|venc|ganhador|habilitac|lance|homolog|adj|vitoria/i.test(file.titulo)
         }));
 
         res.json(files);
