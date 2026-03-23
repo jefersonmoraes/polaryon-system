@@ -134,6 +134,10 @@ const AppSidebar = () => {
       ));
   };
 
+  // Logic to hide sidebar on specific pages
+  const isHideSidebarPage = location.pathname === '/documentacao' || location.pathname === '/oportunidades';
+  if (isHideSidebarPage) return null;
+
   return (
     <>
       {/* Mobile Drawer Overlay */}
