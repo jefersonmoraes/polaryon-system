@@ -58,6 +58,9 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         if (!response.ok) throw new Error(`Erro na busca PNCP: ${response.status}`);
         const data: any = await response.json();
 
+        // PNCP search API uses total_items or total_elements
+        const totalElements = data.total_items || data.total_elements || data.totalItems || data.totalElements || 0;
+
         const results = (data.items || []).map((item: any) => ({
             id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
             numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
@@ -73,8 +76,8 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
         res.json({
             items: results,
-            totalItems: data.total_items || results.length,
-            totalPages: Math.ceil((data.total_items || results.length) / Number(tam_pagina))
+            totalItems: totalElements,
+            totalPages: Math.ceil(totalElements / Number(tam_pagina))
         });
     } catch (error: any) {
         console.error('[Transparency Search Error]:', error.message);

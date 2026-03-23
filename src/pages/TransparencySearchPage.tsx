@@ -294,7 +294,30 @@ export default function TransparencySearchPage() {
                             <p className="text-sm font-medium text-muted-foreground">Interrogando base do PNCP...</p>
                         </div>
                     ) : (
-                        <div className="flex flex-col lg:flex-row gap-6">
+                        <div className="flex flex-col gap-6">
+                            {/* Global Analytics Top Row */}
+                            {globalBrands.length > 0 && results.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                    {globalBrands.slice(0, 3).map((brand, i) => (
+                                        <div key={i} className="bg-gradient-to-br from-card to-muted/30 border border-border/60 p-4 rounded-2xl shadow-sm flex items-center gap-4 group hover:border-primary/40 transition-all">
+                                            <div className="p-3 bg-primary/10 text-primary rounded-xl font-black text-xl">
+                                                {i + 1}º
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Top Recorrência</p>
+                                                <h4 className="font-black text-sm truncate uppercase">{brand.name}</h4>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-bold">{brand.value} Vitórias</span>
+                                                    <span className="text-[10px] text-muted-foreground font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(brand.totalGasto)}</span>
+                                                </div>
+                                            </div>
+                                            <TrendingUp className="h-4 w-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex flex-col lg:flex-row gap-6">
                             {/* Left Column: Search Results */}
                             <div className="flex-1 flex flex-col gap-6">
                                 <div className="grid grid-cols-1 gap-4">
@@ -399,7 +422,8 @@ export default function TransparencySearchPage() {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    </div>
+                )}
                 </div>
             </div>
 
