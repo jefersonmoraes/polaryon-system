@@ -34,12 +34,22 @@ const extractBrand = (text: string): string => {
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
-        const { pagina = '1', termo, dataInicial, dataFinal, tam_pagina = '20' } = req.query;
+        const { pagina = '1', termo, dataInicial, dataFinal, situacao, tam_pagina = '20' } = req.query;
         
         let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=${tam_pagina}`;
         
-        if (dataInicial) url += `&data_inicial=${dataInicial.toString().replace(/\//g, '')}`;
-        if (dataFinal) url += `&data_final=${dataFinal.toString().replace(/\//g, '')}`;
+        if (dataInicial) {
+            // Ensure YYYY-MM-DD
+            const d = dataInicial.toString().includes('/') ? dataInicial.toString().split('/').reverse().join('-') : dataInicial.toString();
+            url += `&dataPublicacaoDataInicial=${d}`;
+        }
+        if (dataFinal) {
+            const d = dataFinal.toString().includes('/') ? dataFinal.toString().split('/').reverse().join('-') : dataFinal.toString();
+            url += `&dataPublicacaoDataFinal=${d}`;
+        }
+        if (situacao && situacao !== 'todas') {
+            url += `&situacao=${situacao}`;
+        }
 
         const response = await fetch(url, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Accept': 'application/json' }
@@ -177,8 +187,9 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
         const files = (data || []).map((file: any) => ({
             id: file.id,
             nome: file.titulo,
-            url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}`,
-            dataPublicacao: file.dataPublicacao
+            url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}/documento`,
+            dataPublicacao: file.dataPublicacao,
+            documentoVencedor: file.titulo.toLowerCase().includes('proposta') || file.titulo.toLowerCase().includes('vencedor') || file.titulo.toLowerCase().includes('habilitacao')
         }));
 
         res.json(files);

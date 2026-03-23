@@ -48,6 +48,7 @@ interface BiddingFile {
     nome: string;
     url: string;
     dataPublicacao: string;
+    documentoVencedor?: boolean;
 }
 
 interface BrandAnalytics {
@@ -61,6 +62,7 @@ export default function TransparencySearchPage() {
     const [keyword, setKeyword] = useState('');
     const [dataInicial, setDataInicial] = useState('');
     const [dataFinal, setDataFinal] = useState('');
+    const [situacao, setSituacao] = useState('todas');
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<Licitacao[]>([]);
     const [totalResults, setTotalResults] = useState(0);
@@ -134,8 +136,9 @@ export default function TransparencySearchPage() {
                 params: {
                     termo: keyword,
                     pagina: currentPage,
-                    dataInicial: dataInicial ? dataInicial.replace(/-/g, '') : undefined,
-                    dataFinal: dataFinal ? dataFinal.replace(/-/g, '') : undefined,
+                    dataInicial: dataInicial || undefined,
+                    dataFinal: dataFinal || undefined,
+                    situacao: situacao !== 'todas' ? situacao : undefined,
                     tam_pagina: 20
                 }
             });
@@ -186,40 +189,7 @@ export default function TransparencySearchPage() {
         fetchFiles(lic.id);
     };
 
-    const handleSaveSupplier = (item: ItemLicitacao) => {
-        if (!item.vencedor?.cnpj || !item.vencedor?.nome) {
-            toast.error("Dados do vencedor incompletos para salvar.");
-            return;
-        }
-
-        const { addCompany, companies } = useKanbanStore.getState();
-        
-        const exists = companies.some(c => c.cnpj === item.vencedor?.cnpj);
-        if (exists) {
-            toast.warning("Este fornecedor já está cadastrado.");
-            return;
-        }
-
-        addCompany({
-            type: 'Fornecedor',
-            cnpj: item.vencedor.cnpj,
-            razao_social: item.vencedor.nome,
-            nome_fantasia: item.marca || item.vencedor.nome,
-            descricao_situacao_cadastral: 'ATIVA',
-            cnae_fiscal_descricao: '-',
-            lastCnpjCheck: new Date().toISOString(),
-            cep: '',
-            uf: '',
-            municipio: '',
-            bairro: '',
-            logradouro: '',
-            numero: '',
-            complemento: '',
-            email: ''
-        });
-
-        toast.success(`Fornecedor ${item.vencedor.nome} salvo com sucesso!`);
-    };
+    // Removed handleSaveSupplier as per user request
 
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -239,47 +209,61 @@ export default function TransparencySearchPage() {
                     </div>
 
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1 relative group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <input 
                                 type="text"
-                                placeholder="Refinar por objeto (ex: Notebook, Arroz, Consultoria)..."
+                                placeholder="O que você procura? (ex: Notebook, Arroz, Consultoria)..."
                                 value={keyword}
                                 onChange={(e) => setKeyword(e.target.value)}
-                                className="w-full h-10 bg-background border border-border rounded-lg pl-9 pr-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
+                                className="w-full h-10 bg-background border border-border rounded-lg pl-9 pr-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             />
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-lg border border-border">
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">De</span>
+                                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
                                     type="date" 
                                     value={dataInicial}
                                     onChange={(e) => setDataInicial(e.target.value)}
-                                    className="h-10 pl-9 pr-2 bg-background border border-border rounded-lg text-xs focus:ring-1 focus:ring-primary outline-none"
+                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-32"
                                 />
                             </div>
-                            <span className="text-muted-foreground">até</span>
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">Até</span>
+                                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
                                     type="date" 
                                     value={dataFinal}
                                     onChange={(e) => setDataFinal(e.target.value)}
-                                    className="h-10 pl-9 pr-2 bg-background border border-border rounded-lg text-xs focus:ring-1 focus:ring-primary outline-none"
+                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-32"
                                 />
                             </div>
                         </div>
 
-                        <button 
-                            type="submit"
-                            disabled={loading}
-                            className="h-10 px-6 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-all flex items-center gap-2 shadow-md shadow-primary/20 disabled:opacity-50"
-                        >
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                            Buscar Agora
-                        </button>
+                        <div className="flex border border-border rounded-lg overflow-hidden h-10 bg-background">
+                            <select 
+                                value={situacao}
+                                onChange={(e) => setSituacao(e.target.value)}
+                                className="h-full px-3 text-xs bg-transparent outline-none border-r border-border font-medium cursor-pointer"
+                            >
+                                <option value="todas">Todas as Situações</option>
+                                <option value="em-andamento">Em Andamento</option>
+                                <option value="concluido">Concluído</option>
+                                <option value="suspenso">Suspenso</option>
+                                <option value="cancelado">Cancelado</option>
+                            </select>
+                            <button 
+                                type="submit"
+                                disabled={loading}
+                                className="h-full px-6 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                                Buscar
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -310,63 +294,110 @@ export default function TransparencySearchPage() {
                             <p className="text-sm font-medium text-muted-foreground">Interrogando base do PNCP...</p>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-6">
-                            <div className="grid grid-cols-1 gap-4">
-                                {results.map((lic) => (
-                                    <motion.div 
-                                        key={lic.id}
-                                        initial={{ opacity: 0, scale: 0.98 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        onClick={() => handleSelectLicitacao(lic)}
-                                        className="bg-card border border-border/60 p-5 rounded-2xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 cursor-pointer transition-all group relative overflow-hidden"
-                                    >
-                                        <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="p-2 bg-primary/10 text-primary rounded-full">
-                                                <ChevronRight className="h-5 w-5" />
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-col gap-4">
-                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary/80">
-                                                <Building2 className="h-3 w-3" />
-                                                {lic.orgao}
-                                            </div>
-                                            
-                                            <div>
-                                                <h3 className="text-base font-bold leading-tight line-clamp-2">
-                                                    {lic.objeto}
-                                                </h3>
-                                                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground italic">
-                                                    <span>Licitação Nº {lic.numeroLicitacao}</span>
-                                                    <span>•</span>
-                                                    <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Publicado em {new Date(lic.dataAbertura).toLocaleDateString('pt-BR')}</span>
+                        <div className="flex flex-col lg:flex-row gap-6">
+                            {/* Left Column: Search Results */}
+                            <div className="flex-1 flex flex-col gap-6">
+                                <div className="grid grid-cols-1 gap-4">
+                                    {results.map((lic) => (
+                                        <motion.div 
+                                            key={lic.id}
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            onClick={() => handleSelectLicitacao(lic)}
+                                            className="bg-card border border-border/60 p-5 rounded-2xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 cursor-pointer transition-all group relative overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="p-2 bg-primary/10 text-primary rounded-full">
+                                                    <ChevronRight className="h-5 w-5" />
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap gap-2 pt-1">
-                                                <span className="bg-emerald-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 border border-emerald-500/20">
-                                                    {lic.situacao}
-                                                </span>
-                                                <span className="bg-blue-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 border border-blue-500/20">
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lic.valorLicitacao)}
-                                                </span>
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                                    <Building2 className="h-3 w-3" />
+                                                    {lic.orgao}
+                                                </div>
+                                                
+                                                <div>
+                                                    <h3 className="text-base font-bold leading-tight line-clamp-2">
+                                                        {lic.objeto}
+                                                    </h3>
+                                                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground italic">
+                                                        <span>Licitação Nº {lic.numeroLicitacao}</span>
+                                                        <span>•</span>
+                                                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Publicado em {new Date(lic.dataAbertura).toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    <span className="bg-emerald-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 border border-emerald-500/20">
+                                                        {lic.situacao}
+                                                    </span>
+                                                    <span className="bg-blue-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 border border-blue-500/20">
+                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lic.valorLicitacao)}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </motion.div>
-                                ))}
+                                        </motion.div>
+                                    ))}
+                                </div>
+
+                                {hasMore && results.length > 0 && (
+                                    <div className="flex justify-center pb-10">
+                                        <button 
+                                            onClick={() => handleSearch(undefined, true)}
+                                            className="h-10 px-6 bg-card border border-border rounded-lg text-sm font-bold hover:border-primary/50 transition-all flex items-center gap-2"
+                                        >
+                                            Carregar Mais Processos
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
-                            {hasMore && (
-                                <div className="flex justify-center pb-10">
-                                    <button 
-                                        onClick={() => handleSearch(undefined, true)}
-                                        className="h-10 px-6 bg-card border border-border rounded-lg text-sm font-bold hover:border-primary/50 transition-all flex items-center gap-2"
-                                    >
-                                        Carregar Mais Processos
-                                        <ChevronRight className="h-4 w-4" />
-                                    </button>
+                            {/* Right Column: Global Stats */}
+                            <div className="lg:w-80 shrink-0 space-y-6">
+                                {(globalBrands.length > 0) && (
+                                    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-right-4">
+                                        <h3 className="text-sm font-bold flex items-center gap-2">
+                                            <TrendingUp className="h-4 w-4 text-primary" />
+                                            Ranking Global de Marcas
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {globalBrands.slice(0, 8).map((b, i) => (
+                                                <div key={i} className="flex flex-col gap-1">
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-[10px] font-bold truncate pr-2 uppercase">{b.name}</span>
+                                                        <span className="text-[10px] font-black text-primary">{b.value}</span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                                        <motion.div 
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${(b.value / globalBrands[0].value) * 100}%` }}
+                                                            className="h-full bg-primary"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="pt-2 border-t border-border mt-4">
+                                            <p className="text-[10px] text-muted-foreground leading-relaxed italic">
+                                                Este ranking é gerado dinamicamente com base nos últimos processos homologados para "{keyword}".
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 space-y-3">
+                                    <div className="flex items-center gap-2 text-primary">
+                                        <Info className="h-4 w-4" />
+                                        <h4 className="text-xs font-bold uppercase">Sobre a Busca</h4>
+                                    </div>
+                                    <p className="text-[10px] leading-relaxed text-muted-foreground">
+                                        Total de <strong>{totalResults}</strong> processos encontrados. Os dados de marcas são extraídos via processamento de linguagem natural (PLN) sobre os itens homologados.
+                                    </p>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -482,14 +513,6 @@ export default function TransparencySearchPage() {
                                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.vencedor.valor)}
                                                                     </p>
                                                                 </div>
-                                                                
-                                                                <button 
-                                                                    onClick={() => handleSaveSupplier(item)}
-                                                                    className="mt-3 w-full py-1.5 bg-blue-500/10 text-blue-600 hover:bg-blue-500 hover:text-white rounded-md text-[10px] font-bold transition-all flex items-center justify-center gap-1.5"
-                                                                >
-                                                                    <Save className="h-3 w-3" />
-                                                                    SALVAR FORNECEDOR
-                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -603,27 +626,62 @@ export default function TransparencySearchPage() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {files.map((file) => (
-                                                    <a 
-                                                        key={file.id}
-                                                        href={file.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary/50 hover:shadow-md transition-all group"
-                                                    >
-                                                        <div className="p-3 bg-red-500/10 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
-                                                            <Download className="h-5 w-5" />
+                                            <div className="space-y-6">
+                                                {/* Documentos do Vencedor */}
+                                                {files.filter(f => f.documentoVencedor).length > 0 && (
+                                                    <div className="space-y-3">
+                                                        <h4 className="text-xs font-bold uppercase text-emerald-600 flex items-center gap-2">
+                                                            <ShieldCheck className="h-4 w-4" /> Documentos do Vencedor
+                                                        </h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {files.filter(f => f.documentoVencedor).map((file) => (
+                                                                <a 
+                                                                    key={file.id}
+                                                                    href={file.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-4 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:border-emerald-500/50 hover:shadow-md transition-all group"
+                                                                >
+                                                                    <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                                                        <Download className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
+                                                                        <p className="text-[10px] text-muted-foreground mt-1 uppercase">Proposta/Habilitação</p>
+                                                                    </div>
+                                                                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100" />
+                                                                </a>
+                                                            ))}
                                                         </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
-                                                            <p className="text-[10px] text-muted-foreground mt-1">
-                                                                Publicado em {new Date(file.dataPublicacao).toLocaleDateString('pt-BR')}
-                                                            </p>
-                                                        </div>
-                                                        <ExternalLink className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100" />
-                                                    </a>
-                                                ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Outros Documentos */}
+                                                <div className="space-y-3">
+                                                    <h4 className="text-xs font-bold uppercase text-muted-foreground">Outros Editais e Anexos</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {files.filter(f => !f.documentoVencedor).map((file) => (
+                                                            <a 
+                                                                key={file.id}
+                                                                href={file.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary/50 hover:shadow-md transition-all group"
+                                                            >
+                                                                <div className="p-3 bg-red-500/10 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
+                                                                    <Download className="h-5 w-5" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
+                                                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                                                        Publicado em {new Date(file.dataPublicacao).toLocaleDateString('pt-BR')}
+                                                                    </p>
+                                                                </div>
+                                                                <ExternalLink className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100" />
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </TabsContent>
