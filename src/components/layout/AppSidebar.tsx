@@ -309,6 +309,10 @@ const AppSidebar = () => {
                 <Link to="/oportunidades/busca" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/busca' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Busca Exata PNCP">
                   <Target className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa no PNCP</span>}
                 </Link>
+
+                <Link to="/transparencia" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transparencia' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Portal da Transparência">
+                  <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Portal da Transparência</span>}
+                </Link>
               </div>
             </div>
           ) : isKanbanModule && activeKanbanFolder ? (

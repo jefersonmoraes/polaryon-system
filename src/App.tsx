@@ -40,6 +40,7 @@ import { CashflowForecastDash } from "./components/accounting/CashflowForecastDa
 import KanbanPage from "./pages/KanbanPage";
 import ConnectionPage from "./pages/ConnectionPage";
 import LandingPage from "./pages/LandingPage";
+import TransparencySearchPage from "./pages/TransparencySearchPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -273,6 +274,7 @@ const AppContent = () => {
       <Route path="/board/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesDashboard /></ProtectedRoute>} />
       <Route path="/oportunidades/busca" element={<ProtectedRoute><OportunidadesSearch /></ProtectedRoute>} />
+      <Route path="/transparencia" element={<ProtectedRoute><TransparencySearchPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />
       <Route path="/team" element={<ProtectedRoute><TeamWorkloadPage /></ProtectedRoute>} />
       <Route path="/suppliers" element={<ProtectedRoute><SuppliersPage /></ProtectedRoute>} />
