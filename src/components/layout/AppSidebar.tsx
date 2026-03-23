@@ -56,10 +56,10 @@ const AppSidebar = () => {
 
   const isCompanyModule = location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/transporters');
   const isBudgetModule = location.pathname.startsWith('/budgets');
-  const isDocsModule = location.pathname.startsWith('/documentacao') && location.pathname !== '/documentacao';
+  const isDocsModule = location.pathname.startsWith('/documentacao');
   const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
-  const isOportunidadesModule = location.pathname.startsWith('/oportunidades') && location.pathname !== '/oportunidades';
+  const isOportunidadesModule = location.pathname.startsWith('/oportunidades');
   const isConnectionModule = location.pathname.startsWith('/conexao');
 
   useEffect(() => {
