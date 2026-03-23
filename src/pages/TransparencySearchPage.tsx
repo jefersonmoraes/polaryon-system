@@ -169,20 +169,16 @@ export default function TransparencySearchPage() {
                     dataInicial: dataInicial || undefined,
                     dataFinal: dataFinal || undefined,
                     situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
-                    tam_pagina: 20
+                    tam_pagina: 10
                 }
             });
             
-            const newItems = response.data.items || [];
-            if (isLoadMore) {
-                setResults(prev => [...prev, ...newItems]);
-            } else {
-                setResults(newItems);
-                setTotalResults(response.data.totalItems || 0);
-            }
+            setResults(response.data.items || []);
+            setTotalResults(response.data.totalItems || 0);
+            setPage(currentPage);
             setHasMore(currentPage < (response.data.totalPages || 0));
 
-            if (!isLoadMore && keyword) {
+            if (currentPage === 1 && keyword) {
                 fetchGlobalBrands(keyword);
             }
         } catch (err: any) {
@@ -399,14 +395,72 @@ export default function TransparencySearchPage() {
                                     ))}
                                 </div>
 
-                                {hasMore && results.length > 0 && (
-                                    <div className="flex justify-center pb-10">
+                                {results.length > 0 && (
+                                    <div className="flex items-center justify-center gap-2 pb-10 mt-6">
                                         <button 
-                                            onClick={() => handleSearch(undefined, true)}
-                                            className="h-10 px-6 bg-card border border-border rounded-lg text-sm font-bold hover:border-primary/50 transition-all flex items-center gap-2"
+                                            onClick={() => handleSearch(undefined, false)}
+                                            disabled={page === 1}
+                                            className="h-9 px-4 bg-card border border-border rounded-lg text-[10px] font-bold hover:border-primary/50 disabled:opacity-30 transition-all uppercase tracking-widest"
                                         >
-                                            Carregar Mais Processos
-                                            <ChevronRight className="h-4 w-4" />
+                                            Anterior
+                                        </button>
+                                        
+                                        <div className="flex items-center gap-1">
+                                            {[...Array(Math.min(5, Math.ceil(totalResults / 10)))].map((_, i) => {
+                                                const p = i + 1;
+                                                // Simples lógica para mostrar as páginas próximas à atual
+                                                return (
+                                                    <button
+                                                        key={p}
+                                                        onClick={() => {
+                                                            setPage(p);
+                                                            // Mocking handleSearch logic without LoadMore
+                                                            const e = { preventDefault: () => {} } as any;
+                                                            // Forçar a página específica no handleSearch
+                                                            setPage(p);
+                                                            api.get('/transparency/licitacoes', {
+                                                                params: {
+                                                                    termo: keyword,
+                                                                    pagina: p,
+                                                                    dataInicial: dataInicial || undefined,
+                                                                    dataFinal: dataFinal || undefined,
+                                                                    situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
+                                                                    tam_pagina: 10
+                                                                }
+                                                            }).then(res => {
+                                                                setResults(res.data.items || []);
+                                                                setPage(p);
+                                                            });
+                                                        }}
+                                                        className={`h-9 w-9 rounded-lg text-xs font-bold transition-all ${page === p ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:border-primary/50'}`}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <button 
+                                            onClick={() => {
+                                                const next = page + 1;
+                                                api.get('/transparency/licitacoes', {
+                                                    params: {
+                                                        termo: keyword,
+                                                        pagina: next,
+                                                        dataInicial: dataInicial || undefined,
+                                                        dataFinal: dataFinal || undefined,
+                                                        situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
+                                                        tam_pagina: 10
+                                                    }
+                                                }).then(res => {
+                                                    setResults(res.data.items || []);
+                                                    setPage(next);
+                                                });
+                                            }}
+                                            disabled={!hasMore}
+                                            className="h-9 px-4 bg-card border border-border rounded-lg text-[10px] font-bold hover:border-primary/50 disabled:opacity-30 transition-all uppercase tracking-widest"
+                                        >
+                                            Próxima
                                         </button>
                                     </div>
                                 )}
