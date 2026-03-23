@@ -20,7 +20,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api';
+import api from '../lib/api';
 import { toast } from 'sonner';
 import { 
     Dialog, 
