@@ -224,66 +224,6 @@ const AppSidebar = () => {
                 )}
               </div>
 
-              <div className="flex flex-col gap-1 border-t border-sidebar-border/50 pt-4">
-                <div className="flex items-center justify-between px-2 mb-1">
-                  {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Links Úteis</span>}
-                  <button 
-                    onClick={() => setIsLinkDialogOpen(true)}
-                    className="p-1 hover:bg-sidebar-accent rounded-full text-muted-foreground hover:text-primary transition-colors"
-                    title="Adicionar Link"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {links.filter(l => l.category === 'DOCUMENTATION').map(link => (
-                  <div key={link.id} className="group flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
-                    <a 
-                      href={link.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="flex items-center gap-2 truncate flex-1"
-                      title={link.title}
-                    >
-                      <img 
-                        src={`https://www.google.com/s2/favicons?sz=64&domain_url=${(() => {
-                          try {
-                            return new URL(link.url).hostname;
-                          } catch (e) {
-                            return 'google.com';
-                          }
-                        })()}`} 
-                        alt="" 
-                        className="h-4 w-4 shrink-0 rounded-sm bg-white"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain_url=google.com";
-                        }}
-                      />
-                      {!isCollapsed && <span className="truncate">{link.title}</span>}
-                      {link.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 shrink-0" />}
-                    </a>
-                    {!isCollapsed && (
-                      <button 
-                        onClick={() => deleteLink(link.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
-                        title="Excluir Link"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                {links.filter(l => l.category === 'DOCUMENTATION').length === 0 && !isCollapsed && (
-                  <p className="text-[10px] text-muted-foreground italic px-2 py-2">Nenhum link adicionado.</p>
-                )}
-              </div>
-
-              <SidebarLinkDialog 
-                open={isLinkDialogOpen} 
-                onOpenChange={setIsLinkDialogOpen} 
-                category="DOCUMENTATION" 
-              />
             </div>
           ) : isAdminModule ? (
             <div className="flex-1 p-3 mt-6 flex flex-col gap-6">
@@ -369,55 +309,6 @@ const AppSidebar = () => {
                 <Link to="/oportunidades/busca" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/busca' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Busca Exata PNCP">
                   <Target className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa no PNCP</span>}
                 </Link>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                {!isCollapsed && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Links Úteis</span>}
-                
-                <a href="https://www3.comprasnet.gov.br/sicaf-web/index.jsf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="SICAF">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="SICAF" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>SICAF</span>}
-                </a>
-
-                <a href="https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Compras.gov">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.gov.br" alt="Compras.gov" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Compras.gov</span>}
-                </a>
-
-                <a href="https://pncp.gov.br/app/editais?q=&status=recebendo_proposta&pagina=1" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="PNCP">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://pncp.gov.br" alt="PNCP" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Portal PNCP</span>}
-                </a>
-
-                <a href="https://www.tesourotransparente.gov.br/temas/estados-e-municipios/capacidade-de-pagamento-capag" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="CAPAG">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://tesourotransparente.gov.br" alt="CAPAG" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>CAPAG</span>}
-                </a>
-
-                <a href="https://paineldeprecos.planejamento.gov.br/analise-materiais" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Preços">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldeprecos.planejamento.gov.br" alt="Painel de Preços" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Painel de Preços</span>}
-                </a>
-
-                <a href="https://paineldecompras.economia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Painel de Compras">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://paineldecompras.economia.gov.br" alt="Painel de Compras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Painel de Compras</span>}
-                </a>
-
-                <a href="https://portaldatransparencia.gov.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Portal da Transparência">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://portaldatransparencia.gov.br" alt="Portal da Transparência" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Transparência</span>}
-                </a>
-
-                <a href="https://prefeiturasdobrasil.org/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Prefeituras do Brasil">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://prefeiturasdobrasil.org" alt="Prefeituras do Brasil" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Prefeituras Br</span>}
-                </a>
-
-                <a href="https://www.transvias.com.br/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors text-sidebar-foreground hover:bg-sidebar-accent" title="Transportadoras">
-                  <img src="https://www.google.com/s2/favicons?sz=64&domain_url=https://www.transvias.com.br" alt="Transportadoras" className="h-4 w-4 shrink-0 rounded-sm bg-white" />
-                  {!isCollapsed && <span>Transportadoras</span>}
-                </a>
               </div>
             </div>
           ) : isKanbanModule && activeKanbanFolder ? (
