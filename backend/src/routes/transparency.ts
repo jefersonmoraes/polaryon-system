@@ -6,41 +6,52 @@ const router = express.Router();
 const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
 const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search';
 
+// Lista expandida e categorizada
 const COMMON_BRANDS = [
     'DELL', 'HP', 'LENOVO', 'APPLE', 'SAMSUNG', 'LG', 'ASUS', 'ACER', 'POSITIVO', 'MULTILASER',
     'INTEL', 'AMD', 'EPSON', 'CANON', 'LOGITECH', 'CISCO', 'ARUBA', 'HUAWEI', 'FURUKAWA',
     'MICROSOFT', 'ADOBE', 'ORACLE', 'SAP', 'TOTVS', 'PHILIPS', 'BRASTEMP', 'CONSUL', 'ELECTROLUX',
     'ORTOBRAS', 'OTTOBOCK', 'JAGUARIBE', 'PROLIFE', 'VIVER', 'FREEDOM', 'ESTRELA', 'FISIO', 'CARCI',
-    'MERCÚRIO', 'INDIANA', 'INVACARE', 'DRIVE', 'SUNRISE'
+    'MERCÚRIO', 'INDIANA', 'INVACARE', 'DRIVE', 'SUNRISE', 'VITAL', 'LUMINA', 'MOBILITY', 'PERMORABIL'
 ];
 
 const extractBrand = (text: string): string => {
     if (!text) return 'N/A';
-    const brandMatch = text.match(/\bMarca:\s*([^;,\n\)]+)/i);
+    
+    // Pattern 1: Rigoroso "Marca: XXXXX"
+    const brandMatch = text.match(/\bMarca\s*:\s*([^;,\n\)\/\-]+)/i);
     if (brandMatch && brandMatch[1].trim().length > 1) {
-        return brandMatch[1].trim().toUpperCase();
+        const found = brandMatch[1].trim().toUpperCase();
+        if (found.length < 30) return found; // Evitar frases inteiras capturadas por erro
     }
+
+    // Pattern 2: Whole word matches para marcas conhecidas
     const upperText = text.toUpperCase();
     for (const brand of COMMON_BRANDS) {
         const regex = new RegExp(`\\b${brand}\\b`, 'i');
         if (regex.test(upperText)) return brand;
     }
+
     return 'N/A';
 };
 
 /**
  * GET /api/transparency/licitacoes
+ * Retorna os processos (de 10 em 10 por padrão)
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
         const { pagina = '1', termo, dataInicial, dataFinal, situacao = 'concluido', tam_pagina = '10' } = req.query;
+        
         let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=${tam_pagina}`;
+        
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
+        
         const sit = (situacao === 'todas' || !situacao) ? '' : situacao;
         if (sit) url += `&situacao=${sit}`;
 
-        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
         const data: any = response.data;
         const totalElements = data.total_items || data.total_elements || 0;
 
@@ -60,7 +71,7 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         res.json({
             items: results,
             totalItems: Number(totalElements),
-            totalPages: Math.ceil(Number(totalElements) / Number(tam_pagina))
+            totalPages: Math.min(100, Math.ceil(Number(totalElements) / Number(tam_pagina))) // Cap em 100 páginas (1000 itens)
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -69,6 +80,7 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
 /**
  * GET /api/transparency/analytics/global-brands
+ * PROFUNDIDADE DE 1000 PROCESSOS (em lotes)
  */
 router.get('/analytics/global-brands', async (req: Request, res: Response) => {
     try {
@@ -78,33 +90,52 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         
-        // Reduzido para 100 processos (1 página) para evitar timeout na VPS
-        let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=100&situacao=concluido`;
-        if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
-        if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
+        // Buscar 1000 processos (10 páginas de 100)
+        const fetchDepth = 10;
+        const allProcesses: any[] = [];
         
-        const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const processes = searchRes.data.items || [];
+        for (let p = 1; p <= fetchDepth; p++) {
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${p}&tam_pagina=100&situacao=concluido`;
+            if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
+            if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
+            
+            try {
+                const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
+                if (searchRes.data.items) allProcesses.push(...searchRes.data.items);
+                if (searchRes.data.items.length < 100) break; // Fim dos resultados
+            } catch (e) { break; }
+        }
 
-        const batchSize = 15;
-        for (let i = 0; i < processes.length; i += batchSize) {
-            const batch = processes.slice(i, i + batchSize);
+        // Processar os 1000 processos em lotes de 25 para velocidade máxima sem travar
+        const batchSize = 25;
+        for (let i = 0; i < allProcesses.length; i += batchSize) {
+            const batch = allProcesses.slice(i, i + batchSize);
             await Promise.all(batch.map(async (proc: any) => {
                 try {
-                    const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`);
+                    const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 5000 });
                     const items = itemsRes.data || [];
+                    
                     for (const item of items) {
                         const desc = (item.descricao || item.description || '').toLowerCase();
-                        if (keywords.every(k => desc.includes(k))) {
+                        
+                        // FILTRO DEFINITIVO: O item deve possuir o termo principal para ser contabilizado
+                        // Se buscar "Cadeira de roda", não adianta o processo ter o termo, o ITEM deve ter.
+                        const matchesKeyword = keywords.every(k => desc.includes(k));
+                        
+                        if (matchesKeyword) {
                             let brand = extractBrand(item.descricao || item.description);
+                            
+                            // Se não achou no texto, tenta o resultado oficial (Homologado)
                             if (brand === 'N/A' && item.temResultado) {
                                 try {
-                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`);
+                                    const rUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`;
+                                    const rRes = await axios.get(rUrl, { timeout: 3000 });
                                     if (rRes.data && rRes.data.length > 0 && rRes.data[0].marcaFornecedor) {
-                                        brand = rRes.data[0].marcaFornecedor.toUpperCase();
+                                        brand = rRes.data[0].marcaFornecedor.toUpperCase().trim();
                                     }
                                 } catch (e) {}
                             }
+
                             if (brand !== 'N/A' && brand.length > 1) {
                                 if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
                                 brandCounts[brand].value++;
@@ -114,13 +145,13 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                     }
                 } catch (err) {}
             }));
-            if (Object.keys(brandCounts).length > 150) break;
         }
 
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 30);
+
         res.json(results);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -128,7 +159,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 });
 
 /**
- * RESTO DAS ROTAS...
+ * ITENS E ARQUIVOS (MANTIDOS COM SEGURANÇA)
  */
 router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res: Response) => {
     try {
@@ -136,7 +167,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res:
         const { termo } = req.query;
         const keywords = (termo || '').toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const response = await axios.get(`${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens`);
-        const items: any = response.data || [];
+        const items = response.data || [];
         const filteredItems = items.filter((item: any) => {
             if (keywords.length === 0) return true;
             const desc = (item.descricao || item.description || '').toLowerCase();
@@ -147,18 +178,16 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res:
             let marca = extractBrand(item.descricao || item.description);
             try {
                 const resUrl = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
-                const resResponse = await axios.get(resUrl);
-                if (resResponse.data && resResponse.data.length > 0) {
-                    const winner = resResponse.data[0];
+                const rr = await axios.get(resUrl);
+                if (rr.data && rr.data.length > 0) {
+                    const winner = rr.data[0];
                     vencedor = { nome: winner.nomeRazaoSocialFornecedor, cnpj: winner.niFornecedor, valor: winner.valorTotalHomologado };
-                    if (marca === 'N/A' && winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase();
+                    if (marca === 'N/A' && winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
                 }
             } catch (e) {}
             return {
-                numero: item.numeroItem,
-                descricao: item.descricao || item.description,
-                quantidade: item.quantidade,
-                valorUnitario: item.valorUnitarioEstimado,
+                numero: item.numeroItem, descricao: item.descricao || item.description,
+                quantidade: item.quantidade, valorUnitario: item.valorUnitarioEstimado,
                 vencedor, marca
             };
         }));
@@ -173,7 +202,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
         const { cnpj, ano, sequencial } = req.params;
         const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
         const response = await axios.get(url);
-        const data: any = response.data || [];
+        const data = response.data || [];
         const files = data.map((file: any) => ({
             id: file.id, nome: file.titulo,
             url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}/documento`,

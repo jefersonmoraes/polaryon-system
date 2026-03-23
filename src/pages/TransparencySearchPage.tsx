@@ -148,10 +148,14 @@ export default function TransparencySearchPage() {
         }
     };
 
-    const handleSearch = async (e?: React.FormEvent, isLoadMore = false) => {
+    const handlePageChange = (p: number) => {
+        handleSearch(undefined, false, p);
+    };
+
+    const handleSearch = async (e?: React.FormEvent, isLoadMore = false, forcedPage?: number) => {
         if (e) e.preventDefault();
         
-        const currentPage = isLoadMore ? page + 1 : 1;
+        const currentPage = forcedPage || (isLoadMore ? page + 1 : 1);
         setLoading(true);
         if (!isLoadMore) {
             setResults([]);
@@ -173,11 +177,13 @@ export default function TransparencySearchPage() {
                 }
             });
             
-            setResults(response.data.items || []);
+            const resultsData = response.data.items || [];
+            setResults(resultsData);
             setTotalResults(response.data.totalItems || 0);
             setPage(currentPage);
             setHasMore(currentPage < (response.data.totalPages || 0));
 
+            // Trigger global analytics if search term changed or it's the first page
             if (currentPage === 1 && keyword) {
                 fetchGlobalBrands(keyword);
             }
@@ -396,108 +402,110 @@ export default function TransparencySearchPage() {
                                 </div>
 
                                 {results.length > 0 && (
-                                    <div className="flex items-center justify-center gap-2 pb-10 mt-6">
-                                        <button 
-                                            onClick={() => handleSearch(undefined, false)}
-                                            disabled={page === 1}
-                                            className="h-9 px-4 bg-card border border-border rounded-lg text-[10px] font-bold hover:border-primary/50 disabled:opacity-30 transition-all uppercase tracking-widest"
-                                        >
-                                            Anterior
-                                        </button>
-                                        
-                                        <div className="flex items-center gap-1">
-                                            {[...Array(Math.min(5, Math.ceil(totalResults / 10)))].map((_, i) => {
-                                                const p = i + 1;
-                                                // Simples lógica para mostrar as páginas próximas à atual
-                                                return (
-                                                    <button
-                                                        key={p}
-                                                        onClick={() => {
-                                                            setPage(p);
-                                                            // Mocking handleSearch logic without LoadMore
-                                                            const e = { preventDefault: () => {} } as any;
-                                                            // Forçar a página específica no handleSearch
-                                                            setPage(p);
-                                                            api.get('/transparency/licitacoes', {
-                                                                params: {
-                                                                    termo: keyword,
-                                                                    pagina: p,
-                                                                    dataInicial: dataInicial || undefined,
-                                                                    dataFinal: dataFinal || undefined,
-                                                                    situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
-                                                                    tam_pagina: 10
-                                                                }
-                                                            }).then(res => {
-                                                                setResults(res.data.items || []);
-                                                                setPage(p);
-                                                            });
-                                                        }}
-                                                        className={`h-9 w-9 rounded-lg text-xs font-bold transition-all ${page === p ? 'bg-primary text-primary-foreground' : 'bg-card border border-border hover:border-primary/50'}`}
-                                                    >
-                                                        {p}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                    <div className="flex flex-col items-center gap-4 pb-12 mt-8 border-t border-border/50 pt-8">
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    const prev = Math.max(1, page - 1);
+                                                    handlePageChange(prev);
+                                                }}
+                                                disabled={page === 1 || loading}
+                                                className="h-10 px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-2"
+                                            >
+                                                <ChevronRight className="h-4 w-4 rotate-180" />
+                                                Anterior
+                                            </button>
+                                            
+                                            <div className="flex items-center gap-1.5 px-2">
+                                                {/* Mostrar páginas vizinhas */}
+                                                {Array.from({ length: Math.min(5, Math.ceil(totalResults / 10)) }, (_, i) => {
+                                                    const p = i + 1;
+                                                    // Se estivermos em páginas altas, mostrar um range diferente? 
+                                                    // Por simplicidade, as primeiras 5 ou as 5 ao redor da atual
+                                                    return (
+                                                        <button
+                                                            key={p}
+                                                            onClick={() => handlePageChange(p)}
+                                                            disabled={loading}
+                                                            className={`h-10 w-10 rounded-xl text-xs font-bold transition-all ${page === p ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card border border-border hover:border-primary/50'}`}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {Math.ceil(totalResults / 10) > 5 && <span className="text-muted-foreground px-1">...</span>}
+                                            </div>
 
-                                        <button 
-                                            onClick={() => {
-                                                const next = page + 1;
-                                                api.get('/transparency/licitacoes', {
-                                                    params: {
-                                                        termo: keyword,
-                                                        pagina: next,
-                                                        dataInicial: dataInicial || undefined,
-                                                        dataFinal: dataFinal || undefined,
-                                                        situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
-                                                        tam_pagina: 10
-                                                    }
-                                                }).then(res => {
-                                                    setResults(res.data.items || []);
-                                                    setPage(next);
-                                                });
-                                            }}
-                                            disabled={!hasMore}
-                                            className="h-9 px-4 bg-card border border-border rounded-lg text-[10px] font-bold hover:border-primary/50 disabled:opacity-30 transition-all uppercase tracking-widest"
-                                        >
-                                            Próxima
-                                        </button>
+                                            <button 
+                                                onClick={() => {
+                                                    const next = page + 1;
+                                                    handlePageChange(next);
+                                                }}
+                                                disabled={!hasMore || loading}
+                                                className="h-10 px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-2"
+                                            >
+                                                Próxima
+                                                <ChevronRight className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
+                                            Página {page} de {Math.ceil(totalResults / 10)} • {totalResults} Processos encontrados
+                                        </p>
                                     </div>
                                 )}
                             </div>
 
                             {/* Right Column: Global Stats */}
                             <div className="lg:w-80 shrink-0 space-y-6">
-                                {(globalBrands.length > 0) && (
+                                {loadingGlobalBrands ? (
+                                    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4 animate-pulse">
+                                        <div className="flex items-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                            <h3 className="text-sm font-bold uppercase">Analisando Mercado...</h3>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {[1,2,3,4,5].map(i => <div key={i} className="h-6 bg-muted rounded animate-pulse" />)}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground italic">Consultando 1000 licitações para extrair marcas...</p>
+                                    </div>
+                                ) : (globalBrands.length > 0) ? (
                                     <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-right-4">
-                                        <h3 className="text-sm font-bold flex items-center gap-2">
+                                        <h3 className="text-sm font-bold flex items-center gap-2 italic">
                                             <TrendingUp className="h-4 w-4 text-primary" />
                                             Ranking Global de Marcas
                                         </h3>
-                                        <div className="space-y-3">
-                                            {globalBrands.slice(0, 8).map((b, i) => (
-                                                <div key={i} className="flex flex-col gap-1">
+                                        <div className="space-y-4">
+                                            {globalBrands.slice(0, 10).map((b, i) => (
+                                                <div key={i} className="flex flex-col gap-1.5 group cursor-default">
                                                     <div className="flex justify-between items-end">
-                                                        <span className="text-[10px] font-bold truncate pr-2 uppercase">{b.name}</span>
+                                                        <span className="text-[10px] font-black truncate pr-2 uppercase group-hover:text-primary transition-colors">{b.name}</span>
                                                         <span className="text-[10px] font-black text-primary">{b.value}</span>
                                                     </div>
-                                                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                                    <div className="h-2 w-full bg-muted/50 rounded-full overflow-hidden border border-border/20">
                                                         <motion.div 
                                                             initial={{ width: 0 }}
                                                             animate={{ width: `${(b.value / globalBrands[0].value) * 100}%` }}
-                                                            className="h-full bg-primary"
+                                                            className="h-full bg-gradient-to-r from-primary/80 to-primary"
                                                         />
+                                                    </div>
+                                                    <div className="flex justify-between items-center opacity-70">
+                                                        <span className="text-[9px] font-bold text-muted-foreground uppercase">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(b.totalGasto)}</span>
+                                                        <span className="text-[8px] text-muted-foreground">{Math.round((b.value / globalBrands.reduce((acc, x) => acc + x.value, 0)) * 100)}% do volume</span>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="pt-2 border-t border-border mt-4">
+                                        <div className="pt-3 border-t border-border mt-4">
+                                            <div className="flex items-center gap-2 text-primary/80 mb-1">
+                                                <ShieldCheck className="h-3 w-3" />
+                                                <span className="text-[10px] font-black uppercase tracking-tighter">Deep Analytics</span>
+                                            </div>
                                             <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                                                Este ranking é gerado dinamicamente com base nos últimos processos homologados para "{keyword}".
+                                                Pesquisamos até 1000 licitações dos últimos 2 anos para gerar este ranking de precisão.
                                             </p>
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
                                 
                                 <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 space-y-3">
                                     <div className="flex items-center gap-2 text-primary">
