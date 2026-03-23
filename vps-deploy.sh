@@ -1,8 +1,14 @@
 #!/bin/bash
+# Habilitar verbose para debug no GitHub Actions
+set -x
 set -e
-export NODE_OPTIONS="--max-old-space-size=4096"
 
-# Carregar variáveis de ambiente do sistema e NVM
+echo "=== INFOS DO SISTEMA ==="
+node -v
+npm -v
+free -h
+
+# Carregar variáveis de ambiente
 [ -f ~/.bashrc ] && source ~/.bashrc
 [ -f ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh
 [ -f ~/.profile ] && source ~/.profile
@@ -28,6 +34,7 @@ echo "=== [6/9] Gerando Prisma Client ==="
 npx prisma generate || { echo "ERRO: Falha no prisma generate"; exit 1; }
 
 echo "=== [7/9] Compilando backend (TypeScript) ==="
+rm -rf dist
 npm run build || { echo "ERRO: Falha no build do backend (tsc)"; exit 1; }
 
 echo "=== [8/9] Sincronizando schema do banco de dados ==="
