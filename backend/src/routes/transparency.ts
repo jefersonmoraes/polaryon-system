@@ -14,26 +14,35 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         const { pagina = '1', termo, dataInicial, dataFinal } = req.query;
         
         // PNCP Search API
-        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital&ordenacao=-dataPublicacao`;
+        // Correct types: edital|ata|contrato|pcaorgao
+        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=15`;
+        
         if (dataInicial) url += `&data_inicial=${dataInicial.toString().replace(/\//g, '')}`;
         if (dataFinal) url += `&data_final=${dataFinal.toString().replace(/\//g, '')}`;
 
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json'
+            }
+        });
+
         if (!response.ok) throw new Error(`Erro na busca PNCP: ${response.status}`);
         const data: any = await response.json();
 
-        // Map PNCP search results to a more friendly format
-        const results = (data.data || []).map((item: any) => ({
-            id: `${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-            numeroLicitacao: `${item.numeroCompra}/${item.anoCompra}`,
-            objeto: item.objeto,
-            orgao: item.orgaoEntidade.razaoSocial,
-            dataAbertura: item.dataPublicacao,
-            valorLicitacao: item.valorTotalEstimado,
-            situacao: item.situacaoCompraNome,
-            cnpjOrgao: item.orgaoEntidade.cnpj,
-            ano: item.anoCompra,
-            sequencial: item.sequencialCompra
+        // Map PNCP search results (data.items) to our format
+        const itemsList = data.items || [];
+        const results = itemsList.map((item: any) => ({
+            id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
+            numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
+            objeto: item.description || 'Sem descrição',
+            orgao: item.orgao_nome,
+            dataAbertura: item.data_publicacao_pncp,
+            valorLicitacao: item.valor_global || 0,
+            situacao: item.situacao_nome,
+            cnpjOrgao: item.orgao_cnpj,
+            ano: item.ano,
+            sequencial: item.numero_sequencial
         }));
 
         res.json(results);
