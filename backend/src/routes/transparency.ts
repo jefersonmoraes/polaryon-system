@@ -81,7 +81,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         
-        const fetchDepth = 10;
+        const fetchDepth = 5; // 5 * 100 = 500
         const allProcesses: any[] = [];
         
         for (let p = 1; p <= fetchDepth; p++) {
