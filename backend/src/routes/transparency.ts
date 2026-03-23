@@ -1,68 +1,105 @@
 import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const router = express.Router();
 
-const API_BASE_URL = 'https://api.portaldatransparencia.gov.br/api-de-dados';
-const API_TOKEN = process.env.PORTAL_TRANSPARENCIA_TOKEN || '';
-
-// Proxy helper
-const fetchFromGov = async (endpoint: string) => {
-    if (!API_TOKEN) {
-        throw new Error('API Token [PORTAL_TRANSPARENCIA_TOKEN] não configurado no .env do backend.');
-    }
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: {
-            'chave-api-dados': API_TOKEN,
-            'Accept': 'application/json'
-        }
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Erro na API do Governo (${response.status}): ${errorText}`);
-    }
-
-    return response.json();
-};
+const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
+const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search';
 
 /**
  * GET /api/transparency/licitacoes
- * Query params support: pagina, dataInicial, dataFinal, codigoOrgao
- * Note: Keywords usually handled by fetching and filtering if API limitations exist
+ * Search biddings globally using PNCP Search API
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
-        const { pagina = '1', dataInicial, dataFinal, codigoOrgao } = req.query;
+        const { pagina = '1', termo, dataInicial, dataFinal } = req.query;
         
-        let url = `/licitacoes?pagina=${pagina}`;
-        if (dataInicial) url += `&dataInicial=${dataInicial}`;
-        if (dataFinal) url += `&dataFinal=${dataFinal}`;
-        if (codigoOrgao) url += `&codigoOrgao=${codigoOrgao}`;
+        // PNCP Search API
+        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital&ordenacao=-dataPublicacao`;
+        if (dataInicial) url += `&data_inicial=${dataInicial.toString().replace(/\//g, '')}`;
+        if (dataFinal) url += `&data_final=${dataFinal.toString().replace(/\//g, '')}`;
 
-        const data = await fetchFromGov(url);
-        res.json(data);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Erro na busca PNCP: ${response.status}`);
+        const data: any = await response.json();
+
+        // Map PNCP search results to a more friendly format
+        const results = (data.data || []).map((item: any) => ({
+            id: `${item.orgaoEntidade.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+            numeroLicitacao: `${item.numeroCompra}/${item.anoCompra}`,
+            objeto: item.objeto,
+            orgao: item.orgaoEntidade.razaoSocial,
+            dataAbertura: item.dataPublicacao,
+            valorLicitacao: item.valorTotalEstimado,
+            situacao: item.situacaoCompraNome,
+            cnpjOrgao: item.orgaoEntidade.cnpj,
+            ano: item.anoCompra,
+            sequencial: item.sequencialCompra
+        }));
+
+        res.json(results);
     } catch (error: any) {
-        console.error('[Transparency API Error]:', error.message);
-        res.status(500).json({ error: error.message });
+        console.error('[Transparency Search Error]:', error.message);
+        res.status(500).json({ error: 'Erro ao buscar no portal nacional: ' + error.message });
     }
 });
 
 /**
- * GET /api/transparency/licitacoes/:id/itens
- * Fetch items, winners, and brands for a specific bidding
+ * GET /api/transparency/licitacoes/:cnpj/:ano/:sequencial/itens
+ * Fetch items and their winners for a specific bidding
  */
-router.get('/licitacoes/:id/itens', async (req: Request, res: Response) => {
+router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
-        const data = await fetchFromGov(`/licitacoes/${id}/itens`);
-        res.json(data);
+        const { cnpj, ano, sequencial } = req.params;
+        
+        // 1. Fetch Items
+        const itemsResponse = await fetch(`${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens`);
+        if (!itemsResponse.ok) throw new Error(`Erro ao buscar itens: ${itemsResponse.status}`);
+        const items: any = await itemsResponse.json();
+
+        // 2. For each item, try to fetch results (winners)
+        const detailedItems = await Promise.all(items.map(async (item: any) => {
+            let vencedor = null;
+            let marca = 'Não informada';
+
+            if (item.temResultado) {
+                try {
+                    const resResponse = await fetch(`${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`);
+                    if (resResponse.ok) {
+                        const resultados: any = await resResponse.json();
+                        if (resultados && resultados.length > 0) {
+                            const winner = resultados[0];
+                            vencedor = {
+                                nome: winner.nomeRazaoSocialFornecedor,
+                                cnpj: winner.niFornecedor,
+                                valor: winner.valorTotalHomologado
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Could not fetch result for item ${item.numeroItem}`);
+                }
+            }
+
+            // Simple heuristic to find brand in description if not a separate field
+            const brandMatch = item.descricao.match(/Marca:\s*([^;,\n]+)/i);
+            if (brandMatch) {
+                marca = brandMatch[1].trim();
+            }
+
+            return {
+                numero: item.numeroItem,
+                descricao: item.descricao,
+                quantidade: item.quantidade,
+                valorUnitario: item.valorUnitarioEstimado,
+                vencedor,
+                marca: marca || 'Ver detalhes no edital'
+            };
+        }));
+
+        res.json(detailedItems);
     } catch (error: any) {
-        console.error('[Transparency API Items Error]:', error.message);
-        res.status(500).json({ error: error.message });
+        console.error('[Transparency Items Error]:', error.message);
+        res.status(500).json({ error: 'Erro ao buscar itens: ' + error.message });
     }
 });
 

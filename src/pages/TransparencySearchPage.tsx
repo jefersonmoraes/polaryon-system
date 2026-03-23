@@ -17,33 +17,29 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 
 interface Licitacao {
-    id: string;
-    numeroLicitecao: string;
+    id: string; // "cnpj/ano/sequencial"
+    numeroLicitacao: string;
     objeto: string;
+    orgao: string;
     dataAbertura: string;
-    dataPublicacao: string;
+    valorLicitacao: number;
     situacao: string;
-    modalidade: string;
-    orgaoLicitante: {
-        nome: string;
-        cnpj: string;
-    };
-    unidadeGestora: {
-        nome: string;
-    };
-    valor?: number;
+    cnpjOrgao: string;
+    ano: number;
+    sequencial: string;
 }
 
 interface ItemLicitacao {
-    id: string;
+    numero: number;
     descricao: string;
     quantidade: number;
     valorUnitario: number;
-    valorTotal: number;
-    vencedor?: string;
-    cnpjVencedor?: string;
-    marca?: string;
-    modelo?: string;
+    vencedor?: {
+        nome: string;
+        cnpj: string;
+        valor: number;
+    };
+    marca: string;
 }
 
 export default function TransparencySearchPage() {
@@ -76,11 +72,11 @@ export default function TransparencySearchPage() {
         const counts: Record<string, { name: string; value: number; totalGasto: number }> = {};
         
         items.forEach(item => {
-            if (item.marca) {
+            if (item.marca && item.marca !== 'Não informada' && item.marca !== 'Ver detalhes no edital') {
                 const brand = item.marca.toUpperCase().trim();
                 if (!counts[brand]) counts[brand] = { name: brand, value: 0, totalGasto: 0 };
                 counts[brand].value++;
-                counts[brand].totalGasto += item.valorTotal || 0;
+                counts[brand].totalGasto += (item.quantidade * item.valorUnitario) || 0;
             }
         });
 
@@ -97,9 +93,10 @@ export default function TransparencySearchPage() {
             // Use Backend Proxy
             const response = await api.get('/transparency/licitacoes', {
                 params: {
+                    termo: keyword,
                     pagina: page,
-                    dataInicial: dataInicial.replace(/-/g, '/'), // Format: DD/MM/YYYY
-                    dataFinal: dataFinal.replace(/-/g, '/'),
+                    dataInicial: dataInicial ? dataInicial.replace(/-/g, '') : undefined,
+                    dataFinal: dataFinal ? dataFinal.replace(/-/g, '') : undefined,
                 }
             });
             
@@ -131,14 +128,14 @@ export default function TransparencySearchPage() {
     };
 
     const handleSaveSupplier = (item: ItemLicitacao) => {
-        if (!item.cnpjVencedor || !item.vencedor) {
+        if (!item.vencedor?.cnpj || !item.vencedor?.nome) {
             toast.error("Dados do vencedor incompletos para salvar.");
             return;
         }
 
         const { addCompany, companies } = useKanbanStore.getState();
         
-        const exists = companies.some(c => c.cnpj === item.cnpjVencedor);
+        const exists = companies.some(c => c.cnpj === item.vencedor?.cnpj);
         if (exists) {
             toast.warning("Este fornecedor já está cadastrado.");
             return;
@@ -146,14 +143,14 @@ export default function TransparencySearchPage() {
 
         addCompany({
             type: 'Fornecedor',
-            cnpj: item.cnpjVencedor,
-            razao_social: item.vencedor,
-            nome_fantasia: item.marca || item.vencedor,
+            cnpj: item.vencedor.cnpj,
+            razao_social: item.vencedor.nome,
+            nome_fantasia: item.marca || item.vencedor.nome,
             descricao_situacao_cadastral: 'ATIVA',
             lastCnpjCheck: new Date().toISOString()
         });
 
-        toast.success(`Fornecedor ${item.vencedor} salvo com sucesso!`);
+        toast.success(`Fornecedor ${item.vencedor.nome} salvo com sucesso!`);
     };
 
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -242,11 +239,11 @@ export default function TransparencySearchPage() {
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-20 animate-pulse">
                             <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                            <p className="text-sm font-medium text-muted-foreground">Interrogando base da CGU...</p>
+                            <p className="text-sm font-medium text-muted-foreground">Interrogando base do PNCP...</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4">
-                            {filteredResults.map((lic) => (
+                            {results.map((lic) => (
                                 <motion.div 
                                     key={lic.id}
                                     initial={{ opacity: 0, scale: 0.98 }}
@@ -263,7 +260,7 @@ export default function TransparencySearchPage() {
                                     <div className="flex flex-col gap-4">
                                         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary/80">
                                             <Building2 className="h-3 w-3" />
-                                            {lic.orgaoLicitante.nome}
+                                            {lic.orgao}
                                         </div>
                                         
                                         <div>
@@ -271,18 +268,18 @@ export default function TransparencySearchPage() {
                                                 {lic.objeto}
                                             </h3>
                                             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground italic">
-                                                <span>Licitação Nº {lic.numeroLicitecao}</span>
+                                                <span>Licitação Nº {lic.numeroLicitacao}</span>
                                                 <span>•</span>
-                                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Publicado em {lic.dataPublicacao}</span>
+                                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Publicado em {new Date(lic.dataAbertura).toLocaleDateString('pt-BR')}</span>
                                             </div>
                                         </div>
 
                                         <div className="flex flex-wrap gap-2 pt-1">
-                                            <span className="bg-secondary px-2 py-0.5 rounded-md text-[10px] font-bold text-secondary-foreground border border-border/50">
-                                                {lic.modalidade}
-                                            </span>
                                             <span className="bg-emerald-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 border border-emerald-500/20">
                                                 {lic.situacao}
+                                            </span>
+                                            <span className="bg-blue-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 border border-blue-500/20">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lic.valorLicitacao)}
                                             </span>
                                         </div>
                                     </div>
@@ -305,9 +302,9 @@ export default function TransparencySearchPage() {
                                             {selectedLicitacao.objeto}
                                         </DialogTitle>
                                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                            <span className="font-semibold text-primary">Nº {selectedLicitacao.numeroLicitecao}</span>
+                                            <span className="font-semibold text-primary">Nº {selectedLicitacao.numeroLicitacao}</span>
                                             <span>•</span>
-                                            <span>{selectedLicitacao.orgaoLicitante.nome}</span>
+                                            <span>{selectedLicitacao.orgao}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -385,9 +382,12 @@ export default function TransparencySearchPage() {
                                                                         <Award className="h-3 w-3" /> VENCEDOR
                                                                     </span>
                                                                     <p className="text-xs font-bold leading-tight line-clamp-2 uppercase">
-                                                                        {item.vencedor}
+                                                                        {item.vencedor.nome}
                                                                     </p>
-                                                                    <p className="text-[10px] text-muted-foreground">CNPJ: {item.cnpjVencedor}</p>
+                                                                    <p className="text-[10px] text-muted-foreground">CNPJ: {item.vencedor.cnpj}</p>
+                                                                    <p className="text-[10px] text-emerald-600 font-bold">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.vencedor.valor)}
+                                                                    </p>
                                                                 </div>
                                                                 
                                                                 <button 
@@ -473,10 +473,10 @@ export default function TransparencySearchPage() {
                                                         <UserCheck className="h-4 w-4" /> Principais Fornecedores
                                                     </h4>
                                                     <div className="space-y-3">
-                                                        {Array.from(new Set(items.map(i => i.vencedor))).slice(0, 3).map((v, i) => v && (
+                                                        {Array.from(new Set(items.map(i => i.vencedor?.nome))).slice(0, 3).map((v, i) => v && (
                                                             <div key={i} className="flex justify-between items-center p-2 bg-background/40 rounded-lg border border-border/40">
                                                                 <span className="text-xs font-bold truncate max-w-[200px]">{v}</span>
-                                                                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black">{items.filter(it => it.vencedor === v).length} vitórias</span>
+                                                                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black">{items.filter(it => it.vencedor?.nome === v).length} vitórias</span>
                                                             </div>
                                                         ))}
                                                     </div>
