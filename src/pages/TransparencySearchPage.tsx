@@ -1,23 +1,52 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-    Search, Filter, Loader2, AlertCircle, ChevronRight, 
-    Building2, MapPin, Calendar, DollarSign, BarChart3, 
-    Zap, ShieldCheck, Save, ExternalLink, Info, Award,
-    Tags, Package, TrendingUp, UserCheck, FileText, Download
+    Search, 
+    Calendar, 
+    Building2, 
+    FileText, 
+    Package, 
+    BarChart3, 
+    TrendingUp, 
+    Info, 
+    ChevronRight, 
+    Loader2, 
+    AlertCircle,
+    Download,
+    ExternalLink,
+    Award,
+    Tags,
+    DollarSign,
+    UserCheck,
+    ShieldCheck
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-    ResponsiveContainer, Cell, PieChart, Pie
-} from 'recharts';
-import api from '@/lib/api';
-import { useKanbanStore } from '@/store/kanban-store';
+import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../lib/api';
 import { toast } from 'sonner';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle 
+} from '../components/ui/dialog';
+import { 
+    Tabs, 
+    TabsContent, 
+    TabsList, 
+    TabsTrigger 
+} from '../components/ui/tabs';
+import { 
+    BarChart, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip, 
+    ResponsiveContainer,
+    Cell
+} from 'recharts';
 
 interface Licitacao {
-    id: string; // "cnpj/ano/sequencial"
+    id: string;
     numeroLicitacao: string;
     objeto: string;
     orgao: string;
@@ -34,21 +63,22 @@ interface ItemLicitacao {
     descricao: string;
     quantidade: number;
     valorUnitario: number;
+    marca?: string;
+    modelo?: string;
     vencedor?: {
         nome: string;
         cnpj: string;
         valor: number;
-    };
-    marca: string;
-    modelo?: string;
+    }
 }
 
 interface BiddingFile {
     id: string;
     nome: string;
     url: string;
+    originalUrl?: string; // Link direto do PNCP
     dataPublicacao: string;
-    documentoVencedor?: boolean;
+    documentoVencedor: boolean;
 }
 
 interface BrandAnalytics {
@@ -58,19 +88,16 @@ interface BrandAnalytics {
 }
 
 export default function TransparencySearchPage() {
-    // Search States
     const [keyword, setKeyword] = useState('');
     const [dataInicial, setDataInicial] = useState('');
     const [dataFinal, setDataFinal] = useState('');
-    const [situacao, setSituacao] = useState('todas');
+    const [situacao, setSituacao] = useState('concluido');
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<Licitacao[]>([]);
     const [totalResults, setTotalResults] = useState(0);
-    const [error, setError] = useState('');
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
-
-    // Detail States
+    const [error, setError] = useState('');
     const [selectedLicitacao, setSelectedLicitacao] = useState<Licitacao | null>(null);
     const [items, setItems] = useState<ItemLicitacao[]>([]);
     const [files, setFiles] = useState<BiddingFile[]>([]);
@@ -79,26 +106,18 @@ export default function TransparencySearchPage() {
     const [loadingGlobalBrands, setLoadingGlobalBrands] = useState(false);
     const [globalBrands, setGlobalBrands] = useState<BrandAnalytics[]>([]);
 
-    // Filtered Results based on Keyword (if API doesn't support it)
-    const filteredResults = useMemo(() => {
-        if (!keyword) return results;
-        return results.filter(lic => 
-            lic.objeto?.toLowerCase().includes(keyword.toLowerCase()) || 
-            lic.orgao?.toLowerCase().includes(keyword.toLowerCase())
-        );
-    }, [results, keyword]);
-
     // Analytics Cache
     const brandRanking = useMemo(() => {
         if (items.length === 0) return [];
         const counts: Record<string, { name: string; value: number; totalGasto: number }> = {};
         
         items.forEach(item => {
-            if (item.marca && item.marca !== 'Não informada' && item.marca !== 'Ver detalhes no edital') {
-                const brand = item.marca.toUpperCase().trim();
-                if (!counts[brand]) counts[brand] = { name: brand, value: 0, totalGasto: 0 };
-                counts[brand].value++;
-                counts[brand].totalGasto += (item.quantidade * item.valorUnitario) || 0;
+            if (item.marca && item.marca !== 'N/A' && item.marca !== 'NÃO INFORMADA') {
+                if (!counts[item.marca]) {
+                    counts[item.marca] = { name: item.marca, value: 0, totalGasto: 0 };
+                }
+                counts[item.marca].value++;
+                counts[item.marca].totalGasto += (item.valorUnitario || 0) * (item.quantidade || 0);
             }
         });
 
@@ -120,10 +139,11 @@ export default function TransparencySearchPage() {
     };
 
     const handleSearch = async (e?: React.FormEvent, isLoadMore = false) => {
-        e?.preventDefault();
+        if (e) e.preventDefault();
+        
         const currentPage = isLoadMore ? page + 1 : 1;
+        setLoading(true);
         if (!isLoadMore) {
-            setLoading(true);
             setResults([]);
             setPage(1);
         } else {
@@ -138,14 +158,18 @@ export default function TransparencySearchPage() {
                     pagina: currentPage,
                     dataInicial: dataInicial || undefined,
                     dataFinal: dataFinal || undefined,
-                    situacao: situacao !== 'todas' ? situacao : undefined,
+                    situacao: (situacao === 'todas' || !situacao) ? undefined : situacao,
                     tam_pagina: 20
                 }
             });
             
             const newItems = response.data.items || [];
-            setResults(prev => isLoadMore ? [...prev, ...newItems] : newItems);
-            setTotalResults(response.data.totalItems || 0);
+            if (isLoadMore) {
+                setResults(prev => [...prev, ...newItems]);
+            } else {
+                setResults(newItems);
+                setTotalResults(response.data.totalItems || 0);
+            }
             setHasMore(currentPage < (response.data.totalPages || 0));
 
             if (!isLoadMore && keyword) {
@@ -162,7 +186,9 @@ export default function TransparencySearchPage() {
     const fetchItems = async (licId: string) => {
         setLoadingItems(true);
         try {
-            const response = await api.get(`/transparency/licitacoes/${licId}/itens`);
+            const response = await api.get(`/transparency/licitacoes/${licId}/itens`, {
+                params: { termo: keyword }
+            });
             setItems(Array.isArray(response.data) ? response.data : []);
         } catch (err: any) {
             toast.error("Erro ao carregar itens da licitação");
@@ -188,8 +214,6 @@ export default function TransparencySearchPage() {
         fetchItems(lic.id);
         fetchFiles(lic.id);
     };
-
-    // Removed handleSaveSupplier as per user request
 
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -278,7 +302,7 @@ export default function TransparencySearchPage() {
                         </div>
                     )}
 
-                    {!loading && filteredResults.length === 0 && !error && (
+                    {!loading && results.length === 0 && !error && (
                         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 opacity-50">
                             <Search className="h-12 w-12 text-muted-foreground" />
                             <div>
@@ -659,22 +683,38 @@ export default function TransparencySearchPage() {
                                                         </h4>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                             {files.filter(f => f.documentoVencedor).map((file) => (
-                                                                <a 
+                                                                <div 
                                                                     key={file.id}
-                                                                    href={file.url}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="flex items-center gap-4 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:border-emerald-500/50 hover:shadow-md transition-all group"
+                                                                    className="flex flex-col gap-2 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:border-emerald-500/50 hover:shadow-md transition-all group"
                                                                 >
-                                                                    <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                                                                        <Download className="h-5 w-5" />
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-lg">
+                                                                            <FileText className="h-5 w-5" />
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
+                                                                            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">Proposta / Vencedor</p>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
-                                                                        <p className="text-[10px] text-muted-foreground mt-1 uppercase">Proposta/Habilitação</p>
+                                                                    <div className="flex gap-2 mt-2">
+                                                                        <a 
+                                                                            href={file.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                                                                        >
+                                                                            <Download className="h-3 w-3" /> DOWNLOAD OFICIAL
+                                                                        </a>
+                                                                        <a 
+                                                                            href={file.originalUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="px-3 h-8 border border-emerald-600/30 text-emerald-600 text-[10px] font-bold rounded flex items-center justify-center hover:bg-emerald-500/10 transition-colors"
+                                                                        >
+                                                                            LINK DIRETO (PNCP)
+                                                                        </a>
                                                                     </div>
-                                                                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100" />
-                                                                </a>
+                                                                </div>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -685,24 +725,40 @@ export default function TransparencySearchPage() {
                                                     <h4 className="text-xs font-bold uppercase text-muted-foreground">Outros Editais e Anexos</h4>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         {files.filter(f => !f.documentoVencedor).map((file) => (
-                                                            <a 
+                                                            <div 
                                                                 key={file.id}
-                                                                href={file.url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary/50 hover:shadow-md transition-all group"
+                                                                className="flex flex-col gap-2 p-4 bg-card border border-border rounded-xl hover:border-primary/50 hover:shadow-md transition-all group"
                                                             >
-                                                                <div className="p-3 bg-red-500/10 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
-                                                                    <Download className="h-5 w-5" />
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="p-3 bg-primary/10 text-primary rounded-lg">
+                                                                        <FileText className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
+                                                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                                                            Publicado em {new Date(file.dataPublicacao).toLocaleDateString('pt-BR')}
+                                                                        </p>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <h4 className="text-sm font-bold truncate leading-tight">{file.nome}</h4>
-                                                                    <p className="text-[10px] text-muted-foreground mt-1">
-                                                                        Publicado em {new Date(file.dataPublicacao).toLocaleDateString('pt-BR')}
-                                                                    </p>
+                                                                <div className="flex gap-2 mt-2">
+                                                                    <a 
+                                                                        href={file.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex-1 h-8 bg-primary text-primary-foreground text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
+                                                                    >
+                                                                        <Download className="h-3 w-3" /> DOWNLOAD
+                                                                    </a>
+                                                                    <a 
+                                                                        href={file.originalUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="px-3 h-8 border border-border text-muted-foreground text-[10px] font-bold rounded flex items-center justify-center hover:bg-muted transition-colors"
+                                                                    >
+                                                                        ABRIR NO PNCP
+                                                                    </a>
                                                                 </div>
-                                                                <ExternalLink className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100" />
-                                                            </a>
+                                                            </div>
                                                         ))}
                                                     </div>
                                                 </div>
