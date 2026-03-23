@@ -106,6 +106,16 @@ export default function TransparencySearchPage() {
     const [loadingGlobalBrands, setLoadingGlobalBrands] = useState(false);
     const [globalBrands, setGlobalBrands] = useState<BrandAnalytics[]>([]);
 
+    // Set default dates to last 2 years on mount
+    useEffect(() => {
+        const end = new Date();
+        const start = new Date();
+        start.setFullYear(end.getFullYear() - 2);
+        
+        setDataFinal(end.toISOString().split('T')[0]);
+        setDataInicial(start.toISOString().split('T')[0]);
+    }, []);
+
     // Analytics Cache
     const brandRanking = useMemo(() => {
         if (items.length === 0) return [];
