@@ -6,7 +6,6 @@ const router = express.Router();
 const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
 const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search';
 
-// Lista expandida e categorizada
 const COMMON_BRANDS = [
     'DELL', 'HP', 'LENOVO', 'APPLE', 'SAMSUNG', 'LG', 'ASUS', 'ACER', 'POSITIVO', 'MULTILASER',
     'INTEL', 'AMD', 'EPSON', 'CANON', 'LOGITECH', 'CISCO', 'ARUBA', 'HUAWEI', 'FURUKAWA',
@@ -17,43 +16,36 @@ const COMMON_BRANDS = [
 
 const extractBrand = (text: string): string => {
     if (!text) return 'N/A';
-    
-    // Pattern 1: Rigoroso "Marca: XXXXX"
     const brandMatch = text.match(/\bMarca\s*:\s*([^;,\n\)\/\-]+)/i);
     if (brandMatch && brandMatch[1].trim().length > 1) {
         const found = brandMatch[1].trim().toUpperCase();
-        if (found.length < 30) return found; // Evitar frases inteiras capturadas por erro
+        if (found.length < 30) return found;
     }
-
-    // Pattern 2: Whole word matches para marcas conhecidas
     const upperText = text.toUpperCase();
     for (const brand of COMMON_BRANDS) {
         const regex = new RegExp(`\\b${brand}\\b`, 'i');
         if (regex.test(upperText)) return brand;
     }
-
     return 'N/A';
 };
 
 /**
  * GET /api/transparency/licitacoes
- * Retorna os processos (de 10 em 10 por padrão)
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
         const { pagina = '1', termo, dataInicial, dataFinal, situacao = 'concluido', tam_pagina = '10' } = req.query;
-        
         let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=${tam_pagina}`;
-        
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
-        
         const sit = (situacao === 'todas' || !situacao) ? '' : situacao;
         if (sit) url += `&situacao=${sit}`;
 
         const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
         const data: any = response.data;
-        const totalElements = data.total_items || data.total_elements || 0;
+        
+        // CORREÇÃO: PNCP retorna o total no campo "total"
+        const totalElements = data.total || data.total_items || data.total_elements || 0;
 
         const results = (data.items || []).map((item: any) => ({
             id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
@@ -71,7 +63,7 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         res.json({
             items: results,
             totalItems: Number(totalElements),
-            totalPages: Math.min(100, Math.ceil(Number(totalElements) / Number(tam_pagina))) // Cap em 100 páginas (1000 itens)
+            totalPages: Math.ceil(Number(totalElements) / Number(tam_pagina))
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -80,7 +72,6 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
 /**
  * GET /api/transparency/analytics/global-brands
- * PROFUNDIDADE DE 1000 PROCESSOS (em lotes)
  */
 router.get('/analytics/global-brands', async (req: Request, res: Response) => {
     try {
@@ -90,7 +81,6 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         
-        // Buscar 1000 processos (10 páginas de 100)
         const fetchDepth = 10;
         const allProcesses: any[] = [];
         
@@ -101,41 +91,32 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             
             try {
                 const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
-                if (searchRes.data.items) allProcesses.push(...searchRes.data.items);
-                if (searchRes.data.items.length < 100) break; // Fim dos resultados
+                if (searchRes.data && searchRes.data.items) {
+                    allProcesses.push(...searchRes.data.items);
+                    if (searchRes.data.items.length < 100) break;
+                } else break;
             } catch (e) { break; }
         }
 
-        // Processar os 1000 processos em lotes de 25 para velocidade máxima sem travar
-        const batchSize = 25;
+        const batchSize = 30;
         for (let i = 0; i < allProcesses.length; i += batchSize) {
             const batch = allProcesses.slice(i, i + batchSize);
             await Promise.all(batch.map(async (proc: any) => {
                 try {
-                    const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 5000 });
+                    const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 4000 });
                     const items = itemsRes.data || [];
-                    
                     for (const item of items) {
                         const desc = (item.descricao || item.description || '').toLowerCase();
-                        
-                        // FILTRO DEFINITIVO: O item deve possuir o termo principal para ser contabilizado
-                        // Se buscar "Cadeira de roda", não adianta o processo ter o termo, o ITEM deve ter.
-                        const matchesKeyword = keywords.every(k => desc.includes(k));
-                        
-                        if (matchesKeyword) {
+                        if (keywords.every(k => desc.includes(k))) {
                             let brand = extractBrand(item.descricao || item.description);
-                            
-                            // Se não achou no texto, tenta o resultado oficial (Homologado)
                             if (brand === 'N/A' && item.temResultado) {
                                 try {
-                                    const rUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`;
-                                    const rRes = await axios.get(rUrl, { timeout: 3000 });
+                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
                                     if (rRes.data && rRes.data.length > 0 && rRes.data[0].marcaFornecedor) {
                                         brand = rRes.data[0].marcaFornecedor.toUpperCase().trim();
                                     }
                                 } catch (e) {}
                             }
-
                             if (brand !== 'N/A' && brand.length > 1) {
                                 if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
                                 brandCounts[brand].value++;
@@ -151,7 +132,6 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             .map(([name, data]) => ({ name, ...data }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 30);
-
         res.json(results);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -159,7 +139,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 });
 
 /**
- * ITENS E ARQUIVOS (MANTIDOS COM SEGURANÇA)
+ * Itens e Arquivos
  */
 router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res: Response) => {
     try {
@@ -177,8 +157,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens', async (req: Request, res:
             let vencedor = null;
             let marca = extractBrand(item.descricao || item.description);
             try {
-                const resUrl = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
-                const rr = await axios.get(resUrl);
+                const rr = await axios.get(`${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`);
                 if (rr.data && rr.data.length > 0) {
                     const winner = rr.data[0];
                     vencedor = { nome: winner.nomeRazaoSocialFornecedor, cnpj: winner.niFornecedor, valor: winner.valorTotalHomologado };
@@ -202,8 +181,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
         const { cnpj, ano, sequencial } = req.params;
         const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
         const response = await axios.get(url);
-        const data = response.data || [];
-        const files = data.map((file: any) => ({
+        const files = (response.data || []).map((file: any) => ({
             id: file.id, nome: file.titulo,
             url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}/documento`,
             originalUrl: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${file.sequencial}`,
