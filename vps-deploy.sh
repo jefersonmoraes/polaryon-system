@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export NODE_OPTIONS="--max-old-space-size=4096"
 
 # Carregar variáveis de ambiente do sistema e NVM
 [ -f ~/.bashrc ] && source ~/.bashrc
@@ -33,6 +34,6 @@ echo "=== [8/9] Sincronizando schema do banco de dados ==="
 npx prisma db push --accept-data-loss || { echo "ERRO: Falha no prisma db push"; exit 1; }
 
 echo "=== [9/9] Reiniciando processos no PM2 ==="
-pm2 restart polaryon-backend || pm2 start dist/server.js --name polaryon-backend
+pm2 restart polaryon-backend || pm2 start dist/server.js --name polaryon-backend || { echo "ERRO: Falha ao reiniciar PM2"; exit 1; }
 
 echo "=== DEPLOY CONCLUÍDO COM SUCESSO! ==="
