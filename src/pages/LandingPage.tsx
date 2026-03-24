@@ -133,15 +133,15 @@ export default function LandingPage() {
       </div>
 
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-black/60 backdrop-blur-xl py-4' : 'bg-transparent py-8'}`}>
-        <div className="max-w-[1800px] mx-auto px-10 flex justify-between items-center text-xs font-bold tracking-[0.2em] uppercase">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_15px_rgba(37,99,235,0.6)]" />
-            <span className="text-white font-oswald text-xl tracking-tighter">POLARYON</span>
-            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-black/60 backdrop-blur-xl py-3 md:py-4' : 'bg-transparent py-6 md:py-8'}`}>
+        <div className="max-w-[1800px] mx-auto px-4 md:px-10 flex justify-between items-center text-[10px] md:text-xs font-bold tracking-[0.1em] md:tracking-[0.2em] uppercase">
+          <div className="flex items-center gap-2 md:gap-3">
+            <img src={logo} alt="Logo" className="w-6 h-6 md:w-8 md:h-8 object-contain drop-shadow-[0_0_15px_rgba(37,99,235,0.6)]" />
+            <span className="text-white font-oswald text-lg md:text-xl tracking-tighter">POLARYON</span>
+            <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-blue-500 rounded-full animate-pulse" />
           </div>
 
-          <div className="flex items-center gap-10">
+          <div className="flex items-center gap-3 md:gap-10">
             <a href="#about" className="hover:text-blue-500 transition-colors">Sobre</a>
             <a href="#contact" className="hover:text-blue-500 transition-colors">Contato</a>
           </div>
@@ -156,7 +156,7 @@ export default function LandingPage() {
           initial={{ x: -200, opacity: 0 }}
           animate={{ x: 0, opacity: 0.15 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
-          className="absolute left-0 top-0 w-[35vw] h-auto pointer-events-none z-0"
+          className="absolute left-0 top-0 w-[40vw] md:w-[35vw] h-auto pointer-events-none z-0 hidden sm:block"
         >
           <img src={jef} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
@@ -165,7 +165,7 @@ export default function LandingPage() {
           initial={{ x: 200, opacity: 0 }}
           animate={{ x: 0, opacity: 0.15 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
-          className="absolute right-0 top-0 w-[35vw] h-auto pointer-events-none z-0"
+          className="absolute right-0 top-0 w-[40vw] md:w-[35vw] h-auto pointer-events-none z-0 hidden sm:block"
         >
           <img src={belt} alt="" className="w-full h-auto grayscale brightness-150" />
         </motion.div>
@@ -182,8 +182,8 @@ export default function LandingPage() {
               transition={{ duration: 1.5, ease: "easeOut" }}
               className="flex flex-col items-center justify-center gap-4 mb-2"
             >
-              <img src={logo} alt="" className="w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
-              <h1 className="text-[10vw] font-['Montserrat'] font-[900] leading-none tracking-tighter uppercase metallic-text">
+              <img src={logo} alt="" className="w-[40vw] md:w-[18.5vw] h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+              <h1 className="text-[14vw] md:text-[10vw] font-['Montserrat'] font-[900] leading-none tracking-tighter uppercase metallic-text text-center">
                 POLARYON
               </h1>
             </motion.div>
@@ -216,30 +216,30 @@ export default function LandingPage() {
       {/* Vertical Cards with Movement */}
       <section className="relative py-40 px-6 z-10">
         <div className="max-w-7xl mx-auto space-y-20">
-          <div className="grid md:grid-cols-2 gap-20 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 items-center">
             <ScrollParaCard offset={100}>
-              <div className="glass-card p-12 rounded-[3rem] group">
+              <div className="glass-card p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] group">
                 <span className="text-blue-500 text-xs font-bold tracking-[0.4em] mb-8 block uppercase">01 / Inteligência</span>
-                <h3 className="text-6xl font-anton uppercase leading-none mb-8 tracking-tighter">
+                <h3 className="text-4xl md:text-6xl font-anton uppercase leading-none mb-8 tracking-tighter">
                   ANÁLISE <br /> <span className="text-white/40">ESTRATÉGICA</span>
                 </h3>
-                <p className="text-white/50 text-base leading-relaxed tracking-wider mb-10 font-light">
+                <p className="text-white/50 text-sm md:text-base leading-relaxed tracking-wider mb-10 font-light text-justify md:text-left">
                   Transformamos dados complexos em oportunidades claras. Nossa metodologia de análise para editais públicos garante vantagem competitiva no mercado de licitações.
                 </p>
-                <Zap className="text-blue-600 w-12 h-12 opacity-40" />
+                <Zap className="text-blue-600 w-10 h-10 md:w-12 md:h-12 opacity-40" />
               </div>
             </ScrollParaCard>
 
             <ScrollParaCard offset={150}>
-              <div className="glass-card p-12 rounded-[3rem] md:translate-y-20">
+              <div className="glass-card p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] md:translate-y-20">
                 <span className="text-blue-500 text-xs font-bold tracking-[0.4em] mb-8 block uppercase">02 / Segurança</span>
-                <h3 className="text-6xl font-anton uppercase leading-none mb-8 tracking-tighter">
+                <h3 className="text-4xl md:text-6xl font-anton uppercase leading-none mb-8 tracking-tighter">
                   COMPLIANCE <br /> <span className="text-white/40">RIGOROSO</span>
                 </h3>
-                <p className="text-white/50 text-base leading-relaxed tracking-wider mb-10 font-light">
+                <p className="text-white/50 text-sm md:text-base leading-relaxed tracking-wider mb-10 font-light text-justify md:text-left">
                   A Polaryon opera com os mais altos padrões de transparência e ética, assegurando conformidade total em todos os processos de contratação e supply chain.
                 </p>
-                <Shield className="text-blue-600 w-12 h-12 opacity-40" />
+                <Shield className="text-blue-600 w-10 h-10 md:w-12 md:h-12 opacity-40" />
               </div>
             </ScrollParaCard>
           </div>
@@ -247,12 +247,12 @@ export default function LandingPage() {
       </section>
 
       {/* Giant Scrolling Text */}
-      <section className="py-40 bg-zinc-950/20 overflow-hidden relative z-10">
+      <section className="py-20 md:py-40 bg-zinc-950/20 overflow-hidden relative z-10">
         <div className="flex whitespace-nowrap scrolling-text">
-          <p className="text-[12rem] font-anton text-white/5 uppercase leading-none pr-20 select-none">
+          <p className="text-[4rem] md:text-[12rem] font-anton text-white/5 uppercase leading-none pr-10 md:pr-20 select-none">
             EFICIÊNCIA • ESTRATÉGIA • POLARYON • EXCELÊNCIA • TECNOLOGIA • COMPLIANCE • 
           </p>
-          <p className="text-[12rem] font-anton text-white/5 uppercase leading-none pr-20 select-none">
+          <p className="text-[4rem] md:text-[12rem] font-anton text-white/5 uppercase leading-none pr-10 md:pr-20 select-none">
             EFICIÊNCIA • ESTRATÉGIA • POLARYON • EXCELÊNCIA • TECNOLOGIA • COMPLIANCE • 
           </p>
         </div>
@@ -262,17 +262,17 @@ export default function LandingPage() {
       <section id="about" className="py-40 px-10 relative z-10">
         <div className="max-w-[1800px] mx-auto">
           <div className="grid lg:grid-cols-2 gap-20 mb-24">
-            <div className="sticky top-40 h-fit">
-              <h2 className="text-8xl lg:text-9xl font-anton uppercase leading-tight tracking-[0.05em] mb-12">
+            <div className="sticky top-20 md:top-40 h-fit">
+              <h2 className="text-5xl md:text-8xl lg:text-9xl font-anton uppercase leading-none tracking-tight mb-6 md:mb-12">
                 SOBRE A <br />
                 <span className="text-blue-600">POLARYON.</span>
               </h2>
-              <div className="w-32 h-2 bg-blue-600" />
+              <div className="w-20 md:w-32 h-1 md:h-2 bg-blue-600" />
             </div>
             
             <div className="space-y-12">
               <ScrollParaCard offset={40}>
-                <p className="text-7xl font-anton text-white opacity-80 uppercase leading-none tracking-tight">
+                <p className="text-3xl md:text-7xl font-anton text-white opacity-80 uppercase leading-none tracking-tight">
                   Nós não apenas participamos de licitações. <br />
                   <span className="text-white/20">Nós redefinimos o sucesso nelas.</span>
                 </p>
@@ -317,7 +317,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-24 items-center">
             <div>
-              <h2 className="text-7xl font-anton uppercase leading-tight mb-8">
+              <h2 className="text-5xl md:text-7xl font-anton uppercase leading-tight mb-8">
                 FALE COM O <br />
                 <span className="text-blue-600">COMERCIAL.</span>
               </h2>
@@ -328,7 +328,7 @@ export default function LandingPage() {
               {/* CONTACT CARD */}
               <motion.div 
                 whileHover={{ scale: 1.02, rotateY: 5 }}
-                className="glass-card p-12 rounded-[4rem] relative overflow-hidden group shadow-2xl"
+                className="glass-card p-8 md:p-12 rounded-[2rem] md:rounded-[4rem] relative overflow-hidden group shadow-2xl"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[60px]" />
                 <div className="space-y-8 relative z-10">
@@ -392,9 +392,9 @@ export default function LandingPage() {
 
       {/* Minimal Footer */}
       <footer className="py-10 px-10 border-t border-white/5 z-10 relative">
-        <div className="max-w-[1800px] mx-auto flex justify-between items-center text-white/20 text-[10px] uppercase font-bold tracking-[0.5em]">
+        <div className="max-w-[1800px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-white/20 text-[8px] md:text-[10px] uppercase font-bold tracking-[0.3em] md:tracking-[0.5em] text-center md:text-left">
           <span>© {new Date().getFullYear()} POLARYON / 65.516.785/0001-03 — TODOS OS DIREITOS RESERVADOS.</span>
-          <Link to="/login" className="hover:text-white transition-colors">
+          <Link to="/login" className="hover:text-white transition-colors border border-white/10 px-4 py-2 rounded-full">
             ÁREA RESTRITA
           </Link>
         </div>

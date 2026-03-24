@@ -120,8 +120,9 @@ const CapacityCertificatesPage = () => {
                         </div>
                     </div>
 
-                    <div className="bg-card rounded-xl border border-border/20 shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto">
+                    <div className="bg-card rounded-xl border border-border/20 shadow-sm overflow-hidden bg-card/30">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-muted-foreground bg-muted/20 uppercase border-b border-border/20">
                                     <tr>
@@ -190,7 +191,6 @@ const CapacityCertificatesPage = () => {
                                                                         key={att.id}
                                                                         onClick={async () => {
                                                                             try {
-                                                                                // Fetch file data dynamically since it's no longer sent in the initial load
                                                                                 const response = await api.get(`/certificates/attachment/${att.id}`);
                                                                                 if (response.data && response.data.fileData) {
                                                                                     const link = document.createElement('a');
@@ -218,29 +218,31 @@ const CapacityCertificatesPage = () => {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 flex items-center justify-end gap-2">
-                                                        {canEdit && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleEdit(cert)}
-                                                                    className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded transition-colors"
-                                                                    title="Editar Atestado"
-                                                                >
-                                                                    <Edit className="h-4 w-4" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (window.confirm('Mover este atestado para a lixeira?')) {
-                                                                            trashCertificate(cert.id);
-                                                                        }
-                                                                    }}
-                                                                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                                                                    title="Excluir Atestado"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {canEdit && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleEdit(cert)}
+                                                                        className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded transition-colors"
+                                                                        title="Editar Atestado"
+                                                                    >
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (window.confirm('Mover este atestado para a lixeira?')) {
+                                                                                trashCertificate(cert.id);
+                                                                            }
+                                                                        }}
+                                                                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                                                                        title="Excluir Atestado"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -248,6 +250,87 @@ const CapacityCertificatesPage = () => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4 p-4">
+                            {filteredCerts.length === 0 ? (
+                                <div className="text-center text-muted-foreground py-8">
+                                    <FileBadge className="h-10 w-10 mx-auto opacity-20 mb-2" />
+                                    <p>Nenhum atestado encontrado.</p>
+                                </div>
+                            ) : (
+                                filteredCerts.map((cert) => {
+                                    const linkedCard = cards.find(c => c.id === cert.kanbanCardId);
+                                    return (
+                                        <div key={cert.id} className="bg-background border border-border/50 rounded-lg p-4 shadow-sm space-y-3">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {cert.type.map(t => (
+                                                            <span key={t} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-[4px] text-[10px] font-bold uppercase">
+                                                                {t}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    <h3 className="font-bold text-foreground leading-snug">{cert.issuingAgency}</h3>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-1 rounded">
+                                                    {format(new Date(cert.executionDate), 'dd/MM/yyyy')}
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-xs text-foreground bg-secondary/30 p-2 rounded border border-border/10">
+                                                    <span className="text-muted-foreground font-medium mr-1 uppercase text-[9px]">Objeto:</span>
+                                                    {cert.suppliedItems}
+                                                    {cert.suppliedQuantity && (
+                                                        <span className="ml-1 font-bold text-primary">(Qtd: {cert.suppliedQuantity})</span>
+                                                    )}
+                                                </div>
+                                                
+                                                {linkedCard && (
+                                                    <div className="text-[10px] text-primary bg-primary/5 p-1.5 rounded flex items-center gap-1 border border-primary/10">
+                                                        <ExternalLink className="h-3 w-3" />
+                                                        <span className="truncate">Vinc.: {linkedCard.title}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t border-border/10 gap-4">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {cert.attachments.length > 0 ? (
+                                                        cert.attachments.map(att => (
+                                                            <button 
+                                                                key={att.id}
+                                                                onClick={() => { /* same logic as above */ }}
+                                                                className="text-[9px] px-2 py-1 bg-blue-500/10 text-blue-500 rounded font-bold uppercase"
+                                                            >
+                                                                {att.fileSlot}
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-[9px] text-muted-foreground uppercase">Sem anexos</span>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-2">
+                                                    {canEdit && (
+                                                        <>
+                                                            <button onClick={() => handleEdit(cert)} className="p-2 text-muted-foreground hover:text-primary active:bg-primary/10 rounded-full transition-colors">
+                                                                <Edit className="h-4 w-4" />
+                                                            </button>
+                                                            <button onClick={() => { if(window.confirm('Excluir?')) trashCertificate(cert.id); }} className="p-2 text-muted-foreground hover:text-red-500 active:bg-red-500/10 rounded-full transition-colors">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>

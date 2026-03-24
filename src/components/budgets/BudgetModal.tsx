@@ -1199,59 +1199,87 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 Nenhum produto ou serviço listado neste fornecedor.
                             </div>
                         ) : (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2">
+                            <div className="space-y-3">
+                                {/* Desktop Header */}
+                                <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2">
                                     <div className="col-span-1 border-r border-border/50 text-center">#</div>
-                                    <div className="col-span-5">Descrição</div>
+                                    <div className="col-span-4">Descrição</div>
                                     <div className="col-span-2 text-right">Qtd</div>
                                     <div className="col-span-2 text-right">V. Unit</div>
-                                    <div className="col-span-2 text-right pr-6">Total</div>
+                                    <div className="col-span-3 text-right pr-6">Total</div>
                                 </div>
+
                                 {item.items.map((sub: any, subIdx: number) => (
-                                    <div key={sub.id} className="grid grid-cols-12 gap-2 items-center bg-secondary/50 p-2 rounded-lg border border-border group/sub">
-                                        <div className="col-span-1 text-[10px] text-muted-foreground text-center font-medium border-r border-border/50">
+                                    <div key={sub.id} className="flex flex-col sm:grid sm:grid-cols-12 gap-3 sm:gap-2 items-start sm:items-center bg-secondary/50 p-3 sm:p-2 rounded-lg border border-border group/sub">
+                                        {/* Mobile Header with Index and Delete */}
+                                        <div className="flex sm:hidden items-center justify-between w-full border-b border-border/50 pb-2 mb-1">
+                                            <span className="text-[10px] font-bold text-muted-foreground">ITEM #{subIdx + 1}</span>
+                                            {canEdit && (
+                                                <button
+                                                    onClick={() => removeSubItem(sub.id)}
+                                                    className="p-1 text-destructive hover:bg-destructive/10 rounded transition-colors"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="hidden sm:block col-span-1 text-[10px] text-muted-foreground text-center font-medium border-r border-border/50">
                                             {subIdx + 1}
                                         </div>
-                                        <div className="col-span-5 relative">
+
+                                        <div className="w-full sm:col-span-4 relative">
+                                            <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Descrição</label>
                                             <input
                                                 value={sub.description}
                                                 disabled={!canEdit}
                                                 onChange={e => updateSubItem(sub.id, 'description', e.target.value)}
                                                 placeholder="Nome do produto ou serviço..."
-                                                className="w-full bg-transparent border-none text-xs px-1 py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                                                className="w-full bg-background sm:bg-transparent border border-border sm:border-none text-xs px-2 sm:px-1 py-1.5 sm:py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                                             />
                                         </div>
-                                        <div className="col-span-2">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                disabled={!canEdit}
-                                                value={sub.quantity || ''}
-                                                onChange={e => updateSubItem(sub.id, 'quantity', Number(e.target.value))}
-                                                className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                                            />
+
+                                        <div className="grid grid-cols-2 sm:contents gap-3 w-full">
+                                            <div className="sm:col-span-2">
+                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Qtd</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    disabled={!canEdit}
+                                                    value={sub.quantity || ''}
+                                                    onChange={e => updateSubItem(sub.id, 'quantity', Number(e.target.value))}
+                                                    className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                                                />
+                                            </div>
+                                            <div className="sm:col-span-2 relative">
+                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">V. Unit</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">R$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        disabled={!canEdit}
+                                                        value={sub.unitPrice || ''}
+                                                        onChange={e => updateSubItem(sub.id, 'unitPrice', Number(e.target.value))}
+                                                        className="w-full bg-background border border-border/50 rounded text-xs pl-6 pr-2 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="col-span-2 relative">
-                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">R$</span>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                disabled={!canEdit}
-                                                value={sub.unitPrice || ''}
-                                                onChange={e => updateSubItem(sub.id, 'unitPrice', Number(e.target.value))}
-                                                className="w-full bg-background border border-border/50 rounded text-xs pl-6 pr-2 py-1 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                                            />
-                                        </div>
-                                        <div className="col-span-2 text-right text-xs font-mono font-bold text-primary flex justify-between items-center pl-1">
-                                            <span className="truncate flex items-center gap-1 justify-end w-full">
-                                                <DollarSign className="h-3 w-3 inline text-muted-foreground mr-1" />
-                                                {formatCurrency(sub.totalPrice || 0)}
-                                            </span>
+
+                                        <div className="w-full sm:col-span-3 text-right text-xs font-mono font-bold text-primary flex justify-between items-center sm:pl-1 border-t sm:border-none border-border/50 pt-2 sm:pt-0">
+                                            <div className="flex flex-col sm:contents items-end w-full">
+                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-0.5 block">Total Item</label>
+                                                <span className="truncate flex items-center gap-1 justify-end w-full">
+                                                    <DollarSign className="h-3 w-3 inline text-muted-foreground mr-1" />
+                                                    {formatCurrency(sub.totalPrice || 0)}
+                                                </span>
+                                            </div>
                                             {canEdit && (
                                                 <button
                                                     onClick={() => removeSubItem(sub.id)}
-                                                    className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
+                                                    className="hidden sm:block p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
                                                     title="Remover Item"
                                                 >
                                                     <X className="h-3.5 w-3.5" />
@@ -1570,8 +1598,16 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 <div className="flex-1 flex overflow-hidden">
                     {/* Left Sidebar (Supplier) */}
                     {expandedQuoteId && (
-                        <div className="w-80 lg:w-96 border-r border-border bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-[inset_-10px_0_20px_-20px_rgba(0,0,0,0.1)] transition-all animate-in slide-in-from-left-8">
-                            <h3 className="text-sm font-bold flex items-center gap-2 border-b border-border pb-2 text-primary">
+                        <div className="fixed lg:relative inset-y-0 left-0 w-full sm:w-80 lg:w-96 border-r border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_-10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in slide-in-from-left-8">
+                            <div className="flex items-center justify-between lg:hidden mb-2">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
+                                    <Building2 className="h-4 w-4" /> Perfil do Fornecedor
+                                </h3>
+                                <button onClick={() => setExpandedQuoteId(null)} className="p-2 hover:bg-secondary rounded-full">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <h3 className="hidden lg:flex text-sm font-bold items-center gap-2 border-b border-border pb-2 text-primary">
                                 <Building2 className="h-4 w-4" /> Perfil do Fornecedor
                             </h3>
                             {supplierProfile ? (
@@ -1937,8 +1973,16 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
                     {/* Right Sidebar (Transporter) */}
                     {expandedQuoteId && (
-                        <div className="w-80 lg:w-96 border-l border-border bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-[inset_10px_0_20px_-20px_rgba(0,0,0,0.1)] transition-all animate-in slide-in-from-right-8">
-                            <h3 className="text-sm font-bold flex items-center gap-2 border-b border-border pb-2 text-primary">
+                        <div className="fixed lg:relative inset-y-0 right-0 w-full sm:w-80 lg:w-96 border-l border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in slide-in-from-right-8">
+                            <div className="flex items-center justify-between lg:hidden mb-2">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
+                                    <Truck className="h-4 w-4" /> Perfil da Transportadora
+                                </h3>
+                                <button onClick={() => setExpandedQuoteId(null)} className="p-2 hover:bg-secondary rounded-full">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <h3 className="hidden lg:flex text-sm font-bold items-center gap-2 border-b border-border pb-2 text-primary">
                                 <Truck className="h-4 w-4" /> Perfil da Transportadora
                             </h3>
                             {transporterProfile ? (

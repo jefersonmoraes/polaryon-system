@@ -509,28 +509,28 @@ const SuppliersPage = () => {
                                     </div>
 
                                     {/* Save Button / Action */}
-                                    <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row gap-4 items-center justify-between">
-                                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                            <Briefcase className="h-4 w-4" />
+                                    <div className="mt-8 pt-6 border-t border-border flex flex-col lg:flex-row gap-4 items-center justify-between">
+                                        <p className="text-sm text-muted-foreground flex items-center gap-2 text-center lg:text-left">
+                                            <Briefcase className="h-4 w-4 shrink-0" />
                                             Salve este contato para acesso rápido nas suas tarefas e boards.
                                         </p>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                                             <button
                                                 onClick={() => setResult(null)}
-                                                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                                                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                                             >
                                                 Limpar Busca
                                             </button>
                                             <button
                                                 onClick={() => handleSave('Fornecedor')}
-                                                className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-lg shadow-md hover:bg-primary/90 hover:shadow-lg transition-all flex items-center gap-2"
+                                                className="w-full sm:w-auto px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-lg shadow-md hover:bg-primary/90 hover:shadow-lg transition-all flex items-center justify-center gap-2"
                                             >
                                                 <Building2 className="h-4 w-4" />
                                                 Salvar Fornecedor
                                             </button>
                                             <button
                                                 onClick={() => handleSave('Transportadora')}
-                                                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                                                className="w-full sm:w-auto px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                                             >
                                                 <Truck className="h-4 w-4" />
                                                 Salvar Transportadora

@@ -198,16 +198,16 @@ export default function LoginPage() {
             </Link>
 
             <div className="w-full max-w-lg z-10 animate-in fade-in zoom-in-95 duration-1000">
-                <div className="text-center mb-12">
-                    <img src={logo} alt="Polaryon" className="w-24 h-24 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(37,99,235,0.4)]" />
-                    <h1 className="text-7xl lg:text-8xl font-anton text-white tracking-tighter uppercase leading-none mb-4">
-                        Acesso <br />
+                <div className="text-center mb-6 md:mb-12 px-4">
+                    <img src={logo} alt="Polaryon" className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 drop-shadow-[0_0_20px_rgba(37,99,235,0.4)]" />
+                    <h1 className="text-4xl md:text-7xl lg:text-8xl font-anton text-white tracking-tighter uppercase leading-[0.9] md:leading-none mb-4">
+                        Acesso <br className="hidden md:block" />
                         <span className="text-blue-600">Restrito.</span>
                     </h1>
                     <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
+                <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl relative overflow-hidden">
                     {/* Security Overlay for Bots */}
                     <input
                         type="text"
@@ -242,7 +242,7 @@ export default function LoginPage() {
                                     value={captchaAnswer}
                                     onChange={handleCaptchaChange}
                                     maxLength={5}
-                                    className="w-full bg-transparent border-b-2 border-white/10 focus:border-blue-600 px-4 py-4 text-center text-3xl font-anton text-white outline-none transition-all placeholder:text-white/5 tracking-[0.5em]"
+                                    className="w-full bg-transparent border-b-2 border-white/10 focus:border-blue-600 px-2 py-4 text-center text-2xl md:text-3xl font-anton text-white outline-none transition-all placeholder:text-white/5 tracking-[0.3em] md:tracking-[0.5em]"
                                     placeholder="CÓDIGO"
                                 />
                             </div>

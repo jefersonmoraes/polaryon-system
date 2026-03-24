@@ -260,7 +260,7 @@ export default function TransparencySearchPage() {
                         </div>
                     </div>
 
-                    <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
+                    <form onSubmit={handleSearch} className="flex flex-col xl:flex-row gap-3">
                         <div className="flex-1 relative group">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <input 
@@ -272,34 +272,34 @@ export default function TransparencySearchPage() {
                             />
                         </div>
                         
-                        <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-lg border border-border">
-                            <div className="relative">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-1 bg-muted/50 rounded-lg border border-border">
+                            <div className="relative flex-1">
                                 <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">De</span>
                                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
                                     type="date" 
                                     value={dataInicial}
                                     onChange={(e) => setDataInicial(e.target.value)}
-                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-32"
+                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-full sm:w-32"
                                 />
                             </div>
-                            <div className="relative">
+                            <div className="relative flex-1">
                                 <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">Até</span>
                                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
                                     type="date" 
                                     value={dataFinal}
                                     onChange={(e) => setDataFinal(e.target.value)}
-                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-32"
+                                    className="h-8 pl-8 pr-1 bg-background border-none rounded text-[10px] focus:ring-0 outline-none w-full sm:w-32"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex border border-border rounded-lg overflow-hidden h-10 bg-background">
+                        <div className="flex flex-col sm:flex-row border border-border rounded-lg overflow-hidden sm:h-10 bg-background">
                             <select 
                                 value={situacao}
                                 onChange={(e) => setSituacao(e.target.value)}
-                                className="h-full px-3 text-xs bg-transparent outline-none border-r border-border font-medium cursor-pointer"
+                                className="h-10 sm:h-full px-3 text-xs bg-transparent outline-none border-b sm:border-b-0 sm:border-r border-border font-medium cursor-pointer"
                             >
                                 <option value="todas">Todas as Situações</option>
                                 <option value="em-andamento">Em Andamento</option>
@@ -310,7 +310,7 @@ export default function TransparencySearchPage() {
                             <button 
                                 type="submit"
                                 disabled={loading}
-                                className="h-full px-6 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+                                className="h-10 sm:h-full px-6 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                                 Buscar
@@ -349,7 +349,7 @@ export default function TransparencySearchPage() {
                         <div className="flex flex-col gap-6">
                             {/* Global Analytics Top Row */}
                             {globalBrands.length > 0 && results.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                                     {globalBrands.slice(0, 3).map((brand, i) => (
                                         <div key={i} className="bg-gradient-to-br from-card to-muted/30 border border-border/60 p-4 rounded-2xl shadow-sm flex items-center gap-4 group hover:border-primary/40 transition-all">
                                             <div className="p-3 bg-primary/10 text-primary rounded-xl font-black text-xl">
@@ -419,48 +419,46 @@ export default function TransparencySearchPage() {
 
                                 {results.length > 0 && (
                                     <div className="flex flex-col items-center gap-4 pb-12 mt-8 border-t border-border/50 pt-8">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1 sm:gap-2">
                                             <button 
                                                 onClick={() => {
                                                     const prev = Math.max(1, page - 1);
                                                     handlePageChange(prev);
                                                 }}
                                                 disabled={page === 1 || loading}
-                                                className="h-10 px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-2"
+                                                className="h-10 px-3 sm:px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-1 sm:gap-2"
                                             >
                                                 <ChevronRight className="h-4 w-4 rotate-180" />
-                                                Anterior
+                                                <span className="hidden sm:inline">Anterior</span>
                                             </button>
                                             
-                                            <div className="flex items-center gap-1.5 px-2">
+                                            <div className="flex items-center gap-1 sm:gap-1.5 px-1 sm:px-2">
                                                 {/* Mostrar páginas vizinhas */}
-                                                {Array.from({ length: Math.min(5, Math.ceil(totalResults / 10)) }, (_, i) => {
+                                                {Array.from({ length: Math.min(Math.ceil(totalResults / 10), 5) }, (_, i) => {
                                                     const p = i + 1;
-                                                    // Se estivermos em páginas altas, mostrar um range diferente? 
-                                                    // Por simplicidade, as primeiras 5 ou as 5 ao redor da atual
+                                                    const isMobileHide = p > 3 && p !== page;
                                                     return (
                                                         <button
                                                             key={p}
                                                             onClick={() => handlePageChange(p)}
                                                             disabled={loading}
-                                                            className={`h-10 w-10 rounded-xl text-xs font-bold transition-all ${page === p ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card border border-border hover:border-primary/50'}`}
+                                                            className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl text-xs font-bold transition-all ${isMobileHide ? 'hidden sm:flex' : 'flex'} items-center justify-center ${page === p ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card border border-border hover:border-primary/50'}`}
                                                         >
                                                             {p}
                                                         </button>
                                                     );
                                                 })}
-                                                {Math.ceil(totalResults / 10) > 5 && <span className="text-muted-foreground px-1">...</span>}
+                                                {Math.ceil(totalResults / 10) > 5 && <span className="text-muted-foreground px-1 hidden sm:inline">...</span>}
                                             </div>
-
                                             <button 
                                                 onClick={() => {
                                                     const next = page + 1;
                                                     handlePageChange(next);
                                                 }}
                                                 disabled={!hasMore || loading}
-                                                className="h-10 px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-2"
+                                                className="h-10 px-3 sm:px-4 bg-card border border-border rounded-xl text-xs font-bold hover:border-primary/50 disabled:opacity-30 transition-all flex items-center gap-1 sm:gap-2"
                                             >
-                                                Próxima
+                                                <span className="hidden sm:inline">Próxima</span>
                                                 <ChevronRight className="h-4 w-4" />
                                             </button>
                                         </div>
@@ -569,34 +567,34 @@ export default function TransparencySearchPage() {
 
                             <div className="flex-1 overflow-hidden">
                                 <Tabs defaultValue="itens" className="h-full flex flex-col">
-                                    <div className="px-6 border-b border-border bg-card">
-                                        <TabsList className="bg-transparent h-12 gap-6 p-0">
+                                    <div className="px-4 md:px-6 border-b border-border bg-card">
+                                        <TabsList className="bg-transparent h-12 gap-3 md:gap-6 p-0 flex-nowrap overflow-x-auto scrollbar-hide">
                                             <TabsTrigger 
                                                 value="itens" 
-                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
+                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >
-                                                <Package className="h-4 w-4 mr-2" />
+                                                <Package className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                                 Itens e Vencedores
                                             </TabsTrigger>
                                             <TabsTrigger 
                                                 value="winner-docs" 
-                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
+                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >
-                                                <Award className="h-4 w-4 mr-2" />
+                                                <Award className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                                 Docs do Vencedor
                                             </TabsTrigger>
                                             <TabsTrigger 
                                                 value="analytics" 
-                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
+                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >
-                                                <BarChart3 className="h-4 w-4 mr-2" />
+                                                <BarChart3 className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                                 Análise de Mercado
                                             </TabsTrigger>
                                             <TabsTrigger 
                                                 value="files" 
-                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
+                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >
-                                                <FileText className="h-4 w-4 mr-2" />
+                                                <FileText className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
                                                 Arquivos PNCP
                                             </TabsTrigger>
                                         </TabsList>
@@ -661,7 +659,7 @@ export default function TransparencySearchPage() {
                                                                     <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2 border border-emerald-500/10">
                                                                         <p className="text-[10px] font-bold text-muted-foreground uppercase mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">Marca Ofertada:</p>
                                                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 break-words line-clamp-2 leading-tight">
-                                                                            {item.vencedor.marca || item.marca || 'N/A'}
+                                                                            {(item.vencedor as any).marca || item.marca || 'N/A'}
                                                                         </p>
                                                                     </div>
 

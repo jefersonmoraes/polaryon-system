@@ -254,8 +254,9 @@ export default function AdminDashboardPage() {
                 </div>
             )}
 
-            <div className="bg-neutral-900 border border-border rounded-xl flex-1 flex flex-col relative z-10 shadow-lg mt-8">
-                <div className="overflow-x-auto custom-scrollbar">
+            <div className="bg-neutral-900 border border-border rounded-xl flex-1 flex flex-col relative z-10 shadow-lg mt-8 overflow-hidden">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-muted text-muted-foreground uppercase text-[10px] font-bold tracking-wider relative border-b border-border">
                             <tr>
@@ -389,6 +390,125 @@ export default function AdminDashboardPage() {
                             })}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden flex flex-col divide-y divide-border">
+                    {isLoading ? (
+                        <div className="px-5 py-12 text-center text-muted-foreground animate-pulse">
+                            <RefreshCcw className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+                            Sincronizando Banco de Dados...
+                        </div>
+                    ) : systemsUsersDb.map(user => {
+                        const isMe = user.id === currentUser?.id;
+                        return (
+                            <div key={user.id} className="p-5 space-y-4 bg-neutral-900 group">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-sm shrink-0 truncate overflow-hidden">
+                                            {user.photoURL ? <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-foreground flex items-center gap-2">
+                                                <div className={`w-2 h-2 rounded-full shrink-0 ${onlineUsers.includes(user.id) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-slate-500/30'}`} />
+                                                {user.name}
+                                                {isMe && <span className="bg-primary/20 text-primary text-[9px] px-1.5 py-0.5 rounded uppercase">Você</span>}
+                                            </span>
+                                            <span className="text-xs font-mono text-muted-foreground truncate max-w-[180px]">{user.email}</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteUser(user.id)}
+                                        disabled={isMe}
+                                        className={`p-2 rounded bg-destructive/10 text-destructive transition-colors ${isMe ? 'opacity-0' : 'opacity-100'}`}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-2">
+                                    <button
+                                        onClick={() => toggleRole(user.id)}
+                                        disabled={isMe}
+                                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 ${user.role === 'ADMIN'
+                                            ? 'bg-primary/20 text-primary'
+                                            : user.role === 'CONTADOR'
+                                                ? 'bg-amber-500/20 text-amber-500'
+                                                : 'bg-secondary text-muted-foreground'
+                                            } ${isMe ? 'opacity-50' : ''}`}
+                                    >
+                                        {user.role === 'ADMIN' ? <ShieldAlert className="w-3 h-3" /> : (user.role === 'CONTADOR' ? <KeyRound className="w-3 h-3" /> : <Users className="w-3 h-3" />)}
+                                        Nível: {user.role}
+                                    </button>
+
+                                    <button
+                                        onClick={() => toggleStatus(user.id)}
+                                        disabled={isMe}
+                                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors border ${user.status === 'active'
+                                            ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/5'
+                                            : user.status === 'invited'
+                                                ? 'text-amber-500 border-amber-500/30 bg-amber-500/5'
+                                                : 'text-destructive border-destructive/30 bg-destructive/5'
+                                            } ${isMe ? 'opacity-50' : ''}`}
+                                    >
+                                        {user.status === 'active' ? 'Ativo' : (user.status === 'invited' ? 'Pendente' : 'Desativado')}
+                                    </button>
+                                </div>
+
+                                {user.role === 'USER' && (
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex flex-col gap-2">
+                                            <label className="flex items-center gap-3 p-3 rounded-lg bg-secondary/20 border border-border/50 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={user.permissions.canEdit}
+                                                    onChange={() => togglePermission(user.id, 'canEdit')}
+                                                    className="rounded text-primary focus:ring-primary h-4 w-4 bg-background border-border"
+                                                />
+                                                <span className="font-medium">Escrever e Excluir</span>
+                                            </label>
+                                            <label className="flex items-center gap-3 p-3 rounded-lg bg-secondary/20 border border-border/50 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={user.permissions.canDownload}
+                                                    onChange={() => togglePermission(user.id, 'canDownload')}
+                                                    className="rounded text-primary focus:ring-primary h-4 w-4 bg-background border-border"
+                                                />
+                                                <span className="font-medium">Exportar Planilhas</span>
+                                            </label>
+                                        </div>
+
+                                        <div className="bg-muted/40 p-3 rounded-xl border border-border/50 space-y-3">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                <Monitor className="w-3 h-3" /> Telas Autorizadas
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {AVAILABLE_SCREENS.map(screen => {
+                                                    const hasAccess = user.permissions.allowedScreens?.includes('ALL') || user.permissions.allowedScreens?.includes(screen.id);
+                                                    return (
+                                                        <button
+                                                            key={screen.id}
+                                                            onClick={() => toggleScreenAccess(user.id, screen.id)}
+                                                            className={`text-[10px] px-2 py-2 rounded-md font-medium text-left transition-colors truncate ${hasAccess ? 'bg-primary text-primary-foreground' : 'bg-background border border-border text-muted-foreground'}`}
+                                                        >
+                                                            {screen.label}
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {user.role !== 'USER' && (
+                                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary italic flex items-center gap-2">
+                                        <ShieldCheck className="w-4 h-4" /> 
+                                        Acesso total ao sistema habilitado para este cargo.
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
         </div>

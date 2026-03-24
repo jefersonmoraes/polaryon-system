@@ -187,71 +187,116 @@ const AuditLogPage = () => {
                 </Card>
 
                 {/* Data Table */}
-                <Card className="border-border shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left whitespace-nowrap">
-                            <thead className="bg-muted text-muted-foreground uppercase text-xs font-semibold">
-                                <tr>
-                                    <th className="px-4 py-3 min-w-[150px]">Data e Hora</th>
-                                    <th className="px-4 py-3 min-w-[180px]">Usuário</th>
-                                    <th className="px-4 py-3 min-w-[120px]">Ação</th>
-                                    <th className="px-4 py-3 min-w-[120px]">Módulo</th>
-                                    <th className="px-4 py-3 w-full min-w-[300px]">Detalhes</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {filteredLogs.length === 0 ? (
+                {/* Data Table / Cards */}
+                <div className="space-y-4">
+                    {/* Desktop Table View */}
+                    <Card className="hidden md:block border-border shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left whitespace-nowrap">
+                                <thead className="bg-muted text-muted-foreground uppercase text-xs font-semibold">
                                     <tr>
-                                        <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                                            Nenhum registro encontrado para os filtros selecionados.
-                                        </td>
+                                        <th className="px-4 py-3 min-w-[150px]">Data e Hora</th>
+                                        <th className="px-4 py-3 min-w-[180px]">Usuário</th>
+                                        <th className="px-4 py-3 min-w-[120px]">Ação</th>
+                                        <th className="px-4 py-3 min-w-[120px]">Módulo</th>
+                                        <th className="px-4 py-3 w-full min-w-[300px]">Detalhes</th>
                                     </tr>
-                                ) : (
-                                    filteredLogs.map(log => (
-                                        <tr key={log.id} className="hover:bg-muted/50 transition-colors">
-                                            <td className="px-4 py-3 text-muted-foreground text-xs">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Clock className="h-3 w-3 shrink-0" />
-                                                    {format(new Date(log.timestamp), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
-                                                        {log.userName.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <span className="font-medium text-foreground">{log.userName}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ACTION_COLORS[log.action] || 'bg-gray-500/10 text-gray-600 border-gray-500/20'}`}>
-                                                    {log.action}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="font-medium text-foreground text-xs">{log.entity}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="text-muted-foreground whitespace-normal line-clamp-2" title={log.details}>
-                                                    {log.details}
-                                                </span>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {filteredLogs.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                                                Nenhum registro encontrado para os filtros selecionados.
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    ) : (
+                                        filteredLogs.map(log => (
+                                            <tr key={log.id} className="hover:bg-muted/50 transition-colors">
+                                                <td className="px-4 py-3 text-muted-foreground text-xs">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Clock className="h-3 w-3 shrink-0" />
+                                                        {format(new Date(log.timestamp), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                                            {log.userName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="font-medium text-foreground">{log.userName}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ACTION_COLORS[log.action] || 'bg-gray-500/10 text-gray-600 border-gray-500/20'}`}>
+                                                        {log.action}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="font-medium text-foreground text-xs">{log.entity}</span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="text-muted-foreground whitespace-normal line-clamp-2 text-xs" title={log.details}>
+                                                        {log.details}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
 
-                    <div className="p-4 border-t border-border bg-muted/20 flex justify-between items-center text-xs text-muted-foreground">
+                    {/* Mobile Card View */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                        {filteredLogs.length === 0 ? (
+                            <Card className="p-8 text-center text-muted-foreground">
+                                Nenhum registro encontrado.
+                            </Card>
+                        ) : (
+                            filteredLogs.map(log => (
+                                <Card key={log.id} className="border-border shadow-sm overflow-hidden">
+                                    <div className="p-4 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                                    {log.userName.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="font-bold text-sm">{log.userName}</span>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ACTION_COLORS[log.action] || 'bg-gray-500/10 text-gray-600 border-gray-500/20'}`}>
+                                                {log.action}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                            <div className="flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {format(new Date(log.timestamp), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                                            </div>
+                                            <span className="font-medium bg-muted px-2 py-0.5 rounded text-foreground">{log.entity}</span>
+                                        </div>
+
+                                        <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
+                                            <p className="text-xs text-foreground leading-relaxed">
+                                                {log.details}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                    <div className="p-4 border-t border-border bg-muted/20 flex justify-between items-center text-[10px] md:text-xs text-muted-foreground rounded-b-xl border md:border-t-0">
                         <span>
                             Mostrando {filteredLogs.length} registro(s) de um total de {logs.length}.
                         </span>
-                        <span>
+                        <span className="hidden sm:inline">
                             Apenas as últimas 5.000 ações são retidas localmente.
                         </span>
                     </div>
-                </Card>
 
             </div>
         </div>

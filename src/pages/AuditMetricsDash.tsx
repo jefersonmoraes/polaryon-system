@@ -109,14 +109,14 @@ export const AuditMetricsDash = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <h2 className="text-xl font-bold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+                <h2 className="text-lg md:text-xl font-bold flex items-center gap-2">
                     <Activity className="h-5 w-5 text-primary" />
-                    Métricas de Auditoria do Sistema
+                    Métricas de Auditoria
                 </h2>
                 <button
                     onClick={handleExportCSV}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold rounded-md transition-colors border border-border"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 py-2 bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold rounded-md transition-colors border border-border min-h-[44px]"
                 >
                     <Download className="h-3.5 w-3.5" /> Exportar Logs (CSV)
                 </button>

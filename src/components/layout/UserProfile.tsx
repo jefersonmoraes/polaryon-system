@@ -1,15 +1,30 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth-store';
-import { LogOut, ShieldAlert } from 'lucide-react';
+import { useKanbanStore } from '@/store/kanban-store';
+import { LogOut, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserProfile() {
     const { currentUser, logout } = useAuthStore();
+    const { fetchKanbanData } = useKanbanStore();
     const [isOpen, setIsOpen] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     if (!currentUser) return null;
 
     const initial = currentUser.name ? currentUser.name.charAt(0).toUpperCase() : '?';
+
+    const handleSync = async () => {
+        setIsSyncing(true);
+        try {
+            await fetchKanbanData();
+            // Success toast is already inside fetchKanbanData
+        } catch (error) {
+            // Error toast is already inside fetchKanbanData
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const handleLogout = () => {
         setIsOpen(false);
@@ -75,6 +90,18 @@ export default function UserProfile() {
 
                         {/* Actions Body */}
                         <div className="p-2 space-y-1 bg-background">
+                            <button
+                                onClick={handleSync}
+                                disabled={isSyncing}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-primary rounded-md hover:bg-primary/10 transition-colors disabled:opacity-50"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                                    <span>Sincronizar Dados</span>
+                                </div>
+                                {isSyncing && <span className="text-[9px] uppercase font-bold animate-pulse">Sincronizando...</span>}
+                            </button>
+
                             <button
                                 onClick={handleLogout}
                                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-destructive rounded-md hover:bg-destructive/10 transition-colors group"

@@ -235,8 +235,9 @@ const AccountingEntries = () => {
                         </div>
                     </div>
 
-                    <div className="kanban-card rounded-xl border border-border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <div className="overflow-auto custom-scrollbar flex-1">
+                    <div className="rounded-xl border border-border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden bg-card/30">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-auto custom-scrollbar flex-1">
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-muted-foreground bg-muted/30 sticky top-0 z-10 uppercase font-semibold">
                                     <tr>
@@ -287,7 +288,7 @@ const AccountingEntries = () => {
                                                         {entry.type === 'revenue' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
-                                                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex items-center justify-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                             <button
                                                                 onClick={() => handleEdit(entry.id, entry.type)}
                                                                 disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
@@ -316,6 +317,69 @@ const AccountingEntries = () => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden overflow-auto custom-scrollbar flex-1 p-2 space-y-3">
+                            {filteredEntries.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-muted-foreground">
+                                    Nenhum lançamento encontrado.
+                                </div>
+                            ) : (
+                                filteredEntries.map(entry => {
+                                    const category = categories.find(c => c.id === entry.categoryId);
+                                    return (
+                                        <div key={entry.id} className="bg-background border border-border rounded-lg p-3 shadow-sm flex flex-col gap-2">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{new Date(entry.date.includes('T') ? entry.date : entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                    <h3 className="font-bold text-sm text-foreground leading-tight mt-0.5">{entry.title}</h3>
+                                                </div>
+                                                <div className={`text-sm font-bold ${entry.type === 'revenue' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {entry.type === 'revenue' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between mt-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-1.5 py-0.5 bg-secondary text-secondary-foreground rounded text-[10px] font-medium border border-border">
+                                                        {category?.name || 'Sem categoria'}
+                                                    </span>
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${entry.status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                                                        {entry.status === 'paid' ? 'PAGO' : 'PENDENTE'}
+                                                    </span>
+                                                    {entry.attachments && entry.attachments.length > 0 && (
+                                                        <span className="flex items-center text-muted-foreground bg-secondary px-1.5 py-0.5 rounded text-[10px]">
+                                                            <Paperclip className="h-3 w-3 mr-1" /> {entry.attachments.length}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-3">
+                                                    <button
+                                                        onClick={() => handleEdit(entry.id, entry.type)}
+                                                        disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                                        className="p-1 text-muted-foreground hover:text-primary active:scale-95 transition-all text-sm font-medium flex items-center gap-1"
+                                                    >
+                                                        <Edit className="h-3.5 w-3.5" /> Editar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (confirm('Tem certeza que deseja excluir este lançamento?')) {
+                                                                deleteEntry(entry.id);
+                                                            }
+                                                        }}
+                                                        disabled={currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit}
+                                                        className="p-1 text-rose-500/70 hover:text-rose-500 active:scale-95 transition-all text-sm font-medium flex items-center gap-1"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>

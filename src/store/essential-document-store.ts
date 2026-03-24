@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import idbStorage from '@/lib/idb-storage';
 import { socketService } from '@/lib/socket';
 import api from '@/lib/api';
 
@@ -174,8 +175,17 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
             }
         }),
         {
-            name: 'polaryon-essential-document-storage',
+            name: 'polaryon-essential-document-storage-idb',
+            storage: createJSONStorage(() => idbStorage),
             version: 1,
+            onRehydrateStorage: () => {
+                // Cleanup old localStorage key
+                if (typeof window !== 'undefined') {
+                    try {
+                        localStorage.removeItem('polaryon-essential-document-storage');
+                    } catch (e) {}
+                }
+            }
         }
     )
 );

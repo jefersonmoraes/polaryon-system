@@ -219,7 +219,7 @@ const BudgetsPage = () => {
                                         <PopoverTrigger asChild>
                                             <button
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="p-1 -mr-1 text-muted-foreground hover:bg-secondary rounded transition-colors opacity-0 group-hover:opacity-100"
+                                                className="p-1.5 -mr-1 text-muted-foreground hover:bg-secondary rounded transition-colors"
                                             >
                                                 <MoreVertical className="h-4 w-4" />
                                             </button>

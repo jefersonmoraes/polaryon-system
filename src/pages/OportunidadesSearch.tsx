@@ -457,7 +457,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
                     <form onSubmit={handleSearch} className="flex flex-col gap-3">
                         {/* Top Line: Search & Main Filters */}
-                        <div className="flex flex-col md:flex-row gap-2">
+                        <div className="flex flex-col lg:flex-row gap-2">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input
@@ -468,31 +468,35 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     className="w-full h-10 bg-background border border-border rounded-md pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
                                 />
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
-                                className={`h-10 px-4 text-sm font-medium rounded-md border transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap ${isAdvancedOpen ? 'bg-secondary text-secondary-foreground border-border' : 'bg-background hover:bg-secondary border-border'}`}
-                            >
-                                <Filter className="h-4 w-4" />
-                                Filtros Avançados
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleClearFilters}
-                                className="h-10 px-4 text-sm font-medium rounded-md border border-border bg-background hover:bg-destructive/10 hover:text-destructive transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
-                                title="Restaurar filtro padrão de lote inicial"
-                            >
-                                <X className="h-4 w-4" />
-                                Limpar Filtros
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="h-10 px-6 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
-                            >
-                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                                Pesquisar
-                            </button>
+                            <div className="flex flex-wrap md:flex-nowrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+                                    className={`flex-1 md:flex-none h-10 px-4 text-sm font-medium rounded-md border transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap ${isAdvancedOpen ? 'bg-secondary text-secondary-foreground border-border' : 'bg-background hover:bg-secondary border-border'}`}
+                                >
+                                    <Filter className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Filtros Avançados</span>
+                                    <span className="sm:hidden">Filtros</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleClearFilters}
+                                    className="flex-1 md:flex-none h-10 px-4 text-sm font-medium rounded-md border border-border bg-background hover:bg-destructive/10 hover:text-destructive transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
+                                    title="Restaurar filtro padrão de lote inicial"
+                                >
+                                    <X className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Limpar Filtros</span>
+                                    <span className="sm:hidden">Limpar</span>
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full md:w-auto h-10 px-6 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
+                                >
+                                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                                    Pesquisar
+                                </button>
+                            </div>
                         </div>
 
                         {/* Expandable Advanced Filters Grid */}
@@ -616,7 +620,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 </div>
             )}
 
-            {/* Main Content Area - Table Layout */}
+            {/* Main Content Area */}
             <div className="flex-1 overflow-auto bg-muted/20 relative">
                 {loading && results.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm z-20">
@@ -630,67 +634,122 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                         <p className="text-sm text-muted-foreground">O filtro selecionado não retornou resultados no lote atual. Tente remover filtros ou usar sinônimos.</p>
                     </div>
                 ) : (
-                    <div className="w-full min-w-[900px]">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-muted text-muted-foreground sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th className="px-4 py-3 font-medium w-32">Status</th>
-                                    <th className="px-4 py-3 font-medium w-40">Publicação</th>
-                                    <th className="px-4 py-3 font-medium w-32">Início Recepção</th>
-                                    <th className="px-4 py-3 font-medium w-32">Fim Recepção</th>
-                                    <th className="px-4 py-3 font-medium">Órgão / Descrição Sintética</th>
-                                    <th className="px-4 py-3 font-medium w-32">Modalidade</th>
-                                    <th className="px-4 py-3 font-medium w-24">UF</th>
-                                    <th className="px-4 py-3 font-medium w-20">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border bg-background">
-                                {results.map((item, index) => (
-                                    <tr
-                                        key={item.id || index}
-                                        onClick={() => setSelectedItem(item)}
-                                        className="hover:bg-muted/50 cursor-pointer transition-colors group"
-                                    >
-                                        <td className="px-4 py-3.5 align-top">
-                                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold border truncate max-w-[120px] ${getStatusStyle(item.situacao_nome)}`}>
-                                                {item.situacao_nome}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3.5 align-top text-muted-foreground">
-                                            {formatDate(item.data_publicacao_pncp)}
-                                        </td>
-                                        <ProposalDates item={item} />
-                                        <td className="px-4 py-2.5 whitespace-normal">
-                                            <div className="flex flex-col gap-1 max-w-[500px]">
-                                                <span className="font-semibold text-foreground text-xs leading-tight tracking-tight uppercase">
-                                                    {item.orgao_nome}
-                                                </span>
-                                                <span className="text-muted-foreground text-xs line-clamp-2 leading-relaxed" title={item.description}>
-                                                    {item.description || item.title}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3.5 align-top">
-                                            <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
-                                                {item.modalidade_licitacao_nome}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3.5 align-top">
-                                            <div className="flex items-center gap-1 text-xs">
-                                                <MapPin className="h-3 w-3 text-muted-foreground" />
-                                                <span className="font-medium">{item.uf || '-'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3.5 align-top text-right">
-                                            <div className="h-7 w-7 rounded bg-secondary text-muted-foreground flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors ml-auto">
-                                                <ChevronRight className="h-4 w-4" />
-                                            </div>
-                                        </td>
+                    <>
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block w-full min-w-[900px]">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-muted text-muted-foreground sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium w-32">Status</th>
+                                        <th className="px-4 py-3 font-medium w-40">Publicação</th>
+                                        <th className="px-4 py-3 font-medium w-32">Início Recepção</th>
+                                        <th className="px-4 py-3 font-medium w-32">Fim Recepção</th>
+                                        <th className="px-4 py-3 font-medium">Órgão / Descrição Sintética</th>
+                                        <th className="px-4 py-3 font-medium w-32">Modalidade</th>
+                                        <th className="px-4 py-3 font-medium w-24">UF</th>
+                                        <th className="px-4 py-3 font-medium w-20">Ações</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="divide-y divide-border bg-background">
+                                    {results.map((item, index) => (
+                                        <tr
+                                            key={item.id || index}
+                                            onClick={() => setSelectedItem(item)}
+                                            className="hover:bg-muted/50 cursor-pointer transition-colors group"
+                                        >
+                                            <td className="px-4 py-3.5 align-top">
+                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold border truncate max-w-[120px] ${getStatusStyle(item.situacao_nome)}`}>
+                                                    {item.situacao_nome}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5 align-top text-muted-foreground">
+                                                {formatDate(item.data_publicacao_pncp)}
+                                            </td>
+                                            <ProposalDates item={item} />
+                                            <td className="px-4 py-2.5 whitespace-normal">
+                                                <div className="flex flex-col gap-1 max-w-[500px]">
+                                                    <span className="font-semibold text-foreground text-xs leading-tight tracking-tight uppercase">
+                                                        {item.orgao_nome}
+                                                    </span>
+                                                    <span className="text-muted-foreground text-xs line-clamp-2 leading-relaxed" title={item.description}>
+                                                        {item.description || item.title}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 align-top">
+                                                <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
+                                                    {item.modalidade_licitacao_nome}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5 align-top">
+                                                <div className="flex items-center gap-1 text-xs">
+                                                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                                                    <span className="font-medium">{item.uf || '-'}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 align-top text-right">
+                                                <div className="h-7 w-7 rounded bg-secondary text-muted-foreground flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors ml-auto">
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden p-4 space-y-4">
+                            {results.map((item, index) => (
+                                <div
+                                    key={item.id || index}
+                                    onClick={() => setSelectedItem(item)}
+                                    className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3 active:scale-[0.98] transition-all"
+                                >
+                                    <div className="flex justify-between items-start gap-2">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold border ${getStatusStyle(item.situacao_nome)}`}>
+                                            {item.situacao_nome}
+                                        </span>
+                                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded">
+                                            <Calendar className="h-3 w-3" />
+                                            {formatDate(item.data_publicacao_pncp)}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-xs font-bold uppercase text-foreground leading-tight line-clamp-2">
+                                            {item.orgao_nome}
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                                            {item.description || item.title}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
+                                        <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-bold uppercase">
+                                            {item.modalidade_licitacao_nome}
+                                        </span>
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/10">
+                                            <MapPin className="h-3 w-3" />
+                                            {item.uf || '-'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
+                                        <div className="flex gap-3">
+                                            <div className="flex flex-col">
+                                                <span className="uppercase text-[8px] font-black opacity-50">Encerramento</span>
+                                                <span className="font-bold text-rose-500/80">
+                                                    {item.data_fim_vigencia ? new Date(item.data_fim_vigencia).toLocaleDateString('pt-BR') : '-'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 text-primary" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
 
@@ -895,25 +954,25 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                             </div>
 
-                            <div className="p-4 border-t border-border bg-muted/50 flex justify-end gap-3 sticky bottom-0 z-10 w-full overflow-hidden shrink-0 items-center">
+                            <div className="p-4 border-t border-border bg-muted/50 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-0 z-10 w-full overflow-hidden shrink-0 items-stretch sm:items-center">
                                 <button
                                     onClick={() => setIsExportDialogOpen(true)}
-                                    className="px-4 py-2 bg-foreground text-background text-sm font-bold rounded-md hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 shadow-sm mr-auto"
+                                    className="px-4 py-2 bg-foreground text-background text-sm font-bold rounded-md hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 shadow-sm order-2 sm:order-none sm:mr-auto"
                                 >
                                     <KanbanSquare className="h-4 w-4" /> Exportar p/ Kanban
                                 </button>
                                 <DialogClose asChild>
-                                    <button className="px-4 py-2 border border-border bg-background hover:bg-muted text-foreground text-sm font-medium rounded-md transition-colors">
-                                        Fechar Resumo
+                                    <button className="px-4 py-2 border border-border bg-background hover:bg-muted text-foreground text-sm font-medium rounded-md transition-colors order-3 sm:order-none">
+                                        Fechar
                                     </button>
                                 </DialogClose>
                                 <a
                                     href={getOfficialLink(selectedItem)}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm order-1 sm:order-none"
                                 >
-                                    Ir para o Edital Oficial <ExternalLink className="h-4 w-4" />
+                                    Abrir Edital Oficial <ExternalLink className="h-4 w-4" />
                                 </a>
                             </div>
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import idbStorage from '@/lib/idb-storage';
 import { socketService } from '@/lib/socket';
 import { useAuditStore } from './audit-store';
 import { useAuthStore } from './auth-store';
@@ -439,7 +440,16 @@ export const useAccountingStore = create<AccountingState>()(
             }
         }),
         {
-            name: 'accounting-storage',
+            name: 'accounting-storage-idb',
+            storage: createJSONStorage(() => idbStorage),
+            onRehydrateStorage: () => {
+                // Cleanup old localStorage key
+                if (typeof window !== 'undefined') {
+                    try {
+                        localStorage.removeItem('accounting-storage');
+                    } catch (e) {}
+                }
+            }
         }
     )
 );
