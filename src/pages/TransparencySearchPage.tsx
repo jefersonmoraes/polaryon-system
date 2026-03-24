@@ -139,10 +139,14 @@ export default function TransparencySearchPage() {
     const fetchGlobalBrands = async (term: string) => {
         setLoadingGlobalBrands(true);
         try {
-            const response = await api.get('/transparency/analytics/global-brands', { params: { termo: term } });
-            setGlobalBrands(response.data);
+            const response = await api.get('/transparency/analytics/global-brands', { 
+                params: { termo: term },
+                timeout: 15000 // 15 segundos de timeout no frontend
+            });
+            setGlobalBrands(response.data || []);
         } catch (err) {
             console.error("Erro marcas globais", err);
+            setGlobalBrands([]); // Limpa para sair do loading
         } finally {
             setLoadingGlobalBrands(false);
         }

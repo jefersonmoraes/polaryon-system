@@ -138,8 +138,12 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             } catch (err) {}
         };
 
-        // Processar em paralelo com limite de concorrência suave
-        await Promise.all(allProcesses.map(proc => processBatch(proc)));
+        // Processar em pequenos pedaços (chunks) de 2 paralelos para não estourar limite do PNCP nem do VPS
+        const chunkSize = 2;
+        for (let i = 0; i < allProcesses.length; i += chunkSize) {
+            const chunk = allProcesses.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(proc => processBatch(proc)));
+        }
 
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
