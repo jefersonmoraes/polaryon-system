@@ -637,20 +637,38 @@ export default function TransparencySearchPage() {
                                                         </div>
 
                                                         {item.vencedor && (
-                                                            <div className="md:w-64 shrink-0 bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 flex flex-col justify-between relative">
-                                                                <div className="space-y-1">
-                                                                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                                                                        <Award className="h-3 w-3" /> MARCA VENCEDORA
-                                                                    </span>
-                                                                    <p className="text-sm font-black leading-tight line-clamp-2 uppercase text-emerald-700">
-                                                                        {item.marca || 'NÃO INFORMADA'}
-                                                                    </p>
-                                                                    <div className="mt-2 pt-2 border-t border-emerald-500/10">
-                                                                        <p className="text-[10px] text-muted-foreground font-medium uppercase">Empresa Detentora:</p>
-                                                                        <p className="text-[10px] font-bold truncate">{item.vencedor.nome}</p>
-                                                                        <p className="text-[10px] text-muted-foreground">CNPJ: {item.vencedor.cnpj}</p>
+                                                            <div className="md:w-72 shrink-0 bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between relative shadow-sm">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="bg-emerald-500 text-white p-1 rounded-md">
+                                                                            <Award className="h-3.5 w-3.5" />
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">
+                                                                            Ganhador & Marca
+                                                                        </span>
                                                                     </div>
-                                                                    <p className="text-xs text-emerald-600 font-bold mt-1">
+                                                                    
+                                                                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2 border border-emerald-500/10">
+                                                                        <p className="text-[10px] font-bold text-muted-foreground uppercase mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">Marca Ofertada:</p>
+                                                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 break-words line-clamp-2 leading-tight">
+                                                                            {item.vencedor.marca || item.marca || 'N/A'}
+                                                                        </p>
+                                                                    </div>
+
+                                                                    <div className="pt-1">
+                                                                        <p className="text-[10px] text-muted-foreground font-bold uppercase mb-0.5">Empresa Vencedora:</p>
+                                                                        <p className="text-[11px] font-extrabold line-clamp-2 leading-snug">{item.vencedor.nome}</p>
+                                                                        <div className="flex items-center gap-1.5 mt-1">
+                                                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                                                                                CNPJ: {item.vencedor.cnpj}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="mt-3 pt-2 border-t border-emerald-500/10 flex items-center justify-between">
+                                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Valor Ganho</span>
+                                                                    <p className="text-sm text-emerald-600 font-extrabold italic">
                                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.vencedor.valor)}
                                                                     </p>
                                                                 </div>

@@ -129,7 +129,27 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                     
                     if (isMatch) {
                         let brand = extractBrand(item.descricao || item.description || '');
+                        let vencedor = null; // Initialize vencedor object
                         
+                        // SE TIVER RESULTADO, TENTAR PEGAR A MARCA DO VENCEDOR (O que o usuário quer!)
+                        if (item.temResultado) {
+                            try {
+                                const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
+                                if (rRes.data && rRes.data.length > 0) {
+                                    const winner = rRes.data[0];
+                                    vencedor = {
+                                        nome: winner.nomeRazaoSocialFornecedor || 'N/A',
+                                        cnpj: winner.niFornecedor || 'N/A',
+                                        valor: winner.valorTotalHomologado || winner.valorUnitarioHomologado || 0,
+                                        marca: winner.marcaFornecedor || 'N/A'
+                                    };
+                                    if (winner.marcaFornecedor) {
+                                        brand = winner.marcaFornecedor.toUpperCase().trim();
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+
                         if ((brand === 'N/A' || !brand) && item.marca) {
                             brand = item.marca.toUpperCase().trim();
                         }
