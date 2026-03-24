@@ -34,12 +34,15 @@ const extractBrand = (text: string): string => {
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
-        const { pagina = '1', termo, dataInicial, dataFinal, situacao = 'concluido', tam_pagina = '10' } = req.query;
-        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato%7Cpcaorgao&ordenacao=-data&tam_pagina=${tam_pagina}`;
+        const { pagina = '1', termo, dataInicial, dataFinal, status = 'encerradas', tam_pagina = '10' } = req.query;
+        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&tam_pagina=${tam_pagina}`;
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
-        const sit = (situacao === 'todas' || !situacao) ? '' : situacao;
-        if (sit) url += `&situacao=${sit}`;
+        
+        // Se status for 'todas', não envia o filtro. Caso contrário usa o status pedido (default encerradas)
+        if (status && status !== 'todas') {
+            url += `&status=${status}`;
+        }
 
         const response = await axios.get(url, { 
             headers: { 
@@ -92,7 +95,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const allProcesses: any[] = [];
         
         try {
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=${fetchLimit}&situacao=concluido`;
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=${fetchLimit}&status=encerradas`;
             if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
