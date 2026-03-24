@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 interface CompanyListPageProps {
     type: 'Fornecedor' | 'Transportadora';
 }
@@ -155,14 +156,17 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
         return companies.find(c => c.id === selectedCompanyId);
     }, [companies, selectedCompanyId]);
 
+    const isMobile = useIsMobile();
+    
     // Select the first company by default if none selected and results exist (only if no URL ID is handling it)
+    // IMPORTANT: On mobile, we DO NOT auto-select because the detail view covers the list.
     useEffect(() => {
-        if (!selectedCompanyId && filteredCompanies.length > 0 && !urlId) {
+        if (!isMobile && !selectedCompanyId && filteredCompanies.length > 0 && !urlId) {
             setSelectedCompanyId(filteredCompanies[0].id);
         } else if (filteredCompanies.length === 0 && selectedCompanyId) {
             setSelectedCompanyId(null);
         }
-    }, [filteredCompanies, selectedCompanyId, urlId]);
+    }, [filteredCompanies, selectedCompanyId, urlId, isMobile]);
 
     const handleAddContact = () => {
         if (!selectedCompany) return;
