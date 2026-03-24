@@ -466,7 +466,7 @@ export default function TransparencySearchPage() {
                                         <div className="space-y-3">
                                             {[1,2,3,4,5].map(i => <div key={i} className="h-6 bg-muted rounded animate-pulse" />)}
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground italic">Consultando 500 licitações para extrair marcas...</p>
+                                        <p className="text-[10px] text-muted-foreground italic">Consultando 50 licitações para extrair marcas...</p>
                                     </div>
                                 ) : (globalBrands.length > 0) ? (
                                     <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-right-4">
@@ -501,7 +501,7 @@ export default function TransparencySearchPage() {
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">Deep Analytics</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                                                Pesquisamos até 500 licitações dos últimos 2 anos para gerar este ranking de precisão.
+                                                Pesquisamos até 50 licitações dos últimos 12 meses para gerar este ranking de precisão.
                                             </p>
                                         </div>
                                     </div>

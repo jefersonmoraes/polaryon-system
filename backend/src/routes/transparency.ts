@@ -87,11 +87,11 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         
-        const fetchDepth = 5; // 5 * 100 = 500
+        const fetchDepth = 1; // Apenas 1 página de 50 (total 50) conforme solicitado
         const allProcesses: any[] = [];
         
         for (let p = 1; p <= fetchDepth; p++) {
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${p}&tam_pagina=100&situacao=concluido`;
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${p}&tam_pagina=50&situacao=concluido`;
             if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
