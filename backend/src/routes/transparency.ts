@@ -50,8 +50,8 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         });
         const data: any = response.data;
         
-        // CORREÇÃO: PNCP retorna o total no campo "total"
-        const totalElements = data.total || data.total_items || data.total_elements || 0;
+        // CORREÇÃO: Limitar a 50 conforme pedido pelo usuário para foco nos últimos processos
+        const totalElements = Math.min(data.total || data.total_items || data.total_elements || 0, 50);
 
         const results = (data.items || []).map((item: any) => ({
             id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
