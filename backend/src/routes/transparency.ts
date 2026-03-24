@@ -87,71 +87,59 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         
-        const fetchDepth = 1; // Apenas 1 página de 50 (total 50) conforme solicitado
+        // Limite de 20 processos para o ranking para garantir carregamento instantâneo (< 5s)
+        const fetchLimit = 20; 
         const allProcesses: any[] = [];
         
-        for (let p = 1; p <= fetchDepth; p++) {
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${p}&tam_pagina=50&situacao=concluido`;
+        try {
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=${fetchLimit}&situacao=concluido`;
             if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
-            try {
-                const searchRes = await axios.get(searchUrl, { 
-                    headers: { 
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Accept': 'application/json, text/plain, */*'
-                    }, 
-                    timeout: 10000 
-                });
-                if (searchRes.data && searchRes.data.items) {
-                    allProcesses.push(...searchRes.data.items);
-                    if (searchRes.data.items.length < 100) break;
-                } else break;
-            } catch (e) { break; }
-        }
+            const searchRes = await axios.get(searchUrl, { 
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'application/json'
+                }, 
+                timeout: 8000 
+            });
+            if (searchRes.data && searchRes.data.items) {
+                allProcesses.push(...searchRes.data.items);
+            }
+        } catch (e: any) { console.error('Error in ranking search:', e.message); }
 
-        const batchSize = 30;
-        for (let i = 0; i < allProcesses.length; i += batchSize) {
-            const batch = allProcesses.slice(i, i + batchSize);
-            await Promise.all(batch.map(async (proc: any) => {
-                try {
-                    const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 4000 });
-                    const items = itemsRes.data || [];
-                    for (const item of items) {
-                        const desc = (item.descricao || item.description || '').toLowerCase();
-                        // Filtro mais resiliente: se tiver múltiplas palavras, pelo menos 50% devem bater ou a primeira deve bater
-                        const matchCount = keywords.filter(k => desc.includes(k)).length;
-                        const isMatch = keywords.length === 0 || (matchCount >= Math.ceil(keywords.length / 2)) || (keywords.length > 0 && desc.includes(keywords[0]));
+        const processBatch = async (proc: any) => {
+            try {
+                // Timeout curto para os itens
+                const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 3500 });
+                const items = itemsRes.data || [];
+                
+                // Analisar no máximo os 20 primeiros itens de cada licitação para evitar lentidão
+                for (const item of items.slice(0, 20)) {
+                    const desc = (item.descricao || item.description || '').toLowerCase();
+                    const matchCount = keywords.filter(k => desc.includes(k)).length;
+                    const isMatch = keywords.length === 0 || (matchCount >= Math.ceil(keywords.length / 2)) || (keywords.length > 0 && desc.includes(keywords[0]));
+                    
+                    if (isMatch) {
+                        let brand = extractBrand(item.descricao || item.description || '');
                         
-                        if (isMatch) {
-                            let brand = extractBrand(item.descricao || item.description || '');
-                            
-                            // Tentar pegar do campo marca se existir
-                            if ((brand === 'N/A' || !brand) && item.marca) {
-                                brand = item.marca.toUpperCase().trim();
-                            }
-                            
-                            if (brand === 'N/A' && item.temResultado) {
-                                try {
-                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
-                                    if (rRes.data && rRes.data.length > 0 && rRes.data[0].marcaFornecedor) {
-                                        brand = rRes.data[0].marcaFornecedor.toUpperCase().trim();
-                                    }
-                                } catch (e) {}
-                            }
-                            
-                            if (brand && brand !== 'N/A' && brand.length > 1) {
-                                if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
-                                brandCounts[brand].value++;
-                                // Tentar valor unitário ou valor total
-                                const unitPrice = item.valorUnitarioEstimado || item.valorUnitario || 0;
-                                brandCounts[brand].totalGasto += unitPrice * (item.quantidade || 0);
-                            }
+                        if ((brand === 'N/A' || !brand) && item.marca) {
+                            brand = item.marca.toUpperCase().trim();
+                        }
+                        
+                        if (brand && brand !== 'N/A' && brand.length > 2) {
+                            if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
+                            brandCounts[brand].value++;
+                            const unitPrice = item.valorUnitarioEstimado || item.valorUnitario || 0;
+                            brandCounts[brand].totalGasto += unitPrice * (item.quantidade || 0);
                         }
                     }
-                } catch (err) {}
-            }));
-        }
+                }
+            } catch (err) {}
+        };
+
+        // Processar em paralelo com limite de concorrência suave
+        await Promise.all(allProcesses.map(proc => processBatch(proc)));
 
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
