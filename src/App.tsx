@@ -8,7 +8,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fixDateToBRT } from "@/lib/utils";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppHeader from "@/components/layout/AppHeader";
 import AppSidebar from "@/components/layout/AppSidebar";
@@ -50,15 +50,10 @@ import { useEssentialDocumentStore } from '@/store/essential-document-store';
 import { useCertificateStore } from '@/store/certificate-store';
 
 const AppContent = () => {
-  const { 
-    cleanupTrash, 
-    cleanOldTrash: cleanKanbanTrash, 
-    fetchKanbanData,
-    isHydrated 
-  } = useKanbanStore();
+  const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany, fetchKanbanData } = useKanbanStore();
   const { isAuthenticated, currentUser: authUser, setOnlineUsers, setSocketConnected } = useAuthStore();
   const { uiZoom, isDark } = useUserPrefsStore();
-  const { cleanOldTrash: cleanDocsTrash } = useDocumentStore();
+  const { documents, validateDocumentStatuses, cleanOldTrash: cleanDocsTrash } = useDocumentStore();
   const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
   const { cleanOldTrash: cleanEssentialDocsTrash } = useEssentialDocumentStore();
   const { cleanOldTrash: cleanCertificateTrash } = useCertificateStore();
@@ -81,48 +76,23 @@ const AppContent = () => {
     }
   }, [authUser]);
 
-  // Initial Sync Strategy: Trigger on mount AND on auth change
   useEffect(() => {
-    if (!isAuthenticated || !isHydrated) return;
+    if (!isAuthenticated) return;
+    
+    cleanupTrash();
+    cleanKanbanTrash();
+    cleanDocsTrash();
+    cleanAccountingTrash();
+    cleanEssentialDocsTrash();
+    cleanCertificateTrash();
 
-    const performSync = async () => {
-        try {
-            console.log('App Content - Triggering Initial Data Sync...');
-            
-            // Background cleanup actions
-            cleanupTrash();
-            cleanKanbanTrash();
-            cleanDocsTrash();
-            cleanAccountingTrash();
-            cleanEssentialDocsTrash();
-            cleanCertificateTrash();
+    // Trigger local-to-server sync for docs and certs
+    useDocumentStore.getState().syncLocalDataToServer().catch(console.error);
+    useCertificateStore.getState().syncLocalDataToServer().catch(console.error);
+    useAccountingStore.getState().syncLocalDataToServer().catch(console.error);
 
-            // Trigger local-to-server sync for docs and certs
-            useDocumentStore.getState().syncLocalDataToServer().catch(() => {});
-            useCertificateStore.getState().syncLocalDataToServer().catch(() => {});
-            useAccountingStore.getState().syncLocalDataToServer().catch(() => {});
-
-            // Main Data Fetch
-            await fetchKanbanData();
-            console.log('App Content - Data Sync Done.');
-        } catch (err) {
-            console.error('App Content - Data Sync Failed:', err);
-        }
-    };
-
-    performSync();
-  }, [isAuthenticated, isHydrated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
-
-  // Hydration Fallback: Ensure app is not stuck if rehydration fails
-  useEffect(() => {
-    if (!isHydrated) {
-      const timer = setTimeout(() => {
-        console.warn('App Content - Hydration taking too long, forcing ready state...');
-        useKanbanStore.getState().setHydrated(true);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [isHydrated]);
+    fetchKanbanData();
+  }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
 
   // Real-time Presence and Connection Monitor
   useEffect(() => {
@@ -292,21 +262,8 @@ const AppContent = () => {
     return () => clearInterval(docInterval);
   }, []); // Run only once
 
-  if (!isHydrated) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-medium animate-pulse">Iniciando sistema...</span>
-        </div>
-        <div className="text-[10px] text-muted-foreground uppercase tracking-widest opacity-50">Polaryon Kunbun</div>
-      </div>
-    );
-  }
-
   return (
     <Routes>
-      <Route path="/dashboard" element={<Navigate to="/tarefas" replace />} />
       {/* Public Routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
