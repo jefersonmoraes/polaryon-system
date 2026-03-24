@@ -3,8 +3,8 @@ import axios from 'axios';
 // Create central Axios instance
 const isProd = import.meta.env.PROD;
 const api = axios.create({
-    baseURL: isProd ? '/api' : 'http://localhost:3000/api',
-    timeout: 10000,
+    baseURL: isProd ? '/api' : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:3000/api`,
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     }

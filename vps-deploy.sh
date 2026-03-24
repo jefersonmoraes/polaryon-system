@@ -15,8 +15,8 @@ free -h
 
 echo "=== [1/9] Atualizando código do repositório ==="
 cd /var/www/polaryon
-git reset --hard HEAD
-git pull origin main
+git fetch origin main
+git reset --hard origin/main
 
 echo "=== [2/9] Instalando dependências do frontend ==="
 npm install --no-audit --no-fund
