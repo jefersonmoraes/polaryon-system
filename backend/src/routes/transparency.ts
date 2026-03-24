@@ -29,6 +29,29 @@ const extractBrand = (text: string): string => {
     return 'N/A';
 };
 
+router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, res: Response) => {
+    try {
+        const { cnpj, ano, sequencial } = req.params;
+        const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
+        const response = await axios.get(url, { timeout: 5000 });
+        const files = response.data || [];
+        
+        // Marcar arquivos que provavelmente são do vencedor ou de homologação
+        const mappedFiles = files.map((f: any) => {
+            const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
+            const isWinnerDoc = name.includes('proposta') || name.includes('habilitacao') || name.includes('vencedor') || name.includes('homologacao') || name.includes('ata');
+            return {
+                ...f,
+                isWinnerDoc
+            };
+        });
+        
+        res.json(mappedFiles);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 /**
  * GET /api/transparency/licitacoes
  */
@@ -89,13 +112,11 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
         const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
-        
-        // Limite de 20 processos para o ranking para garantir carregamento instantâneo (< 5s)
-        const fetchLimit = 20; 
         const allProcesses: any[] = [];
         
         try {
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=${fetchLimit}&status=encerradas`;
+            // Busca os últimos 50 processos encerrados para ter uma amostra boa
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=50&status=encerradas`;
             if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
@@ -106,77 +127,71 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                 }, 
                 timeout: 8000 
             });
+            
             if (searchRes.data && searchRes.data.items) {
-                allProcesses.push(...searchRes.data.items);
+                // FILTRO CRÍTICO: Só processos que REALMENTE tem resultado/vencedor
+                // Se o usuário quer análise de mercado, precisamos de quem ganhou.
+                const concluded = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
+                allProcesses.push(...concluded);
             }
         } catch (e: any) { console.error('Error in ranking search:', e.message); }
 
-        const processBatch = async (proc: any) => {
-            try {
-                // Determinar endpoint correto baseado no tipo de documento
-                const isContrato = proc.document_type === 'contrato';
-                const typePath = isContrato ? 'contratos' : 'compras';
-                const itemsUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/${typePath}/${proc.ano}/${proc.numero_sequencial}/itens`;
-                
-                const itemsRes = await axios.get(itemsUrl, { timeout: 4000 });
-                const items = itemsRes.data || [];
-                
-                // Analisar no máximo os 20 primeiros itens de cada licitação para evitar lentidão
-                for (const item of items.slice(0, 20)) {
-                    const desc = (item.descricao || item.description || '').toLowerCase();
-                    const matchCount = keywords.filter(k => desc.includes(k)).length;
-                    const isMatch = keywords.length === 0 || (matchCount >= Math.ceil(keywords.length / 2)) || (keywords.length > 0 && desc.includes(keywords[0]));
-                    
-                    if (isMatch) {
-                        let brand = extractBrand(item.descricao || item.description || '');
-                        let vencedor = null; // Initialize vencedor object
-                        
-                        // SE TIVER RESULTADO, TENTAR PEGAR A MARCA DO VENCEDOR (O que o usuário quer!)
-                        if (item.temResultado) {
-                            try {
-                                const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
-                                if (rRes.data && rRes.data.length > 0) {
-                                    const winner = rRes.data[0];
-                                    vencedor = {
-                                        nome: winner.nomeRazaoSocialFornecedor || 'N/A',
-                                        cnpj: winner.niFornecedor || 'N/A',
-                                        valor: winner.valorTotalHomologado || winner.valorUnitarioHomologado || 0,
-                                        marca: winner.marcaFornecedor || 'N/A'
-                                    };
-                                    if (winner.marcaFornecedor) {
-                                        brand = winner.marcaFornecedor.toUpperCase().trim();
-                                    }
-                                }
-                            } catch (e) {}
-                        }
+        if (allProcesses.length === 0) {
+            return res.json({ results: [], version: '2026-03-24-v5-concluded-only' });
+        }
 
-                        if ((brand === 'N/A' || !brand) && item.marca) {
-                            brand = item.marca.toUpperCase().trim();
-                        }
-                        
-                        if (brand && brand !== 'N/A' && brand.length > 2) {
-                            if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
-                            brandCounts[brand].value++;
-                            const unitPrice = item.valorUnitarioEstimado || item.valorUnitario || 0;
-                            brandCounts[brand].totalGasto += unitPrice * (item.quantidade || 0);
-                        }
-                    }
-                }
-            } catch (err) {}
-        };
-
-        // Processar em pequenos pedaços (chunks) de 2 paralelos para não estourar limite do PNCP nem do VPS
+        // Processar os lotes (chunks) de 2 paralelos
         const chunkSize = 2;
         for (let i = 0; i < allProcesses.length; i += chunkSize) {
             const chunk = allProcesses.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(proc => processBatch(proc)));
+            await Promise.all(chunk.map(async (proc: any) => {
+                try {
+                    const typePath = proc.document_type === 'contrato' ? 'contratos' : 'compras';
+                    const itemsUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/${typePath}/${proc.ano}/${proc.numero_sequencial}/itens?pagina=1&tamanhoPagina=100`;
+                    const itemsRes = await axios.get(itemsUrl, { timeout: 4000 });
+                    const items = itemsRes.data || [];
+
+                    for (const item of items) {
+                        const desc = (item.descricao || '').toLowerCase();
+                        const isMatch = keywords.some(k => desc.includes(k));
+                        
+                        if (isMatch) {
+                            let brand = extractBrand(desc);
+                            
+                            // TENTAR PEGAR A MARCA DO VENCEDOR (Prioridade Máxima)
+                            if (item.temResultado) {
+                                try {
+                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
+                                    if (rRes.data && rRes.data.length > 0) {
+                                        const winner = rRes.data[0];
+                                        if (winner.marcaFornecedor) {
+                                            brand = winner.marcaFornecedor.toUpperCase().trim();
+                                        }
+                                    }
+                                } catch (e) {}
+                            }
+
+                            if ((brand === 'N/A' || !brand) && item.marca) {
+                                brand = item.marca.toUpperCase().trim();
+                            }
+
+                            if (brand && brand !== 'N/A' && brand.length > 1) {
+                                if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
+                                brandCounts[brand].value++;
+                                brandCounts[brand].totalGasto += (item.valorUnitarioHomologado || item.valorUnitarioEstimado || item.valorUnitario || 0) * (item.quantidade || 1);
+                            }
+                        }
+                    }
+                } catch (e: any) { console.error(`Error processing ranking items:`, e.message); }
+            }));
         }
 
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
             .sort((a, b) => b.value - a.value)
-            .slice(0, 30);
-        res.json({ results, version: '2026-03-24-v3' });
+            .slice(0, 10);
+
+        res.json({ results, version: '2026-03-24-v5-winner-data' });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

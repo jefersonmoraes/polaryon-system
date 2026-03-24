@@ -106,6 +106,7 @@ export default function TransparencySearchPage() {
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [loadingGlobalBrands, setLoadingGlobalBrands] = useState(false);
     const [globalBrands, setGlobalBrands] = useState<BrandAnalytics[]>([]);
+    const [winnerFiles, setWinnerFiles] = useState<any[]>([]);
 
     // Set default dates to last 2 years on mount
     useEffect(() => {
@@ -222,11 +223,13 @@ export default function TransparencySearchPage() {
         }
     };
 
-    const fetchFiles = async (licId: string) => {
+    const fetchFiles = async (lic: Licitacao) => {
         setLoadingFiles(true);
         try {
-            const response = await api.get(`/transparency/licitacoes/${licId}/arquivos`);
-            setFiles(Array.isArray(response.data) ? response.data : []);
+            const response = await api.get(`/transparency/licitacoes/${lic.cnpjOrgao}/${lic.ano}/${lic.sequencial}/arquivos`);
+            const allFiles = response.data || [];
+            setFiles(allFiles);
+            setWinnerFiles(allFiles.filter((f: any) => f.isWinnerDoc));
         } catch (err: any) {
             console.error("Erro ao carregar arquivos", err);
         } finally {
@@ -237,7 +240,7 @@ export default function TransparencySearchPage() {
     const handleSelectLicitacao = (lic: Licitacao) => {
         setSelectedLicitacao(lic);
         fetchItems(lic.id);
-        fetchFiles(lic.id);
+        fetchFiles(lic);
     };
 
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -576,18 +579,25 @@ export default function TransparencySearchPage() {
                                                 Itens e Vencedores
                                             </TabsTrigger>
                                             <TabsTrigger 
+                                                value="winner-docs" 
+                                                className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
+                                            >
+                                                <Award className="h-4 w-4 mr-2" />
+                                                Docs do Vencedor
+                                            </TabsTrigger>
+                                            <TabsTrigger 
                                                 value="analytics" 
                                                 className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
                                             >
                                                 <BarChart3 className="h-4 w-4 mr-2" />
-                                                Estatísticas de Marcas {keyword ? `para "${keyword}"` : ''}
+                                                Análise de Mercado
                                             </TabsTrigger>
                                             <TabsTrigger 
                                                 value="files" 
                                                 className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-sm font-bold"
                                             >
                                                 <FileText className="h-4 w-4 mr-2" />
-                                                Arquivos e Editais
+                                                Arquivos PNCP
                                             </TabsTrigger>
                                         </TabsList>
                                     </div>
@@ -680,6 +690,47 @@ export default function TransparencySearchPage() {
                                         )}
                                     </TabsContent>
 
+                                    <TabsContent value="winner-docs" className="flex-1 overflow-auto p-6 focus-visible:outline-none">
+                                        <div className="space-y-6">
+                                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-4">
+                                                <div className="bg-emerald-500 text-white p-2 rounded-lg shadow-sm">
+                                                    <FileText className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-emerald-800">Documentação do Vencedor</h4>
+                                                    <p className="text-xs text-emerald-600 font-medium">Arquivos identificados como propostas, habilitação e homologação final.</p>
+                                                </div>
+                                            </div>
+
+                                            {winnerFiles.length === 0 ? (
+                                                <div className="text-center py-12 opacity-50 space-y-2 border-2 border-dashed border-border rounded-2xl">
+                                                    <Info className="h-10 w-10 mx-auto" />
+                                                    <p className="text-sm">Não encontramos documentos marcados como "Vencedor" nesta amostra.</p>
+                                                    <p className="text-xs">Tente a aba "Arquivos PNCP" para ver todos os documentos disponíveis.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {winnerFiles.map((file, idx) => (
+                                                        <a 
+                                                            key={idx}
+                                                            href={file.url_bucket || file.url_origem}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-4 p-4 bg-white dark:bg-card border border-border rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group"
+                                                        >
+                                                            <div className="p-3 bg-muted group-hover:bg-emerald-50 rounded-lg group-hover:text-emerald-600 transition-colors">
+                                                                <Download className="h-5 w-5" />
+                                                            </div>
+                                                            <div className="flex-1 overflow-hidden">
+                                                                <p className="text-sm font-bold truncate uppercase">{file.titulo || file.nome_arquivo}</p>
+                                                                <p className="text-[10px] text-muted-foreground font-medium uppercase">Tipo: Documento do Ganhador</p>
+                                                            </div>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </TabsContent>
                                     <TabsContent value="analytics" className="flex-1 overflow-auto p-6 focus-visible:outline-none bg-muted/5">
                                         {loadingGlobalBrands ? (
                                             <div className="flex flex-col items-center justify-center py-20 animate-pulse">
