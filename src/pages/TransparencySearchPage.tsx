@@ -163,6 +163,8 @@ export default function TransparencySearchPage() {
         } else {
             setPage(currentPage);
         }
+        const termToSearch = isLoadMore ? keyword : keyword; // A variável keyword já é o que o usuário quer buscar no momento do submit
+        setKeyword(keyword); 
         
         setError('');
         try {
@@ -178,15 +180,19 @@ export default function TransparencySearchPage() {
             });
             
             const resultsData = response.data.items || [];
-            setResults(resultsData);
+            if (isLoadMore) {
+                setResults(prev => [...prev, ...resultsData]);
+            } else {
+                setResults(resultsData);
+                // Trigger global analytics IMMEDIATELY on new search
+                if (keyword) {
+                    fetchGlobalBrands(keyword);
+                }
+            }
+            
             setTotalResults(response.data.totalItems || 0);
             setPage(currentPage);
             setHasMore(currentPage < (response.data.totalPages || 0));
-
-            // Trigger global analytics if search term changed or it's the first page
-            if (currentPage === 1 && keyword) {
-                fetchGlobalBrands(keyword);
-            }
         } catch (err: any) {
             setError(err.response?.data?.error || 'Erro ao conectar com o backend.');
             toast.error("Falha na busca do Portal da Transparência");

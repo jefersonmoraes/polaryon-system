@@ -119,8 +119,18 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                     const items = itemsRes.data || [];
                     for (const item of items) {
                         const desc = (item.descricao || item.description || '').toLowerCase();
-                        if (keywords.every(k => desc.includes(k))) {
-                            let brand = extractBrand(item.descricao || item.description);
+                        // Filtro mais resiliente: se tiver múltiplas palavras, pelo menos 50% devem bater ou a primeira deve bater
+                        const matchCount = keywords.filter(k => desc.includes(k)).length;
+                        const isMatch = keywords.length === 0 || (matchCount >= Math.ceil(keywords.length / 2)) || (keywords.length > 0 && desc.includes(keywords[0]));
+                        
+                        if (isMatch) {
+                            let brand = extractBrand(item.descricao || item.description || '');
+                            
+                            // Tentar pegar do campo marca se existir
+                            if ((brand === 'N/A' || !brand) && item.marca) {
+                                brand = item.marca.toUpperCase().trim();
+                            }
+                            
                             if (brand === 'N/A' && item.temResultado) {
                                 try {
                                     const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
@@ -129,10 +139,13 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                                     }
                                 } catch (e) {}
                             }
-                            if (brand !== 'N/A' && brand.length > 1) {
+                            
+                            if (brand && brand !== 'N/A' && brand.length > 1) {
                                 if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
                                 brandCounts[brand].value++;
-                                brandCounts[brand].totalGasto += (item.valorUnitarioEstimado || 0) * (item.quantidade || 0);
+                                // Tentar valor unitário ou valor total
+                                const unitPrice = item.valorUnitarioEstimado || item.valorUnitario || 0;
+                                brandCounts[brand].totalGasto += unitPrice * (item.quantidade || 0);
                             }
                         }
                     }
