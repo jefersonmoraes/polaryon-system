@@ -110,8 +110,12 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
         const processBatch = async (proc: any) => {
             try {
-                // Timeout curto para os itens
-                const itemsRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens`, { timeout: 3500 });
+                // Determinar endpoint correto baseado no tipo de documento
+                const isContrato = proc.document_type === 'contrato';
+                const typePath = isContrato ? 'contratos' : 'compras';
+                const itemsUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/${typePath}/${proc.ano}/${proc.numero_sequencial}/itens`;
+                
+                const itemsRes = await axios.get(itemsUrl, { timeout: 4000 });
                 const items = itemsRes.data || [];
                 
                 // Analisar no máximo os 20 primeiros itens de cada licitação para evitar lentidão
@@ -149,7 +153,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             .map(([name, data]) => ({ name, ...data }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 30);
-        res.json(results);
+        res.json({ results, version: '2026-03-24-v3' });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

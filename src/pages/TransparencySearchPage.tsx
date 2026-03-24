@@ -9,6 +9,7 @@ import {
     TrendingUp, 
     Info, 
     ChevronRight, 
+    Zap,
     Loader2, 
     AlertCircle,
     Download,
@@ -141,12 +142,14 @@ export default function TransparencySearchPage() {
         try {
             const response = await api.get('/transparency/analytics/global-brands', { 
                 params: { termo: term },
-                timeout: 15000 // 15 segundos de timeout no frontend
+                timeout: 15000 
             });
-            setGlobalBrands(response.data || []);
+            // O backend agora retorna { results, version }
+            const brands = response.data?.results || response.data || [];
+            setGlobalBrands(Array.isArray(brands) ? brands : []);
         } catch (err) {
             console.error("Erro marcas globais", err);
-            setGlobalBrands([]); // Limpa para sair do loading
+            setGlobalBrands([]); 
         } finally {
             setLoadingGlobalBrands(false);
         }
@@ -479,11 +482,14 @@ export default function TransparencySearchPage() {
                                         <p className="text-[10px] text-muted-foreground italic">Consultando os 20 processos mais recentes para extrair marcas...</p>
                                     </div>
                                 ) : (globalBrands.length > 0) ? (
-                                    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-right-4">
-                                        <h3 className="text-sm font-bold flex items-center gap-2 italic">
-                                            <TrendingUp className="h-4 w-4 text-primary" />
-                                            Ranking Global de Marcas
-                                        </h3>
+                                    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm animate-in fade-in slide-in-from-right-4">
+                                        <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                                                <h3 className="font-black text-[10px] uppercase tracking-wider text-muted-foreground">Ranking de Mercado (Amostra)</h3>
+                                            </div>
+                                            <Zap className="h-3 w-3 text-amber-500 fill-amber-500" />
+                                        </div>
                                         <div className="space-y-4">
                                             {globalBrands.slice(0, 10).map((b, i) => (
                                                 <div key={i} className="flex flex-col gap-1.5 group cursor-default">
@@ -515,7 +521,12 @@ export default function TransparencySearchPage() {
                                             </p>
                                         </div>
                                     </div>
-                                ) : null}
+                                ) : (
+                                    <div className="bg-card/50 border border-border/50 border-dashed rounded-2xl p-8 text-center space-y-3">
+                                        <Info className="h-8 w-8 text-muted-foreground/30 mx-auto" />
+                                        <p className="text-xs text-muted-foreground font-medium italic">Nenhuma marca consolidada nos 20 processos recentes.</p>
+                                    </div>
+                                )}
                                 
                                 <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 space-y-3">
                                     <div className="flex items-center gap-2 text-primary">
