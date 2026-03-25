@@ -39,8 +39,7 @@ router.post('/folders', async (req: Request, res: Response) => {
 
 router.put('/folders/:id', async (req: Request, res: Response) => {
     try {
-        const { boards, ...data } = req.body;
-        delete (data as any).updatedAt;
+        const { boards, id, createdAt, updatedAt, ...data } = req.body;
         
         console.log(`[Folder Update] ID: ${req.params.id}`);
         console.log(`[Folder Update] Received keys:`, Object.keys(req.body));
@@ -91,8 +90,7 @@ router.post('/boards', async (req: Request, res: Response) => {
 
 router.put('/boards/:id', async (req: Request, res: Response) => {
     try {
-        const { lists, ...data } = req.body;
-        delete (data as any).updatedAt;
+        const { lists, id, createdAt, updatedAt, ...data } = req.body;
         const board = await prisma.board.update({ where: { id: req.params.id as string }, data });
         res.json(board);
     } catch (e: any) {
@@ -133,8 +131,7 @@ router.post('/lists', async (req: Request, res: Response) => {
 
 router.put('/lists/:id', async (req: Request, res: Response) => {
     try {
-        const { cards, ...data } = req.body;
-        delete (data as any).updatedAt;
+        const { cards, id, createdAt, updatedAt, ...data } = req.body;
         const list = await prisma.kanbanList.update({ where: { id: req.params.id as string }, data });
         res.json(list);
     } catch (e: any) {
@@ -166,7 +163,8 @@ router.post('/labels', async (req: Request, res: Response) => {
 
 router.put('/labels/:id', async (req: Request, res: Response) => {
     try {
-        const label = await prisma.label.update({ where: { id: req.params.id as string }, data: req.body });
+        const { id, createdAt, ...data } = req.body;
+        const label = await prisma.label.update({ where: { id: req.params.id as string }, data });
         res.json(label);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -416,7 +414,8 @@ router.post('/companies', async (req: Request, res: Response) => {
 
 router.put('/companies/:id', async (req: Request, res: Response) => {
     try {
-        const company = await prisma.company.update({ where: { id: req.params.id as string }, data: req.body });
+        const { id, createdAt, ...data } = req.body;
+        const company = await prisma.company.update({ where: { id: req.params.id as string }, data });
         res.json(company);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -453,7 +452,8 @@ router.post('/main-companies', async (req: Request, res: Response) => {
 
 router.put('/main-companies/:id', async (req: Request, res: Response) => {
     try {
-        const mainComp = await prisma.mainCompanyProfile.update({ where: { id: req.params.id as string }, data: req.body });
+        const { id, createdAt, ...data } = req.body;
+        const mainComp = await prisma.mainCompanyProfile.update({ where: { id: req.params.id as string }, data });
         res.json(mainComp);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -490,7 +490,8 @@ router.post('/routes', async (req: Request, res: Response) => {
 
 router.put('/routes/:id', async (req: Request, res: Response) => {
     try {
-        const route = await prisma.route.update({ where: { id: req.params.id as string }, data: req.body });
+        const { id, createdAt, ...data } = req.body;
+        const route = await prisma.route.update({ where: { id: req.params.id as string }, data });
         res.json(route);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -527,7 +528,8 @@ router.post('/budgets', async (req: Request, res: Response) => {
 
 router.put('/budgets/:id', async (req: Request, res: Response) => {
     try {
-        const budget = await prisma.budget.update({ where: { id: req.params.id as string }, data: req.body });
+        const { id, createdAt, ...data } = req.body;
+        const budget = await prisma.budget.update({ where: { id: req.params.id as string }, data });
         res.json(budget);
     } catch (e: any) {
         res.status(500).json({ error: e.message });
