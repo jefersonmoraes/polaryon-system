@@ -1384,13 +1384,35 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const isDirtyRef = useRef(false);
     const lastSavedDataRef = useRef<string>('');
-    // Helper to compare only relevant data (ignore IDs and timestamps)
-    const getRelevantData = (b: any) => {
-        if (!b) return '';
-        const { id, createdAt, updatedAt, ...rest } = b;
-        return JSON.stringify(rest);
-    };
     const saveTimeoutRef = useRef<NodeJS.Timeout>();
+    const syncLockRef = useRef<number>(0);
+
+    // Helper to compare only relevant data (ignore IDs and timestamps and SORT KEYS)
+    const getRelevantData = (obj: any): string => {
+        if (!obj) return '';
+
+        const sortObj = (o: any): any => {
+            if (o === null || typeof o !== 'object') return o;
+            if (Array.isArray(o)) return o.map(sortObj);
+
+            return Object.keys(o)
+                .sort()
+                .filter(key => ![
+                    'id', 'createdAt', 'updatedAt', 'trashedAt', 
+                    'userId', 'lastCnpjCheck', 'archived'
+                ].includes(key))
+                .reduce((acc: any, key) => {
+                    acc[key] = sortObj(o[key]);
+                    return acc;
+                }, {});
+        };
+
+        try {
+            return JSON.stringify(sortObj(obj));
+        } catch (e) {
+            return '';
+        }
+    };
 
     // INITIALIZATION: Only run when the prop budget ID changes or component mounts
     useEffect(() => {
@@ -1429,11 +1451,15 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     useEffect(() => {
         if (!budget || !activeBudgetId) return;
         
+        // Skip if we are editing or just saved (lock for 2 seconds)
+        const isLocked = (Date.now() - syncLockRef.current) < 2000;
+        if (isDirtyRef.current || isLocked) return;
+
         const storeDataStr = getRelevantData(budget);
         const localDataStr = getRelevantData(formData);
         
-        // If we are NOT dirty and the store is different, sync
-        if (!isDirtyRef.current && storeDataStr !== localDataStr) {
+        // If the store is different, sync
+        if (storeDataStr !== localDataStr) {
             setFormData(budget);
             lastSavedDataRef.current = storeDataStr;
         }
@@ -1452,8 +1478,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         const currentDataStr = getRelevantData(formData);
         // Only if different from LAST SAVED
         if (currentDataStr === lastSavedDataRef.current) {
-            if (saveStatus === 'saved' || saveStatus === 'saving') {
-                const t = setTimeout(() => setSaveStatus('idle'), 2000);
+            if (saveStatus === 'saved') {
+                const t = setTimeout(() => setSaveStatus('idle'), 3000);
                 return () => clearTimeout(t);
             }
             return;
@@ -1468,13 +1494,14 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             updateBudget(activeBudgetId, formData);
             lastSavedDataRef.current = currentDataStr;
             isDirtyRef.current = false;
+            syncLockRef.current = Date.now(); // Set safety lock
             setSaveStatus('saved');
-        }, 1000);
+        }, 1500); // Increased debounce for stability
 
         return () => {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         };
-    }, [formData, activeBudgetId, updateBudget]);
+    }, [formData, activeBudgetId, updateBudget, saveStatus]);
 
     // Force strict save on Unmount to prevent data loss on sudden closes
     const formDataRef = useRef(formData);
