@@ -9,7 +9,7 @@ import {
     Phone, Mail, MessageCircle, ExternalLink
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
-import { getFaviconUrl } from '@/lib/utils';
+import { cn, getFaviconUrl } from '@/lib/utils';
 
 interface BudgetModalProps {
     budget?: Budget;
@@ -1412,18 +1412,28 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     };
 
 
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const saveTimeoutRef = useRef<NodeJS.Timeout>();
+
     // Auto-Save Effect (Debounce)
     useEffect(() => {
         if (!activeBudgetId) return;
 
-        const timeoutId = setTimeout(() => {
-            if (activeBudgetId) {
-                // Ensure we only update if not completely empty or deleted
-                updateBudget(activeBudgetId, formData);
-            }
-        }, 500);
+        setSaveStatus('saving');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-        return () => clearTimeout(timeoutId);
+        saveTimeoutRef.current = setTimeout(() => {
+            if (activeBudgetId) {
+                updateBudget(activeBudgetId, formData);
+                setSaveStatus('saved');
+                // Back to idle after showing "Saved" for a bit
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            }
+        }, 800);
+
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
     }, [formData, activeBudgetId, updateBudget]);
 
     // Force strict save on Unmount to prevent data loss on sudden closes
@@ -1584,9 +1594,37 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                         <div className={`p-2 rounded-lg bg-primary/10 text-primary`}>
                             <Calculator className="h-5 w-5" />
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold">{budget ? 'Editar Orçamento' : 'Novo Orçamento'}</h2>
-                            <p className="text-xs text-muted-foreground mt-0.5">Gerencie os detalhes do seu orçamento</p>
+                        <div className="flex flex-col">
+                            <h2 className="text-xl font-bold tracking-tight">
+                                {budget ? 'Editar Orçamento' : 'Novo Orçamento'}
+                            </h2>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-xs text-muted-foreground">
+                                    {budget ? `ID: ${budget.id}` : 'Rascunho inicial'}
+                                </p>
+                                {saveStatus !== 'idle' && (
+                                    <div className={cn(
+                                        "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-in fade-in duration-300",
+                                        saveStatus === 'saving' ? "bg-blue-500/10 text-blue-500" :
+                                        saveStatus === 'saved' ? "bg-green-500/10 text-green-500" :
+                                        "bg-red-500/10 text-red-500"
+                                    )}>
+                                        {saveStatus === 'saving' ? (
+                                            <>
+                                                <div className="h-2 w-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                Salvando...
+                                            </>
+                                        ) : saveStatus === 'saved' ? (
+                                            <>
+                                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                                Salvo no Banco
+                                            </>
+                                        ) : (
+                                            "Erro ao Salvar"
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 text-muted-foreground hover:bg-secondary rounded-lg transition-colors">

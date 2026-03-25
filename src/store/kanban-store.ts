@@ -581,7 +581,12 @@ export const useKanbanStore = create<KanbanState>()(
         api.post('/kanban/budgets', { ...budgetData, userId: currentUser?.id, id, createdAt }).then(res => {
             const newBudget = { ...budgetData, userId: currentUser?.id, id, createdAt };
             socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_BUDGET', payload: newBudget });
-        }).catch(console.error);
+        }).catch(err => {
+            console.error("Failed to create budget:", err);
+            import('sonner').then(({ toast }) => {
+                toast.error("Erro ao criar orçamento no servidor. Verifique sua conexão.");
+            });
+        });
         
         return id;
       },
@@ -611,8 +616,17 @@ export const useKanbanStore = create<KanbanState>()(
             budgets: s.budgets.map(b => b.id === id ? { ...b, ...data } : b)
           };
         });
-        api.put(`/kanban/budgets/${id}`, data).catch(console.error);
-        socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_BUDGET', payload: { id, data } });
+        api.put(`/kanban/budgets/${id}`, data)
+          .then(() => {
+              // Successfully saved to DB
+              socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_BUDGET', payload: { id, data } });
+          })
+          .catch(err => {
+              console.error("Failed to update budget:", err);
+              import('sonner').then(({ toast }) => {
+                  toast.error("Erro ao salvar alteração no orçamento. Os dados podem não persistir.");
+              });
+          });
       },
       deleteBudget: (id) => {
         set(s => {
