@@ -1345,9 +1345,23 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 };
 
 const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
-    const { addBudget, updateBudget, companies, mainCompanies } = useKanbanStore();
+    const { 
+        addBudget, 
+        updateBudget, 
+        companies, 
+        mainCompanies, 
+        budgets,
+        cards,
+        lists,
+        boards,
+        routes
+    } = useKanbanStore();
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
+    const navigate = useNavigate();
+
+    const [activeBudgetId, setActiveBudgetId] = useState<string | undefined>(budget?.id);
+    const budgetFromStore = budgets.find(b => b.id === activeBudgetId);
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
@@ -1360,9 +1374,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         totalValue: 0
     });
 
-    const navigate = useNavigate();
-
-    const { cards, lists, boards, routes } = useKanbanStore();
     const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
     const allowedCards = cards.filter(c => {
@@ -1380,7 +1391,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         return true;
     });
 
-    const [activeBudgetId, setActiveBudgetId] = useState<string | undefined>(budget?.id);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const isDirtyRef = useRef(false);
     const lastSavedDataRef = useRef<string>('');
@@ -1416,12 +1426,15 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     // INITIALIZATION: Only run when the prop budget ID changes or component mounts
     useEffect(() => {
-        if (budget?.id && budget.id !== activeBudgetId) {
-            setActiveBudgetId(budget.id);
-            setFormData(budget);
+        // Use store version if available (more up to date)
+        const initialBudget = budgets.find(b => b.id === budget?.id) || budget;
+
+        if (initialBudget?.id && initialBudget.id !== activeBudgetId) {
+            setActiveBudgetId(initialBudget.id);
+            setFormData(initialBudget);
             isDirtyRef.current = false;
-            lastSavedDataRef.current = getRelevantData(budget);
-        } else if (!budget?.id && !activeBudgetId) {
+            lastSavedDataRef.current = getRelevantData(initialBudget);
+        } else if (!initialBudget?.id && !activeBudgetId) {
             // New Budget logic
             const newId = crypto.randomUUID();
             const initialData = {
@@ -1447,23 +1460,24 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         }
     }, [budget?.id, activeBudgetId, addBudget]);
 
-    // EXTERNAL SYNC: Update local formData if budget from store changes
+    // EXTERNAL SYNC: Update local formData if budget from store changes (Socket updates)
     useEffect(() => {
-        if (!budget || !activeBudgetId) return;
+        const liveBudget = budgetFromStore || budget;
+        if (!liveBudget || !activeBudgetId) return;
         
         // Skip if we are editing or just saved (lock for 2 seconds)
         const isLocked = (Date.now() - syncLockRef.current) < 2000;
         if (isDirtyRef.current || isLocked) return;
 
-        const storeDataStr = getRelevantData(budget);
+        const storeDataStr = getRelevantData(liveBudget);
         const localDataStr = getRelevantData(formData);
         
         // If the store is different, sync
         if (storeDataStr !== localDataStr) {
-            setFormData(budget);
+            setFormData(liveBudget);
             lastSavedDataRef.current = storeDataStr;
         }
-    }, [budget]);
+    }, [budgetFromStore, budget]);
 
     // Fast-Save wrapper: Update local state and mark as dirty
     const handleUpdateField = (field: keyof Budget, value: any) => {
