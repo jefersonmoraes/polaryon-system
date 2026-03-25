@@ -1380,60 +1380,71 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         return true;
     });
 
-    // Auto-Initialization / Creation for New Budgets
     const [activeBudgetId, setActiveBudgetId] = useState<string | undefined>(budget?.id);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const isDirtyRef = useRef(false);
+    const lastSavedDataRef = useRef<string>('');
 
+    // INITIALIZATION: Only run when the prop budget ID changes or component mounts
     useEffect(() => {
-        if (!budget?.id && !activeBudgetId) {
-            // It's a "New Budget", pre-create it silently
+        if (budget?.id && budget.id !== activeBudgetId) {
+            setActiveBudgetId(budget.id);
+            setFormData(budget);
+            isDirtyRef.current = false;
+        } else if (!budget?.id && !activeBudgetId) {
+            // New Budget logic
             const newId = crypto.randomUUID();
             const initialData: Omit<Budget, 'id' | 'createdAt'> = {
-                title: formData.title || 'Novo Orçamento',
-                address: formData.address || '',
-                deliveryTime: formData.deliveryTime || '',
-                type: formData.type as BudgetType || 'Produto',
-                status: formData.status as BudgetStatus || 'Aguardando',
-                cardId: formData.cardId || undefined,
-                items: formData.items || [],
-                totalValue: formData.totalValue || 0,
+                title: 'Novo Orçamento',
+                address: '',
+                deliveryTime: '',
+                type: 'Produto',
+                status: 'Aguardando',
+                items: [],
+                totalValue: 0
             };
             addBudget({ ...initialData, id: newId } as unknown as Budget);
             setActiveBudgetId(newId);
+            setFormData({ ...initialData, id: newId } as unknown as Budget);
+            isDirtyRef.current = false;
         }
-    }, [budget, activeBudgetId, addBudget, formData]);
+    }, [budget?.id, activeBudgetId]);
 
-    // Fast-Save wrapper to ensure fields like Title, Type, Status get pushed to Zustand instantly
+    // EXTERNAL SYNC: Update local formData if budget from store changes AND we are not editing
+    useEffect(() => {
+        if (budget && !isDirtyRef.current && JSON.stringify(budget) !== JSON.stringify(formData)) {
+            setFormData(budget);
+        }
+    }, [budget]);
+
+    // Fast-Save wrapper: Update local state and mark as dirty
     const handleUpdateField = (field: keyof Budget, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-
-        if (activeBudgetId) {
-            updateBudget(activeBudgetId, { [field]: value });
-        }
+        setFormData(prev => {
+            const next = { ...prev, [field]: value };
+            // Update store immediately for simple fields if needed, but here we'll rely on auto-save
+            // to keep it unified and avoid double-hits.
+            return next;
+        });
+        isDirtyRef.current = true;
     };
-
-
-    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-    const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
     // Auto-Save Effect (Debounce)
     useEffect(() => {
-        if (!activeBudgetId) return;
+        if (!activeBudgetId || !isDirtyRef.current) return;
+
+        const currentDataStr = JSON.stringify(formData);
+        if (currentDataStr === lastSavedDataRef.current) return;
 
         setSaveStatus('saving');
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        const timeoutId = setTimeout(() => {
+            updateBudget(activeBudgetId, formData);
+            lastSavedDataRef.current = currentDataStr;
+            isDirtyRef.current = false;
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus(s => s === 'saved' ? 'idle' : s), 2000);
+        }, 1000); // 1s debounce is safer for collaborative work
 
-        saveTimeoutRef.current = setTimeout(() => {
-            if (activeBudgetId) {
-                updateBudget(activeBudgetId, formData);
-                setSaveStatus('saved');
-                // Back to idle after showing "Saved" for a bit
-                setTimeout(() => setSaveStatus('idle'), 2000);
-            }
-        }, 800);
-
-        return () => {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        };
+        return () => clearTimeout(timeoutId);
     }, [formData, activeBudgetId, updateBudget]);
 
     // Force strict save on Unmount to prevent data loss on sudden closes
@@ -1499,6 +1510,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
+        isDirtyRef.current = true;
     };
 
     const updateItemField = (id: string, field: keyof BudgetItem, value: any) => {
@@ -1522,6 +1534,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
+        isDirtyRef.current = true;
     };
 
     const removeItem = (id: string) => {
@@ -1533,6 +1546,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
+        isDirtyRef.current = true;
     };
 
     const cloneItem = (id: string) => {
@@ -1562,6 +1576,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
+        isDirtyRef.current = true;
     };
 
     const formatCurrency = (value: number) => {
