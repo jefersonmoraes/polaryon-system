@@ -1393,49 +1393,41 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const isDirtyRef = useRef(false);
+    const saveStatusRef = useRef<'idle' | 'saving' | 'saved' | 'error'>(saveStatus);
+    useEffect(() => {
+        saveStatusRef.current = saveStatus;
+    }, [saveStatus]);
+
     const lastSavedDataRef = useRef<string>('');
     const saveTimeoutRef = useRef<NodeJS.Timeout>();
     const syncLockRef = useRef<number>(0);
+    const dirtyFieldsRef = useRef<Set<string>>(new Set());
 
-    // Helper to compare only relevant data (ignore IDs and timestamps and SORT KEYS)
-    const getRelevantData = (obj: any): string => {
-        if (!obj) return '';
-
-        const sortObj = (o: any): any => {
-            if (o === null || typeof o !== 'object') return o;
-            if (Array.isArray(o)) return o.map(sortObj);
-
-            return Object.keys(o)
-                .sort()
-                .filter(key => ![
-                    'id', 'createdAt', 'updatedAt', 'trashedAt', 
-                    'userId', 'lastCnpjCheck', 'archived'
-                ].includes(key))
-                .reduce((acc: any, key) => {
-                    acc[key] = sortObj(o[key]);
-                    return acc;
-                }, {});
-        };
-
-        try {
-            return JSON.stringify(sortObj(obj));
-        } catch (e) {
-            return '';
-        }
+    // STABLE COMPARISON: Deep equality check that ignores metadata 
+    const stableStringify = (obj: any): string => {
+        if (obj === null || obj === undefined) return 'null';
+        if (typeof obj !== 'object') return String(obj);
+        if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(',')}]`;
+        const keys = Object.keys(obj).sort().filter(k => ![
+            'id', 'createdAt', 'updatedAt', 'trashedAt', 
+            'userId', 'lastCnpjCheck', 'archived'
+        ].includes(k));
+        return `{${keys.map(k => `${k}:${stableStringify(obj[k])}`).join(',')}}`;
     };
+
+    const getRelevantData = (data: any) => stableStringify(data);
 
     // INITIALIZATION: Only run when the prop budget ID changes or component mounts
     useEffect(() => {
-        // Use store version if available (more up to date)
         const initialBudget = budgets.find(b => b.id === budget?.id) || budget;
 
         if (initialBudget?.id && initialBudget.id !== activeBudgetId) {
             setActiveBudgetId(initialBudget.id);
             setFormData(initialBudget);
             isDirtyRef.current = false;
+            dirtyFieldsRef.current.clear();
             lastSavedDataRef.current = getRelevantData(initialBudget);
         } else if (!initialBudget?.id && !activeBudgetId) {
-            // New Budget logic
             const newId = crypto.randomUUID();
             const initialData = {
                 title: 'Novo Orçamento',
@@ -1451,81 +1443,144 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             setFormData({ ...initialData, id: newId } as unknown as Budget);
             setActiveBudgetId(newId);
             isDirtyRef.current = false;
+            dirtyFieldsRef.current.clear();
             lastSavedDataRef.current = getRelevantData(initialData);
 
-            // Auto-create in DB for new budgets
             setTimeout(() => {
                 addBudget({ ...initialData, id: newId });
             }, 0);
         }
     }, [budget?.id, activeBudgetId, addBudget]);
 
-    // EXTERNAL SYNC: Update local formData if budget from store changes (Socket updates)
-    useEffect(() => {
-        const liveBudget = budgetFromStore || budget;
-        if (!liveBudget || !activeBudgetId) return;
-        
-        // Skip if we are editing or just saved (lock for 2 seconds)
-        const isLocked = (Date.now() - syncLockRef.current) < 2000;
-        if (isDirtyRef.current || isLocked) return;
-
-        const storeDataStr = getRelevantData(liveBudget);
-        const localDataStr = getRelevantData(formData);
-        
-        // If the store is different, sync
-        if (storeDataStr !== localDataStr) {
-            setFormData(liveBudget);
-            lastSavedDataRef.current = storeDataStr;
-        }
-    }, [budgetFromStore, budget]);
-
-    // Fast-Save wrapper: Update local state and mark as dirty
-    const handleUpdateField = (field: keyof Budget, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-        isDirtyRef.current = true;
-    };
-
-    // Auto-Save Effect (Debounce)
-    useEffect(() => {
-        if (!activeBudgetId) return;
-        
-        const currentDataStr = getRelevantData(formData);
-        // Only if different from LAST SAVED
-        if (currentDataStr === lastSavedDataRef.current) {
-            if (saveStatus === 'saved') {
-                const t = setTimeout(() => setSaveStatus('idle'), 3000);
-                return () => clearTimeout(t);
-            }
-            return;
-        }
-
-        // It's different!
-        isDirtyRef.current = true;
-        setSaveStatus('saving');
-
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => {
-            updateBudget(activeBudgetId, formData);
-            lastSavedDataRef.current = currentDataStr;
-            isDirtyRef.current = false;
-            syncLockRef.current = Date.now(); // Set safety lock
-            setSaveStatus('saved');
-        }, 1500); // Increased debounce for stability
-
-        return () => {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        };
-    }, [formData, activeBudgetId, updateBudget, saveStatus]);
-
-    // Force strict save on Unmount to prevent data loss on sudden closes
+    // Track latest formData for unmount save
     const formDataRef = useRef(formData);
     useEffect(() => {
         formDataRef.current = formData;
     }, [formData]);
 
+    // Track in-flight saving promise to avoid parallel request conflicts
+    const savingPromiseRef = useRef<Promise<any> | null>(null);
+
+    // Auto-Save Effect (Debounce)
+    const currentDataStr = getRelevantData(formData);
+    useEffect(() => {
+        if (!activeBudgetId || !isDirtyRef.current) return;
+        
+        // If data is already saved, just clear the dirty flag and return
+        if (currentDataStr === lastSavedDataRef.current) {
+            isDirtyRef.current = false;
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            // Wait for any in-flight save to finish
+            if (savingPromiseRef.current) {
+                await savingPromiseRef.current;
+            }
+
+            // Check if we are still dirty after waiting
+            if (!isDirtyRef.current) return;
+
+            const currentFormData = formDataRef.current;
+            
+            // SIMULTANEOUS EDITING: Only send the fields that actually changed
+            const dataToSave: any = {};
+            dirtyFieldsRef.current.forEach(field => {
+                dataToSave[field] = (currentFormData as any)[field];
+            });
+
+            // If no fields are actually dirty after all, skip
+            if (Object.keys(dataToSave).length === 0) {
+                isDirtyRef.current = false;
+                return;
+            }
+            
+            console.log("BudgetModal - Saving delta:", Object.keys(dataToSave));
+            setSaveStatus('saving');
+
+            try {
+                const savePromise = updateBudget(activeBudgetId, dataToSave);
+                savingPromiseRef.current = savePromise;
+                
+                await savePromise;
+                
+                console.log("BudgetModal - Delta save successful!");
+                lastSavedDataRef.current = getRelevantData(currentFormData);
+                isDirtyRef.current = false;
+                dirtyFieldsRef.current.clear();
+                syncLockRef.current = Date.now();
+                setSaveStatus('saved');
+            } catch (err) {
+                console.error("BudgetModal - Save failed:", err);
+                setSaveStatus('error');
+            } finally {
+                savingPromiseRef.current = null;
+            }
+        }, 1500); 
+
+        return () => clearTimeout(timer);
+    }, [currentDataStr, activeBudgetId, updateBudget]);
+
+    // EXTERNAL SYNC: Update local formData if budget from store changes (Socket updates)
+    const liveBudget = budgetFromStore || budgets.find(b => b.id === activeBudgetId);
+    const storeDataStr = getRelevantData(liveBudget);
+    useEffect(() => {
+        if (!liveBudget || !activeBudgetId) return;
+
+        // Skip if recently saved by us to avoid immediate feedback jitter
+        const isRecentlySavedByMe = (Date.now() - syncLockRef.current) < 3000;
+        if (isRecentlySavedByMe || savingPromiseRef.current) return;
+
+        setFormData(prev => {
+            const localDataStr = getRelevantData(prev);
+            // If nothing changed in the store relative to what we see, skip
+            if (storeDataStr === localDataStr) return prev;
+
+            console.log("BudgetModal - Performing smart merge from remote...");
+            const merged = { ...prev };
+            let hasChanges = false;
+
+            Object.keys(liveBudget).forEach(key => {
+                const k = key as keyof Budget;
+                // ONLY UPDATE FIELDS WE ARE NOT CURRENTLY EDITING
+                if (!dirtyFieldsRef.current.has(key)) {
+                    const storeValueStr = stableStringify((liveBudget as any)[key]);
+                    const localValueStr = stableStringify(prev[k]);
+                    
+                    if (storeValueStr !== localValueStr) {
+                        (merged as any)[key] = (liveBudget as any)[key];
+                        hasChanges = true;
+                    }
+                }
+            });
+
+            if (!hasChanges) return prev;
+            return merged;
+        });
+        
+        lastSavedDataRef.current = storeDataStr;
+    }, [storeDataStr, activeBudgetId]);
+
+    // Reset Saved feedback status
+    useEffect(() => {
+        if (saveStatus === 'saved') {
+            const t = setTimeout(() => setSaveStatus('idle'), 3000);
+            return () => clearTimeout(t);
+        }
+    }, [saveStatus]);
+
+    // User Edit Handler
+    const handleUpdateField = (field: keyof Budget, value: any) => {
+        console.log("BudgetModal - Field updated:", field);
+        isDirtyRef.current = true;
+        dirtyFieldsRef.current.add(field as string);
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    // Final Unmount Save
     useEffect(() => {
         return () => {
-            if (activeBudgetId && formDataRef.current) {
+            if (activeBudgetId && isDirtyRef.current && formDataRef.current) {
                 updateBudget(activeBudgetId, formDataRef.current);
             }
         };
@@ -1541,8 +1596,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     // Refs for clicking outside
     const cardDropdownRef = useRef<HTMLDivElement>(null);
-    const supplierDropdownRef = useRef<HTMLDivElement>(null); // Not used in BudgetModal directly, but kept for consistency if needed
-    const transporterDropdownRef = useRef<HTMLDivElement>(null); // Not used in BudgetModal directly, but kept for consistency if needed
+    const supplierDropdownRef = useRef<HTMLDivElement>(null);
+    const transporterDropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -1572,6 +1627,9 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             finalSellingPrice: 0,
             taxesBreakdown: { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, total: 0 }
         };
+        // CRITICAL: Mark as DIRTY for the item add too
+        isDirtyRef.current = true;
+        dirtyFieldsRef.current.add('items');
         setFormData(prev => {
             const newItems = [...(prev.items || []), newGroup];
             return {
@@ -1580,7 +1638,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
-        isDirtyRef.current = true;
     };
 
     const updateItemField = (id: string, field: keyof BudgetItem, value: any) => {
@@ -1696,7 +1753,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     )}>
                                         {saveStatus === 'saving' ? (
                                             <>
-                                                <div className="h-2 w-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                                 Salvando...
                                             </>
                                         ) : saveStatus === 'saved' ? (

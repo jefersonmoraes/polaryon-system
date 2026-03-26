@@ -55,7 +55,7 @@ interface KanbanState {
   permanentlyDeleteRoute: (id: string) => void;
   // budgets
   addBudget: (budgetData: Omit<Budget, 'createdAt'> | Omit<Budget, 'id' | 'createdAt'>) => string | void;
-  updateBudget: (id: string, data: Partial<Budget>) => void;
+  updateBudget: (id: string, data: Partial<Budget>) => Promise<void>;
   deleteBudget: (id: string) => void; // Soft delete
   restoreBudget: (id: string) => void;
   permanentlyDeleteBudget: (id: string) => void;
@@ -616,7 +616,7 @@ export const useKanbanStore = create<KanbanState>()(
             budgets: s.budgets.map(b => b.id === id ? { ...b, ...data } : b)
           };
         });
-        api.put(`/kanban/budgets/${id}`, data)
+        return api.put(`/kanban/budgets/${id}`, data)
           .then(() => {
               // Successfully saved to DB
               socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_BUDGET', payload: { id, data } });
@@ -626,6 +626,7 @@ export const useKanbanStore = create<KanbanState>()(
               import('sonner').then(({ toast }) => {
                   toast.error("Erro ao salvar alteração no orçamento. Os dados podem não persistir.");
               });
+              throw err; // Re-throw so the caller knows it failed
           });
       },
       deleteBudget: (id) => {
