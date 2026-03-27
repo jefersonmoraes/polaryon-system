@@ -1402,6 +1402,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     const saveTimeoutRef = useRef<NodeJS.Timeout>();
     const syncLockRef = useRef<number>(0);
     const dirtyFieldsRef = useRef<Set<string>>(new Set());
+    const dirtyItemIdsRef = useRef<Set<string>>(new Set());
 
     // STABLE COMPARISON: Deep equality check that ignores metadata 
     const stableStringify = (obj: any): string => {
@@ -1508,6 +1509,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 lastSavedDataRef.current = getRelevantData(currentFormData);
                 isDirtyRef.current = false;
                 dirtyFieldsRef.current.clear();
+                dirtyItemIdsRef.current.clear(); // Limpa itens alterados após persistência
                 syncLockRef.current = Date.now();
                 setSaveStatus('saved');
             } catch (err) {
@@ -1542,8 +1544,58 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
             Object.keys(liveBudget).forEach(key => {
                 const k = key as keyof Budget;
-                // ONLY UPDATE FIELDS WE ARE NOT CURRENTLY EDITING
-                if (!dirtyFieldsRef.current.has(key)) {
+                
+                // CRITICAL: SPECIAL GRANULAR MERGE FOR ITEMS ARRAY
+                if (k === 'items') {
+                    const remoteItems = (liveBudget as any).items || [];
+                    const localItems = prev.items || [];
+                    
+                    let itemsMerged = false;
+                    const mergedItems = [...localItems];
+
+                    // 1. Process Remote Items (Update or Add)
+                    remoteItems.forEach((remoteItem: any) => {
+                        const localIdx = mergedItems.findIndex(li => li.id === remoteItem.id);
+                        
+                        if (localIdx === -1) {
+                            // New item added by someone else
+                            console.log(`BudgetModal Sync - Adding new remote item: ${remoteItem.id}`);
+                            mergedItems.push(remoteItem);
+                            itemsMerged = true;
+                        } else if (!dirtyItemIdsRef.current.has(remoteItem.id)) {
+                            // Existing item NOT being edited by us
+                            const remoteItemStr = stableStringify(remoteItem);
+                            const localItemStr = stableStringify(mergedItems[localIdx]);
+                            
+                            if (remoteItemStr !== localItemStr) {
+                                console.log(`BudgetModal Sync - Updating remote item: ${remoteItem.id}`);
+                                mergedItems[localIdx] = remoteItem;
+                                itemsMerged = true;
+                            }
+                        } else {
+                            // console.log(`BudgetModal Sync - Skipping dirty local item: ${remoteItem.id}`);
+                        }
+                    });
+
+                    // 2. Handle Deletions (Items present locally but gone remotely)
+                    // Only remove if NOT locally dirty
+                    const remoteIds = new Set(remoteItems.map((ri: any) => ri.id));
+                    const filteredItems = mergedItems.filter(li => {
+                        if (remoteIds.has(li.id)) return true;
+                        if (dirtyItemIdsRef.current.has(li.id)) return true; // Keep local if we are editing it (race condition)
+                        
+                        console.log(`BudgetModal Sync - Removing item deleted remotely: ${li.id}`);
+                        itemsMerged = true;
+                        return false;
+                    });
+
+                    if (itemsMerged) {
+                        merged.items = filteredItems;
+                        hasChanges = true;
+                    }
+                } 
+                // ONLY UPDATE OTHER FIELDS WE ARE NOT CURRENTLY EDITING
+                else if (!dirtyFieldsRef.current.has(key)) {
                     const storeValueStr = stableStringify((liveBudget as any)[key]);
                     const localValueStr = stableStringify(prev[k]);
                     
@@ -1630,6 +1682,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         // CRITICAL: Mark as DIRTY for the item add too
         isDirtyRef.current = true;
         dirtyFieldsRef.current.add('items');
+        // When adding a new quote group, we don't have its ID yet easily in a granular way, 
+        // but 'items' being dirty at top level will block the array structure update until save.
         setFormData(prev => {
             const newItems = [...(prev.items || []), newGroup];
             return {
@@ -1663,6 +1717,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
         isDirtyRef.current = true;
         dirtyFieldsRef.current.add('items');
+        dirtyItemIdsRef.current.add(id);
     };
 
     const removeItem = (id: string) => {
@@ -1676,6 +1731,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
         isDirtyRef.current = true;
         dirtyFieldsRef.current.add('items');
+        dirtyItemIdsRef.current.add(id);
     };
 
     const cloneItem = (id: string) => {
@@ -1707,6 +1763,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
         isDirtyRef.current = true;
         dirtyFieldsRef.current.add('items');
+        // Para clone, marcamos apenas 'items' como dirty (estrutura mudou), 
+        // o merge de itens existentes continuará funcionando.
     };
 
     const formatCurrency = (value: number) => {
