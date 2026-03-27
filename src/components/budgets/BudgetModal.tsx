@@ -1662,6 +1662,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             };
         });
         isDirtyRef.current = true;
+        dirtyFieldsRef.current.add('items');
     };
 
     const removeItem = (id: string) => {
@@ -1674,6 +1675,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             };
         });
         isDirtyRef.current = true;
+        dirtyFieldsRef.current.add('items');
     };
 
     const cloneItem = (id: string) => {
@@ -1704,6 +1706,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             };
         });
         isDirtyRef.current = true;
+        dirtyFieldsRef.current.add('items');
     };
 
     const formatCurrency = (value: number) => {
