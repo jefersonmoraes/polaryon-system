@@ -38,7 +38,7 @@ interface QuotationItemCardProps {
     lowestCost: number;
     companies: Company[];
     mainCompanies: MainCompanyProfile[];
-    updateItem: (id: string, field: keyof BudgetItem, value: any) => void;
+    updateItem: (id: string, fieldOrObject: keyof BudgetItem | Partial<BudgetItem>, value?: any, markDirty?: boolean) => void;
     removeItem: (id: string) => void;
     cloneItem: (id: string) => void;
     formatCurrency: (val: number) => string;
@@ -308,14 +308,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             subItems, freight, discountValue, discountOpt, adminId, destState, margin
         );
 
-        // Use setTimeout to avoid state update batching issues if called rapidly
+        // Batch update all calculated fields at once
+        // Use markDirty: false because these are automatic SIDE EFFECTS of a change.
+        // The original change (e.g. unitPrice update) already marked the item as dirty.
+        // If this was triggered by a REMOTE sync, we definitely DON'T want to mark it dirty.
         setTimeout(() => {
-            updateItem(item.id, 'totalPrice', result.cost); // The historical "totalPrice" now maps to Base Cost
-            updateItem(item.id, 'taxValue', result.taxNominal);
-            updateItem(item.id, 'difalValue', result.difalNominal);
-            updateItem(item.id, 'taxesBreakdown', result.breakdown);
-            updateItem(item.id, 'finalSellingPrice', result.finalPrice);
-            updateItem(item.id, 'difalBreakdown', result.difalBreakdown || undefined);
+            updateItem(item.id, {
+                totalPrice: result.cost,
+                taxValue: result.taxNominal,
+                difalValue: result.difalNominal,
+                taxesBreakdown: result.breakdown,
+                finalSellingPrice: result.finalPrice,
+                difalBreakdown: result.difalBreakdown || undefined
+            }, undefined, false);
         }, 0);
     }, [item.id, updateItem, recalculateTotal]);
 
@@ -1562,18 +1567,24 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                             console.log(`BudgetModal Sync - Adding new remote item: ${remoteItem.id}`);
                             mergedItems.push(remoteItem);
                             itemsMerged = true;
-                        } else if (!dirtyItemIdsRef.current.has(remoteItem.id)) {
-                            // Existing item NOT being edited by us
+                        } else {
                             const remoteItemStr = stableStringify(remoteItem);
                             const localItemStr = stableStringify(mergedItems[localIdx]);
-                            
-                            if (remoteItemStr !== localItemStr) {
+                            const isCurrentlyDirty = dirtyItemIdsRef.current.has(remoteItem.id);
+
+                            if (isCurrentlyDirty) {
+                                // If local item is dirty but now IDENTICAL to remote (e.g. after a save), clear dirty flag
+                                if (remoteItemStr === localItemStr) {
+                                    console.log(`BudgetModal Sync - Local item ${remoteItem.id} is now in sync. Clearing dirty flag.`);
+                                    dirtyItemIdsRef.current.delete(remoteItem.id);
+                                }
+                                // Otherwise, keep local version since it's dirty
+                            } else if (remoteItemStr !== localItemStr) {
+                                // Existing item NOT being edited by us and DIFFERENT from remote
                                 console.log(`BudgetModal Sync - Updating remote item: ${remoteItem.id}`);
                                 mergedItems[localIdx] = remoteItem;
                                 itemsMerged = true;
                             }
-                        } else {
-                            // console.log(`BudgetModal Sync - Skipping dirty local item: ${remoteItem.id}`);
                         }
                     });
 
@@ -1623,7 +1634,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     // User Edit Handler
     const handleUpdateField = (field: keyof Budget, value: any) => {
-        console.log("BudgetModal - Field updated:", field);
         isDirtyRef.current = true;
         dirtyFieldsRef.current.add(field as string);
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -1694,20 +1704,38 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
     };
 
-    const updateItemField = (id: string, field: keyof BudgetItem, value: any) => {
+    const updateItemField = (id: string, fieldOrObject: keyof BudgetItem | Partial<BudgetItem>, value?: any, markDirty: boolean = true) => {
         setFormData(prev => {
             if (!canEdit) return prev;
+            
+            let hasTrueChanges = false;
             const newItems = (prev.items || []).map(group => {
                 if (group.id === id) {
-                    const updated = { ...group, [field]: value };
+                    const changes: any = typeof fieldOrObject === 'string' ? { [fieldOrObject]: value } : fieldOrObject;
+                    
+                    // Check if there's actually a change to avoid unnecessary renders
+                    const willChange = Object.entries(changes).some(([k, v]) => stableStringify(group[k as keyof BudgetItem]) !== stableStringify(v));
+                    if (!willChange) return group;
+
+                    hasTrueChanges = true;
+                    const updated = { ...group, ...changes };
+                    
                     // If 'items' (sub-items) are updated, recalculate totalPrice for the group
-                    if (field === 'items') {
-                        updated.totalPrice = (value as QuotationSubItem[]).reduce((sum, sub) => sum + (sub.totalPrice || 0), 0);
+                    if (changes.items) {
+                        updated.totalPrice = (changes.items as QuotationSubItem[]).reduce((sum, sub) => sum + (sub.totalPrice || 0), 0);
                     }
                     return updated;
                 }
                 return group;
             });
+
+            if (!hasTrueChanges) return prev;
+
+            if (markDirty) {
+                isDirtyRef.current = true;
+                dirtyFieldsRef.current.add('items');
+                dirtyItemIdsRef.current.add(id);
+            }
 
             return {
                 ...prev,
@@ -1715,9 +1743,6 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: calculateTotal(newItems)
             };
         });
-        isDirtyRef.current = true;
-        dirtyFieldsRef.current.add('items');
-        dirtyItemIdsRef.current.add(id);
     };
 
     const removeItem = (id: string) => {

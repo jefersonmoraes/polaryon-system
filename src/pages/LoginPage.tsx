@@ -61,7 +61,6 @@ export default function LoginPage() {
         if (isAuthenticated) {
             navigate(from, { replace: true });
         } else {
-            setLoadTime(Date.now());
             generateCaptcha();
         }
     }, [isAuthenticated, navigate, from]);
