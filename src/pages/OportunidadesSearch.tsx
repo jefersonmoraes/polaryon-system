@@ -6,6 +6,8 @@ import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
 
 interface PncpItem {
     id: string;
@@ -151,6 +153,12 @@ export default function OportunidadesSearch() {
     const [selectedItemFiles, setSelectedItemFiles] = useState<any[]>([]);
     const [selectedFilesToExport, setSelectedFilesToExport] = useState<any[]>([]);
     const [loadingFiles, setLoadingFiles] = useState(false);
+    
+    // Novas Variáveis de Detalhamento
+    const [fullItems, setFullItems] = useState<any[]>([]);
+    const [loadingFullItems, setLoadingFullItems] = useState(false);
+    const [cguDetails, setCguDetails] = useState<any>(null);
+    const [loadingCgu, setLoadingCgu] = useState(false);
 
     const getOfficialLink = useCallback((item: PncpItem) => {
         if (!item?.item_url) return '#';
@@ -161,30 +169,54 @@ export default function OportunidadesSearch() {
     useEffect(() => {
         if (!selectedItem) {
             setSelectedItemFiles([]);
+            setFullItems([]);
+            setCguDetails(null);
             return;
         }
-        const fetchFiles = async () => {
+
+        const fetchDetails = async () => {
+            const ano = (selectedItem as any).ano_compra || (selectedItem as any).ano;
+            const seq = (selectedItem as any).numero_compra || (selectedItem as any).numero_sequencial;
+            const cnpj = selectedItem.orgao_cnpj;
+
+            if (!cnpj || !ano || !seq) return;
+
+            // 1. Fetch Files (Original)
             setLoadingFiles(true);
             try {
-                const ano = (selectedItem as any).ano_compra || (selectedItem as any).ano;
-                const seq = (selectedItem as any).numero_compra || (selectedItem as any).numero_sequencial;
-                if (!selectedItem.orgao_cnpj || !ano || !seq) {
-                    setSelectedItemFiles([]);
-                    return;
-                }
-                const res = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${selectedItem.orgao_cnpj}/compras/${ano}/${seq}/arquivos`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setSelectedItemFiles(data);
-                    setSelectedFilesToExport(data); // Vêm todos pré-selecionados para export
-                }
+                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`);
+                setSelectedItemFiles(res.data || []);
+                setSelectedFilesToExport(res.data || []);
             } catch (e) {
                 console.error("Failed to fetch files", e);
             } finally {
                 setLoadingFiles(false);
             }
+
+            // 2. Fetch Full Items (New)
+            setLoadingFullItems(true);
+            try {
+                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`);
+                setFullItems(res.data || []);
+            } catch (e) {
+                console.error("Failed to fetch full items", e);
+            } finally {
+                setLoadingFullItems(false);
+            }
+
+            // 3. Fetch CGU Data (New)
+            setLoadingCgu(true);
+            try {
+                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/cgu`);
+                setCguDetails(res.data || null);
+            } catch (e) {
+                console.error("Failed to fetch CGU data", e);
+            } finally {
+                setLoadingCgu(false);
+            }
         };
-        fetchFiles();
+
+        fetchDetails();
     }, [selectedItem]);
 
     // --- Kanban Export States ---
@@ -839,119 +871,298 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                             </DialogHeader>
 
-                            <div className="p-6 space-y-8">
-                                {/* Section 1: Órgão */}
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
-                                        <Building2 className="h-4 w-4" /> Info do Órgão
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">Instituição Licitante</span>
-                                            <span className="text-sm font-semibold">{selectedItem.orgao_nome}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">Unidade Compradora</span>
-                                            <span className="text-sm">{selectedItem.unidade_nome || 'N/A'} {selectedItem.unidade_codigo ? `(${selectedItem.unidade_codigo})` : ''}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">CNPJ</span>
-                                            <span className="text-sm">{selectedItem.orgao_cnpj}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">Poder Administrativo</span>
-                                            <span className="text-sm">{selectedItem.esfera_nome} • {selectedItem.poder_nome}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">Instrumento Convocatório</span>
-                                            <span className="text-sm">{selectedItem.tipo_instrumento_convocacao_nome || '-'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs text-muted-foreground mb-0.5">Amparo Legal / SRP</span>
-                                            <span className="text-sm">{selectedItem.amparo_legal_nome?.slice(0, 30) || 'N/A'}{selectedItem.amparo_legal_nome?.length && selectedItem.amparo_legal_nome.length > 30 ? '...' : ''} • SRP: {selectedItem.srp ? 'Sim' : 'Não'}</span>
-                                        </div>
+                            <div className="flex-1 overflow-hidden">
+                                <Tabs defaultValue="overview" className="h-full flex flex-col">
+                                    <div className="px-6 border-b border-border bg-card/50 sticky top-0 z-20 overflow-x-auto">
+                                        <TabsList className="bg-transparent h-12 gap-6 p-0 flex-nowrap min-w-max">
+                                            <TabsTrigger value="overview" className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-xs font-bold uppercase tracking-wider">
+                                                <Info className="h-3.5 w-3.5 mr-2" /> Visão Geral
+                                            </TabsTrigger>
+                                            <TabsTrigger value="items" className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-xs font-bold uppercase tracking-wider">
+                                                <Package className="h-3.5 w-3.5 mr-2" /> Itens e Vencedores
+                                            </TabsTrigger>
+                                            <TabsTrigger value="transparency" className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-xs font-bold uppercase tracking-wider">
+                                                <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Portal da Transparência
+                                            </TabsTrigger>
+                                            <TabsTrigger value="files" className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-xs font-bold uppercase tracking-wider">
+                                                <FileText className="h-3.5 w-3.5 mr-2" /> Arquivos PNCP
+                                            </TabsTrigger>
+                                        </TabsList>
                                     </div>
-                                </div>
 
-                                {/* Section 2: Objeto Detalhado */}
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
-                                        <FileText className="h-4 w-4" /> Objeto / Descrição
-                                    </h3>
-                                    <div className="bg-card border border-border p-4 rounded-lg shadow-sm">
-                                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                                            {selectedItem.description || "Descrição sumária não fornecida na ementa eletrônica."}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Section 3: Prazos e Valores */}
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
-                                        <Calendar className="h-4 w-4" /> Valores & Cronograma
-                                    </h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
-                                        <div>
-                                            <span className="block text-[10px] text-muted-foreground uppercase mb-0.5 flex items-center"><DollarSign className="h-3 w-3 mr-0.5" /> Val. Estimado</span>
-                                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedItem.valor_global)}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Publicação</span>
-                                            <span className="text-sm">{formatDate(selectedItem.data_publicacao_pncp, true)}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Início Recepção</span>
-                                            <span className="text-sm">{formatDate(selectedItem.data_inicio_vigencia, true)}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Fim Recepção</span>
-                                            <span className="text-sm font-medium text-destructive">{formatDate(selectedItem.data_fim_vigencia, true)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Section 4: Arquivos Anexos */}
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
-                                        <FileText className="h-4 w-4" /> Arquivos Anexos
-                                    </h3>
-                                    <div className="bg-muted/10 border border-border rounded-lg overflow-hidden">
-                                        {loadingFiles ? (
-                                            <div className="p-6 flex items-center justify-center">
-                                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    <div className="flex-1 overflow-y-auto">
+                                        <TabsContent value="overview" className="p-6 space-y-8 m-0 focus-visible:outline-none">
+                                            {/* Section 1: Órgão */}
+                                            <div className="space-y-3">
+                                                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
+                                                    <Building2 className="h-4 w-4" /> Info do Órgão
+                                                </h3>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">Instituição Licitante</span>
+                                                        <span className="text-sm font-semibold">{selectedItem.orgao_nome}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">Unidade Compradora</span>
+                                                        <span className="text-sm">{selectedItem.unidade_nome || 'N/A'} {selectedItem.unidade_codigo ? `(${selectedItem.unidade_codigo})` : ''}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">CNPJ</span>
+                                                        <span className="text-sm">{selectedItem.orgao_cnpj}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">Poder Administrativo</span>
+                                                        <span className="text-sm">{selectedItem.esfera_nome} • {selectedItem.poder_nome}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">Instrumento Convocatório</span>
+                                                        <span className="text-sm">{selectedItem.tipo_instrumento_convocacao_nome || '-'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-xs text-muted-foreground mb-0.5">Amparo Legal / SRP</span>
+                                                        <span className="text-sm">{selectedItem.amparo_legal_nome?.slice(0, 30) || 'N/A'}{selectedItem.amparo_legal_nome?.length && selectedItem.amparo_legal_nome.length > 30 ? '...' : ''} • SRP: {selectedItem.srp ? 'Sim' : 'Não'}</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        ) : selectedItemFiles.length === 0 ? (
-                                            <div className="p-4 text-center text-sm text-muted-foreground">Nenhum arquivo listado na API do PNCP para este edital.</div>
-                                        ) : (
-                                            <ul className="divide-y divide-border">
-                                                {selectedItemFiles.map((file, idx) => (
-                                                    <li key={idx} className="p-3 hover:bg-muted/20 flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-3 overflow-hidden">
-                                                            <input
-                                                                type="checkbox"
-                                                                title="Exportar para o Kanban"
-                                                                checked={selectedFilesToExport.some(f => f.url === file.url)}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) setSelectedFilesToExport(prev => [...prev, file]);
-                                                                    else setSelectedFilesToExport(prev => prev.filter(f => f.url !== file.url));
-                                                                }}
-                                                                className="rounded border-border text-primary focus:ring-primary h-4 w-4 shrink-0 transition-all cursor-pointer"
-                                                            />
-                                                            <FileText className="h-5 w-5 text-primary shrink-0 opacity-80" />
-                                                            <div className="truncate">
-                                                                <span className="block text-sm font-semibold truncate" title={file.titulo}>{file.titulo}</span>
-                                                                <span className="block text-[11px] text-muted-foreground uppercase">{file.tipoDocumentoNome}</span>
+
+                                            {/* Section 2: Objeto Detalhado */}
+                                            <div className="space-y-3">
+                                                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
+                                                    <FileText className="h-4 w-4" /> Objeto / Descrição
+                                                </h3>
+                                                <div className="bg-card border border-border p-4 rounded-lg shadow-sm">
+                                                    <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                                                        {selectedItem.description || "Descrição sumária não fornecida na ementa eletrônica."}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Section 3: Prazos e Valores */}
+                                            <div className="space-y-3">
+                                                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
+                                                    <Calendar className="h-4 w-4" /> Valores & Cronograma
+                                                </h3>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
+                                                    <div>
+                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5 flex items-center"><DollarSign className="h-3 w-3 mr-0.5" /> Val. Estimado</span>
+                                                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedItem.valor_global)}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Publicação</span>
+                                                        <span className="text-sm">{formatDate(selectedItem.data_publicacao_pncp, true)}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Início Recepção</span>
+                                                        <span className="text-sm">{formatDate(selectedItem.data_inicio_vigencia, true)}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Fim Recepção</span>
+                                                        <span className="text-sm font-medium text-destructive">{formatDate(selectedItem.data_fim_vigencia, true)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </TabsContent>
+
+                                        <TabsContent value="items" className="p-6 m-0 focus-visible:outline-none">
+                                            {loadingFullItems ? (
+                                                <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+                                                    <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                                                    <p className="text-sm font-medium text-muted-foreground">Extraindo itens e cruzando resultados...</p>
+                                                </div>
+                                            ) : fullItems.length === 0 ? (
+                                                <div className="text-center py-20 opacity-50 space-y-4">
+                                                    <Package className="h-16 w-16 mx-auto text-muted-foreground/30" />
+                                                    <p className="text-sm font-medium uppercase tracking-widest">Nenhum item granulado disponível para este edital.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 gap-4">
+                                                    {fullItems.map((item, idx) => (
+                                                        <div key={idx} className="bg-card border border-border rounded-xl p-5 hover:border-primary/40 transition-all group overflow-hidden relative">
+                                                            <div className="flex flex-col lg:flex-row gap-6">
+                                                                <div className="flex-1 space-y-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-sm">ITEM {item.numero}</span>
+                                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.situacao}</span>
+                                                                    </div>
+                                                                    <h4 className="font-bold text-sm leading-snug text-foreground uppercase tracking-tight line-clamp-2" title={item.descricao}>
+                                                                        {item.descricao}
+                                                                    </h4>
+                                                                    
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+                                                                        <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                                                                            <span className="block text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Quantidade</span>
+                                                                            <span className="text-xs font-bold">{item.quantidade} <span className="text-[10px] font-normal opacity-60 lowercase">{item.unidadeMedida}</span></span>
+                                                                        </div>
+                                                                        <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                                                                            <span className="block text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Valor Unit. Est.</span>
+                                                                            <span className="text-xs font-bold text-primary">{formatCurrency(item.valorUnitarioEstimado)}</span>
+                                                                        </div>
+                                                                        <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                                                                            <span className="block text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Valor Total Est.</span>
+                                                                            <span className="text-xs font-bold">{formatCurrency(item.valorTotalEstimado)}</span>
+                                                                        </div>
+                                                                        <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                                                                            <span className="block text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Marca PNCP</span>
+                                                                            <span className="text-xs font-bold truncate block">{item.marca || '-'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {item.vencedor && (
+                                                                    <div className="lg:w-80 shrink-0 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                                                                        <div className="absolute top-0 right-0 p-2 opacity-10">
+                                                                            <Award className="h-12 w-12 text-emerald-500" />
+                                                                        </div>
+                                                                        <div className="space-y-3 relative z-10">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Award className="h-4 w-4 text-emerald-500" />
+                                                                                <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Empresa Vencedora</span>
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-black text-foreground line-clamp-2 leading-none">{item.vencedor.nome}</p>
+                                                                                <p className="text-[10px] font-bold text-muted-foreground mt-1">CNPJ: {item.vencedor.cnpj}</p>
+                                                                            </div>
+                                                                            
+                                                                            <div className="bg-background/80 backdrop-blur-sm rounded-lg p-2 border border-emerald-500/20">
+                                                                               <div className="flex justify-between items-center mb-1">
+                                                                                    <span className="text-[9px] font-black text-muted-foreground uppercase">Marca Ofertada</span>
+                                                                                    <Zap className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                                                                               </div>
+                                                                               <p className="text-xs font-black text-emerald-600 truncate">{item.vencedor.marcaFornecedor || item.marca || 'N/I'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="mt-4 pt-3 border-t border-emerald-500/10 flex items-center justify-between">
+                                                                            <span className="text-[10px] font-black text-muted-foreground uppercase">Valor Homologado</span>
+                                                                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(item.vencedor.valor)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center justify-center h-8 w-8 rounded bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors outline-none focus:ring-2 focus:ring-primary" title="Download Arquivo Analítico">
-                                                            <ExternalLink className="h-4 w-4" />
-                                                        </a>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </TabsContent>
+
+                                        <TabsContent value="transparency" className="p-6 m-0 focus-visible:outline-none">
+                                            {loadingCgu ? (
+                                                <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+                                                    <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                                                    <p className="text-sm font-medium text-muted-foreground">Cruzando dados com o Portal da Transparência...</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-6">
+                                                    <div className="bg-primary/10 border border-primary/20 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
+                                                        <div className="p-4 bg-primary text-primary-foreground rounded-2xl shadow-xl shadow-primary/20 shrink-0">
+                                                            <ShieldCheck className="h-10 w-10" />
+                                                        </div>
+                                                        <div className="flex-1 text-center md:text-left">
+                                                            <h3 className="text-lg font-black tracking-tight uppercase">Inteligência de Transparência</h3>
+                                                            <p className="text-xs text-muted-foreground font-medium leading-relaxed max-w-2xl">
+                                                                Integramos seu token oficial da CGU para rastrear o histórico financeiro e conformidade deste órgão. 
+                                                                Abaixo, dados diretos extraídos do **Portal da Transparência**.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {!cguDetails?.cguData ? (
+                                                        <div className="bg-muted/10 border-2 border-dashed border-border rounded-2xl p-12 text-center space-y-4">
+                                                            <TrendingUp className="h-12 w-12 text-muted-foreground/20 mx-auto" />
+                                                            <div className="space-y-2">
+                                                                <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Licitação em Fase de Registro</h4>
+                                                                <p className="text-xs text-muted-foreground max-w-md mx-auto italic">
+                                                                    O Portal da Transparência (CGU) demora cerca de 15-30 dias para indexar novos editais após a abertura no PNCP. 
+                                                                    Acompanhe aqui o fluxo de empenho e pagamentos assim que homologado.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                            {/* Resumo da Licitação na CGU */}
+                                                            <div className="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-sm">
+                                                                <h4 className="text-xs font-black uppercase text-primary tracking-widest border-b border-border pb-2 flex items-center gap-2">
+                                                                    <BarChart3 className="h-4 w-4" /> Registro CGU: {cguDetails.cguData.numeroLicitacao}
+                                                                </h4>
+                                                                <div className="space-y-3">
+                                                                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                                                                        <span className="text-xs font-bold text-muted-foreground">Valor Total Licitado (CGU)</span>
+                                                                        <span className="text-sm font-black text-foreground">{formatCurrency(cguDetails.cguData.valorLicitacao)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                                                                        <span className="text-xs font-bold text-muted-foreground">Data Resultado</span>
+                                                                        <span className="text-sm font-bold">{cguDetails.cguData.dataResultado || '-'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                                                                        <span className="text-xs font-bold text-muted-foreground">Situação no Portal</span>
+                                                                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-sm text-[10px] font-black uppercase">{cguDetails.cguData.situacao}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="bg-card border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center space-y-4">
+                                                                <Zap className="h-12 w-12 text-amber-500 animate-pulse" />
+                                                                <div>
+                                                                    <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Insights de Mercado</h4>
+                                                                    <p className="text-sm font-bold mt-1">Este órgão já transacionou {cguDetails.allResults?.length || 0} licitações similares recentemente.</p>
+                                                                    <p className="text-[10px] text-muted-foreground mt-2 uppercase font-black">Fonte: api.portaldatransparencia.gov.br</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </TabsContent>
+
+                                        <TabsContent value="files" className="p-6 m-0 focus-visible:outline-none">
+                                            <div className="space-y-3">
+                                                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
+                                                    <FileText className="h-4 w-4" /> Repositório de Documentos
+                                                </h3>
+                                                <div className="bg-muted/10 border border-border rounded-2xl overflow-hidden">
+                                                    {loadingFiles ? (
+                                                        <div className="p-12 flex items-center justify-center">
+                                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                                        </div>
+                                                    ) : selectedItemFiles.length === 0 ? (
+                                                        <div className="p-12 text-center text-sm text-muted-foreground italic">Nenhum arquivo listado na API do PNCP para este edital.</div>
+                                                    ) : (
+                                                        <ul className="divide-y divide-border">
+                                                            {selectedItemFiles.map((file, idx) => (
+                                                                <li key={idx} className="p-4 hover:bg-muted/30 flex items-center justify-between gap-4 transition-colors">
+                                                                    <div className="flex items-center gap-4 overflow-hidden">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            title="Exportar para o Kanban"
+                                                                            checked={selectedFilesToExport.some(f => f.url === file.url)}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.checked) setSelectedFilesToExport(prev => [...prev, file]);
+                                                                                else setSelectedFilesToExport(prev => prev.filter(f => f.url !== file.url));
+                                                                            }}
+                                                                            className="rounded border-border text-primary focus:ring-primary h-5 w-5 shrink-0 transition-all cursor-pointer"
+                                                                        />
+                                                                        <div className="p-2 bg-primary/5 rounded-lg text-primary">
+                                                                            <FileText className="h-5 w-5 opacity-80" />
+                                                                        </div>
+                                                                        <div className="truncate">
+                                                                            <span className="block text-sm font-bold truncate uppercase tracking-tight" title={file.titulo}>{file.titulo || file.nome}</span>
+                                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                                <span className="text-[9px] font-black text-muted-foreground uppercase">{file.tipoDocumentoNome || 'Documento Geral'}</span>
+                                                                                {file.isWinnerDoc && <span className="text-[9px] font-black bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-sm uppercase flex items-center items-center gap-1"><Award className="h-2 w-2" /> Vencedor</span>}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center justify-center h-10 w-10 rounded-xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all shadow-md shadow-primary/20" title="Download Arquivo PNCP">
+                                                                        <Download className="h-4.5 w-4.5" />
+                                                                    </a>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </TabsContent>
                                     </div>
-                                </div>
+                                </Tabs>
                             </div>
 
                             <div className="p-4 border-t border-border bg-muted/50 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-0 z-10 w-full overflow-hidden shrink-0 items-stretch sm:items-center">
