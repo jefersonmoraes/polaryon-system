@@ -257,6 +257,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                     const winner = rr.data[0];
                     
                     // Tentar localizar nota de empenho na CGU para este vencedor
+                    let empenhoDados = null;
                     if (winner.niFornecedor) {
                         // Tenta encontrar um empenho no órgão com o mesmo CNPJ do vencedor
                         const matchEmpenho = empenhosCGU.find((e: any) => 
@@ -267,19 +268,16 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                         if (matchEmpenho) {
                             // Link para o detalhamento no Portal da Transparência
                             empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenho/${matchEmpenho.id}?pessoa=${winner.niFornecedor}`;
+                            
+                            empenhoDados = {
+                                numero: matchEmpenho.numeroEmpenho,
+                                data: matchEmpenho.dataEmissao,
+                                valor: matchEmpenho.valorOriginal || winner.valorTotalHomologado
+                            };
                         } else {
                             // Fallback: Link genérico de busca por empenhos do fornecedor no órgão
                             empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenhos/lista?cnpjOrgao=${cnpj}&cpfCnpj=${winner.niFornecedor}`;
                         }
-                    }
-
-                    let empenhoDados = null;
-                    if (matchEmpenho) {
-                        empenhoDados = {
-                            numero: matchEmpenho.numeroEmpenho,
-                            data: matchEmpenho.dataEmissao,
-                            valor: matchEmpenho.valorOriginal || winner.valorTotalHomologado
-                        };
                     }
 
                     vencedor = { 
