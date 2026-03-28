@@ -4,7 +4,7 @@ import axios from 'axios';
 const router = express.Router();
 
 const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
-const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao';
+const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search/';
 const CGU_BASE_URL = 'https://api.portaldatransparencia.gov.br/api-v1';
 
 const PORTAL_TRANSPARENCIA_TOKEN = process.env.PORTAL_TRANSPARENCIA_TOKEN;
@@ -70,18 +70,17 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
         const { pagina = '1', termo, dataInicial, dataFinal, status, tam_pagina = '12' } = req.query;
         
-        // Mapeamento de status para IDs do PNCP na API V1
-        const situacaoMap: Record<string, string> = {
-            'concluido': '3',
-            '3': '3',
-            'em-andamento': '2',
-            '2': '2'
+        // Mapeamento correto para a API de Busca (Legacy mas funcional)
+        const statusMap: Record<string, string> = {
+            'concluido': 'encerradas',
+            'em-andamento': 'em-andamento'
         };
 
-        const sitParam = status && typeof status === 'string' && situacaoMap[status] ? situacaoMap[status] : '';
+        const sitParam = status && typeof status === 'string' && statusMap[status] ? statusMap[status] : '';
         
-        let url = `${PNCP_SEARCH_URL}?pagina=${pagina}&tamanhoPagina=${tam_pagina}&tipos_documento=1%7C2%7C3&q=${encodeURIComponent(termo ? termo.toString() : '')}&ordenacao=-data`;
-        if (sitParam) url += `&situacao=${sitParam}`;
+        // URL Corrigida: tam_pagina, sem duplicidade de / e q obrigatório
+        let url = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(termo ? termo.toString() : '*')}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=${tam_pagina}`;
+        if (sitParam) url += `&status=${sitParam}`;
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
 
@@ -93,28 +92,28 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         });
         
         const data: any = response.data;
-        const items = data.data || [];
+        const items = data.items || [];
 
         const results = items.map((item: any) => ({
-            id: `${item.orgaoCnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-            numeroLicitacao: item.numeroCompra ? `${item.numeroCompra}/${item.anoCompra}` : `${item.sequencialCompra}/${item.anoCompra}`,
-            objeto: item.objetoCompra || 'Sem descrição',
-            orgao: item.orgaoEntidade?.razaoSocial || 'Órgão Desconhecido',
-            dataAbertura: item.dataPublicacaoPncp,
-            valorLicitacao: item.valorTotalEstimado || 0,
-            situacao: item.situacaoNome || 'Desconhecido',
-            cnpjOrgao: item.orgaoCnpj,
-            ano: item.anoCompra,
-            sequencial: item.sequencialCompra
+            id: item.id || `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
+            numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
+            objeto: item.description || 'Sem descrição',
+            orgao: item.orgao_nome || 'Órgão Desconhecido',
+            dataAbertura: item.data_publicacao_pncp,
+            valorLicitacao: item.valor_global || 0,
+            situacao: item.situacao_nome || 'Desconhecida',
+            cnpjOrgao: item.orgao_cnpj,
+            ano: item.ano,
+            sequencial: item.numero_sequencial
         }));
 
         res.json({
             items: results,
-            totalItems: data.totalElements || results.length,
-            totalPages: data.totalPaginas || 1
+            totalItems: data.total || results.length,
+            totalPages: Math.ceil((data.total || results.length) / Number(tam_pagina))
         });
     } catch (error: any) {
-        console.error('ERROR PNCP SEARCH V1:', error.message);
+        console.error('ERROR PNCP SEARCH LEGACY:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -134,22 +133,22 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const allProcesses: any[] = [];
         
         try {
-            // Nova API V1 para ranking (Amostra 100)
-            const searchUrl = `${PNCP_SEARCH_URL}?pagina=1&tamanhoPagina=100&q=${encodeURIComponent(searchKeyword)}&situacao=3&tipos_documento=1%7C2%7C3&ordenacao=-data`;
+            // API Busca Legada (Amostra 100)
+            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=100&status=encerradas`;
             const searchRes = await axios.get(searchUrl, { 
                 headers: { 'User-Agent': 'Mozilla/5.0' }, 
                 timeout: 12000 
             });
             
-            if (searchRes.data && searchRes.data.data) {
-                // A nova API usa p.temResultado
-                const validOnes = searchRes.data.data.filter((p: any) => 
-                    p.temResultado === true || p.valorTotalEstimado > 0
+            if (searchRes.data && searchRes.data.items) {
+                // A API legada usa p.tem_resultado
+                const validOnes = searchRes.data.items.filter((p: any) => 
+                    p.tem_resultado === true || p.valor_global > 0
                 );
                 allProcesses.push(...validOnes.slice(0, 20));
             }
         } catch (e: any) { 
-            console.error('Error in ranking search (v1):', e.message); 
+            console.error('Error in ranking search (legacy):', e.message); 
         }
 
         if (allProcesses.length === 0) {
