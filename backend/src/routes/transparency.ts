@@ -7,6 +7,8 @@ const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
 const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search/';
 const CGU_BASE_URL = 'https://api.portaldatransparencia.gov.br/api-v1';
 
+const normalizeCnpj = (val: string) => (val || '').replace(/\D/g, '');
+
 const PORTAL_TRANSPARENCIA_TOKEN = process.env.PORTAL_TRANSPARENCIA_TOKEN;
 
 const cguApi = axios.create({
@@ -259,24 +261,25 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                     // Tentar localizar nota de empenho na CGU para este vencedor
                     let empenhoDados = null;
                     if (winner.niFornecedor) {
+                        const targetNi = normalizeCnpj(winner.niFornecedor);
                         // Tenta encontrar um empenho no órgão com o mesmo CNPJ do vencedor
                         const matchEmpenho = empenhosCGU.find((e: any) => 
-                            e.credor?.cnpjcpf === winner.niFornecedor || 
-                            e.credor?.nome?.includes(winner.nomeRazaoSocialFornecedor?.substring(0, 10))
+                            normalizeCnpj(e.credor?.cnpjcpf) === targetNi || 
+                            e.credor?.nome?.includes(winner.nomeRazaoSocialFornecedor?.substring(0, 8))
                         );
                         
+                        // URL de Busca Estável (Evita 404 de IDs internos)
+                        // A URL de lista com parâmetros é 100% garantida de carregar os resultados certos
+                        empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenhos/lista?faf=true&aberto=false&cnpjOrgao=${cnpj}&cpfCnpj=${targetNi}`;
+
                         if (matchEmpenho) {
-                            // Link para o detalhamento no Portal da Transparência
-                            empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenho/${matchEmpenho.id}?pessoa=${winner.niFornecedor}`;
-                            
                             empenhoDados = {
                                 numero: matchEmpenho.numeroEmpenho,
                                 data: matchEmpenho.dataEmissao,
                                 valor: matchEmpenho.valorOriginal || winner.valorTotalHomologado
                             };
-                        } else {
-                            // Fallback: Link genérico de busca por empenhos do fornecedor no órgão
-                            empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenhos/lista?cnpjOrgao=${cnpj}&cpfCnpj=${winner.niFornecedor}`;
+                            // Se temos o ID exato, podemos também oferecer o link direto como alternativa interna, 
+                            // mas o link de busca pública é mais resiliente para o usuário final.
                         }
                     }
 

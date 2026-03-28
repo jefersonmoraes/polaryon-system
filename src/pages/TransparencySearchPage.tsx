@@ -1027,10 +1027,12 @@ export default function TransparencySearchPage() {
                                         className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-emerald-600/20 group"
                                     >
                                         <ExternalLink className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                                        ABRIR DOCUMENTO COMPLETO NO PORTAL
+                                        {previewEmpenhoData ? 'ABRIR DOCUMENTO COMPLETO NO PORTAL' : 'LOCALIZAR DOCUMENTOS NO PORTAL'}
                                     </a>
                                     <p className="text-[10px] text-center text-muted-foreground font-medium">
-                                        Clique acima para visualizar a nota fiscal, comprovantes e histórico de pagamentos diretamente na fonte oficial da CGU.
+                                        {previewEmpenhoData 
+                                            ? 'Clique acima para visualizar a nota fiscal e histórico de pagamentos.' 
+                                            : 'Não encontramos o empenho exato desta amostra. Clique acima para pesquisar manualmente no portal.'}
                                     </p>
                                 </div>
                             </div>
