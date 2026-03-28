@@ -18,7 +18,8 @@ import {
     Tags,
     DollarSign,
     UserCheck,
-    ShieldCheck
+    ShieldCheck,
+    X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
@@ -70,6 +71,8 @@ interface ItemLicitacao {
         nome: string;
         cnpj: string;
         valor: number;
+        marcaFornecedor?: string;
+        empenhoUrl?: string;
     }
 }
 
@@ -107,6 +110,10 @@ export default function TransparencySearchPage() {
     const [loadingGlobalBrands, setLoadingGlobalBrands] = useState(false);
     const [globalBrands, setGlobalBrands] = useState<BrandAnalytics[]>([]);
     const [winnerFiles, setWinnerFiles] = useState<any[]>([]);
+    
+    // Estados para o Preview de Empenho (Dentro do Sistema)
+    const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     // Set default dates to last 2 years on mount
     useEffect(() => {
@@ -209,10 +216,10 @@ export default function TransparencySearchPage() {
         }
     };
 
-    const fetchItems = async (licId: string) => {
+    const fetchItems = async (lic: Licitacao) => {
         setLoadingItems(true);
         try {
-            const response = await api.get(`/transparency/licitacoes/${licId}/itens`, {
+            const response = await api.get(`/transparency/licitacoes/${lic.cnpjOrgao}/${lic.ano}/${lic.sequencial}/itens-completos`, {
                 params: { termo: keyword }
             });
             setItems(Array.isArray(response.data) ? response.data : []);
@@ -239,7 +246,7 @@ export default function TransparencySearchPage() {
 
     const handleSelectLicitacao = (lic: Licitacao) => {
         setSelectedLicitacao(lic);
-        fetchItems(lic.id);
+        fetchItems(lic);
         fetchFiles(lic);
     };
 
@@ -515,10 +522,10 @@ export default function TransparencySearchPage() {
                                         <div className="pt-3 border-t border-border mt-4">
                                             <div className="flex items-center gap-2 text-primary/80 mb-1">
                                                 <ShieldCheck className="h-3 w-3" />
-                                                <span className="text-[10px] font-black uppercase tracking-tighter">Deep Analytics</span>
+                                                <span className="text-[10px] font-black uppercase tracking-tighter">Deep Intelligence</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                                                Analisamos os 20 processos mais recentes dos últimos 12 meses para gerar este ranking ultra-rápido.
+                                                Análise em tempo real dos <strong>20 processos mais recentes</strong> concluídos para este item (Todos os Âmbitos).
                                             </p>
                                         </div>
                                     </div>
@@ -659,7 +666,7 @@ export default function TransparencySearchPage() {
                                                                     <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2 border border-emerald-500/10">
                                                                         <p className="text-[10px] font-bold text-muted-foreground uppercase mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">Marca Ofertada:</p>
                                                                         <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 break-words line-clamp-2 leading-tight">
-                                                                            {(item.vencedor as any).marca || item.marca || 'N/A'}
+                                                                            {(item.vencedor as any).marcaFornecedor || (item.vencedor as any).marca || item.marca || 'N/A'}
                                                                         </p>
                                                                     </div>
 
@@ -672,6 +679,21 @@ export default function TransparencySearchPage() {
                                                                             </span>
                                                                         </div>
                                                                     </div>
+
+                                                                    {(item.vencedor as any).empenhoUrl && (
+                                                                        <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setPreviewEmpenhoUrl((item.vencedor as any).empenhoUrl);
+                                                                                setIsPreviewOpen(true);
+                                                                            }}
+                                                                            className="mt-2 flex items-center justify-center gap-2 w-full py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                        >
+                                                                            <FileText className="h-3 w-3" />
+                                                                            VER NOTA DE EMPENHO
+                                                                            <ExternalLink className="h-2.5 w-2.5" />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
 
                                                                 <div className="mt-3 pt-2 border-t border-emerald-500/10 flex items-center justify-between">
@@ -931,6 +953,56 @@ export default function TransparencySearchPage() {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Modal de Preview da Nota de Empenho (Dentro do Sistema) */}
+            <AnimatePresence>
+                {isPreviewOpen && previewEmpenhoUrl && (
+                    <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 border-border bg-background shadow-2xl z-[150] flex flex-col sm:rounded-xl overflow-hidden">
+                            <DialogHeader className="p-4 border-b border-border bg-emerald-600 text-white flex-row items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-white/20 rounded-lg">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <DialogTitle className="text-md font-bold text-white uppercase tracking-tight">
+                                            Nota de Empenho Oficial
+                                        </DialogTitle>
+                                        <p className="text-[10px] opacity-80 font-medium">Extraído do Portal da Transparência (CGU)</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     <a 
+                                        href={previewEmpenhoUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="h-8 px-3 bg-white/10 hover:bg-white/20 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-colors border border-white/20"
+                                     >
+                                        <ExternalLink className="h-3.5 w-3.5" /> Abrir no Portal
+                                     </a>
+                                     <button 
+                                        onClick={() => setIsPreviewOpen(false)}
+                                        className="h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
+                                     >
+                                        <X className="h-4 w-4" />
+                                     </button>
+                                </div>
+                            </DialogHeader>
+                            
+                            <div className="flex-1 bg-white relative">
+                                <iframe 
+                                    src={previewEmpenhoUrl} 
+                                    className="w-full h-full border-none"
+                                    title="Nota de Empenho"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
+                                    <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
+                                </div>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

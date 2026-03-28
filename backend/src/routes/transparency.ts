@@ -115,19 +115,21 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
 /**
  * GET /api/transparency/analytics/global-brands
+ * Ranking de marcas refinado: Limite de 20 processos e filtro rigoroso por item
  */
 router.get('/analytics/global-brands', async (req: Request, res: Response) => {
     try {
         const { termo, dataInicial, dataFinal } = req.query;
         if (!termo) return res.status(400).json({ error: 'Termo de busca é obrigatório' });
 
-        const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
+        const searchKeyword = termo.toString().toLowerCase();
+        const keywords = searchKeyword.split(' ').filter(k => k.length > 2);
         const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         const allProcesses: any[] = [];
         
         try {
-            // Busca os últimos 50 processos encerrados para ter uma amostra boa
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=50&status=encerradas`;
+            // REQUISITO: Limite de 20 processos anteriores concluídos
+            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=20&status=encerradas`;
             if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
             if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
             
@@ -140,19 +142,18 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             });
             
             if (searchRes.data && searchRes.data.items) {
-                // FILTRO CRÍTICO: Só processos que REALMENTE tem resultado/vencedor
-                // Se o usuário quer análise de mercado, precisamos de quem ganhou.
+                // REQUISITO: Últimos 20 processos concluídos (status=2 no Search indica homologado/concluído)
                 const concluded = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
-                allProcesses.push(...concluded);
+                allProcesses.push(...concluded.slice(0, 20));
             }
         } catch (e: any) { console.error('Error in ranking search:', e.message); }
 
         if (allProcesses.length === 0) {
-            return res.json({ results: [], version: '2026-03-24-v5-concluded-only' });
+            return res.json({ results: [], version: '2026-03-27-refined-v20' });
         }
 
-        // Processar os lotes (chunks) de 2 paralelos
-        const chunkSize = 2;
+        // Processamento paralelo leve (chunks de 3)
+        const chunkSize = 3;
         for (let i = 0; i < allProcesses.length; i += chunkSize) {
             const chunk = allProcesses.slice(i, i + chunkSize);
             await Promise.all(chunk.map(async (proc: any) => {
@@ -164,15 +165,18 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
                     for (const item of items) {
                         const desc = (item.descricao || '').toLowerCase();
-                        const isMatch = keywords.some(k => desc.includes(k));
+                        
+                        // Normalização simples para busca (remover acentos se necessário, mas includes básico já ajuda)
+                        const searchNorm = searchKeyword.toLowerCase();
+                        const isMatch = desc.includes(searchNorm) || keywords.every(k => desc.includes(k.toLowerCase()));
                         
                         if (isMatch) {
-                            let brand = extractBrand(desc);
+                            let brand = 'N/A';
                             
-                            // TENTAR PEGAR A MARCA DO VENCEDOR (Prioridade Máxima)
+                            // TENTAR PEGAR A MARCA DO VENCEDOR (Dados Reais)
                             if (item.temResultado) {
                                 try {
-                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
+                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 3000 });
                                     if (rRes.data && rRes.data.length > 0) {
                                         const winner = rRes.data[0];
                                         if (winner.marcaFornecedor) {
@@ -182,8 +186,12 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                                 } catch (e) {}
                             }
 
+                            // Fallback para marca no item ou regex se PNCP estiver vazio
                             if ((brand === 'N/A' || !brand) && item.marca) {
                                 brand = item.marca.toUpperCase().trim();
+                            }
+                            if (brand === 'N/A') {
+                                brand = extractBrand(desc);
                             }
 
                             if (brand && brand !== 'N/A' && brand.length > 1) {
@@ -193,7 +201,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
                             }
                         }
                     }
-                } catch (e: any) { console.error(`Error processing ranking items:`, e.message); }
+                } catch (e: any) { /* silent fail for item fetch */ }
             }));
         }
 
@@ -202,7 +210,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             .sort((a, b) => b.value - a.value)
             .slice(0, 10);
 
-        res.json({ results, version: '2026-03-24-v5-winner-data' });
+        res.json({ results, version: '2026-03-27-refined-v20' });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -210,30 +218,64 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
 /**
  * GET /api/transparency/licitacoes/:cnpj/:ano/:sequencial/itens-completos
- * Retorna todos os itens COM seus respectivos resultados (vencedores) em uma única chamada.
+ * Retorna todos os itens COM seus respectivos resultados (vencedores) e tenta localizar Nota de Empenho (CGU)
  */
 router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Request, res: Response) => {
     try {
         const { cnpj, ano, sequencial } = req.params;
+        const { termo } = req.query; // Para filtragem do empenho específico
         const urlItems = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=500`;
         const itemsRes = await axios.get(urlItems, { timeout: 10000 });
         const items = itemsRes.data || [];
 
+        // Buscar empenhos relacionados na CGU antecipadamente (opcional, mas ajuda a vincular)
+        let empenhosCGU: any[] = [];
+        try {
+            const empenhosRes = await cguApi.get('/empenhos', {
+                params: {
+                    cnpjOrgao: cnpj,
+                    pagina: 1
+                    // A API da CGU não filtra por licitação diretamente, mas podemos filtrar por órgão e período
+                }
+            });
+            empenhosCGU = empenhosRes.data || [];
+        } catch (e) {}
+
         const detailedItems = await Promise.all(items.map(async (item: any) => {
             let vencedor = null;
             let marca = extractBrand(item.descricao || item.description);
+            let empenhoUrl = null;
             
             try {
                 const urlResult = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
                 const rr = await axios.get(urlResult, { timeout: 5000 });
                 if (rr.data && rr.data.length > 0) {
                     const winner = rr.data[0];
+                    
+                    // Tentar localizar nota de empenho na CGU para este vencedor
+                    if (winner.niFornecedor) {
+                        // Tenta encontrar um empenho no órgão com o mesmo CNPJ do vencedor
+                        const matchEmpenho = empenhosCGU.find((e: any) => 
+                            e.credor?.cnpjcpf === winner.niFornecedor || 
+                            e.credor?.nome?.includes(winner.nomeRazaoSocialFornecedor?.substring(0, 10))
+                        );
+                        
+                        if (matchEmpenho) {
+                            // Link para o detalhamento no Portal da Transparência
+                            empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenho/${matchEmpenho.id}?pessoa=${winner.niFornecedor}`;
+                        } else {
+                            // Fallback: Link genérico de busca por empenhos do fornecedor no órgão
+                            empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenhos/lista?cnpjOrgao=${cnpj}&cpfCnpj=${winner.niFornecedor}`;
+                        }
+                    }
+
                     vencedor = { 
                         nome: winner.nomeRazaoSocialFornecedor, 
                         cnpj: winner.niFornecedor, 
                         valor: winner.valorTotalHomologado,
                         marcaFornecedor: winner.marcaFornecedor,
-                        modeloFornecedor: winner.modeloFornecedor
+                        modeloFornecedor: winner.modeloFornecedor,
+                        empenhoUrl
                     };
                     if (winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
                 }

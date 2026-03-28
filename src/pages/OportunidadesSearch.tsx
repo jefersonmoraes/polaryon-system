@@ -159,6 +159,10 @@ export default function OportunidadesSearch() {
     const [loadingFullItems, setLoadingFullItems] = useState(false);
     const [cguDetails, setCguDetails] = useState<any>(null);
     const [loadingCgu, setLoadingCgu] = useState(false);
+    
+    // Estados para o Preview de Empenho no Sistema
+    const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     const getOfficialLink = useCallback((item: PncpItem) => {
         if (!item?.item_url) return '#';
@@ -196,7 +200,9 @@ export default function OportunidadesSearch() {
             // 2. Fetch Full Items (New)
             setLoadingFullItems(true);
             try {
-                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`);
+                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, {
+                    params: { termo: keyword }
+                });
                 setFullItems(res.data || []);
             } catch (e) {
                 console.error("Failed to fetch full items", e);
@@ -1030,6 +1036,21 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                                                </div>
                                                                                <p className="text-xs font-black text-emerald-600 truncate">{item.vencedor.marcaFornecedor || item.marca || 'N/I'}</p>
                                                                             </div>
+
+                                                                            {item.vencedor.empenhoUrl && (
+                                                                                <button 
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setPreviewEmpenhoUrl(item.vencedor.empenhoUrl);
+                                                                                        setIsPreviewOpen(true);
+                                                                                    }}
+                                                                                    className="mt-2 flex items-center justify-center gap-2 w-full py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                                >
+                                                                                    <FileText className="h-3 w-3" />
+                                                                                    VER NOTA DE EMPENHO
+                                                                                    <ExternalLink className="h-2.5 w-2.5" />
+                                                                                </button>
+                                                                            )}
                                                                         </div>
                                                                         <div className="mt-4 pt-3 border-t border-emerald-500/10 flex items-center justify-between">
                                                                             <span className="text-[10px] font-black text-muted-foreground uppercase">Valor Homologado</span>
@@ -1279,6 +1300,57 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     </Dialog>
                                 )}
                             </AnimatePresence>
+                        </DialogContent>
+                    </Dialog>
+                )}
+            </AnimatePresence>
+
+            {/* Modal de Preview da Nota de Empenho (Dentro do Sistema) */}
+            <AnimatePresence>
+                {isPreviewOpen && previewEmpenhoUrl && (
+                    <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 border-border bg-background shadow-2xl z-[150] flex flex-col sm:rounded-xl overflow-hidden">
+                            <DialogHeader className="p-4 border-b border-border bg-emerald-600 text-white flex-row items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-white/20 rounded-lg">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <DialogTitle className="text-md font-bold text-white uppercase tracking-tight">
+                                            Nota de Empenho Oficial
+                                        </DialogTitle>
+                                        <p className="text-[10px] opacity-80 font-medium">Extraído do Portal da Transparência (CGU)</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     <a 
+                                        href={previewEmpenhoUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="h-8 px-3 bg-white/10 hover:bg-white/20 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-colors border border-white/20"
+                                     >
+                                        <ExternalLink className="h-3.5 w-3.5" /> Abrir no Portal
+                                     </a>
+                                     <button 
+                                        onClick={() => setIsPreviewOpen(false)}
+                                        className="h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
+                                     >
+                                        <X className="h-4 w-4" />
+                                     </button>
+                                </div>
+                            </DialogHeader>
+                            
+                            <div className="flex-1 bg-white relative">
+                                <iframe 
+                                    src={previewEmpenhoUrl} 
+                                    className="w-full h-full border-none"
+                                    title="Nota de Empenho"
+                                />
+                                {/* Overlay de carregamento caso necessário */}
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
+                                    <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
+                                </div>
+                            </div>
                         </DialogContent>
                     </Dialog>
                 )}
