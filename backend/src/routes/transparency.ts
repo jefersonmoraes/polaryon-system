@@ -73,24 +73,43 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
         
-        // Se status for 'todas', não envia o filtro. Caso contrário usa o status pedido (default encerradas)
-        if (status && status !== 'todas') {
-            url += `&status=${status}`;
+        // Mapeamento de status para IDs do PNCP
+        // 1: Divulgada, 2: Em andamento, 3: Encerrada, 4: Suspensa, 5: Cancelada
+        const statusMap: Record<string, string> = {
+            'concluido': '3',
+            'encerradas': '3',
+            'em-andamento': '2',
+            'divulgada': '1',
+            'suspensa': '4',
+            'cancelada': '5'
+        };
+
+        const pncpStatus = (status && typeof status === 'string' && statusMap[status]) 
+            ? statusMap[status] 
+            : (status === 'todas' ? '' : (typeof status === 'string' ? status : ''));
+
+        if (pncpStatus) {
+            url += `&status=${pncpStatus}`;
         }
 
         const response = await axios.get(url, { 
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }, 
             timeout: 15000 
         });
         const data: any = response.data;
-        
-        // CORREÇÃO: Limitar a 50 conforme pedido pelo usuário para foco nos últimos processos
-        const totalElements = Math.min(data.total || data.total_items || data.total_elements || 0, 50);
+        let items = data.items || [];
 
-        const results = (data.items || []).map((item: any) => ({
+        // REQUISITO: Filtro de Segurança In-Memory para garantir precisão de status
+        // Mesmo que o PNCP ignore o filtro na URL, nós garantimos o esperado
+        if (status === 'concluido' || status === '3') {
+            items = items.filter((i: any) => i.tem_resultado === true && String(i.situacao_id) !== '1');
+        } else if (status === 'em-andamento' || status === '2') {
+            items = items.filter((i: any) => String(i.situacao_id) === '2');
+        }
+
+        const results = items.map((item: any) => ({
             id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
             numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
             objeto: item.description || 'Sem descrição',
@@ -105,8 +124,8 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
         res.json({
             items: results,
-            totalItems: Number(totalElements),
-            totalPages: Math.ceil(Number(totalElements) / Number(tam_pagina))
+            totalItems: results.length,
+            totalPages: 1 // In-memory filter compromises totalPages count from PNCP
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -128,25 +147,23 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         const allProcesses: any[] = [];
         
         try {
-            // REQUISITO: Limite de 20 processos anteriores concluídos
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=20&status=encerradas`;
-            if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
-            if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
-            
+            // REQUISITO: Amostra maior (100) para garantir que encontremos 20 com marcas válidas
+            const searchUrl = `${PNCP_SEARCH_URL}/?pagina=1&tam_pagina=100&q=${encodeURIComponent(searchKeyword)}&ordenacao=-data`;
             const searchRes = await axios.get(searchUrl, { 
-                headers: { 
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/json'
-                }, 
-                timeout: 8000 
+                headers: { 'User-Agent': 'Mozilla/5.0' }, 
+                timeout: 10000 
             });
             
             if (searchRes.data && searchRes.data.items) {
-                // REQUISITO: Últimos 20 processos concluídos (status=2 no Search indica homologado/concluído)
-                const concluded = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
-                allProcesses.push(...concluded.slice(0, 20));
+                // Filtro rigoroso: Apenas os que REALMENTE tem resultado e no status correto (não Divulgada)
+                const validOnes = searchRes.data.items.filter((p: any) => 
+                    p.tem_resultado === true && String(p.situacao_id) !== '1'
+                );
+                allProcesses.push(...validOnes.slice(0, 20)); // Limite dos últimos 20 concluídos
             }
-        } catch (e: any) { console.error('Error in ranking search:', e.message); }
+        } catch (e: any) { 
+            console.error('Error in ranking search:', e.message); 
+        }
 
         if (allProcesses.length === 0) {
             return res.json({ results: [], version: '2026-03-27-refined-v20' });
@@ -207,10 +224,11 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
         const results = Object.entries(brandCounts)
             .map(([name, data]) => ({ name, ...data }))
+            .filter(b => b.name !== 'N/A')
             .sort((a, b) => b.value - a.value)
             .slice(0, 10);
 
-        res.json({ results, version: '2026-03-27-refined-v20' });
+        res.json({ results, version: '2026-03-27-refined-v21' });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

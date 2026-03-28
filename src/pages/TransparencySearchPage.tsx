@@ -189,8 +189,8 @@ export default function TransparencySearchPage() {
                     pagina: currentPage,
                     dataInicial: dataInicial || undefined,
                     dataFinal: dataFinal || undefined,
-                    status: situacao === 'concluido' ? 'encerradas' : situacao,
-                    tam_pagina: 10
+                    status: situacao === 'concluido' ? '3' : (situacao === 'em-andamento' ? '2' : (situacao === 'todas' ? '' : situacao)),
+                    tam_pagina: 12
                 }
             });
             

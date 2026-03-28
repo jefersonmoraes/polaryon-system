@@ -557,10 +557,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Status</label>
                                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todos os Status</option>
-                                        <option value="1">A Receber / Recebendo Proposta</option>
-                                        <option value="2">Em Julgamento / Homologadas</option>
-                                        <option value="3">Encerradas / Anuladas</option>
-                                        <option value="4">Suspensas</option>
+                                        <option value="1">Divulgada (Recente)</option>
+                                        <option value="2">Em Andamento (Licitação)</option>
+                                        <option value="3">Concluída (Ranking Disponível)</option>
+                                        <option value="4">Suspensa</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
