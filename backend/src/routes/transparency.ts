@@ -273,13 +273,23 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                         }
                     }
 
+                    let empenhoDados = null;
+                    if (matchEmpenho) {
+                        empenhoDados = {
+                            numero: matchEmpenho.numeroEmpenho,
+                            data: matchEmpenho.dataEmissao,
+                            valor: matchEmpenho.valorOriginal || winner.valorTotalHomologado
+                        };
+                    }
+
                     vencedor = { 
                         nome: winner.nomeRazaoSocialFornecedor, 
                         cnpj: winner.niFornecedor, 
                         valor: winner.valorTotalHomologado,
                         marcaFornecedor: winner.marcaFornecedor,
                         modeloFornecedor: winner.modeloFornecedor,
-                        empenhoUrl
+                        empenhoUrl,
+                        empenhoDados
                     };
                     if (winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
                 }

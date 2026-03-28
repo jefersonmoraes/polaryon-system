@@ -73,6 +73,12 @@ interface ItemLicitacao {
         valor: number;
         marcaFornecedor?: string;
         empenhoUrl?: string;
+        empenhoDados?: {
+            numero?: string;
+            data?: string;
+            valor?: number;
+            orgaoUnidade?: string;
+        }
     }
 }
 
@@ -113,6 +119,7 @@ export default function TransparencySearchPage() {
     
     // Estados para o Preview de Empenho (Dentro do Sistema)
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
+    const [previewEmpenhoData, setPreviewEmpenhoData] = useState<any>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     // Set default dates to last 2 years on mount
@@ -685,12 +692,13 @@ export default function TransparencySearchPage() {
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 setPreviewEmpenhoUrl((item.vencedor as any).empenhoUrl);
+                                                                                setPreviewEmpenhoData((item.vencedor as any).empenhoDados);
                                                                                 setIsPreviewOpen(true);
                                                                             }}
                                                                             className="mt-2 flex items-center justify-center gap-2 w-full py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-colors shadow-sm"
                                                                         >
                                                                             <FileText className="h-3 w-3" />
-                                                                            VER NOTA DE EMPENHO
+                                                                            VER DETALHES DO EMPENHO
                                                                             <ExternalLink className="h-2.5 w-2.5" />
                                                                         </button>
                                                                     )}
@@ -954,11 +962,11 @@ export default function TransparencySearchPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Modal de Preview da Nota de Empenho (Dentro do Sistema) */}
+            {/* Modal de Detalhes do Empenho (Visualização Digital) */}
             <AnimatePresence>
-                {isPreviewOpen && previewEmpenhoUrl && (
+                {isPreviewOpen && (
                     <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-                        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 border-border bg-background shadow-2xl z-[150] flex flex-col sm:rounded-xl overflow-hidden">
+                        <DialogContent className="max-w-2xl w-[95vw] p-0 border-border bg-background shadow-2xl z-[150] flex flex-col sm:rounded-xl overflow-hidden">
                             <DialogHeader className="p-4 border-b border-border bg-emerald-600 text-white flex-row items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-white/20 rounded-lg">
@@ -966,37 +974,64 @@ export default function TransparencySearchPage() {
                                     </div>
                                     <div>
                                         <DialogTitle className="text-md font-bold text-white uppercase tracking-tight">
-                                            Nota de Empenho Oficial
+                                            Dados do Empenho
                                         </DialogTitle>
-                                        <p className="text-[10px] opacity-80 font-medium">Extraído do Portal da Transparência (CGU)</p>
+                                        <p className="text-[10px] opacity-80 font-medium tracking-wide">Extraído do Portal da Transparência (CGU)</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                     <a 
-                                        href={previewEmpenhoUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="h-8 px-3 bg-white/10 hover:bg-white/20 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-colors border border-white/20"
-                                     >
-                                        <ExternalLink className="h-3.5 w-3.5" /> Abrir no Portal
-                                     </a>
-                                     <button 
-                                        onClick={() => setIsPreviewOpen(false)}
-                                        className="h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
-                                     >
-                                        <X className="h-4 w-4" />
-                                     </button>
-                                </div>
+                                <button 
+                                    onClick={() => setIsPreviewOpen(false)}
+                                    className="h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
                             </DialogHeader>
                             
-                            <div className="flex-1 bg-white relative">
-                                <iframe 
-                                    src={previewEmpenhoUrl} 
-                                    className="w-full h-full border-none"
-                                    title="Nota de Empenho"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
-                                    <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
+                            <div className="p-6 space-y-6 bg-card/30">
+                                {/* Alerta sobre o Bloqueio de Iframe */}
+                                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-4">
+                                    <div className="p-2 bg-emerald-500/20 text-emerald-600 rounded-lg shrink-0">
+                                        <Info className="h-5 w-5" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <h4 className="text-sm font-bold text-emerald-700">Acesso Restrito do Governo</h4>
+                                        <p className="text-xs text-emerald-600 leading-relaxed">
+                                            O Portal da Transparência não permite a visualização direta do documento original dentro deste sistema por questões de segurança.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Dados Consolidados */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-background border border-border rounded-xl shadow-sm space-y-1">
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Identificação</label>
+                                        <p className="text-sm font-bold text-primary">{previewEmpenhoData?.numero || 'Não informado'}</p>
+                                    </div>
+                                    <div className="p-4 bg-background border border-border rounded-xl shadow-sm space-y-1">
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Data de Emissão</label>
+                                        <p className="text-sm font-bold text-primary">{previewEmpenhoData?.data || '--/--/----'}</p>
+                                    </div>
+                                    <div className="p-4 bg-background border border-border rounded-xl shadow-sm space-y-1 sm:col-span-2">
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valor Empenhado</label>
+                                        <p className="text-xl font-black text-emerald-600">
+                                            {previewEmpenhoData?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previewEmpenhoData.valor) : 'R$ 0,00'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-border flex flex-col gap-3">
+                                    <a 
+                                        href={previewEmpenhoUrl || '#'} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-emerald-600/20 group"
+                                    >
+                                        <ExternalLink className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                        ABRIR DOCUMENTO COMPLETO NO PORTAL
+                                    </a>
+                                    <p className="text-[10px] text-center text-muted-foreground font-medium">
+                                        Clique acima para visualizar a nota fiscal, comprovantes e histórico de pagamentos diretamente na fonte oficial da CGU.
+                                    </p>
                                 </div>
                             </div>
                         </DialogContent>
