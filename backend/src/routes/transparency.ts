@@ -75,7 +75,9 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         // Mapeamento correto para a API de Busca (Legacy mas funcional)
         const statusMap: Record<string, string> = {
             'concluido': 'encerradas',
-            'em-andamento': 'em-andamento'
+            '3': 'encerradas',
+            'em-andamento': 'em-andamento',
+            '2': 'em-andamento'
         };
 
         const sitParam = status && typeof status === 'string' && statusMap[status] ? statusMap[status] : '';
@@ -98,9 +100,9 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
         // REQUISITO: Filtro de Segurança In-Memory para garantir precisão de status
         // Mesmo que o PNCP aceite 'status=encerradas', às vezes ele retorna 'Divulgada'
-        if (status === 'concluido') {
+        if (status === 'concluido' || status === '3') {
             items = items.filter((i: any) => i.tem_resultado === true && String(i.situacao_id) !== '1' && String(i.situacao_id) !== '2');
-        } else if (status === 'em-andamento') {
+        } else if (status === 'em-andamento' || status === '2') {
             items = items.filter((i: any) => String(i.situacao_id) === '2');
         }
 
