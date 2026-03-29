@@ -25,25 +25,36 @@ const COMMON_BRANDS = [
     'MICROSOFT', 'ADOBE', 'ORACLE', 'SAP', 'TOTVS', 'PHILIPS', 'BRASTEMP', 'CONSUL', 'ELECTROLUX',
     'ORTOBRAS', 'OTTOBOCK', 'JAGUARIBE', 'PROLIFE', 'VIVER', 'FREEDOM', 'ESTRELA', 'FISIO', 'CARCI',
     'MERCÚRIO', 'INDIANA', 'INVACARE', 'DRIVE', 'SUNRISE', 'VITAL', 'LUMINA', 'MOBILITY', 'PERMORABIL',
-    'CAMIL', 'TIO JOÃO', 'NAMORADO', 'KODILAR', 'NESTLE', 'PILÃO', 'KIMBERLY', 'PIRACANJUBA', 'ITAMBÉ'
+    'CAMIL', 'TIO JOÃO', 'NAMORADO', 'KODILAR', 'NESTLE', 'PILÃO', 'KIMBERLY', 'PIRACANJUBA', 'ITAMBÉ',
+    'BIC', 'PILOT', 'FABER-CASTELL', 'STABILO', 'CIS', 'COMPACTOR', 'CROWN', 'PARKER', 'PENTEL', 'MAPED',
+    '3M', 'POST-IT', 'CHAMECO', 'CHAMEX', 'REFRIGERANTE', 'COCA-COLA', 'AMBEV', 'ANTARCTICA', 'BRAHMA', 'SKOL'
 ];
 
 const extractBrand = (text: string): string => {
     if (!text) return 'N/A';
-    
-    // Heurística de RegEx ultra-refinada para extrair a marca oculta no edital de QUALQUER produto
-    // Reorganizado para priorizar termos completos e evitar capturar sufixos como "ICANTE"
+    const upperText = text.toUpperCase();
+
+    // 1. CAMADA DE PRIORIDADE: Marcas Conhecidas (Dicionário de Alta Confiança)
+    // Se a marca oficial estiver no texto (ex: "Caneta BIC"), ela ganha de qualquer RegEx ruidoso.
+    for (const brand of COMMON_BRANDS) {
+        const fullWordRegex = new RegExp(`\\b${brand}\\b`, 'i');
+        if (fullWordRegex.test(upperText)) {
+            return brand;
+        }
+    }
+
+    // 2. CAMADA DE EXTRAÇÃO (RegEx para Marcas não Tabeladas)
     const regexList = [
-        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,40})/i, // Captura de 2 a 40 chars
+        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,40})/i,
         /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,40})/i,
         /fabricado\s+por\s+([^;,\n\)\/\-]{2,40})/i
     ];
 
-    const noiseFilter = [
-        'ICANTE', 'ICAÇÃO', 'ICADO', 'ICADA', 'ICADO EM', 'ICADA EM', 
-        'DE', 'DO', 'DAS', 'DOS', 'PARA', 'COM', 'OU', 'E/OU',
-        'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 'N/A', 
-        'DIVERSAS', 'A DEFINIR', 'GENERICA', 'SEM MARCA', 'MARCA'
+    const junkSuffixes = ['ICANTE', 'ICANTES', 'ICAÇÃO', 'ICACAO', 'ICADO', 'ICADA', 'ICADOS', 'ICADAS'];
+    const systemBlacklist = [
+        'TEXTO', 'PRE', 'COMERCIAL', 'ITEM', 'LOTE', 'ITEM.', 'LOTE.', 'PAGINA', 'EDITAL', 'ANEXO',
+        'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 'N/A', 'DIVERSAS', 'A DEFINIR', 'GENERICA',
+        'SEM MARCA', 'MARCA', 'QUE O', 'DO FABRICANTE', 'DOR', 'ICA'
     ];
 
     for (const rx of regexList) {
@@ -51,31 +62,26 @@ const extractBrand = (text: string): string => {
         if (match && match[1]) {
             let found = match[1].trim().toUpperCase();
             
-            // Limpa sufixos genéricos caso tenham vindo acidentalmente
-            found = found.split(/\b(?:MODELO|REF|LOTE|TIPO|DESCRIÇÃO|ESPEC|CATMAT)\b/i)[0].trim();
-            
-            // Tratamento de "DEVERÁ SER X" ou "A MARCA É X" -> Fica só com X
-            if (found.includes('DEVERÁ SER')) found = found.split('DEVERÁ SER')[1].trim();
+            // Limpeza de sufixos de sistema e pontuação residual
+            found = found.split(/\b(?:MODELO|REF|LOTE|TIPO|DESC|ESPEC|CATMAT|PARA|COM|NA|NOS|EM|NA COR)\b/i)[0].trim();
+            found = found.replace(/[.\-_: ]+$/, '').trim(); 
 
-            // Validação final: Ignorar se for ruído puro ou pedaço de palavra de sistema
-            const isJunk = noiseFilter.some(noise => found === noise || found.startsWith(noise + ' ') || found.endsWith(' ' + noise));
+            // --- FILTROS DE QUALIDADE ---
             
-            // Ignora se o termo capturado contiver palavras puramente técnicas ou descritivas longas
-            const isDesc = /\b(?:AÇO|POLIPROPILENO|QUALIDADE|EMBALAGEM|LITRO|GRAMAS|UNIDADE|SERVIÇO)\b/i.test(found);
+            // Descarde por tamanho ou lista negra de sistema
+            if (found.length < 2 || systemBlacklist.includes(found)) continue;
+            
+            // Descarte por sufixo de fragmento (ICANTE, ICACAO...)
+            if (junkSuffixes.some(suffix => found.endsWith(suffix))) continue;
+            
+            // Descarte por frases descritivas longas ou instruções
+            if (found.includes('DEVERÁ') || found.includes('DEVERA') || found.includes('CONSULTAR')) continue;
+            if (found.startsWith('EM ') || found.startsWith('NA COR') || found.includes(' RESISTENTE')) continue;
 
-            if (found.length > 1 && found.length < 35 && !isJunk && !isDesc) {
+            // Se restar algo sólido, retorna
+            if (found.length > 1 && found.length < 35) {
                 return found;
             }
-        }
-    }
-
-    // Fallback: Busca de força bruta pelas marcas conhecidas que o RegEx pode ter pulado
-    const upperText = text.toUpperCase();
-    for (const brand of COMMON_BRANDS) {
-        // Busca com palavra completa para evitar capturar "INTEL" dentro de "INTELIGENTE"
-        const fullWordRegex = new RegExp(`\\b${brand}\\b`, 'i');
-        if (fullWordRegex.test(upperText)) {
-            return brand;
         }
     }
 
