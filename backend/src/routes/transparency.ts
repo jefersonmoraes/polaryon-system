@@ -29,16 +29,35 @@ const COMMON_BRANDS = [
 
 const extractBrand = (text: string): string => {
     if (!text) return 'N/A';
-    const brandMatch = text.match(/\bMarca\s*:\s*([^;,\n\)\/\-]+)/i);
-    if (brandMatch && brandMatch[1].trim().length > 1) {
-        const found = brandMatch[1].trim().toUpperCase();
-        if (found.length < 30) return found;
+    
+    // Heurística de RegEx expandida para extrair a marca oculta no edital de QUALQUER produto
+    const regexList = [
+        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]+)/i,
+        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]+)/i,
+        /fabricado\s+por\s+([^;,\n\)\/\-]+)/i
+    ];
+
+    for (const rx of regexList) {
+        const match = text.match(rx);
+        if (match && match[1]) {
+            let found = match[1].trim().toUpperCase();
+            // Limpa sufixos genéricos caso tenham vindo acidentalmente ex: "MARCA: NESTLE - MODELO: 3" -> "NESTLE"
+            found = found.split('MODELO')[0].split('REF')[0].split('C/')[0].trim();
+            
+            if (found.length > 1 && found.length < 35 && !['NÃO', 'NAO', 'NAO APLICAVEL', 'N/A', 'DIVERSAS', 'NACIONAL', 'GENERICA', 'PROPRIA', 'A DEFINIR', 'SEM MARCA'].includes(found)) {
+                return found;
+            }
+        }
     }
+
+    // Fallback: Busca de força bruta pelas Techs/Med conhecidas
     const upperText = text.toUpperCase();
     for (const brand of COMMON_BRANDS) {
-        const regex = new RegExp(`\\b${brand}\\b`, 'i');
-        if (regex.test(upperText)) return brand;
+        if (upperText.includes(` ${brand} `) || upperText.includes(` ${brand},`) || upperText.startsWith(`${brand} `) || upperText.endsWith(` ${brand}`)) {
+            return brand;
+        }
     }
+
     return 'N/A';
 };
 
