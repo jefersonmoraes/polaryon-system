@@ -859,7 +859,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-tighter shadow-sm active:scale-95",
                       card.completed 
                         ? "bg-green-500 text-white hover:bg-green-600 ring-4 ring-green-500/20" 
-                        : "bg-orange-600 text-white hover:bg-orange-700 animate-pulse hover:animate-none"
+                        : "bg-green-600 text-white hover:bg-green-700 shadow-lg"
                     )}
                     title={card.completed ? "Reabrir Tarefa" : "Marcar como Concluída"}
                   >
