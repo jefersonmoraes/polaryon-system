@@ -330,6 +330,7 @@ export default function OportunidadesSearch() {
     const [pageInput, setPageInput] = useState('1'); // Para digitação manual no Pagination footer
     const [results, setResults] = useState<PncpItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
     const [totalResults, setTotalResults] = useState(0);
 
@@ -540,6 +541,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
     const fetchOportunidades = useCallback(async (currentPage = 1) => {
         setLoading(true);
         setError('');
+        setLoadingMessage('');
         try {
             // PNCP API hard-caps /search/ results to 50 items.
             // To fulfill the 100 items requirement, we must double-fetch pages concurrently.
@@ -589,18 +591,32 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
             let items = [...(data1?.items || []), ...(data2?.items || [])];
 
-            // --- Client-Side "Mega Filters" Fallback ---
-            // A API PNCP /search/ não suporta todos os filtros avançados na URL macro (ex: Fonte Orçamentária, Conteúdo Nacional, Esfera)
-            // Filtraremos em memória (local runtime) os itens retornados no lote de 100 para simular o "Siga Pregão".
+            // GREEDY FETCH: Se houver filtros de valor, precisamos buscar os detalhes ANTES de filtrar,
+            // pois a API de pesquisa do PNCP não retorna o valor estimado.
+            const hasValueFilter = (valorMinFilter && !isNaN(parseFloat(valorMinFilter))) || 
+                                   (valorMaxFilter && !isNaN(parseFloat(valorMaxFilter)));
+            
+            if (hasValueFilter && items.length > 0) {
+                setLoadingMessage("Aplicando filtros de valor (consultando detalhes oficiais)...");
+                const detailedItems = await Promise.all(items.map(async (item) => {
+                    try {
+                        const detail = await queuePncpFetch(item);
+                        return { ...item, valorTotalEstimado: detail?.valor || 0, valor_global: detail?.valor || 0 };
+                    } catch (e) {
+                        return item;
+                    }
+                }));
+                items = detailedItems;
+            }
 
+            // --- Client-Side "Mega Filters" Fallback ---
             if (ufFilter) items = items.filter((i: PncpItem) => i?.uf === ufFilter);
             if (esferaFilter) items = items.filter((i: any) => i?.esfera_id === esferaFilter);
             if (orgaoFilter) items = items.filter((i: PncpItem) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
             if (modalidadeFilter) items = items.filter((i: PncpItem) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
             if (municipioFilter) items = items.filter((i: PncpItem) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
-            if (poderFilter) items = items.filter((i: PncpItem) => (i?.poder_nome?.toLowerCase() || '') === poderFilter.toLowerCase());
+            if (poderFilter) items = items.filter((i: any) => (i?.poder_nome?.toLowerCase() || '') === poderFilter.toLowerCase());
 
-            // Itens extras pedidos (Fonte, Conteúdo Nac., Unidade, Margem) mapeados a partir do payload Real do Gov:
             if (unidadeFilter) items = items.filter((i: any) => (i?.unidade_nome?.toLowerCase() || '').includes(unidadeFilter.toLowerCase()) || (i?.unidade_codigo || '').includes(unidadeFilter));
             if (fonteOrcamentoFilter) items = items.filter((i: any) => (i?.fonte_orcamentaria?.toLowerCase() || '').includes(fonteOrcamentoFilter.toLowerCase()));
             if (conteudoNacionalFilter) items = items.filter((i: any) => {
@@ -610,21 +626,21 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
             if (margemPreferenciaFilter) items = items.filter((i: any) => (i?.tipo_margem_preferencia_nome?.toLowerCase() || '').includes(margemPreferenciaFilter.toLowerCase()));
 
-            // Valor Min/Max Filter (Client Side Memory Filter)
+            // Valor Min/Max Filter - AGORA FUNCIONA POIS TEMOS OS DADOS DO DETALHAMENTO
             if (valorMinFilter) {
                 const min = parseFloat(valorMinFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(min)) {
-                    items = items.filter((i: PncpItem) => (i.valorTotalEstimado || i.valor_global || 0) >= min);
+                    items = items.filter((i: any) => (i.valorTotalEstimado || i.valor_global || 0) >= min);
                 }
             }
             if (valorMaxFilter) {
                 const max = parseFloat(valorMaxFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(max)) {
-                    items = items.filter((i: PncpItem) => (i.valorTotalEstimado || i.valor_global || 0) <= max);
+                    items = items.filter((i: any) => (i.valorTotalEstimado || i.valor_global || 0) <= max);
                 }
             }
 
-            // Client-Side Ordering directly on runtime memory buffer
+            // Client-Side Ordering
             if (ordenacaoFilter === '-data_publicacao_pncp') {
                 items.sort((a, b) => new Date(b.data_publicacao_pncp || 0).getTime() - new Date(a.data_publicacao_pncp || 0).getTime());
             } else if (ordenacaoFilter === 'data_publicacao_pncp') {
@@ -640,12 +656,14 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             setResults([]);
         } finally {
             setLoading(false);
+            setLoadingMessage('');
         }
     }, [
         keyword, ufFilter, modalidadeFilter, statusFilter, instrumentoFilter,
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
-        fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter
+        fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
+        valorMinFilter, valorMaxFilter
     ]);
 
     // Auto-load abertas recentes
@@ -880,10 +898,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
             {/* Main Content Area */}
             <div className="flex-1 overflow-auto bg-muted/20 relative">
-                {loading && results.length === 0 ? (
+                {loading && (results.length === 0 || loadingMessage) ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm z-20">
                         <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
-                        <p className="text-sm font-medium text-muted-foreground animate-pulse">Consultando Diário Oficial / PNCP...</p>
+                        <p className="text-sm font-medium text-muted-foreground animate-pulse text-center max-w-xs">
+                            {loadingMessage || "Consultando Diário Oficial / PNCP..."}
+                        </p>
                     </div>
                 ) : results.length === 0 ? (
                     <div className="max-w-md mx-auto mt-20 p-8 text-center bg-background rounded-xl border border-border shadow-sm">
