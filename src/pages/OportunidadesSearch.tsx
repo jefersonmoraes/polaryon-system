@@ -494,16 +494,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             trashed: false,
         };
 
-        // Inject Attachments (Selected Files + Link to PNCP)
+        // Inject Attachments (Selected Files only)
         const cardAttachments: any[] = [];
-
-        cardAttachments.push({
-            id: crypto.randomUUID(),
-            name: "Acesso Oficial PNCP - " + selectedItem.title,
-            url: getOfficialLink(selectedItem),
-            type: "url",
-            addedAt: new Date().toISOString()
-        });
 
         for (const file of selectedFilesToExport) {
             cardAttachments.push({
