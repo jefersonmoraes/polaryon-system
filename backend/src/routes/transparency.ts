@@ -43,13 +43,21 @@ const extractBrand = (text: string): string => {
     }
 
     // 2. CAMADA DE EXTRAÇÃO (RegEx para Marcas não Tabeladas)
+    // IMPORTANT: \b em cada termo do prefixo impede que "MARCAÇÃO" ou "CONTRATAÇÃO" deem match falso.
     const regexList = [
-        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,50})/i,
-        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,50})/i,
-        /fabricado\s+por\s+([^;,\n\)\/\-]{2,50})/i
+        /\b(?:marca\b|fabricante\b|fabr\b)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,50})/i,
+        /\bmarca\b(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,50})/i,
+        /\bfabricado\s+por\s+([^;,\n\)\/\-]{2,50})/i
     ];
 
-    const junkFragments = ['ICACAO', 'ICAÇÃO', 'ICANTE', 'ICADO', 'ICADA', 'ICADOS', 'ICADAS'];
+    const junkFragments = ['ICACAO', 'ICAÇÃO', 'ICANTE', 'ICADO', 'ICADA', 'ICADOS', 'ICADAS', 'ÇÃO', 'CÃO', 'ÇÃOS', 'CÕES'];
+    const stopWordsPT = [
+        'DE', 'PARA', 'COM', 'POR', 'UMA', 'UM', 'DOS', 'DAS', 'NOS', 'NAS', 'PELO', 'PELA', 
+        'ESTE', 'ESTA', 'ESSE', 'ESSA', 'AQUELE', 'AQUELA', 'CUJO', 'CUJA', 'S SE', 'O', 'A', 
+        'OS', 'AS', 'UM', 'UNS', 'UMA', 'UMAS', 'EM', 'NO', 'NA', 'NOS', 'NAS', 'COMO', 'QUE', 
+        'SE', 'OU', 'MAS', 'ENTRE', 'CONTRA', 'SOBRE', 'ANTE', 'APOS', 'ATÉ', 'DESDE', 'PERANTE',
+        'QUALQUER', 'TODOS', 'TUDO', 'NADA', 'ALGO', 'OUTRO', 'OUTRA', 'CADA', 'MESMO', 'MESMA'
+    ];
     const instructionBlacklist = [
         'REFERENCIA', 'REFERÊNCIA', 'SIMILAR', 'MINIMO', 'MÍNIMO', 'MAXIMO', 'MÁXIMO', 
         'PRAZO', 'VALIDADE', 'EMBALAGEM', 'CAIXA', 'UNIDADE', 'LEGIVEL', 'LEGÍVEL', 
@@ -57,7 +65,8 @@ const extractBrand = (text: string): string => {
         'SUJEIRAS', 'LEVES', 'ACORDO', 'DE 01', 'DE 1', 'ITEM', 'LOTE', 'PAGINA', 
         'EDITAL', 'ANEXO', 'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 
         'N/A', 'DIVERSAS', 'A DEFINIR', 'GENERICA', 'SEM MARCA', 'MARCA', 'QUE O', 
-        'DO FABRICANTE', 'DOR', 'ICA', 'DA TV', 'COR', 'AZUL', 'VERDE', 'AMARELA'
+        'DO FABRICANTE', 'DOR', 'ICA', 'DA TV', 'COR', 'AZUL', 'VERDE', 'AMARELA',
+        'PRODUTO', 'CAPACIDADE', 'JORNADA'
     ];
 
     for (const rx of regexList) {
@@ -71,9 +80,9 @@ const extractBrand = (text: string): string => {
             // Corte em termos de controle técnico
             found = found.split(/\b(?:MODELO|REF|LOTE|TIPO|DESC|ESPEC|CATMAT|PARA|COM|NA|NOS|EM|NA COR)\b/i)[0].trim();
 
-            // --- FILTROS DE QUALIDADE ATÔMICA ---
+            // --- FILTROS DE QUALIDADE ATÔMICA + EXATIDÃO ---
             
-            // Filtro 1: Tamanho mínimo e frases curtas (Marcas tem até 3-4 palavras no máximo)
+            // Filtro 1: Tamanho mínimo e frases curtas
             const words = found.split(/\s+/);
             if (found.length < 2 || words.length > 4) continue;
             
@@ -81,16 +90,17 @@ const extractBrand = (text: string): string => {
             const hasInstruction = instructionBlacklist.some(term => found.includes(term));
             if (hasInstruction) continue;
 
-            // Filtro 3: Bloqueio de fragmentos internos (Onde quer que estejam na frase)
+            // Filtro 3: Bloqueio de fragmentos internos
             const hasJunkFragment = junkFragments.some(fragment => found.includes(fragment));
             if (hasJunkFragment) continue;
             
-            // Filtro 4: Termos descritivos de material/ação
+            // Filtro 4: Bloqueio de Stopwords isoladas (Purismo da língua)
+            // Se o que sobrou for apenas uma palavra comum "DE", ignore.
+            if (stopWordsPT.includes(found)) continue;
+            
+            // Filtro 5: Termos descritivos de material/ação
             if (found.includes('DEVERÁ') || found.includes('DEVERA') || found.includes('CONSULTAR')) continue;
             if (found.startsWith('EM ') || found.includes(' RESISTENTE') || found.includes(' ALTA ')) continue;
-
-            // Filtro 5: Palavras soltas de sistema
-            if (['DA', 'DE', 'DO', 'O', 'A', 'S'].includes(found)) continue;
 
             // Se restar algo sólido, retorna
             if (found.length > 1 && found.length < 35) {
