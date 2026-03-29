@@ -160,6 +160,10 @@ export default function OportunidadesSearch() {
     const [cguDetails, setCguDetails] = useState<any>(null);
     const [loadingCgu, setLoadingCgu] = useState(false);
     
+    // Novo Estado para Detalhamento Completo PNCP (para pegar Valores, etc)
+    const [itemDetail, setItemDetail] = useState<any>(null);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    
     // Estados para o Preview de Empenho no Sistema
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -184,6 +188,20 @@ export default function OportunidadesSearch() {
             const cnpj = selectedItem.orgao_cnpj;
 
             if (!cnpj || !ano || !seq) return;
+
+            // 0. Fetch Main Purchase Detail (V1) - Para pegar Valores Estimados que faltam na busca
+            setLoadingDetail(true);
+            try {
+                const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                if (res.ok) {
+                    const detail = await res.json();
+                    setItemDetail(detail);
+                }
+            } catch (e) {
+                console.error("Failed to fetch purchase detail", e);
+            } finally {
+                setLoadingDetail(false);
+            }
 
             // 1. Fetch Files (Original)
             setLoadingFiles(true);
@@ -281,7 +299,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
         const cardParams = {
             title: selectedItem.title,
-            summary: "Oportunidade importada do GovBr",
+            summary: selectedItem.description || selectedItem.title || "Oportunidade importada do GovBr",
             description: descriptionMD,
             listId: exportListId,
             position: 0,
@@ -951,7 +969,13 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
                                                     <div>
                                                         <span className="block text-[10px] text-muted-foreground uppercase mb-0.5 flex items-center"><DollarSign className="h-3 w-3 mr-0.5" /> Val. Estimado</span>
-                                                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedItem.valor_global)}</span>
+                                                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                                                            {loadingDetail ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin inline-block" />
+                                                            ) : (
+                                                                formatCurrency(itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || selectedItem.valor_global)
+                                                            )}
+                                                        </span>
                                                     </div>
                                                     <div>
                                                         <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Publicação</span>
