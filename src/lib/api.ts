@@ -45,7 +45,9 @@ api.interceptors.response.use(
         }
         
         // Data Loss Protection: Alert user if a write operation failed
-        if (error.config && error.config.method && ['post', 'put', 'delete', 'patch'].includes(error.config.method.toLowerCase())) {
+        const isSilentRoute = error.config && error.config.url && ['/calendar/sync', '/calendar/events'].some(url => error.config.url.includes(url));
+        
+        if (error.config && error.config.method && ['post', 'put', 'delete', 'patch'].includes(error.config.method.toLowerCase()) && !isSilentRoute) {
             console.error('Data persistence failure:', error);
             // Dynamic import to avoid circular dependency issues at boot
             import('sonner').then(({ toast }) => {

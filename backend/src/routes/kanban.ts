@@ -596,8 +596,8 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                // Exclude heavy fields for initial sync: comments and attachments
-                include: { labels: true, checklist: true, milestones: true, timeEntries: true }
+                // Incluindo anexos e comentários para garantir persistência na UI
+                include: { labels: true, checklist: true, milestones: true, timeEntries: true, attachments: true, comments: true }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),

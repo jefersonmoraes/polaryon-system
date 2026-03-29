@@ -72,7 +72,16 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
 
       {/* Summary preview */}
       {card.summary && (
-        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-4 block">{card.summary}</p>
+        <p 
+          className="text-[10px] text-muted-foreground mt-1.5 leading-[1.5] overflow-hidden break-words whitespace-normal"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+          }}
+        >
+          {card.summary}
+        </p>
       )}
 
       {/* Dates & Nearest Milestone */}

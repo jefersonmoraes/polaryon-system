@@ -481,7 +481,15 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 [🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(selectedItem)})
         `.trim();
 
-        const estimatedValue = selectedItem.valorTotalEstimado || selectedItem.valor_global || 0;
+        // Robustly extract estimated value
+        const itemAny = selectedItem as any;
+        const estimatedValue = 
+            itemAny.valorTotalEstimado || 
+            itemAny.valor_global || 
+            itemAny.valor_total_estimado || 
+            itemAny.valor_estimado || 
+            0;
+
         const formattedValue = estimatedValue > 0 
             ? `  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}` 
             : '';
@@ -526,8 +534,19 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
         // Inject Card Optimistically properly via Zustand SetState to trigger LocalStorage Persist
         useKanbanStore.setState(state => ({
-            cards: [...state.cards, newCardData]
+            cards: [newCardData, ...state.cards] // Add to start of list
         }));
+
+        // Notify other clients via Socket
+        try {
+            const socketService = (window as any).socketService;
+            if (socketService) {
+                socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_CARD', payload: newCardData });
+            }
+        } catch (e) {
+            console.error("Socket communication error during export", e);
+        }
+
         api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
 
         toast.success("Oportunidade exportada! Cartão criado no Kanban.");
