@@ -419,12 +419,18 @@ export default function TransparencySearchPage() {
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2 pt-1">
-                                                    <span className="bg-emerald-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 border border-emerald-500/20">
+                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${lic.situacao === 'Concluída' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
                                                         {lic.situacao}
                                                     </span>
-                                                    <span className="bg-blue-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 border border-blue-500/20">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lic.valorLicitacao)}
-                                                    </span>
+                                                    {lic.isConcluidaCacheBug ? (
+                                                        <span className="bg-amber-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-amber-600 border border-amber-500/20" title="A API de busca agrupada do Governo não retornou o valor exato. Clique para ver os itens detalhados.">
+                                                            Valores Apurados na Íntegra
+                                                        </span>
+                                                    ) : (
+                                                        <span className="bg-blue-500/10 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 border border-blue-500/20">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lic.valorLicitacao)}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </motion.div>
@@ -494,7 +500,7 @@ export default function TransparencySearchPage() {
                                         <div className="space-y-3">
                                             {[1,2,3,4,5].map(i => <div key={i} className="h-6 bg-muted rounded animate-pulse" />)}
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground italic">Consultando os 20 processos mais recentes para extrair marcas...</p>
+                                        <p className="text-[10px] text-muted-foreground italic">Consultando os 50 processos mais recentes para extrair marcas...</p>
                                     </div>
                                 ) : (globalBrands.length > 0) ? (
                                     <div className="bg-card border border-border rounded-2xl p-5 shadow-sm animate-in fade-in slide-in-from-right-4">
@@ -532,14 +538,14 @@ export default function TransparencySearchPage() {
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">Deep Intelligence</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                                                Análise em tempo real dos <strong>20 processos mais recentes</strong> concluídos para este item (Todos os Âmbitos).
+                                                Análise em tempo real dos <strong>50 processos mais recentes</strong> concluídos para este item (Todos os Âmbitos).
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="bg-card/50 border border-border/50 border-dashed rounded-2xl p-8 text-center space-y-3">
                                         <Info className="h-8 w-8 text-muted-foreground/30 mx-auto" />
-                                        <p className="text-xs text-muted-foreground font-medium italic">Nenhuma marca consolidada nos 20 processos recentes.</p>
+                                        <p className="text-xs text-muted-foreground font-medium italic">Nenhuma marca consolidada nos 50 processos recentes.</p>
                                     </div>
                                 )}
                                 

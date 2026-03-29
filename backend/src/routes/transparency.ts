@@ -107,18 +107,22 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
             items = items.filter((i: any) => String(i.situacao_id) === '2' && !i.tem_resultado);
         }
 
-        const results = items.map((item: any) => ({
-            id: item.id || `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
-            numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
-            objeto: item.description || 'Sem descrição',
-            orgao: item.orgao_nome || 'Órgão Desconhecido',
-            dataAbertura: item.data_publicacao_pncp,
-            valorLicitacao: item.valor_global || 0,
-            situacao: item.situacao_nome || 'Desconhecida',
-            cnpjOrgao: item.orgao_cnpj,
-            ano: item.ano,
-            sequencial: item.numero_sequencial
-        }));
+        const results = items.map((item: any) => {
+            const isTrullyConcluded = item.tem_resultado === true;
+            return {
+                id: item.id || `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
+                numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
+                objeto: item.description || 'Sem descrição',
+                orgao: item.orgao_nome || 'Órgão Desconhecido',
+                dataAbertura: item.data_publicacao_pncp,
+                valorLicitacao: item.valor_global || 0,
+                situacao: isTrullyConcluded ? 'Concluída' : (item.situacao_nome || 'Desconhecida'),
+                cnpjOrgao: item.orgao_cnpj,
+                ano: item.ano,
+                sequencial: item.numero_sequencial,
+                isConcluidaCacheBug: isTrullyConcluded && (!item.valor_global || Number(item.valor_global) === 0)
+            };
+        });
 
         res.json({
             items: results,
@@ -156,7 +160,7 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             if (searchRes.data && searchRes.data.items) {
                 // Filtro rigoroso baseado apenas na presença de resultados
                 const validOnes = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
-                allProcesses.push(...validOnes.slice(0, 20));
+                allProcesses.push(...validOnes.slice(0, 50));
             }
         } catch (e: any) { 
             console.error('Error in ranking search (legacy):', e.message); 
