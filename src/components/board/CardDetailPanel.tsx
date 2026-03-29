@@ -4,7 +4,7 @@ import {
   X, Calendar, Tag, CheckSquare, MessageSquare, Clock, Trash2, Plus,
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
-  Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck
+  Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
@@ -13,7 +13,7 @@ import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
-import { getFaviconUrl } from '@/lib/utils';
+import { getFaviconUrl, cn } from '@/lib/utils';
 
 const statusStyles: Record<BudgetStatus, string> = {
   Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
@@ -27,13 +27,15 @@ interface Props {
   onClose: () => void;
 }
 
-const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'estimated', 'description', 'attachments', 'budgets', 'checklist', 'timer', 'comments'];
+const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'deliveryAddress', 'deliveryTime', 'estimated', 'description', 'attachments', 'budgets', 'checklist', 'timer', 'comments'];
 
 const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> = {
   summary: { icon: <FileText className="h-3.5 w-3.5" />, label: 'Resumo' },
   labels: { icon: <Tag className="h-3.5 w-3.5" />, label: 'Etiquetas' },
   assignee: { icon: <User className="h-3.5 w-3.5" />, label: 'Responsável' },
   dates: { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Datas' },
+  deliveryAddress: { icon: <MapPin className="h-3.5 w-3.5" />, label: 'Endereço de entrega' },
+  deliveryTime: { icon: <Truck className="h-3.5 w-3.5" />, label: 'Prazo de Entrega' },
   estimated: { icon: <Timer className="h-3.5 w-3.5" />, label: 'Estimativa' },
   description: { icon: <AlignLeft className="h-3.5 w-3.5" />, label: 'Descrição' },
   attachments: { icon: <Paperclip className="h-3.5 w-3.5" />, label: 'Anexos' },
@@ -100,6 +102,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [startDate, setStartDate] = useState(card?.startDate || '');
   const [assignee, setAssignee] = useState(card?.assignee || '');
   const [estimatedTime, setEstimatedTime] = useState(card?.estimatedTime?.toString() || '');
+  const [deliveryAddress, setDeliveryAddress] = useState(card?.deliveryAddress || '');
+  const [deliveryTime, setDeliveryTime] = useState(card?.deliveryTime || '');
 
   // Budget editing state
   const [selectedBudgetToEdit, setSelectedBudgetToEdit] = useState<Budget | undefined>();
@@ -323,7 +327,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   const renderSection = (section: string) => {
     switch (section) {
-      case 'summary':
+      case 'summary': {
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -335,7 +339,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
         );
-      case 'labels':
+      }
+      case 'labels': {
         return (
           <div key={section}>
             <button onClick={() => setShowLabels(!showLabels)} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2 hover:text-foreground transition-colors">
@@ -413,6 +418,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
+      }
       case 'assignee': {
         const assignedMember = members.find(m => 
           m.id === assignee || 
@@ -442,7 +448,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           </div>
         );
       }
-      case 'dates':
+      case 'dates': {
         return (
           <div key={section}>
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-3">
@@ -485,14 +491,44 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 ))}
               </div>
             )}
-
-            <label className={`flex items-center gap-1.5 text-xs text-muted-foreground mt-4 pt-3 border-t border-border focus-within:text-foreground transition-colors ${canEdit ? 'cursor-pointer' : 'opacity-80'}`}>
-              <input type="checkbox" checked={card.completed} onChange={() => updateCard(cardId, { completed: !card.completed })} disabled={!canEdit} className="rounded disabled:cursor-not-allowed" />
-              Cartão concluído geral
-            </label>
           </div>
         );
-      case 'estimated':
+      }
+      case 'deliveryAddress': {
+        return (
+          <div key={section}>
+            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+              <MapPin className="h-3.5 w-3.5" /> Endereço de entrega
+            </label>
+            <textarea
+              value={deliveryAddress}
+              onChange={e => setDeliveryAddress(e.target.value)}
+              onBlur={() => updateCard(cardId, { deliveryAddress: deliveryAddress.trim() || undefined })}
+              disabled={!canEdit}
+              placeholder="Digite o local para entrega..."
+              className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed min-h-[60px]"
+            />
+          </div>
+        );
+      }
+      case 'deliveryTime': {
+        return (
+          <div key={section}>
+            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+              <Truck className="h-3.5 w-3.5" /> Prazo de Entrega
+            </label>
+            <input
+              value={deliveryTime}
+              onChange={e => setDeliveryTime(e.target.value)}
+              onBlur={() => updateCard(cardId, { deliveryTime: deliveryTime.trim() || undefined })}
+              disabled={!canEdit}
+              placeholder="Ex: 5 dias úteis, Imediata..."
+              className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+            />
+          </div>
+        );
+      }
+      case 'estimated': {
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -503,7 +539,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               className="w-32 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
         );
-      case 'description':
+      }
+      case 'description': {
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -563,7 +600,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
-      case 'attachments':
+      }
+      case 'attachments': {
         return (
           <div key={section}>
             <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -615,7 +653,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
-      case 'budgets':
+      }
+      case 'budgets': {
         const linkedBudgets = budgets.filter(b => b.cardId === cardId && !b.trashed);
         if (linkedBudgets.length === 0) return null;
 
@@ -664,7 +703,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                                     </div>
                                   )}
                                 </>
-                              )
+                              );
                             })()}
                           </div>
                         </div>
@@ -701,12 +740,13 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       </div>
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           </div>
-        )
-      case 'checklist':
+        );
+      }
+      case 'checklist': {
         return (
           <div key={section}>
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -743,7 +783,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
           </div>
         );
-      case 'timer':
+      }
+      case 'timer': {
         return (
           <div key={section}>
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -778,8 +819,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             </div>
           </div>
         );
+      }
       case 'comments':
-        return null; // Comentários agora ficam no painel lateral
+        return null;
       default:
         return null;
     }
@@ -811,6 +853,19 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <button 
+                    onClick={() => updateCard(cardId, { completed: !card.completed })} 
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-tighter shadow-sm active:scale-95",
+                      card.completed 
+                        ? "bg-green-500 text-white hover:bg-green-600 ring-4 ring-green-500/20" 
+                        : "bg-orange-600 text-white hover:bg-orange-700 animate-pulse hover:animate-none"
+                    )}
+                    title={card.completed ? "Reabrir Tarefa" : "Marcar como Concluída"}
+                  >
+                    <Check className={cn("h-3.5 w-3.5", card.completed ? "scale-110" : "scale-90 opacity-70")} />
+                    <span>{card.completed ? "CONCLUÍDO" : "CONCLUIR"}</span>
+                  </button>
                   <button onClick={() => setShowChat(!showChat)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors ${showChat ? 'bg-primary/20 text-primary' : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'} text-xs font-semibold`} title="Alternar Chat">
                     <MessageSquare className="h-4 w-4" /> <span className="hidden sm:inline">Comentários</span> {card.comments.length > 0 && `(${card.comments.length})`}
                   </button>

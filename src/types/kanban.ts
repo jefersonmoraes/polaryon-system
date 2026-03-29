@@ -338,6 +338,8 @@ export interface Card {
   estimatedTime?: number; // minutes
   customLink?: string; // Editável para links externos como PNCP
   pncpId?: string; // Para o botão interno de Acessar Oportunidade
+  deliveryAddress?: string;
+  deliveryTime?: string;
   createdAt: string;
 }
 
