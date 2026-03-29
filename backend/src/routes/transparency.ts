@@ -19,6 +19,23 @@ const cguApi = axios.create({
     timeout: 10000
 });
 
+/**
+ * GET /api/transparency/suggestions
+ * Retorna sugestões rápidas de termos de licitação
+ */
+router.get('/suggestions', (req: Request, res: Response) => {
+    const { q } = req.query;
+    if (!q) return res.json([]);
+    
+    const term = q.toString().toUpperCase();
+    const suggestions = BIDDING_SUGGESTIONS
+        .filter(s => s.toUpperCase().includes(term))
+        .sort((a, b) => a.indexOf(term) - b.indexOf(term))
+        .slice(0, 8);
+        
+    res.json(suggestions);
+});
+
 const COMMON_BRANDS = [
     'DELL', 'HP', 'LENOVO', 'APPLE', 'SAMSUNG', 'LG', 'ASUS', 'ACER', 'POSITIVO', 'MULTILASER',
     'INTEL', 'AMD', 'EPSON', 'CANON', 'LOGITECH', 'CISCO', 'ARUBA', 'HUAWEI', 'FURUKAWA',
@@ -28,6 +45,24 @@ const COMMON_BRANDS = [
     'CAMIL', 'TIO JOÃO', 'NAMORADO', 'KODILAR', 'NESTLE', 'PILÃO', 'KIMBERLY', 'PIRACANJUBA', 'ITAMBÉ',
     'BIC', 'PILOT', 'FABER-CASTELL', 'STABILO', 'CIS', 'COMPACTOR', 'CROWN', 'PARKER', 'PENTEL', 'MAPED',
     '3M', 'POST-IT', 'CHAMECO', 'CHAMEX', 'REFRIGERANTE', 'COCA-COLA', 'AMBEV', 'ANTARCTICA', 'BRAHMA', 'SKOL'
+];
+
+const BIDDING_SUGGESTIONS = [
+    'ARROZ', 'AR CONDICIONADO', 'AMBULÂNCIA', 'APARELHO DE RAIO-X', 'ALIMENTOS', 
+    'BRINQUEDOS', 'BORRACHA', 'BARCO', 'CADERNO', 'CADEIRA DE RODAS', 'COMPUTADOR', 
+    'CANETA', 'CAMISETA', 'CONSULTORIA', 'CONSTRUÇÃO', 'CONSERTO', 'COPO DESCARTÁVEL',
+    'DETERGENTE', 'DETETOR DE FUMAÇA', 'DESINFETANTE', 'DRONES', 'EPI', 'ESTANTE',
+    'ESCOLA', 'EQUIPAMENTOS DE TI', 'EQUIPAMENTOS MÉDICOS', 'EXTINTOR', 'Fraldas',
+    'FERRAMENTAS', 'FOGÃO', 'GASOLINA', 'GÊNEROS ALIMENTÍCIOS', 'GESSO', 'HOSPITAL',
+    'HIDRANTE', 'IMPRESSORA', 'INSTALAÇÃO', 'INSETICIDA', 'JARDINAGEM', 'JALECO',
+    'KIT ESCOLAR', 'KITS DE DIAGNÓSTICO', 'LÂMPADA', 'LIMPEZA', 'LIVROS', 'LOTE',
+    'MANUTENÇÃO', 'MADEREIRA', 'MATERIAL DE CONSTRUÇÃO', 'MATERIAL ESCOLAR', 
+    'MEDICAMENTOS', 'MOBILIÁRIO', 'MESA', 'MONITOR', 'NOTEBOOK', 'NUTRIÇÃO', 
+    'ÓLEO DIESEL', 'OBRAS', 'ODONTOLÓGICO', 'OXIGÊNIO', 'PNEUS', 'PORTA', 'PAPEL', 
+    'PEDREIRO', 'PINTURA', 'PROJETOR', 'QUADRO BRANCO', 'REFORMA', 'RELOJOARIA',
+    'REAGENTE', 'REFRIGERADOR', 'REFEIÇÕES', 'SABONETE', 'SONORIZAÇÃO', 'SUPRIMENTOS', 
+    'SERVIÇOS DE VIGILÂNCIA', 'TABLET', 'TELA', 'TIJOLO', 'TRANSPORTE ESCOLAR',
+    'UNIFORME', 'URNA', 'UTENSÍLIOS', 'VIGILÂNCIA', 'VASCULAR', 'VEÍCULO', 'XEROX', 'ZINCO'
 ];
 
 const extractBrand = (text: string): string => {

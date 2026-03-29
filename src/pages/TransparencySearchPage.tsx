@@ -120,6 +120,12 @@ export default function TransparencySearchPage() {
     const [streamChecked, setStreamChecked] = useState<number>(0);
     const [winnerFiles, setWinnerFiles] = useState<any[]>([]);
     
+    // Autocomplete States
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [suggestionIndex, setSuggestionIndex] = useState(-1);
+    const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+    
     // Estados para o Preview de Empenho (Dentro do Sistema)
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [previewEmpenhoData, setPreviewEmpenhoData] = useState<any>(null);
@@ -134,6 +140,58 @@ export default function TransparencySearchPage() {
         setDataFinal(end.toISOString().split('T')[0]);
         setDataInicial(start.toISOString().split('T')[0]);
     }, []);
+
+    // Autocomplete Logic (Debounced)
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            if (keyword.length < 2) {
+                setSuggestions([]);
+                setShowSuggestions(false);
+                return;
+            }
+
+            setIsFetchingSuggestions(true);
+            try {
+                const response = await api.get('/transparency/suggestions', {
+                    params: { q: keyword }
+                });
+                setSuggestions(response.data || []);
+                setShowSuggestions(true);
+                setSuggestionIndex(-1);
+            } catch (err) {
+                console.error("Erro ao buscar sugestões", err);
+            } finally {
+                setIsFetchingSuggestions(false);
+            }
+        };
+
+        const timer = setTimeout(fetchSuggestions, 300);
+        return () => clearTimeout(timer);
+    }, [keyword]);
+
+    const handleSuggestionClick = (s: string) => {
+        setKeyword(s);
+        setSuggestions([]);
+        setShowSuggestions(false);
+        // Opcional: Já disparar a busca ao clicar
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (!showSuggestions || suggestions.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setSuggestionIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setSuggestionIndex(prev => (prev > 0 ? prev - 1 : prev));
+        } else if (e.key === 'Enter' && suggestionIndex >= 0) {
+            e.preventDefault();
+            handleSuggestionClick(suggestions[suggestionIndex]);
+        } else if (e.key === 'Escape') {
+            setShowSuggestions(false);
+        }
+    };
 
     // Analytics Cache
     const brandRanking = useMemo(() => {
@@ -351,8 +409,45 @@ export default function TransparencySearchPage() {
                                 placeholder="O que você procura? (ex: Notebook, Arroz, Consultoria)..."
                                 value={keyword}
                                 onChange={(e) => setKeyword(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                onFocus={() => keyword.length >= 2 && setShowSuggestions(true)}
                                 className="w-full h-10 bg-background border border-border rounded-lg pl-9 pr-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             />
+
+                            {/* Autocomplete Dropdown */}
+                            <AnimatePresence>
+                                {showSuggestions && suggestions.length > 0 && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="absolute top-full left-0 right-0 mt-2 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl z-[100] overflow-hidden"
+                                    >
+                                        <div className="p-2 max-h-64 overflow-y-auto">
+                                            {suggestions.map((s, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => handleSuggestionClick(s)}
+                                                    onMouseMove={() => setSuggestionIndex(i)}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 ${i === suggestionIndex ? 'bg-primary/20 text-primary font-bold' : 'hover:bg-muted text-muted-foreground'}`}
+                                                >
+                                                    <Search className={`h-3 w-3 ${i === suggestionIndex ? 'text-primary' : 'text-muted-foreground/50'}`} />
+                                                    {s}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="bg-muted/50 p-2 border-t border-border flex justify-between items-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                                            <span>Sugerido pela Inteligência</span>
+                                            <div className="flex gap-2">
+                                                <span>↑↓ navegar</span>
+                                                <span>↵ selecionar</span>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                         
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-1 bg-muted/50 rounded-lg border border-border">
