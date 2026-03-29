@@ -123,6 +123,8 @@ export default function OportunidadesSearch() {
     const [unidadeFilter, setUnidadeFilter] = useState('');
     const [dataInicialFilter, setDataInicialFilter] = useState('');
     const [dataFinalFilter, setDataFinalFilter] = useState('');
+    const [valorMinFilter, setValorMinFilter] = useState('');
+    const [valorMaxFilter, setValorMaxFilter] = useState('');
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -139,6 +141,8 @@ export default function OportunidadesSearch() {
         setStatusFilter('1');
         setDataInicialFilter('');
         setDataFinalFilter('');
+        setValorMinFilter('');
+        setValorMaxFilter('');
         setPage(1);
     }, []);
 
@@ -427,6 +431,20 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
             if (margemPreferenciaFilter) items = items.filter((i: any) => (i?.tipo_margem_preferencia_nome?.toLowerCase() || '').includes(margemPreferenciaFilter.toLowerCase()));
 
+            // Valor Min/Max Filter (Client Side Memory Filter)
+            if (valorMinFilter) {
+                const min = parseFloat(valorMinFilter.replace(/[^\d.]/g, ''));
+                if (!isNaN(min)) {
+                    items = items.filter((i: PncpItem) => (i.valorTotalEstimado || i.valor_global || 0) >= min);
+                }
+            }
+            if (valorMaxFilter) {
+                const max = parseFloat(valorMaxFilter.replace(/[^\d.]/g, ''));
+                if (!isNaN(max)) {
+                    items = items.filter((i: PncpItem) => (i.valorTotalEstimado || i.valor_global || 0) <= max);
+                }
+            }
+
             // Client-Side Ordering directly on runtime memory buffer
             if (ordenacaoFilter === '-data_publicacao_pncp') {
                 items.sort((a, b) => new Date(b.data_publicacao_pncp || 0).getTime() - new Date(a.data_publicacao_pncp || 0).getTime());
@@ -663,6 +681,26 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Fim)</label>
                                     <input type="date" value={dataFinalFilter} onChange={(e) => setDataFinalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1"><DollarSign className="h-2.5 w-2.5" /> Valor Mínimo (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Ex: 5000" 
+                                        value={valorMinFilter} 
+                                        onChange={(e) => setValorMinFilter(e.target.value)} 
+                                        className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1"><DollarSign className="h-2.5 w-2.5" /> Valor Máximo (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Ex: 100000" 
+                                        value={valorMaxFilter} 
+                                        onChange={(e) => setValorMaxFilter(e.target.value)} 
+                                        className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" 
+                                    />
+                                </div>
                             </motion.div>
                         )}
                     </form>
@@ -700,6 +738,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         <th className="px-4 py-3 font-medium w-40">Publicação</th>
                                         <th className="px-4 py-3 font-medium w-32">Início Recepção</th>
                                         <th className="px-4 py-3 font-medium w-32">Fim Recepção</th>
+                                        <th className="px-4 py-3 font-medium w-32 text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/5">Valor Est.</th>
                                         <th className="px-4 py-3 font-medium">Órgão / Descrição Sintética</th>
                                         <th className="px-4 py-3 font-medium w-32">Modalidade</th>
                                         <th className="px-4 py-3 font-medium w-24">UF</th>
@@ -722,6 +761,9 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                 {formatDate(item.data_publicacao_pncp)}
                                             </td>
                                             <ProposalDates item={item} />
+                                            <td className="px-4 py-3.5 align-top font-black text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
+                                                {formatCurrency(item.valorTotalEstimado || item.valor_global)}
+                                            </td>
                                             <td className="px-4 py-2.5 whitespace-normal">
                                                 <div className="flex flex-col gap-1 max-w-[500px]">
                                                     <span className="font-semibold text-foreground text-xs leading-tight tracking-tight uppercase">
@@ -769,6 +811,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded">
                                             <Calendar className="h-3 w-3" />
                                             {formatDate(item.data_publicacao_pncp)}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shadow-sm ml-auto">
+                                            <DollarSign className="h-2.5 w-2.5" />
+                                            {formatCurrency(item.valorTotalEstimado || item.valor_global)}
                                         </div>
                                     </div>
 
