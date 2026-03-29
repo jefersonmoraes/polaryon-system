@@ -515,7 +515,6 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             attachments: cardAttachments,
             checklist: [],
             timeEntries: [],
-            customLink: getOfficialLink(selectedItem),
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
         };
