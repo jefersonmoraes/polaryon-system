@@ -157,9 +157,9 @@ export default function TransparencySearchPage() {
 
     const fetchGlobalBrands = async (term: string) => {
         setLoadingGlobalBrands(true);
-        setStreamMessage('Conectando ao núcleo inteligente...');
+        setStreamMessage('Iniciando análise profunda...');
         setStreamFound(0);
-        setStreamChecked(0);
+        setStreamChecked(1); // Começa em 1 para mover a barra de 0% e dar feedback de vida
         try {
             // Unificando lógica de Auth e BaseURL com o api.ts
             let token = '';

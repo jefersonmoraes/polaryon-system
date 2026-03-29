@@ -271,11 +271,16 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
         // Remove stopwords curtas e pega as palavras significativas
         const keywords = searchKeyword.split(' ').filter(k => k.length > 3 && !['para', 'com', 'dos', 'das'].includes(k.toLowerCase()));
 
-        // SSE Configuração
+        // SSE Configuração Estrita Anti-Buffering
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Bypass Nginx buffering
         res.flushHeaders(); // Envia os headers imediatamente
+
+        // Enviar PADDING inicial de 2KB (Comentários SSE) para forçar o buffer do Proxy a "quebrar"
+        // Alguns navegadores/proxies esperam um volume mínimo para começar a transmitir
+        res.write(": " + " ".repeat(2048) + "\n\n");
 
         let brandCounts: Record<string, { value: number; totalGasto: number }> = {};
         let totalMarcasDiversas = 0;
