@@ -318,10 +318,13 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
                     data: milestones.map((i: any) => {
                         let parsedDate = i.dueDate;
                         if (parsedDate === '') parsedDate = null;
-                        else if (parsedDate && typeof parsedDate === 'string' && parsedDate.length === 10) {
-                            parsedDate = new Date(parsedDate).toISOString();
-                        }
-                        return { ...i, dueDate: parsedDate, cardId };
+                        return { 
+                            title: i.title, 
+                            dueDate: parsedDate ? new Date(parsedDate) : null, 
+                            hour: i.hour || null,
+                            completed: !!i.completed,
+                            cardId 
+                        };
                     })
                 });
             }

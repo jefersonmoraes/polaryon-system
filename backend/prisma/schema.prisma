@@ -156,6 +156,7 @@ model Milestone {
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   title     String
   dueDate   DateTime?
+  hour      String?
   completed Boolean  @default(false)
 }
 

@@ -489,6 +489,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             itemAny.valor_total_estimado || 
             itemAny.valor_estimado || 
             itemAny.valor_total ||
+            itemAny.valor ||
             0;
 
         const formattedValue = estimatedValue > 0 
@@ -525,11 +526,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         const newCardData = {
             id: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             comments: [],
             attachments: cardAttachments,
             checklist: [],
             timeEntries: [],
-            milestones: [], // Initialize empty milestones array
+            milestones: [],
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
         };
@@ -543,7 +545,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         try {
             const socketService = (window as any).socketService;
             if (socketService) {
-                socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_CARD', payload: newCardData });
+                // Emit system_action to make others sync or add
+                socketService.emit('system_action', { 
+                    store: 'KANBAN', 
+                    type: 'ADD_CARD', 
+                    payload: newCardData 
+                });
             }
         } catch (e) {
             console.error("Socket emit failed:", e);
