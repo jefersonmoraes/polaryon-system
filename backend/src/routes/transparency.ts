@@ -253,10 +253,11 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 
                     for (const item of items) {
                         const desc = (item.descricao || '').toLowerCase();
-                        
-                        // Normalização simples para busca (remover acentos se necessário, mas includes básico já ajuda)
                         const searchNorm = searchKeyword.toLowerCase();
-                        const isMatch = desc.includes(searchNorm) || keywords.every(k => desc.includes(k.toLowerCase()));
+                        
+                        // Lógica de Precisão Estrita: Deve conter a frase exata OU todas as palavras significativas
+                        const isMatch = desc.includes(searchNorm) || 
+                                        (keywords.length > 0 && keywords.every(k => desc.includes(k.toLowerCase())));
                         
                         if (isMatch) {
                             let brand = 'N/A';
@@ -391,11 +392,9 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
                             const desc = (item.descricao || '').toLowerCase();
                             const searchNorm = searchKeyword.toLowerCase();
                             
-                            // A API PNCP já filtrou o *processo*. Para o *item*, aceitamos se bater alguma keyword ou se a busca for muito longa (confiando no processo)
-                            const isMatch = keywords.length === 0 || 
-                                            desc.includes(searchNorm) || 
-                                            keywords.some(k => desc.includes(k.toLowerCase())) ||
-                                            keywords.length > 4; // Se usou uma frase gigante, assume que os itens do processo são relevantes
+                            // Lógica de Precisão Estrita (Streaming): Deve conter a frase exata OU todas as palavras significativas
+                            const isMatch = desc.includes(searchNorm) || 
+                                            (keywords.length > 0 && keywords.every(k => desc.includes(k.toLowerCase())));
                             
                             if (isMatch) {
                                 let brand = 'N/A';
