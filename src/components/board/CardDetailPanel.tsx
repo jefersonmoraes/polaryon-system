@@ -80,8 +80,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     try {
       const saved = localStorage.getItem('polaryon_card_section_order');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        let parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Garante que novas seções adicionadas ao sistema apareçam mesmo com cache antigo
+          const newSections = DEFAULT_SECTIONS.filter(s => !parsed.includes(s));
+          if (newSections.length > 0) {
+            parsed = [...parsed, ...newSections];
+          }
+          return parsed;
+        }
       }
       return DEFAULT_SECTIONS;
     } catch { return DEFAULT_SECTIONS; }
@@ -927,7 +934,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               )}
 
               {/* Modular sections - reorderable */}
-              <Reorder.Group axis="y" values={sectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} onReorder={setSectionOrder} className="space-y-5">
+              <Reorder.Group axis="y" values={sectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} 
+                onReorder={(newOrder) => {
+                  const hidden = sectionOrder.filter(s => s === 'comments' || s === 'budgets');
+                  setSectionOrder([...newOrder, ...hidden]);
+                }} 
+                className="space-y-5">
                 {sectionOrder.filter(s => s !== 'comments' && s !== 'budgets').map(section => (
                   <Reorder.Item key={section} value={section} className="relative group">
                     <div className="absolute -left-5 top-1 opacity-0 group-hover:opacity-50 cursor-grab">
