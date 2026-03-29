@@ -99,11 +99,12 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         let items = data.items || [];
 
         // REQUISITO: Filtro de Segurança In-Memory para garantir precisão de status
-        // Mesmo que o PNCP aceite 'status=encerradas', às vezes ele retorna 'Divulgada'
+        // A API de busca legada do PNCP muitas vezes trava o status em "1" (Divulgada) mesmo após a conclusão.
+        // O indicador 100% confiável de conclusão é a presença real de um ganhador (`tem_resultado === true`).
         if (status === 'concluido' || status === '3') {
-            items = items.filter((i: any) => i.tem_resultado === true && String(i.situacao_id) !== '1' && String(i.situacao_id) !== '2');
+            items = items.filter((i: any) => i.tem_resultado === true);
         } else if (status === 'em-andamento' || status === '2') {
-            items = items.filter((i: any) => String(i.situacao_id) === '2');
+            items = items.filter((i: any) => String(i.situacao_id) === '2' && !i.tem_resultado);
         }
 
         const results = items.map((item: any) => ({
@@ -153,10 +154,8 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             });
             
             if (searchRes.data && searchRes.data.items) {
-                // Filtro rigoroso: Apenas processos com resultados e que não estejam em andamento ou apenas publicados
-                const validOnes = searchRes.data.items.filter((p: any) => 
-                    p.tem_resultado === true && String(p.situacao_id) !== '1' && String(p.situacao_id) !== '2'
-                );
+                // Filtro rigoroso baseado apenas na presença de resultados
+                const validOnes = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
                 allProcesses.push(...validOnes.slice(0, 20));
             }
         } catch (e: any) { 
