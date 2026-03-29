@@ -236,6 +236,133 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/transparency/analytics/global-brands-stream
+ * EventSource Endpoint: Varre o portal até achar 30 marcas OU bater 5 páginas e envia updates parciais de progresso.
+ */
+router.get('/analytics/global-brands-stream', async (req: Request, res: Response) => {
+    try {
+        const { keyword } = req.query;
+        if (!keyword) {
+            res.status(400).json({ error: 'Termo de busca é obrigatório' });
+            return;
+        }
+
+        const searchKeyword = keyword.toString().trim();
+        const keywords = searchKeyword.split(' ').filter(k => k.length > 2);
+
+        // SSE Configuração
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders(); // Envia os headers imediatamente
+
+        let brandCounts: Record<string, { value: number; totalGasto: number }> = {};
+        let totalMarcasDiversas = 0;
+        let procsAnalisados = 0;
+        let pagina = 1;
+        const META_MARCAS = 30;
+        const LIMITE_PAGINAS = 5;
+        let buscouMais = true;
+
+        const sendEvent = (eventName: string, data: any) => {
+            res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+        };
+
+        sendEvent('progress', { message: 'Iniciando varredura profunda no PNP...', found: 0, checked: 0 });
+
+        while (totalMarcasDiversas < META_MARCAS && pagina <= LIMITE_PAGINAS && buscouMais) {
+            sendEvent('progress', { message: `Recuperando página ${pagina} do arquivo (lotes de 100)...`, found: totalMarcasDiversas, checked: procsAnalisados });
+            
+            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=100&status=encerradas`;
+            let searchRes;
+            try {
+                searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 12000 });
+            } catch (e) {
+                buscouMais = false;
+                break;
+            }
+
+            if (!searchRes.data || !searchRes.data.items || searchRes.data.items.length === 0) {
+                buscouMais = false; // Acabaram as licitações
+                break;
+            }
+
+            // Exclusivo: O governo não tem marcas em licitações "Divulgadas" q n tiveram resultado final
+            const validOnes = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
+            if (validOnes.length === 0) {
+                pagina++;
+                continue;
+            }
+
+            // Chunk ocioso em paralelo para não tomar timeout
+            const chunkSize = 10;
+            for (let i = 0; i < validOnes.length; i += chunkSize) {
+                if (totalMarcasDiversas >= META_MARCAS) break; // Bateu a meta
+                
+                const currentChunk = i + 1;
+                const totalChunk = Math.min(i + chunkSize, validOnes.length);
+                sendEvent('progress', { message: `Filtrando ganhadores ${currentChunk} a ${totalChunk} (Página ${pagina})...`, found: totalMarcasDiversas, checked: procsAnalisados });
+
+                const chunk = validOnes.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(async (proc: any) => {
+                    try {
+                        const typePath = proc.document_type === 'contrato' ? 'contratos' : 'compras';
+                        const itemsUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/${typePath}/${proc.ano}/${proc.numero_sequencial}/itens?pagina=1&tamanhoPagina=100`;
+                        const itemsRes = await axios.get(itemsUrl, { timeout: 4000 });
+                        const items = itemsRes.data || [];
+
+                        for (const item of items) {
+                            const desc = (item.descricao || '').toLowerCase();
+                            const searchNorm = searchKeyword.toLowerCase();
+                            const isMatch = desc.includes(searchNorm) || keywords.every(k => desc.includes(k.toLowerCase()));
+                            
+                            if (isMatch) {
+                                let brand = 'N/A';
+                                if (item.temResultado) {
+                                    try {
+                                        const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 3000 });
+                                        if (rRes.data && rRes.data.length > 0) {
+                                            const winner = rRes.data[0];
+                                            if (winner.marcaFornecedor) brand = winner.marcaFornecedor.toUpperCase().trim();
+                                        }
+                                    } catch (e) {}
+                                }
+
+                                if ((brand === 'N/A' || !brand) && item.marca) brand = item.marca.toUpperCase().trim();
+                                if (brand === 'N/A') brand = extractBrand(desc);
+
+                                if (brand && brand !== 'N/A' && brand.length > 1 && brand !== 'SEM MARCA' && brand !== 'NAO SE APLICA' && brand !== 'NACIONAL') {
+                                    if (!brandCounts[brand]) {
+                                        brandCounts[brand] = { value: 0, totalGasto: 0 };
+                                        totalMarcasDiversas++; // Contabilizou nova marca distinta
+                                    }
+                                    brandCounts[brand].value++;
+                                    brandCounts[brand].totalGasto += (item.valorUnitarioHomologado || item.valorUnitarioEstimado || item.valorUnitario || 0) * (item.quantidade || 1);
+                                }
+                            }
+                        }
+                    } catch (e) { /* silent fail */ }
+                    procsAnalisados++; // Aumenta visual counter
+                }));
+            }
+            pagina++;
+        }
+
+        const rankingFinal = Object.entries(brandCounts)
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, META_MARCAS); // Garante corte pros 30 maiores do mundo real
+
+        sendEvent('complete', { results: rankingFinal, totalChecked: procsAnalisados });
+        res.end();
+    } catch (error: any) {
+        console.error("Erro Fluxo SSE Marcas:", error);
+        res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.end();
+    }
+});
+
+/**
  * GET /api/transparency/licitacoes/:cnpj/:ano/:sequencial/itens-completos
  * Retorna todos os itens COM seus respectivos resultados (vencedores) e tenta localizar Nota de Empenho (CGU)
  */

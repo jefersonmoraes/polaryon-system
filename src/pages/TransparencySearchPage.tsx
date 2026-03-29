@@ -115,6 +115,9 @@ export default function TransparencySearchPage() {
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [loadingGlobalBrands, setLoadingGlobalBrands] = useState(false);
     const [globalBrands, setGlobalBrands] = useState<BrandAnalytics[]>([]);
+    const [streamMessage, setStreamMessage] = useState<string>('');
+    const [streamFound, setStreamFound] = useState<number>(0);
+    const [streamChecked, setStreamChecked] = useState<number>(0);
     const [winnerFiles, setWinnerFiles] = useState<any[]>([]);
     
     // Estados para o Preview de Empenho (Dentro do Sistema)
@@ -154,19 +157,67 @@ export default function TransparencySearchPage() {
 
     const fetchGlobalBrands = async (term: string) => {
         setLoadingGlobalBrands(true);
+        setStreamMessage('Conectando ao núcleo inteligente...');
+        setStreamFound(0);
+        setStreamChecked(0);
         try {
-            const response = await api.get('/transparency/analytics/global-brands', { 
-                params: { termo: term },
-                timeout: 15000 
+            const token = localStorage.getItem('token');
+            const baseUrl = import.meta.env.VITE_API_URL || (window.location.hostname.includes('localhost') ? 'http://localhost:3000/api' : 'https://polaryon-api.vercel.app/api');
+            const url = `${baseUrl}/transparency/analytics/global-brands-stream?keyword=${encodeURIComponent(term)}`;
+            
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            // O backend agora retorna { results, version }
-            const brands = response.data?.results || response.data || [];
-            setGlobalBrands(Array.isArray(brands) ? brands : []);
+
+            if (!response.ok) throw new Error('Falha no Stream');
+            
+            setGlobalBrands([]);
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            if (!reader) return;
+
+            let buffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+
+                for (const part of parts) {
+                    const lines = part.split('\n');
+                    let eventType = 'message';
+                    let eventData = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.substring(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            eventData = line.substring(6).trim();
+                        }
+                    }
+
+                    if (eventData) {
+                        try {
+                            const data = JSON.parse(eventData);
+                            if (eventType === 'progress') {
+                                setStreamMessage(data.message || '');
+                                if (data.found !== undefined) setStreamFound(data.found);
+                                if (data.checked !== undefined) setStreamChecked(data.checked);
+                            } else if (eventType === 'complete') {
+                                setGlobalBrands(data.results || []);
+                                setStreamChecked(data.totalChecked || streamChecked);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
         } catch (err) {
-            console.error("Erro marcas globais", err);
+            console.error("Erro marcas globais stream", err);
             setGlobalBrands([]); 
         } finally {
             setLoadingGlobalBrands(false);
+            setStreamMessage('');
         }
     };
 
@@ -492,15 +543,48 @@ export default function TransparencySearchPage() {
                             {/* Right Column: Global Stats */}
                             <div className="lg:w-80 shrink-0 space-y-6">
                                 {loadingGlobalBrands ? (
-                                    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4 animate-pulse">
-                                        <div className="flex items-center gap-2">
-                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                            <h3 className="text-sm font-bold uppercase">Analisando Mercado...</h3>
+                                    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-5 animate-in fade-in zoom-in duration-500">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative flex items-center justify-center">
+                                                <div className="absolute w-8 h-8 rounded-full border-t-2 border-primary animate-spin"></div>
+                                                <div className="absolute w-6 h-6 rounded-full border-r-2 border-primary/50 animate-spin -rotate-45" style={{ animationDuration: '1.5s' }}></div>
+                                                <Zap className="h-4 w-4 text-primary animate-pulse" />
+                                            </div>
+                                            <h3 className="text-sm font-bold uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+                                                Deep Intelligence
+                                            </h3>
                                         </div>
-                                        <div className="space-y-3">
-                                            {[1,2,3,4,5].map(i => <div key={i} className="h-6 bg-muted rounded animate-pulse" />)}
+                                        
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between text-[11px] font-black uppercase text-muted-foreground border-b border-border pb-2">
+                                                <span>Progresso da Interrogacão</span>
+                                                <span className="text-primary">{Math.round((streamFound / 30) * 100)}%</span>
+                                            </div>
+                                            
+                                            <div className="h-2 w-full bg-muted/30 rounded-full overflow-hidden border border-border/20">
+                                                <motion.div 
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${Math.min((streamFound / 30) * 100, 100)}%` }}
+                                                    className="h-full bg-gradient-to-r from-primary/80 to-primary"
+                                                />
+                                            </div>
+                                            
+                                            <div className="space-y-2 pt-2">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-muted-foreground font-medium flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> Marcas extraídas:</span>
+                                                    <span className="font-bold text-emerald-500">{streamFound} / 30</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-muted-foreground font-medium flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div> Lotes vasculhados:</span>
+                                                    <span className="font-bold">{streamChecked} docs</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="p-3 bg-muted/20 border border-primary/20 rounded-lg flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                <div className="w-1 h-3 bg-primary animate-pulse rounded-full"></div>
+                                                <span className="font-medium">{streamMessage || 'Aguardando fluxo...'}</span>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground italic">Consultando os 50 processos mais recentes para extrair marcas...</p>
                                     </div>
                                 ) : (globalBrands.length > 0) ? (
                                     <div className="bg-card border border-border rounded-2xl p-5 shadow-sm animate-in fade-in slide-in-from-right-4">
@@ -538,14 +622,14 @@ export default function TransparencySearchPage() {
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">Deep Intelligence</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                                                Análise em tempo real dos <strong>50 processos mais recentes</strong> concluídos para este item (Todos os Âmbitos).
+                                                Análise gerada em tempo real rastreando processos licitatórios históricos na lupa (PNCP) em busca das top marcas do mercado.
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="bg-card/50 border border-border/50 border-dashed rounded-2xl p-8 text-center space-y-3">
                                         <Info className="h-8 w-8 text-muted-foreground/30 mx-auto" />
-                                        <p className="text-xs text-muted-foreground font-medium italic">Nenhuma marca consolidada nos 50 processos recentes.</p>
+                                        <p className="text-xs text-muted-foreground font-medium italic">Nenhuma marca foi consolidada ou encontrada nas dezenas de processos vasculhados.</p>
                                     </div>
                                 )}
                                 
