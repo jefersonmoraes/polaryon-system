@@ -24,7 +24,8 @@ const COMMON_BRANDS = [
     'INTEL', 'AMD', 'EPSON', 'CANON', 'LOGITECH', 'CISCO', 'ARUBA', 'HUAWEI', 'FURUKAWA',
     'MICROSOFT', 'ADOBE', 'ORACLE', 'SAP', 'TOTVS', 'PHILIPS', 'BRASTEMP', 'CONSUL', 'ELECTROLUX',
     'ORTOBRAS', 'OTTOBOCK', 'JAGUARIBE', 'PROLIFE', 'VIVER', 'FREEDOM', 'ESTRELA', 'FISIO', 'CARCI',
-    'MERCÚRIO', 'INDIANA', 'INVACARE', 'DRIVE', 'SUNRISE', 'VITAL', 'LUMINA', 'MOBILITY', 'PERMORABIL'
+    'MERCÚRIO', 'INDIANA', 'INVACARE', 'DRIVE', 'SUNRISE', 'VITAL', 'LUMINA', 'MOBILITY', 'PERMORABIL',
+    'CAMIL', 'TIO JOÃO', 'NAMORADO', 'KODILAR', 'NESTLE', 'PILÃO', 'KIMBERLY', 'PIRACANJUBA', 'ITAMBÉ'
 ];
 
 const extractBrand = (text: string): string => {
@@ -434,8 +435,8 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                         );
                         
                         // URL de Busca Estável (Evita 404 de IDs internos e atalhos quebrados)
-                        // Vai direto para o mecanismo de busca de despesas usando o CNPJ do vendedor
-                        empenhoUrl = `https://portaldatransparencia.gov.br/busca/despesas?termo=${targetNi}`;
+                        // Vai direto para o mecanismo de busca geral usando o CNPJ do vendedor (Rota 200 OK)
+                        empenhoUrl = `https://portaldatransparencia.gov.br/busca?termo=${targetNi}`;
 
                         if (matchEmpenho) {
                             empenhoDados = {
