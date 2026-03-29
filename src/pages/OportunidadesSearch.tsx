@@ -52,35 +52,101 @@ const ESTADOS_MAP: Record<string, string> = {
     'SE': 'Sergipe', 'TO': 'Tocantins'
 };
 
+// --- Funções Auxiliares Globais ---
+const formatDate = (dateString?: string, showTime = false) => {
+    if (!dateString) return '-';
+    try {
+        const d = new Date(dateString);
+        return showTime ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : d.toLocaleDateString('pt-BR');
+    } catch {
+        return dateString;
+    }
+};
+
+const formatCurrency = (val?: number) => {
+    if (val === undefined || val === null) return 'N/I';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+};
+
+// Cache Global de Memória para detalhes do PNCP (evita requisições duplicadas entre componentes de data/valor)
+const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = {};
+
 const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     const [dates, setDates] = useState<{ inicio?: string; fim?: string; loading: boolean }>({ loading: true });
 
     useEffect(() => {
         let isMounted = true;
-        const fetchDates = async () => {
-            const ano = (item as any).ano_compra || (item as any).ano;
-            const seq = (item as any).numero_compra || (item as any).numero_sequencial;
-            if (!item.orgao_cnpj || !ano || !seq) {
+        async function load() {
+            const orgaoCnpj = item.orgao_cnpj;
+            const ano = (item as any).ano_compra || (item as any).ano || (item as any).numero_controle_pncp?.split('-')[1];
+            const seq = (item as any).numero_compra || (item as any).numero_sequencial || (item as any).numero_controle_pncp?.split('-')[2];
+
+            if (!orgaoCnpj || !ano || !seq) {
                 if (isMounted) setDates({ loading: false });
                 return;
             }
-            try {
-                // A Rota /pncp/v1 foi desativada e redireciona (301) sem CORS. A Rota /consulta/v1/ é a oficial aberta.
-                const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${item.orgao_cnpj}/compras/${ano}/${seq}`);
-                if (!res.ok) throw new Error();
-                const detail = await res.json();
+
+            const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+            
+            if (pncpDetailCache[cacheKey]?.data) {
                 if (isMounted) {
                     setDates({
-                        inicio: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
-                        fim: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+                        inicio: pncpDetailCache[cacheKey].data.start,
+                        fim: pncpDetailCache[cacheKey].data.end,
                         loading: false
                     });
                 }
-            } catch (e) {
-                if (isMounted) setDates({ loading: false });
+                return;
             }
-        };
-        fetchDates();
+
+            if (pncpDetailCache[cacheKey]?.promise) {
+                const data = await pncpDetailCache[cacheKey].promise;
+                if (isMounted && data) {
+                    setDates({
+                        inicio: data.start,
+                        fim: data.end,
+                        loading: false
+                    });
+                } else if (isMounted) {
+                    setDates({ loading: false });
+                }
+                return;
+            }
+
+            const fetchPromise = (async () => {
+                try {
+                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${orgaoCnpj}/compras/${ano}/${seq}`);
+                    if (res.ok) {
+                        const detail = await res.json();
+                        const result = {
+                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
+                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+                            valor: detail.valorTotalEstimado || detail.valor_global,
+                            raw: detail // Armazena o objeto completo para o modal
+                        };
+                        pncpDetailCache[cacheKey].data = result;
+                        return result;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch PNCP details", e);
+                }
+                return null;
+            })();
+
+            pncpDetailCache[cacheKey] = { promise: fetchPromise };
+            const finalData = await fetchPromise;
+            if (isMounted && finalData) {
+                setDates({
+                    inicio: finalData.start,
+                    fim: finalData.end,
+                    loading: false
+                });
+            } else if (isMounted) {
+                setDates({ loading: false });
+            }
+        }
+
+        load();
         return () => { isMounted = false; };
     }, [item.orgao_cnpj, item.numero_controle_pncp]);
 
@@ -102,6 +168,90 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
                 {dates.fim ? new Date(dates.fim).toLocaleDateString('pt-BR') : '-'}
             </td>
         </>
+    );
+});
+
+// Novo Componente para buscar e renderizar o Valor Estimado (Lazy Load)
+const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?: boolean }) => {
+    const [valor, setValor] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        async function load() {
+            const orgaoCnpj = item.orgao_cnpj;
+            const ano = (item as any).ano_compra || (item as any).ano || (item as any).numero_controle_pncp?.split('-')[1];
+            const seq = (item as any).numero_compra || (item as any).numero_sequencial || (item as any).numero_controle_pncp?.split('-')[2];
+
+            if (!orgaoCnpj || !ano || !seq) {
+                if (isMounted) setLoading(false);
+                return;
+            }
+
+            const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+            
+            if (pncpDetailCache[cacheKey]?.data) {
+                if (isMounted) {
+                    setValor(pncpDetailCache[cacheKey].data.valor);
+                    setLoading(false);
+                }
+                return;
+            }
+
+            if (pncpDetailCache[cacheKey]?.promise) {
+                const data = await pncpDetailCache[cacheKey].promise;
+                if (isMounted) {
+                    setValor(data?.valor || null);
+                    setLoading(false);
+                }
+                return;
+            }
+
+            const fetchPromise = (async () => {
+                try {
+                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${orgaoCnpj}/compras/${ano}/${seq}`);
+                    if (res.ok) {
+                        const detail = await res.json();
+                        const result = {
+                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
+                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+                            valor: detail.valorTotalEstimado || detail.valor_global,
+                            raw: detail
+                        };
+                        pncpDetailCache[cacheKey].data = result;
+                        return result;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch PNCP value", e);
+                }
+                return null;
+            })();
+
+            pncpDetailCache[cacheKey] = { promise: fetchPromise };
+            const finalData = await fetchPromise;
+            if (isMounted) {
+                setValor(finalData?.valor || null);
+                setLoading(false);
+            }
+        }
+
+        load();
+        return () => { isMounted = false; };
+    }, [item.orgao_cnpj, item.numero_controle_pncp]);
+
+    if (isMobile) {
+        return (
+            <div className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shadow-sm ml-auto">
+                <DollarSign className="h-2.5 w-2.5" />
+                {loading ? <Loader2 className="h-2.5 w-2.5 animate-spin opacity-50" /> : formatCurrency(valor)}
+            </div>
+        );
+    }
+
+    return (
+        <td className="px-4 py-3.5 align-top font-black text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto opacity-30" /> : formatCurrency(valor)}
+        </td>
     );
 });
 
@@ -196,10 +346,24 @@ export default function OportunidadesSearch() {
             // 0. Fetch Main Purchase Detail (V1) - Para pegar Valores Estimados que faltam na busca
             setLoadingDetail(true);
             try {
-                const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                if (res.ok) {
-                    const detail = await res.json();
-                    setItemDetail(detail);
+                const cacheKey = `${cnpj}-${ano}-${seq}`;
+                if (pncpDetailCache[cacheKey]?.data?.raw) {
+                    setItemDetail(pncpDetailCache[cacheKey].data.raw);
+                    setLoadingDetail(false);
+                } else {
+                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (res.ok) {
+                        const detail = await res.json();
+                        setItemDetail(detail);
+                        // Atualiza o cache para futuras consultas se ainda não existir
+                        if (!pncpDetailCache[cacheKey]) pncpDetailCache[cacheKey] = {};
+                        pncpDetailCache[cacheKey].data = {
+                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
+                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+                            valor: detail.valorTotalEstimado || detail.valor_global,
+                            raw: detail
+                        };
+                    }
                 }
             } catch (e) {
                 console.error("Failed to fetch purchase detail", e);
@@ -480,27 +644,12 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         fetchOportunidades(1);
     }, [fetchOportunidades]);
 
-    const formatDate = useCallback((dateString?: string, showTime = false) => {
-        if (!dateString) return '-';
-        try {
-            const d = new Date(dateString);
-            return showTime ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : d.toLocaleDateString('pt-BR');
-        } catch {
-            return dateString;
-        }
-    }, []);
-
     const getStatusStyle = useCallback((situacao: string) => {
         const lower = situacao.toLowerCase();
         if (lower.includes('divulgada')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
         if (lower.includes('suspensa')) return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
         if (lower.includes('encerrada') || lower.includes('revogada')) return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
         return 'bg-secondary text-foreground border-border';
-    }, []);
-
-    const formatCurrency = useCallback((val?: number) => {
-        if (val === undefined || val === null) return 'N/I';
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     }, []);
 
     const handlePageInputSubmit = () => {
@@ -761,9 +910,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                 {formatDate(item.data_publicacao_pncp)}
                                             </td>
                                             <ProposalDates item={item} />
-                                            <td className="px-4 py-3.5 align-top font-black text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
-                                                {formatCurrency(item.valorTotalEstimado || item.valor_global)}
-                                            </td>
+                                            <PncpValue item={item} />
                                             <td className="px-4 py-2.5 whitespace-normal">
                                                 <div className="flex flex-col gap-1 max-w-[500px]">
                                                     <span className="font-semibold text-foreground text-xs leading-tight tracking-tight uppercase">
@@ -812,10 +959,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                             <Calendar className="h-3 w-3" />
                                             {formatDate(item.data_publicacao_pncp)}
                                         </div>
-                                        <div className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shadow-sm ml-auto">
-                                            <DollarSign className="h-2.5 w-2.5" />
-                                            {formatCurrency(item.valorTotalEstimado || item.valor_global)}
-                                        </div>
+                                        <PncpValue item={item} isMobile />
                                     </div>
 
                                     <div className="space-y-2">
