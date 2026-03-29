@@ -1,8 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu, ChevronDown, MoreVertical, Target, Gavel, Link2 } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Plus, LayoutDashboard, LayoutGrid, ZoomIn, ZoomOut, Archive, Trash2, Briefcase, Truck, Calculator, Building2, FileText, PiggyBank, Menu, ChevronDown, MoreVertical, Target, Gavel, Link2, RefreshCw, LogOut } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useAuthStore } from '@/store/auth-store';
+import { toast } from 'sonner';
 import logo from '@/assets/logo-polaryon.svg';
 import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
@@ -12,9 +13,13 @@ import UserProfile from './UserProfile';
 import { AnimatePresence } from 'framer-motion';
 
 const AppHeader = () => {
-  const { folders, boards, lists, cards, companies, budgets, notifications, markNotificationRead, markAllNotificationsRead, clearNotifications } = useKanbanStore();
+  const { 
+    folders, boards, lists, cards, companies, budgets, notifications, 
+    markNotificationRead, markAllNotificationsRead, clearNotifications,
+    fetchKanbanData
+  } = useKanbanStore();
   const { isDark, toggleTheme, uiZoom, setUiZoom, setMobileMenuOpen } = useUserPrefsStore();
-  const { currentUser, hasScreenAccess } = useAuthStore();
+  const { currentUser, hasScreenAccess, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -24,6 +29,24 @@ const AppHeader = () => {
   const [showGlobalArchiveViewer, setShowGlobalArchiveViewer] = useState<'archived' | 'trashed' | null>(null);
   const [showDocsArchiveViewer, setShowDocsArchiveViewer] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await fetchKanbanData();
+    } catch (error) {
+    } finally {
+      setIsSyncing(false);
+      setShowMoreActions(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setShowMoreActions(false);
+    logout();
+    toast.info("Você saiu do sistema.");
+  };
 
   // Filter notifications for the current user
   const userNotifications = notifications.filter(n => !n.userId || n.userId === currentUser?.id);
@@ -468,6 +491,24 @@ const AppHeader = () => {
                 <span className="font-medium">Tema {isDark ? 'Claro' : 'Escuro'}</span>
                 {isDark ? <Sun className="h-4 w-4 text-yellow-500" /> : <Moon className="h-4 w-4 text-slate-700" />}
               </button>
+
+              <div className="border-t border-border mt-1 pt-1 space-y-1">
+                <button 
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-primary rounded-md hover:bg-primary/10 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Sincronizar Dados
+                </button>
+                
+                <button 
+                  onClick={handleLogout}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-destructive rounded-md hover:bg-destructive/10 transition-colors flex items-center justify-between"
+                >
+                  <span>Sair do Sistema</span>
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
 
             </div>
           </>
