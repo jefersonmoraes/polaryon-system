@@ -440,6 +440,25 @@ export default function OportunidadesSearch() {
     const [exportListId, setExportListId] = useState('');
     const [exportErrors, setExportErrors] = useState<Record<string, boolean>>({});
 
+    // Persistence for Export to Kanban
+    useEffect(() => {
+        if (folders.length === 0) return;
+        
+        const lastFolder = localStorage.getItem('POLARYON_LAST_EXPORT_FOLDER');
+        const lastBoard = localStorage.getItem('POLARYON_LAST_EXPORT_BOARD');
+        const lastList = localStorage.getItem('POLARYON_LAST_EXPORT_LIST');
+
+        if (lastFolder && folders.some(f => f.id === lastFolder)) {
+            setExportFolderId(lastFolder);
+            if (lastBoard && boards.some(b => b.id === lastBoard && b.folderId === lastFolder)) {
+                setExportBoardId(lastBoard);
+                if (lastList && lists.some(l => l.id === lastList && l.boardId === lastBoard)) {
+                    setExportListId(lastList);
+                }
+            }
+        }
+    }, [folders.length, boards.length, lists.length]);
+
     const handleExportToKanban = () => {
         const newErrors: Record<string, boolean> = {};
         if (!exportFolderId) newErrors.folder = true;
@@ -560,6 +579,11 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
         // 3. Persist to DB
         api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
+
+        // 4. Save persistence preferences
+        localStorage.setItem('POLARYON_LAST_EXPORT_FOLDER', exportFolderId);
+        localStorage.setItem('POLARYON_LAST_EXPORT_BOARD', exportBoardId);
+        localStorage.setItem('POLARYON_LAST_EXPORT_LIST', exportListId);
 
         toast.success("Oportunidade exportada! Cartão criado no Kanban.");
         setIsExportDialogOpen(false);

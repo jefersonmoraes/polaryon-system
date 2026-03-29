@@ -663,14 +663,37 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       }
       case 'budgets': {
         const linkedBudgets = budgets.filter(b => b.cardId === cardId && !b.trashed);
-        if (linkedBudgets.length === 0) return null;
 
         return (
-          <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
-              <Calculator className="h-3.5 w-3.5" /> Orçamentos Vinculados
-            </label>
-            <div className="space-y-2">
+          <div key={section} className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Calculator className="h-3.5 w-3.5" /> Orçamentos Vinculados
+              </label>
+              {canEdit && (
+                <button 
+                  onClick={() => setIsBudgetModalOpen(true)}
+                  className="text-[10px] font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="h-3 w-3" /> ADICIONAR
+                </button>
+              )}
+            </div>
+            
+            {linkedBudgets.length === 0 ? (
+              <div className="text-center py-6 bg-secondary/30 rounded-lg border border-dashed border-border">
+                <p className="text-[11px] text-muted-foreground italic">Nenhum orçamento vinculado</p>
+                {canEdit && (
+                  <button 
+                    onClick={() => setIsBudgetModalOpen(true)}
+                    className="mt-2 text-[10px] font-bold text-primary hover:underline"
+                  >
+                    Criar primeiro orçamento
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
               {linkedBudgets.map(budget => {
                 const isApproved = budget.status === 'Aprovado';
                 return (
@@ -750,9 +773,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 );
               })}
             </div>
-          </div>
-        );
-      }
+          )}
+        </div>
+      );
+    }
       case 'checklist': {
         return (
           <div key={section}>
@@ -1079,6 +1103,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       {isBudgetModalOpen && (
         <BudgetModal
           budget={selectedBudgetToEdit}
+          initialCardId={cardId}
           onClose={() => {
             setIsBudgetModalOpen(false);
             setSelectedBudgetToEdit(undefined);

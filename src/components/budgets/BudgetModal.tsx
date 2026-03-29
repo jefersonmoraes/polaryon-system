@@ -14,6 +14,7 @@ import { cn, getFaviconUrl } from '@/lib/utils';
 interface BudgetModalProps {
     budget?: Budget;
     onClose: () => void;
+    initialCardId?: string;
 }
 
 const statusColors: Record<BudgetStatus, string> = {
@@ -1349,7 +1350,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     );
 };
 
-const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
+const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
     const { 
         addBudget, 
         updateBudget, 
@@ -1442,7 +1443,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
             lastSavedDataRef.current = getRelevantData(initialBudget);
         } else if (!initialBudget?.id && !activeBudgetId) {
             const newId = crypto.randomUUID();
-            const initialData = {
+            const initialData: any = {
                 title: 'Novo Orçamento',
                 address: '',
                 deliveryTime: '',
@@ -1452,6 +1453,17 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 totalValue: 0,
                 createdAt: new Date().toISOString()
             };
+
+            // Pre-fill cardId if provided
+            if (initialCardId) {
+                initialData.cardId = initialCardId;
+                const card = cards.find(c => c.id === initialCardId);
+                if (card) {
+                    initialData.title = `Orç. [${card.title}]`;
+                    if (card.deliveryAddress) initialData.address = card.deliveryAddress;
+                    if (card.deliveryTime) initialData.deliveryTime = card.deliveryTime;
+                }
+            }
             
             setFormData({ ...initialData, id: newId } as unknown as Budget);
             setActiveBudgetId(newId);
@@ -1463,7 +1475,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 addBudget({ ...initialData, id: newId });
             }, 0);
         }
-    }, [budget?.id, activeBudgetId, addBudget]);
+    }, [budget?.id, activeBudgetId, addBudget, initialCardId, cards]);
 
     // Track latest formData for unmount save
     const formDataRef = useRef(formData);
@@ -1645,6 +1657,36 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         dirtyFieldsRef.current.add(field as string);
         setFormData(prev => ({ ...prev, [field]: value }));
     };
+
+    const syncWithCard = useCallback((cardId: string, force: boolean = false) => {
+        const card = cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        setFormData(prev => {
+            const updates: any = {};
+            let hasChanges = false;
+
+            // Sync address if empty or forced
+            if ((!prev.address || force) && card.deliveryAddress) {
+                updates.address = card.deliveryAddress;
+                dirtyFieldsRef.current.add('address');
+                hasChanges = true;
+            }
+            
+            // Sync deliveryTime if empty or forced
+            if ((!prev.deliveryTime || force) && card.deliveryTime) {
+                updates.deliveryTime = card.deliveryTime;
+                dirtyFieldsRef.current.add('deliveryTime');
+                hasChanges = true;
+            }
+
+            if (hasChanges) {
+                isDirtyRef.current = true;
+                return { ...prev, ...updates };
+            }
+            return prev;
+        });
+    }, [cards]);
 
     // Final Unmount Save
     useEffect(() => {
@@ -2620,6 +2662,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                                     onClick={() => {
                                                                         handleUpdateField('cardId', c.id);
                                                                         handleUpdateField('title', c.title);
+                                                                        syncWithCard(c.id);
                                                                         setIsCardDropdownOpen(false);
                                                                     }}
                                                                     className={`w-full text-left flex flex-col px-3 py-2 rounded-md transition-colors hover:bg-secondary ${formData.cardId === c.id ? 'bg-primary/10 text-primary font-medium' : 'text-sm'}`}
