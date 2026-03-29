@@ -6,7 +6,7 @@ import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company
 import {
     X, Plus, Calculator, Trash2, Building2, Calendar, FileText,
     CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp, MapPin, DollarSign, Percent, Star, AlertTriangle,
-    Phone, Mail, MessageCircle, ExternalLink
+    Phone, Mail, MessageCircle, ExternalLink, ClipboardList, Package, Info, ChevronLeft
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { cn, getFaviconUrl } from '@/lib/utils';
@@ -433,8 +433,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-border/50 sm:border-0">
-                    <div className="text-right flex flex-col items-end mr-4 border-r border-border/50 pr-4">
+                <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-6 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-border/50 sm:border-0">
+                    <div className="text-right flex flex-col items-end sm:mr-4 sm:border-r sm:border-border/50 sm:pr-4">
                         <span className="text-[10px] uppercase font-bold text-muted-foreground block">Custo Fornecedor</span>
                         <span className="text-sm font-mono font-medium text-muted-foreground">{formatCurrency(item.totalPrice || 0)}</span>
                         {(() => {
@@ -480,19 +480,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                                     return (
                                         <div
-                                            className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${colorClass}`}
+                                            className={`text-[9px] sm:text-[10px] uppercase font-bold px-1.5 sm:px-2 py-0.5 rounded border flex items-center gap-1 shrink-0 ${colorClass}`}
                                             title={isLoss ? "PREJUÍZO TRIBUTÁRIO DETECTADO!" : "Margem de Lucro Líquida Real (Após Impostos)"}
                                         >
                                             {isLoss ? <AlertTriangle className="h-3 w-3" /> : null}
-                                            <span>
-                                                {isLoss ? 'PREJUÍZO: ' : 'LUCRO: '} {formatCurrency(itemProfit)} ({netMargin.toFixed(1)}%)
+                                            <span className="truncate max-w-[120px] sm:max-w-none">
+                                                {isLoss ? 'PREJ' : 'LUCRO'}: {formatCurrency(itemProfit)}
                                             </span>
                                         </div>
                                     );
                                 }
                                 return null;
                             })()}
-                            <span className="text-base font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">{formatCurrency(item.finalSellingPrice || item.totalPrice || 0)}</span>
+                            <span className="text-sm sm:text-base font-mono font-bold text-primary bg-primary/10 px-1.5 sm:px-2 py-0.5 rounded shrink-0">{formatCurrency(item.finalSellingPrice || item.totalPrice || 0)}</span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -1380,6 +1380,8 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     });
 
     const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
+    const [mobileTab, setMobileTab] = useState<'details' | 'supplier' | 'transporter'>('details');
+
 
     const allowedCards = cards.filter(c => {
         if (c.archived || c.trashed) return false;
@@ -1860,14 +1862,173 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                 </div>
 
                 {/* Content Area with Sidebars */}
-                <div className="flex-1 flex overflow-hidden">
-                    {/* Left Sidebar (Supplier) */}
-                    {expandedQuoteId && (
-                        <div className="fixed lg:relative inset-y-0 left-0 w-full sm:w-80 lg:w-96 border-r border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_-10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in slide-in-from-left-8">
-                            <div className="flex items-center justify-between lg:hidden mb-2">
+                <div className="flex-1 flex overflow-hidden relative">
+                    {/* Panel de Detalhes da Cotação (Mobile Only) */}
+                    {expandedQuoteId && mobileTab === 'details' && (
+                        <div className="fixed lg:hidden inset-0 bg-background z-[115] flex flex-col animate-in slide-in-from-bottom-10">
+                            <div className="flex items-center justify-between p-4 border-b border-border bg-card">
                                 <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
-                                    <Building2 className="h-4 w-4" /> Perfil do Fornecedor
+                                    <ClipboardList className="h-4 w-4" /> Detalhes da Cotação
                                 </h3>
+                                <button onClick={() => setExpandedQuoteId(null)} className="p-2 hover:bg-secondary rounded-full">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                                {/* Supplier & Transporter Buttons */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => setMobileTab('supplier')}
+                                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 transition-all group"
+                                    >
+                                        <div className="p-2 rounded-full bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
+                                            <Building2 className="h-6 w-6" />
+                                        </div>
+                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Fornecedor</span>
+                                        <span className="text-[10px] text-primary font-medium truncate w-full text-center px-2">
+                                            {supplierProfile?.nickname || supplierProfile?.nome_fantasia || 'Não selecionado'}
+                                        </span>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => setMobileTab('transporter')}
+                                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 transition-all group"
+                                    >
+                                        <div className="p-2 rounded-full bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform">
+                                            <Truck className="h-6 w-6" />
+                                        </div>
+                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Transportadora</span>
+                                        <span className="text-[10px] text-primary font-medium truncate w-full text-center px-2">
+                                            {transporterProfile?.nickname || transporterProfile?.nome_fantasia || 'FOB / Incluso'}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {/* Financial Summary Mobile */}
+                                <div className="space-y-3 bg-card border border-border rounded-xl p-4 shadow-sm">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5 border-b border-border pb-2">
+                                        <DollarSign className="h-3 w-3" /> Resumo Financeiro
+                                    </h4>
+                                    
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-muted-foreground">Custo Total (Fornecedor)</span>
+                                            <span className="font-mono font-bold">{formatCurrency(expandedQuote?.totalPrice || 0)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-muted-foreground">Valor Estimado Frete</span>
+                                            <span className="font-mono">{formatCurrency(expandedQuote?.freightValue || 0)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-muted-foreground">Total Impostos</span>
+                                            <span className="font-mono text-destructive">{formatCurrency(expandedQuote?.taxValue || 0)}</span>
+                                        </div>
+                                        <div className="pt-2 border-t border-border flex justify-between items-center">
+                                            <span className="text-sm font-bold">PREÇO FINAL DE VENDA</span>
+                                            <span className="text-lg font-mono font-bold text-primary">{formatCurrency(expandedQuote?.finalSellingPrice || 0)}</span>
+                                        </div>
+                                        
+                                        {/* Profit Badge */}
+                                        {(() => {
+                                            const sell = expandedQuote?.finalSellingPrice || expandedQuote?.totalPrice || 0;
+                                            const cost = expandedQuote?.totalPrice || 0;
+                                            const tax = expandedQuote?.taxValue || 0;
+                                            const difal = expandedQuote?.difalValue || 0;
+                                            const profitAmount = sell - cost - tax - difal;
+                                            const profitPercentage = sell > 0 ? (profitAmount / sell) * 100 : 0;
+                                            const isLoss = profitAmount < 0;
+
+                                            if (sell === 0) return null;
+
+                                            return (
+                                                <div className={cn(
+                                                    "w-full py-2 rounded-lg text-center font-bold text-xs uppercase tracking-widest mt-2",
+                                                    !isLoss ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                                                )}>
+                                                    {!isLoss ? 'Lucro Bruto: ' : 'Prejuízo Bruto: '}
+                                                    {profitPercentage.toFixed(1)}% ({formatCurrency(profitAmount)})
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+
+                                {/* Items List Mobile */}
+                                <div className="space-y-3">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
+                                        <Package className="h-3 w-3" /> Itens da Cotação ({expandedQuote?.items?.length || 0})
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {(expandedQuote?.items || []).map((subI: any, sIdx: number) => (
+                                            <div key={subI.id} className="bg-secondary/20 border border-border/50 rounded-lg p-3 flex flex-col gap-1.5">
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-xs font-bold text-foreground">#{sIdx + 1} {subI.description || 'Sem descrição'}</span>
+                                                    <span className="text-xs font-mono font-bold text-primary">{formatCurrency(subI.totalPrice || 0)}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                                                    <span>Qtd: {subI.quantity || 0}</span>
+                                                    <span>Unit: {formatCurrency(subI.unitPrice || 0)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Additional Info */}
+                                <div className="space-y-3 pt-2">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
+                                        <Info className="h-3 w-3" /> Outras Condições
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Pagamento</span>
+                                            <span className="text-[11px] font-medium">{expandedQuote?.paymentTerms || 'Não inf.'}</span>
+                                        </div>
+                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Validade</span>
+                                            <span className="text-[11px] font-medium">{expandedQuote?.validity || 'Não inf.'}</span>
+                                        </div>
+                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Entrega</span>
+                                            <span className="text-[11px] font-medium">{expandedQuote?.deliveryDate ? new Date(expandedQuote.deliveryDate).toLocaleDateString() : 'A combinar'}</span>
+                                        </div>
+                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Garantia</span>
+                                            <span className="text-[11px] font-medium">{expandedQuote?.warrantyDays || 'Padrão'}</span>
+                                        </div>
+                                    </div>
+
+                                    {expandedQuote?.notes && (
+                                        <div className="bg-yellow-500/5 border border-yellow-500/20 p-3 rounded-lg mt-2">
+                                            <span className="block text-[10px] font-bold text-yellow-600 uppercase mb-1">Observações:</span>
+                                            <p className="text-xs text-muted-foreground italic leading-relaxed">{expandedQuote.notes}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t border-border bg-card">
+                                <button 
+                                    onClick={() => setExpandedQuoteId(null)}
+                                    className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform active:scale-[0.98]"
+                                >
+                                    VOLTAR PARA O ORÇAMENTO
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Left Sidebar (Supplier) */}
+                    {expandedQuoteId && (expandedQuoteId !== null && (mobileTab === 'supplier' || window.innerWidth >= 1024)) && (
+                        <div className={cn(
+                            "fixed lg:relative inset-y-0 left-0 w-full sm:w-80 lg:w-96 border-r border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_-10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in",
+                            mobileTab === 'supplier' ? "slide-in-from-left-8" : "hidden lg:flex"
+                        )}>
+                            <div className="flex items-center justify-between lg:hidden mb-2">
+                                <button onClick={() => setMobileTab('details')} className="flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform">
+                                    <ChevronLeft className="h-4 w-4" /> VOLTAR AOS DETALHES
+                                </button>
                                 <button onClick={() => setExpandedQuoteId(null)} className="p-2 hover:bg-secondary rounded-full">
                                     <X className="h-4 w-4" />
                                 </button>
@@ -2223,7 +2384,11 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                     cloneItem={cloneItem}
                                                     formatCurrency={formatCurrency}
                                                     isExpanded={expandedQuoteId === item.id}
-                                                    onToggleExpand={() => setExpandedQuoteId(prev => prev === item.id ? null : item.id)}
+                                                    onToggleExpand={() => {
+                                                        const newVal = expandedQuoteId === item.id ? null : item.id;
+                                                        setExpandedQuoteId(newVal);
+                                                        if (newVal) setMobileTab('details'); // Reset para 'detalhes' ao abrir nova cotação
+                                                    }}
                                                     canEdit={!!canEdit}
                                                 />
                                             ))}
@@ -2237,12 +2402,15 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                     </div>
 
                     {/* Right Sidebar (Transporter) */}
-                    {expandedQuoteId && (
-                        <div className="fixed lg:relative inset-y-0 right-0 w-full sm:w-80 lg:w-96 border-l border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in slide-in-from-right-8">
+                    {expandedQuoteId && (expandedQuoteId !== null && (mobileTab === 'transporter' || window.innerWidth >= 1024)) && (
+                        <div className={cn(
+                            "fixed lg:relative inset-y-0 right-0 w-full sm:w-80 lg:w-96 border-l border-border bg-background lg:bg-secondary/10 p-5 overflow-y-auto custom-scrollbar shrink-0 flex flex-col gap-4 shadow-xl lg:shadow-[inset_10px_0_20px_-20px_rgba(0,0,0,0.1)] z-[110] lg:z-0 transition-all animate-in",
+                            mobileTab === 'transporter' ? "slide-in-from-right-8" : "hidden lg:flex"
+                        )}>
                             <div className="flex items-center justify-between lg:hidden mb-2">
-                                <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
-                                    <Truck className="h-4 w-4" /> Perfil da Transportadora
-                                </h3>
+                                <button onClick={() => setMobileTab('details')} className="flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform">
+                                    <ChevronLeft className="h-4 w-4" /> VOLTAR AOS DETALHES
+                                </button>
                                 <button onClick={() => setExpandedQuoteId(null)} className="p-2 hover:bg-secondary rounded-full">
                                     <X className="h-4 w-4" />
                                 </button>
