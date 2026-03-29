@@ -1399,6 +1399,11 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
     });
 
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    // Mobile Search States
+    const [mobileSupplierSearch, setMobileSupplierSearch] = useState('');
+    const [mobileTransporterSearch, setMobileTransporterSearch] = useState('');
+    const [isChangingSupplier, setIsChangingSupplier] = useState(false);
+    const [isChangingTransporter, setIsChangingTransporter] = useState(false);
     const isDirtyRef = useRef(false);
     const saveStatusRef = useRef<'idle' | 'saving' | 'saved' | 'error'>(saveStatus);
     useEffect(() => {
@@ -1657,6 +1662,36 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
     const filteredCards = allowedCards.filter(c => c.title.toLowerCase().includes(cardSearch.toLowerCase()) ||
         lists.find(l => l.id === c.listId)?.title.toLowerCase().includes(cardSearch.toLowerCase()));
+
+    const mobileFilteredSuppliers = companies.filter(c => {
+        if (c.trashed || c.type !== 'Fornecedor') return false;
+        if (!mobileSupplierSearch) return true;
+        const term = mobileSupplierSearch.toLowerCase();
+        const numericTerm = mobileSupplierSearch.replace(/\D/g, '');
+        return (c.nickname || '').toLowerCase().includes(term) ||
+               (c.nome_fantasia || '').toLowerCase().includes(term) ||
+               c.razao_social.toLowerCase().includes(term) ||
+               (numericTerm !== '' && (c.cnpj || '').includes(numericTerm));
+    }).sort((a,b) => {
+        if (a.isFavorite && !b.isFavorite) return -1;
+        if (!a.isFavorite && b.isFavorite) return 1;
+        return (a.nickname || a.nome_fantasia || a.razao_social).localeCompare(b.nickname || b.nome_fantasia || b.razao_social);
+    });
+
+    const mobileFilteredTransporters = companies.filter(c => {
+        if (c.trashed || c.type !== 'Transportadora') return false;
+        if (!mobileTransporterSearch) return true;
+        const term = mobileTransporterSearch.toLowerCase();
+        const numericTerm = mobileTransporterSearch.replace(/\D/g, '');
+        return (c.nickname || '').toLowerCase().includes(term) ||
+               (c.nome_fantasia || '').toLowerCase().includes(term) ||
+               c.razao_social.toLowerCase().includes(term) ||
+               (numericTerm !== '' && (c.cnpj || '').includes(numericTerm));
+    }).sort((a,b) => {
+        if (a.isFavorite && !b.isFavorite) return -1;
+        if (!a.isFavorite && b.isFavorite) return 1;
+        return (a.nickname || a.nome_fantasia || a.razao_social).localeCompare(b.nickname || b.nome_fantasia || b.razao_social);
+    });
 
     // Refs for clicking outside
     const cardDropdownRef = useRef<HTMLDivElement>(null);
@@ -2035,7 +2070,7 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                 />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block">Markup Desejado (%)</label>
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block">Margem de Lucro (%)</label>
                                                 <input 
                                                     type="number"
                                                     disabled={!canEdit}
@@ -2312,10 +2347,58 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                            <h3 className="hidden lg:flex text-sm font-bold items-center gap-2 border-b border-border pb-2 text-primary">
-                                <Building2 className="h-4 w-4" /> Perfil do Fornecedor
-                            </h3>
-                            {supplierProfile ? (
+                            <div className="flex items-center justify-between border-b border-border pb-2">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
+                                    <Building2 className="h-4 w-4" /> Perfil do Fornecedor
+                                </h3>
+                                <button 
+                                    onClick={() => setIsChangingSupplier(!isChangingSupplier)}
+                                    className="text-[10px] bg-primary/10 text-primary px-2 py-1 rounded-full font-bold uppercase tracking-wider hover:bg-primary/20 transition-all"
+                                >
+                                    {isChangingSupplier ? 'CANCELAR' : 'TROCAR'}
+                                </button>
+                            </div>
+
+                            {isChangingSupplier ? (
+                                <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+                                        <input 
+                                            autoFocus
+                                            value={mobileSupplierSearch}
+                                            onChange={(e) => setMobileSupplierSearch(e.target.value)}
+                                            placeholder="Buscar fornecedor..."
+                                            className="w-full bg-secondary/30 border-none rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                                        {mobileFilteredSuppliers.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-10 italic">Nenhum fornecedor encontrado.</p>
+                                        ) : (
+                                            mobileFilteredSuppliers.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => {
+                                                        updateItemField(expandedQuote?.id as string, 'companyId', c.id);
+                                                        setIsChangingSupplier(false);
+                                                        setMobileSupplierSearch('');
+                                                    }}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/50 transition-all text-left group"
+                                                >
+                                                    {c.customLink && (
+                                                        <img src={getFaviconUrl(c.customLink)} alt="" className="w-8 h-8 rounded shrink-0" />
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <h5 className="text-xs font-bold text-foreground truncate group-hover:text-primary">{c.nickname || c.nome_fantasia || c.razao_social}</h5>
+                                                        <p className="text-[10px] text-muted-foreground truncate">{c.cnpj ? c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : (c.municipio || 'Sem CNPJ')}</p>
+                                                    </div>
+                                                    {c.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            ) : supplierProfile ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-3">
                                         {supplierProfile.customLink && (
@@ -2694,10 +2777,72 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                            <h3 className="hidden lg:flex text-sm font-bold items-center gap-2 border-b border-border pb-2 text-primary">
-                                <Truck className="h-4 w-4" /> Perfil da Transportadora
-                            </h3>
-                            {transporterProfile ? (
+                            <div className="flex items-center justify-between border-b border-border pb-2">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-primary">
+                                    <Truck className="h-4 w-4" /> Perfil Transportadora
+                                </h3>
+                                <button 
+                                    onClick={() => setIsChangingTransporter(!isChangingTransporter)}
+                                    className="text-[10px] bg-primary/10 text-primary px-2 py-1 rounded-full font-bold uppercase tracking-wider hover:bg-primary/20 transition-all"
+                                >
+                                    {isChangingTransporter ? 'CANCELAR' : 'TROCAR'}
+                                </button>
+                            </div>
+
+                            {isChangingTransporter ? (
+                                <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+                                        <input 
+                                            autoFocus
+                                            value={mobileTransporterSearch}
+                                            onChange={(e) => setMobileTransporterSearch(e.target.value)}
+                                            placeholder="Buscar transportadora..."
+                                            className="w-full bg-secondary/30 border-none rounded-lg pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                                        <button
+                                            onClick={() => {
+                                                updateItemField(expandedQuote?.id as string, 'transporterId', undefined);
+                                                setIsChangingTransporter(false);
+                                                setMobileTransporterSearch('');
+                                            }}
+                                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-border bg-secondary/10 hover:border-primary/50 transition-all text-left group"
+                                        >
+                                            <Truck className="h-8 w-8 text-muted-foreground opacity-50" />
+                                            <div className="flex-1 min-w-0">
+                                                <h5 className="text-xs font-bold text-foreground truncate group-hover:text-primary">Nenhuma (Incluso / FOB)</h5>
+                                                <p className="text-[10px] text-muted-foreground">Remover transportadora selecionada</p>
+                                            </div>
+                                        </button>
+                                        {mobileFilteredTransporters.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-10 italic">Nenhuma transportadora encontrada.</p>
+                                        ) : (
+                                            mobileFilteredTransporters.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => {
+                                                        updateItemField(expandedQuote?.id as string, 'transporterId', c.id);
+                                                        setIsChangingTransporter(false);
+                                                        setMobileTransporterSearch('');
+                                                    }}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/50 transition-all text-left group"
+                                                >
+                                                    {c.customLink && (
+                                                        <img src={getFaviconUrl(c.customLink)} alt="" className="w-8 h-8 rounded shrink-0" />
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <h5 className="text-xs font-bold text-foreground truncate group-hover:text-primary">{c.nickname || c.nome_fantasia || c.razao_social}</h5>
+                                                        <p className="text-[10px] text-muted-foreground truncate">{c.cnpj ? c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : (c.municipio || 'Sem CNPJ')}</p>
+                                                    </div>
+                                                    {c.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            ) : transporterProfile ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-3">
                                         {transporterProfile.customLink && (
