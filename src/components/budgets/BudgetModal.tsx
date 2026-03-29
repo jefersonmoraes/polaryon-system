@@ -420,14 +420,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 }
                                 return null;
                             })()}
-                            {supplierName}
+                            <span className="truncate inline-block max-w-[150px] sm:max-w-none">{supplierName}</span>
                         </h4>
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                            <span>{(item.items || []).length} {((item.items || []).length === 1) ? 'item' : 'itens'} na cotação</span>
+                        <p className="text-[10px] text-muted-foreground flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="shrink-0">{(item.items || []).length} {((item.items || []).length === 1) ? 'item' : 'itens'}</span>
                             {item.freightValue ? (
                                 <>
-                                    <span>•</span>
-                                    <span className="text-primary/70 flex items-center gap-0.5"><Truck className="h-3 w-3" /> Frete: R$ {item.freightValue}</span>
+                                    <span className="text-muted-foreground/30">•</span>
+                                    <span className="text-primary/70 flex items-center gap-0.5 shrink-0"><Truck className="h-3 w-3" /> Frete: R$ {item.freightValue}</span>
                                 </>
                             ) : null}
                         </p>
@@ -1706,6 +1706,39 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
     };
 
+    const updateQuoteSubItem = (itemId: string, subId: string, field: string, value: any) => {
+        setFormData(prev => {
+            const newItems = (prev.items || []).map(item => {
+                if (item.id === itemId) {
+                    const newSubItems = (item.items || []).map(sub => {
+                        if (sub.id === subId) {
+                            const updated = { ...sub, [field]: value };
+                            if (field === 'quantity' || field === 'unitPrice') {
+                                updated.totalPrice = Number(updated.quantity || 0) * Number(updated.unitPrice || 0);
+                            }
+                            return updated;
+                        }
+                        return sub;
+                    });
+                    
+                    const totalPrice = newSubItems.reduce((sum, s) => sum + (s.totalPrice || 0), 0);
+                    return { ...item, items: newSubItems, totalPrice };
+                }
+                return item;
+            });
+
+            isDirtyRef.current = true;
+            dirtyFieldsRef.current.add('items');
+            dirtyItemIdsRef.current.add(itemId);
+
+            return {
+                ...prev,
+                items: newItems,
+                totalValue: calculateTotal(newItems)
+            };
+        });
+    };
+
     const updateItemField = (id: string, fieldOrObject: keyof BudgetItem | Partial<BudgetItem>, value?: any, markDirty: boolean = true) => {
         setFormData(prev => {
             if (!canEdit) return prev;
@@ -1905,25 +1938,48 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     </button>
                                 </div>
 
-                                {/* Financial Summary Mobile */}
+                                {/* Financial Summary Mobile (EDITABLE) */}
                                 <div className="space-y-3 bg-card border border-border rounded-xl p-4 shadow-sm">
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5 border-b border-border pb-2">
-                                        <DollarSign className="h-3 w-3" /> Resumo Financeiro
+                                        <DollarSign className="h-3 w-3" /> Resumo Financeiro (Editável)
                                     </h4>
                                     
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="text-muted-foreground">Custo Total (Fornecedor)</span>
                                             <span className="font-mono font-bold">{formatCurrency(expandedQuote?.totalPrice || 0)}</span>
                                         </div>
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="text-muted-foreground">Valor Estimado Frete</span>
-                                            <span className="font-mono">{formatCurrency(expandedQuote?.freightValue || 0)}</span>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block">Vl. Frete (R$)</label>
+                                                <input 
+                                                    type="number"
+                                                    disabled={!canEdit}
+                                                    value={expandedQuote?.freightValue || ''}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'freightValue', Number(e.target.value))}
+                                                    className="w-full bg-secondary/20 border border-border rounded p-2 text-xs font-mono font-bold"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block">Markup Desejado (%)</label>
+                                                <input 
+                                                    type="number"
+                                                    disabled={!canEdit}
+                                                    value={expandedQuote?.profitMargin || ''}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'profitMargin', Number(e.target.value))}
+                                                    className="w-full bg-secondary/20 border border-border rounded p-2 text-xs font-mono font-bold"
+                                                    placeholder="20%"
+                                                />
+                                            </div>
                                         </div>
+
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-muted-foreground">Total Impostos</span>
+                                            <span className="text-muted-foreground">Total Impostos Estimados</span>
                                             <span className="font-mono text-destructive">{formatCurrency(expandedQuote?.taxValue || 0)}</span>
                                         </div>
+
                                         <div className="pt-2 border-t border-border flex justify-between items-center">
                                             <span className="text-sm font-bold">PREÇO FINAL DE VENDA</span>
                                             <span className="text-lg font-mono font-bold text-primary">{formatCurrency(expandedQuote?.finalSellingPrice || 0)}</span>
@@ -1954,57 +2010,109 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                     </div>
                                 </div>
 
-                                {/* Items List Mobile */}
+                                {/* Items List Mobile (EDITABLE) */}
                                 <div className="space-y-3">
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
                                         <Package className="h-3 w-3" /> Itens da Cotação ({expandedQuote?.items?.length || 0})
                                     </h4>
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         {(expandedQuote?.items || []).map((subI: any, sIdx: number) => (
-                                            <div key={subI.id} className="bg-secondary/20 border border-border/50 rounded-lg p-3 flex flex-col gap-1.5">
+                                            <div key={subI.id} className="bg-secondary/20 border border-border/50 rounded-xl p-3 space-y-3">
                                                 <div className="flex justify-between items-start">
                                                     <span className="text-xs font-bold text-foreground">#{sIdx + 1} {subI.description || 'Sem descrição'}</span>
                                                     <span className="text-xs font-mono font-bold text-primary">{formatCurrency(subI.totalPrice || 0)}</span>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                                                    <span>Qtd: {subI.quantity || 0}</span>
-                                                    <span>Unit: {formatCurrency(subI.unitPrice || 0)}</span>
+                                                <div className="grid grid-cols-2 gap-3 pb-1">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] uppercase font-bold text-muted-foreground">Qtd</label>
+                                                        <input 
+                                                            type="number"
+                                                            disabled={!canEdit}
+                                                            value={subI.quantity}
+                                                            onChange={(e) => updateQuoteSubItem(expandedQuote?.id as string, subI.id, 'quantity', Number(e.target.value))}
+                                                            className="w-full bg-background border border-border rounded text-xs p-1.5 font-mono"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] uppercase font-bold text-muted-foreground">P. Unit (R$)</label>
+                                                        <input 
+                                                            type="number"
+                                                            disabled={!canEdit}
+                                                            value={subI.unitPrice}
+                                                            onChange={(e) => updateQuoteSubItem(expandedQuote?.id as string, subI.id, 'unitPrice', Number(e.target.value))}
+                                                            className="w-full bg-background border border-border rounded text-xs p-1.5 font-mono"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* Additional Info */}
-                                <div className="space-y-3 pt-2">
+                                {/* Additional Info (EDITABLE) */}
+                                <div className="space-y-4 pt-2">
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
-                                        <Info className="h-3 w-3" /> Outras Condições
+                                        <Info className="h-3 w-3" /> Outras Condições (Editável)
                                     </h4>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
-                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Pagamento</span>
-                                            <span className="text-[11px] font-medium">{expandedQuote?.paymentTerms || 'Não inf.'}</span>
+                                        <div className="space-y-1">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase">Cond. Pagamento</span>
+                                            <select 
+                                                disabled={!canEdit}
+                                                value={expandedQuote?.paymentTerms || ''}
+                                                onChange={(e) => updateItemField(expandedQuote?.id as string, 'paymentTerms', e.target.value)}
+                                                className="w-full bg-secondary/10 border border-border/40 rounded text-xs p-1.5"
+                                            >
+                                                <option value="">Não inf.</option>
+                                                <option value="À vista">À vista</option>
+                                                <option value="Boleto">Boleto</option>
+                                                <option value="PIX">PIX</option>
+                                                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                                <option value="Transferência Bancária">Transferência</option>
+                                            </select>
                                         </div>
-                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
-                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Validade</span>
-                                            <span className="text-[11px] font-medium">{expandedQuote?.validity || 'Não inf.'}</span>
+                                        <div className="space-y-1">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase">Validade</span>
+                                            <input 
+                                                disabled={!canEdit}
+                                                value={expandedQuote?.validity || ''}
+                                                onChange={(e) => updateItemField(expandedQuote?.id as string, 'validity', e.target.value)}
+                                                className="w-full bg-secondary/10 border border-border/40 rounded text-xs p-1.5"
+                                                placeholder="ex: 15 dias"
+                                            />
                                         </div>
-                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
-                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Entrega</span>
-                                            <span className="text-[11px] font-medium">{expandedQuote?.deliveryDate ? new Date(expandedQuote.deliveryDate).toLocaleDateString() : 'A combinar'}</span>
+                                        <div className="space-y-1">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase">Data Entrega</span>
+                                            <input 
+                                                type="date"
+                                                disabled={!canEdit}
+                                                value={expandedQuote?.deliveryDate || ''}
+                                                onChange={(e) => updateItemField(expandedQuote?.id as string, 'deliveryDate', e.target.value)}
+                                                className="w-full bg-secondary/10 border border-border/40 rounded text-xs p-1.5"
+                                            />
                                         </div>
-                                        <div className="bg-secondary/10 p-2.5 rounded border border-border/40">
-                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Garantia</span>
-                                            <span className="text-[11px] font-medium">{expandedQuote?.warrantyDays || 'Padrão'}</span>
+                                        <div className="space-y-1">
+                                            <span className="block text-[9px] font-bold text-muted-foreground uppercase">Garantia</span>
+                                            <input 
+                                                disabled={!canEdit}
+                                                value={expandedQuote?.warrantyDays || ''}
+                                                onChange={(e) => updateItemField(expandedQuote?.id as string, 'warrantyDays', e.target.value)}
+                                                className="w-full bg-secondary/10 border border-border/40 rounded text-xs p-1.5"
+                                                placeholder="Padrão"
+                                            />
                                         </div>
                                     </div>
 
-                                    {expandedQuote?.notes && (
-                                        <div className="bg-yellow-500/5 border border-yellow-500/20 p-3 rounded-lg mt-2">
-                                            <span className="block text-[10px] font-bold text-yellow-600 uppercase mb-1">Observações:</span>
-                                            <p className="text-xs text-muted-foreground italic leading-relaxed">{expandedQuote.notes}</p>
-                                        </div>
-                                    )}
+                                    <div className="space-y-1 mt-2">
+                                        <span className="block text-[10px] font-bold text-muted-foreground uppercase">Observações:</span>
+                                        <textarea 
+                                            disabled={!canEdit}
+                                            value={expandedQuote?.notes || ''}
+                                            onChange={(e) => updateItemField(expandedQuote?.id as string, 'notes', e.target.value)}
+                                            className="w-full bg-yellow-500/5 border border-yellow-500/20 p-3 rounded-lg text-xs italic leading-relaxed min-h-[80px]"
+                                            placeholder="Adicione observações para esta cotação..."
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
