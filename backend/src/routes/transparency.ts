@@ -31,30 +31,50 @@ const COMMON_BRANDS = [
 const extractBrand = (text: string): string => {
     if (!text) return 'N/A';
     
-    // Heurística de RegEx expandida para extrair a marca oculta no edital de QUALQUER produto
+    // Heurística de RegEx ultra-refinada para extrair a marca oculta no edital de QUALQUER produto
+    // Reorganizado para priorizar termos completos e evitar capturar sufixos como "ICANTE"
     const regexList = [
-        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]+)/i,
-        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]+)/i,
-        /fabricado\s+por\s+([^;,\n\)\/\-]+)/i
+        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,40})/i, // Captura de 2 a 40 chars
+        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,40})/i,
+        /fabricado\s+por\s+([^;,\n\)\/\-]{2,40})/i
+    ];
+
+    const noiseFilter = [
+        'ICANTE', 'ICAÇÃO', 'ICADO', 'ICADA', 'ICADO EM', 'ICADA EM', 
+        'DE', 'DO', 'DAS', 'DOS', 'PARA', 'COM', 'OU', 'E/OU',
+        'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 'N/A', 
+        'DIVERSAS', 'A DEFINIR', 'GENERICA', 'SEM MARCA', 'MARCA'
     ];
 
     for (const rx of regexList) {
         const match = text.match(rx);
         if (match && match[1]) {
             let found = match[1].trim().toUpperCase();
-            // Limpa sufixos genéricos caso tenham vindo acidentalmente ex: "MARCA: NESTLE - MODELO: 3" -> "NESTLE"
-            found = found.split('MODELO')[0].split('REF')[0].split('C/')[0].trim();
             
-            if (found.length > 1 && found.length < 35 && !['NÃO', 'NAO', 'NAO APLICAVEL', 'N/A', 'DIVERSAS', 'NACIONAL', 'GENERICA', 'PROPRIA', 'A DEFINIR', 'SEM MARCA'].includes(found)) {
+            // Limpa sufixos genéricos caso tenham vindo acidentalmente
+            found = found.split(/\b(?:MODELO|REF|LOTE|TIPO|DESCRIÇÃO|ESPEC|CATMAT)\b/i)[0].trim();
+            
+            // Tratamento de "DEVERÁ SER X" ou "A MARCA É X" -> Fica só com X
+            if (found.includes('DEVERÁ SER')) found = found.split('DEVERÁ SER')[1].trim();
+
+            // Validação final: Ignorar se for ruído puro ou pedaço de palavra de sistema
+            const isJunk = noiseFilter.some(noise => found === noise || found.startsWith(noise + ' ') || found.endsWith(' ' + noise));
+            
+            // Ignora se o termo capturado contiver palavras puramente técnicas ou descritivas longas
+            const isDesc = /\b(?:AÇO|POLIPROPILENO|QUALIDADE|EMBALAGEM|LITRO|GRAMAS|UNIDADE|SERVIÇO)\b/i.test(found);
+
+            if (found.length > 1 && found.length < 35 && !isJunk && !isDesc) {
                 return found;
             }
         }
     }
 
-    // Fallback: Busca de força bruta pelas Techs/Med conhecidas
+    // Fallback: Busca de força bruta pelas marcas conhecidas que o RegEx pode ter pulado
     const upperText = text.toUpperCase();
     for (const brand of COMMON_BRANDS) {
-        if (upperText.includes(` ${brand} `) || upperText.includes(` ${brand},`) || upperText.startsWith(`${brand} `) || upperText.endsWith(` ${brand}`)) {
+        // Busca com palavra completa para evitar capturar "INTEL" dentro de "INTELIGENTE"
+        const fullWordRegex = new RegExp(`\\b${brand}\\b`, 'i');
+        if (fullWordRegex.test(upperText)) {
             return brand;
         }
     }
