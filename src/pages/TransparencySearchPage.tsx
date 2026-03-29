@@ -161,15 +161,33 @@ export default function TransparencySearchPage() {
         setStreamFound(0);
         setStreamChecked(0);
         try {
-            const token = localStorage.getItem('token');
-            const baseUrl = import.meta.env.VITE_API_URL || (window.location.hostname.includes('localhost') ? 'http://localhost:3000/api' : 'https://polaryon-api.vercel.app/api');
+            // Unificando lógica de Auth e BaseURL com o api.ts
+            let token = '';
+            const authDataStr = sessionStorage.getItem('polaryon-auth-v2') || localStorage.getItem('polaryon-auth-v2');
+            if (authDataStr) {
+                try {
+                    const state = JSON.parse(authDataStr).state;
+                    token = state?.jwtToken || '';
+                } catch (e) {}
+            }
+
+            const isProd = import.meta.env.PROD;
+            const baseUrl = isProd ? '/api' : `http://localhost:3000/api`;
             const url = `${baseUrl}/transparency/analytics/global-brands-stream?keyword=${encodeURIComponent(term)}`;
             
+            console.log("Iniciando stream em:", url);
+
             const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'text/event-stream'
+                }
             });
 
-            if (!response.ok) throw new Error('Falha no Stream');
+            if (!response.ok) {
+                console.error("Erro Stream HTTP:", response.status);
+                throw new Error('Falha no Stream');
+            }
             
             setGlobalBrands([]);
             const reader = response.body?.getReader();
