@@ -291,11 +291,31 @@ export const useKanbanStore = create<KanbanState>()(
                 useAuditStore.getState().setLogs(res.data.auditLogs);
             }
 
+            // SMART MERGE: Prevent newly added local cards from disappearing during sync
+            // A card is kept if it's already in the server response OR if it's "very recent" (last 2 mins)
+            const serverCards = res.data.cards || [];
+            const localCards = get().cards;
+            const now = new Date().getTime();
+            const TWO_MINUTES = 120000;
+
+            const mergedCards = [...serverCards];
+            
+            // Add local cards that are not in server response yet but are "fresh"
+            localCards.forEach(lc => {
+                const alreadyInServer = serverCards.some(sc => sc.id === lc.id || (lc.pncpId && sc.pncpId === lc.pncpId));
+                const isRecent = lc.createdAt && (now - new Date(lc.createdAt).getTime() < TWO_MINUTES);
+                
+                if (!alreadyInServer && isRecent) {
+                    console.log('kanbanStore - Keeping optimistic card during sync:', lc.title);
+                    mergedCards.unshift(lc);
+                }
+            });
+
             set({
               folders: res.data.folders || [],
               boards: res.data.boards || [],
               lists: res.data.lists || [],
-              cards: res.data.cards || [],
+              cards: mergedCards,
               members: res.data.members || [],
               labels: (res.data.labels && res.data.labels.length > 0) ? res.data.labels : (get().labels.length > 0 ? get().labels : [...DEFAULT_LABELS]),
               companies: res.data.companies || [],

@@ -8,6 +8,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+import { socketService } from '@/lib/socket';
 
 interface PncpItem {
     id: string;
@@ -545,7 +546,6 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
         // 2. Notify other clients via Socket instantly
         try {
-            const socketService = (window as any).socketService;
             if (socketService) {
                 // Emit system_action to make others sync or add
                 socketService.emit('system_action', { 
