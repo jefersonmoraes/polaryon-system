@@ -458,9 +458,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             return null;
                         })()}
                     </div>
-                    <div className="text-right flex flex-col items-end">
-                        <span className="text-[11px] uppercase font-bold text-primary block">Preço Final (Venda)</span>
-                        <div className="flex items-center gap-2">
+                    <div className="text-right flex flex-col items-end max-w-[50%] sm:max-w-none">
+                        <span className="text-[10px] sm:text-[11px] uppercase font-bold text-primary block truncate w-full text-right leading-none mb-1">Preço Final (Venda)</span>
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2">
                             {(() => {
                                 // FIXED BUG: item.totalPrice already includes DIFAL as part of the Effective Cost.
                                 // Subtracting it again would lead to double deduction.
@@ -480,11 +480,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                                     return (
                                         <div
-                                            className={`text-[9px] sm:text-[10px] uppercase font-bold px-1.5 sm:px-2 py-0.5 rounded border flex items-center gap-1 shrink-0 ${colorClass}`}
+                                            className={`text-[8px] sm:text-[10px] uppercase font-bold px-1 sm:px-2 py-0.5 rounded border flex items-center gap-1 shrink-0 ${colorClass}`}
                                             title={isLoss ? "PREJUÍZO TRIBUTÁRIO DETECTADO!" : "Margem de Lucro Líquida Real (Após Impostos)"}
                                         >
-                                            {isLoss ? <AlertTriangle className="h-3 w-3" /> : null}
-                                            <span className="truncate max-w-[120px] sm:max-w-none">
+                                            {isLoss ? <AlertTriangle className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> : null}
+                                            <span className="truncate max-w-[90px] sm:max-w-none">
                                                 {isLoss ? 'PREJ' : 'LUCRO'}: {formatCurrency(itemProfit)}
                                             </span>
                                         </div>
