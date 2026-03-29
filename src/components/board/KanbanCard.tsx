@@ -72,7 +72,7 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
 
       {/* Summary preview */}
       {card.summary && (
-        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1 block">{card.summary}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-4 block">{card.summary}</p>
       )}
 
       {/* Dates & Nearest Milestone */}
@@ -81,7 +81,10 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
           <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${fixDateToBRT(nearestMilestone.dueDate!)! < new Date() ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'}`}>
             <Calendar className="h-3 w-3" />
             <span className="truncate max-w-[120px]">{nearestMilestone.title}</span>
-            <span className="ml-auto flex-shrink-0 opacity-90">{fixDateToBRT(nearestMilestone.dueDate!)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+            <span className="ml-auto flex-shrink-0 opacity-90">
+              {fixDateToBRT(nearestMilestone.dueDate!)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              {nearestMilestone.hour && ` às ${nearestMilestone.hour}`}
+            </span>
           </div>
         )}
 

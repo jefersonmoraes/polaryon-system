@@ -481,8 +481,13 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 [🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(selectedItem)})
         `.trim();
 
+        const estimatedValue = selectedItem.valorTotalEstimado || selectedItem.valor_global || 0;
+        const formattedValue = estimatedValue > 0 
+            ? `  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}` 
+            : '';
+
         const cardParams = {
-            title: selectedItem.title,
+            title: `${selectedItem.title}${formattedValue}`,
             summary: selectedItem.description || selectedItem.title || "Oportunidade importada do GovBr",
             description: descriptionMD,
             listId: exportListId,

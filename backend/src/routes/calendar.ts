@@ -54,16 +54,36 @@ router.post('/sync', async (req: Request, res: Response) => {
         if (eventsToPush && Array.isArray(eventsToPush)) {
             console.log(`🚀 Starting sync of ${eventsToPush.length} events to Google...`);
             for (const ev of eventsToPush) {
-                const startDate = ev.date.split('T')[0];
-                const endD = new Date(startDate);
-                endD.setDate(endD.getDate() + 1);
-                const endDate = endD.toISOString().split('T')[0];
+                const pureDate = ev.date.split('T')[0];
+                
+                let start, end;
+
+                if (ev.time) {
+                    // Combine date and time (format HH:mm)
+                    const [hours, minutes] = ev.time.split(':').map(Number);
+                    const startD = new Date(pureDate + 'T00:00:00');
+                    startD.setHours(hours, minutes, 0);
+                    
+                    const endD = new Date(startD);
+                    endD.setHours(startD.getHours() + 1); // 1 hour duration default
+
+                    start = { dateTime: startD.toISOString() };
+                    end = { dateTime: endD.toISOString() };
+                } else {
+                    // All day event
+                    const endD = new Date(pureDate + 'T00:00:00');
+                    endD.setDate(endD.getDate() + 1);
+                    const endDate = endD.toISOString().split('T')[0];
+
+                    start = { date: pureDate };
+                    end = { date: endDate };
+                }
 
                 await pushEventToGoogle({
                     summary: ev.title,
                     description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento criado pelo sistema de gestão. Não o apague para manter a sincronia.',
-                    start: { date: startDate },
-                    end: { date: endDate }
+                    start,
+                    end
                 }, ev.id);
             }
         }

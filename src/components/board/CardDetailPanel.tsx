@@ -463,8 +463,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   </div>
                   <div className="flex flex-col sm:flex-row items-center gap-3 pl-5">
                     <div className="flex items-center gap-1.5 w-full sm:flex-1">
-                      <span className="text-[10px] text-muted-foreground w-max font-semibold">Data de Entrega:</span>
-                      <input type="date" value={ms.dueDate ? ms.dueDate.split('T')[0] : ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary" />
+                      <span className="text-[10px] text-muted-foreground w-max font-semibold shrink-0">Prazo:</span>
+                      <input type="date" value={ms.dueDate ? ms.dueDate.split('T')[0] : ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary shrink-0" />
+                      <input type="time" value={ms.hour || ''} onChange={(e) => handleUpdateMilestone(ms.id, { hour: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border w-[85px] focus:border-primary shrink-0" />
                     </div>
                   </div>
                 </div>

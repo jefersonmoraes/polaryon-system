@@ -306,6 +306,7 @@ export interface Milestone {
   id: string;
   title: string;
   dueDate?: string;
+  hour?: string; // NOVO: Campo de hora (ex: "14:30")
   completed: boolean;
 }
 
