@@ -387,9 +387,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                 className={`p-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between cursor-pointer hover:bg-secondary/50 transition-colors ${isExpanded ? 'border-b border-border/50 bg-secondary/20' : ''}`}
                 onClick={onToggleExpand}
             >
-                <div className="flex items-center gap-3">
-                    <div>
-                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold flex items-center gap-2 w-full">
                             <button
                                 onClick={(e) => { e.stopPropagation(); updateItem(item.id, 'isFavorite', !item.isFavorite); }}
                                 disabled={!canEdit}
@@ -420,7 +420,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 }
                                 return null;
                             })()}
-                            <span className="truncate inline-block max-w-[150px] sm:max-w-none">{supplierName}</span>
+                            <span className="truncate flex-1">{supplierName}</span>
                         </h4>
                         <p className="text-[10px] text-muted-foreground flex flex-wrap items-center gap-1.5 mt-0.5">
                             <span className="shrink-0">{(item.items || []).length} {((item.items || []).length === 1) ? 'item' : 'itens'}</span>
