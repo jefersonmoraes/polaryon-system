@@ -159,7 +159,16 @@ export const useKanbanStore = create<KanbanState>()(
         pendingSocketActions.forEach(action => {
             const { type, payload, store } = action;
             if (type === 'ADD_CARD') {
-                useKanbanStore.setState(s => s.cards.find(c => c.id === payload.id) ? s : ({ cards: [...s.cards, payload] }));
+                useKanbanStore.setState(s => {
+                    const existingIdx = s.cards.findIndex(c => c.id === payload.id);
+                    if (existingIdx >= 0) {
+                        // Merge payload into existing card (to catch late-synced details)
+                        return {
+                            cards: s.cards.map((c, i) => i === existingIdx ? { ...c, ...payload } : c)
+                        };
+                    }
+                    return { cards: [payload, ...s.cards] };
+                });
             } else if (type === 'MOVE_CARD') {
                 useKanbanStore.setState(s => ({
                     cards: s.cards.map(c => c.id === payload.cardId ? { ...c, listId: payload.toListId, position: payload.newPosition } : c)

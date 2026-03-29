@@ -45,9 +45,10 @@ api.interceptors.response.use(
         }
         
         // Data Loss Protection: Alert user if a write operation failed
-        const isSilentRoute = error.config && error.config.url && ['/calendar/sync', '/calendar/events'].some(url => error.config.url.includes(url));
+        const isCalendarRoute = error.config && error.config.url && ['/calendar/sync', '/calendar/events'].some(url => error.config.url.includes(url));
+        const isUnauthorized = error.response && error.response.status === 401;
         
-        if (error.config && error.config.method && ['post', 'put', 'delete', 'patch'].includes(error.config.method.toLowerCase()) && !isSilentRoute) {
+        if (error.config && error.config.method && ['post', 'put', 'delete', 'patch'].includes(error.config.method.toLowerCase()) && !isCalendarRoute && !isUnauthorized) {
             console.error('Data persistence failure:', error);
             // Dynamic import to avoid circular dependency issues at boot
             import('sonner').then(({ toast }) => {

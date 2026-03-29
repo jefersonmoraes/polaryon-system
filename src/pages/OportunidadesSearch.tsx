@@ -488,6 +488,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             itemAny.valor_global || 
             itemAny.valor_total_estimado || 
             itemAny.valor_estimado || 
+            itemAny.valor_total ||
             0;
 
         const formattedValue = estimatedValue > 0 
@@ -528,25 +529,27 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             attachments: cardAttachments,
             checklist: [],
             timeEntries: [],
+            milestones: [], // Initialize empty milestones array
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
         };
 
-        // Inject Card Optimistically properly via Zustand SetState to trigger LocalStorage Persist
+        // 1. Update LOCAL store instantly (Optimistic)
         useKanbanStore.setState(state => ({
-            cards: [newCardData, ...state.cards] // Add to start of list
+            cards: [newCardData, ...state.cards] 
         }));
 
-        // Notify other clients via Socket
+        // 2. Notify other clients via Socket instantly
         try {
             const socketService = (window as any).socketService;
             if (socketService) {
                 socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_CARD', payload: newCardData });
             }
         } catch (e) {
-            console.error("Socket communication error during export", e);
+            console.error("Socket emit failed:", e);
         }
 
+        // 3. Persist to DB
         api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
 
         toast.success("Oportunidade exportada! Cartão criado no Kanban.");

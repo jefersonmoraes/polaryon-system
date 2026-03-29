@@ -646,7 +646,10 @@ router.get('/sync', async (req: Request, res: Response) => {
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId), // flatten intersection table into string array
             attachments: c.attachments || [],
-            comments: c.comments || []
+            comments: c.comments || [],
+            milestones: c.milestones || [],
+            checklist: c.checklist || [],
+            timeEntries: c.timeEntries || []
         }));
 
         res.json({ 
