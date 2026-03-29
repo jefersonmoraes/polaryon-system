@@ -59,7 +59,7 @@ const AppSidebar = () => {
   const isDocsModule = location.pathname.startsWith('/documentacao');
   const isAdminModule = location.pathname.startsWith('/company') || location.pathname.startsWith('/admin');
   const isAccountingModule = location.pathname.startsWith('/contabil');
-  const isOportunidadesModule = location.pathname.startsWith('/oportunidades');
+  const isOportunidadesModule = location.pathname.startsWith('/oportunidades') || location.pathname.startsWith('/transparencia');
   const isConnectionModule = location.pathname.startsWith('/conexao');
 
   useEffect(() => {
