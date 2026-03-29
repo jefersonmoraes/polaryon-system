@@ -35,7 +35,6 @@ const extractBrand = (text: string): string => {
     const upperText = text.toUpperCase();
 
     // 1. CAMADA DE PRIORIDADE: Marcas Conhecidas (Dicionário de Alta Confiança)
-    // Se a marca oficial estiver no texto (ex: "Caneta BIC"), ela ganha de qualquer RegEx ruidoso.
     for (const brand of COMMON_BRANDS) {
         const fullWordRegex = new RegExp(`\\b${brand}\\b`, 'i');
         if (fullWordRegex.test(upperText)) {
@@ -45,16 +44,20 @@ const extractBrand = (text: string): string => {
 
     // 2. CAMADA DE EXTRAÇÃO (RegEx para Marcas não Tabeladas)
     const regexList = [
-        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,40})/i,
-        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,40})/i,
-        /fabricado\s+por\s+([^;,\n\)\/\-]{2,40})/i
+        /\b(?:marca|fabricante|fabr)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,50})/i,
+        /\bmarca(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,50})/i,
+        /fabricado\s+por\s+([^;,\n\)\/\-]{2,50})/i
     ];
 
-    const junkSuffixes = ['ICANTE', 'ICANTES', 'ICAÇÃO', 'ICACAO', 'ICADO', 'ICADA', 'ICADOS', 'ICADAS'];
-    const systemBlacklist = [
-        'TEXTO', 'PRE', 'COMERCIAL', 'ITEM', 'LOTE', 'ITEM.', 'LOTE.', 'PAGINA', 'EDITAL', 'ANEXO',
-        'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 'N/A', 'DIVERSAS', 'A DEFINIR', 'GENERICA',
-        'SEM MARCA', 'MARCA', 'QUE O', 'DO FABRICANTE', 'DOR', 'ICA'
+    const junkFragments = ['ICACAO', 'ICAÇÃO', 'ICANTE', 'ICADO', 'ICADA', 'ICADOS', 'ICADAS'];
+    const instructionBlacklist = [
+        'REFERENCIA', 'REFERÊNCIA', 'SIMILAR', 'MINIMO', 'MÍNIMO', 'MAXIMO', 'MÁXIMO', 
+        'PRAZO', 'VALIDADE', 'EMBALAGEM', 'CAIXA', 'UNIDADE', 'LEGIVEL', 'LEGÍVEL', 
+        'INDELEVEL', 'INDELÉVEL', 'MERCADO', 'BRASILEIRO', 'CERTIFICADO', 'DEDOS', 
+        'SUJEIRAS', 'LEVES', 'ACORDO', 'DE 01', 'DE 1', 'ITEM', 'LOTE', 'PAGINA', 
+        'EDITAL', 'ANEXO', 'PROPRIO', 'PROPRIA', 'NACIONAL', 'VER EDITAL', 'NAO', 
+        'N/A', 'DIVERSAS', 'A DEFINIR', 'GENERICA', 'SEM MARCA', 'MARCA', 'QUE O', 
+        'DO FABRICANTE', 'DOR', 'ICA', 'DA TV', 'COR', 'AZUL', 'VERDE', 'AMARELA'
     ];
 
     for (const rx of regexList) {
@@ -62,21 +65,32 @@ const extractBrand = (text: string): string => {
         if (match && match[1]) {
             let found = match[1].trim().toUpperCase();
             
-            // Limpeza de sufixos de sistema e pontuação residual
+            // Limpeza radical de caracteres de pontuação e parênteses residuais nas pontas
+            found = found.replace(/^[(\[.\-_: ]+/, '').replace(/[)\]?.\-_: ]+$/, '').trim(); 
+            
+            // Corte em termos de controle técnico
             found = found.split(/\b(?:MODELO|REF|LOTE|TIPO|DESC|ESPEC|CATMAT|PARA|COM|NA|NOS|EM|NA COR)\b/i)[0].trim();
-            found = found.replace(/[.\-_: ]+$/, '').trim(); 
 
-            // --- FILTROS DE QUALIDADE ---
+            // --- FILTROS DE QUALIDADE ATÔMICA ---
             
-            // Descarde por tamanho ou lista negra de sistema
-            if (found.length < 2 || systemBlacklist.includes(found)) continue;
+            // Filtro 1: Tamanho mínimo e frases curtas (Marcas tem até 3-4 palavras no máximo)
+            const words = found.split(/\s+/);
+            if (found.length < 2 || words.length > 4) continue;
             
-            // Descarte por sufixo de fragmento (ICANTE, ICACAO...)
-            if (junkSuffixes.some(suffix => found.endsWith(suffix))) continue;
+            // Filtro 2: Blacklist de instruções técnicas e termos administrativos
+            const hasInstruction = instructionBlacklist.some(term => found.includes(term));
+            if (hasInstruction) continue;
+
+            // Filtro 3: Bloqueio de fragmentos internos (Onde quer que estejam na frase)
+            const hasJunkFragment = junkFragments.some(fragment => found.includes(fragment));
+            if (hasJunkFragment) continue;
             
-            // Descarte por frases descritivas longas ou instruções
+            // Filtro 4: Termos descritivos de material/ação
             if (found.includes('DEVERÁ') || found.includes('DEVERA') || found.includes('CONSULTAR')) continue;
-            if (found.startsWith('EM ') || found.startsWith('NA COR') || found.includes(' RESISTENTE')) continue;
+            if (found.startsWith('EM ') || found.includes(' RESISTENTE') || found.includes(' ALTA ')) continue;
+
+            // Filtro 5: Palavras soltas de sistema
+            if (['DA', 'DE', 'DO', 'O', 'A', 'S'].includes(found)) continue;
 
             // Se restar algo sólido, retorna
             if (found.length > 1 && found.length < 35) {
