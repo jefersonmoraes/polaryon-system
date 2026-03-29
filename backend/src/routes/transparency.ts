@@ -170,8 +170,8 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
             return res.json({ results: [], version: '2026-03-27-refined-v20' });
         }
 
-        // Processamento paralelo leve (chunks de 3)
-        const chunkSize = 3;
+        // Processamento paralelo leve (chunks de 10 para suportar 50 processos sem timeout)
+        const chunkSize = 10;
         for (let i = 0; i < allProcesses.length; i += chunkSize) {
             const chunk = allProcesses.slice(i, i + chunkSize);
             await Promise.all(chunk.map(async (proc: any) => {
@@ -281,9 +281,9 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
                             e.credor?.nome?.includes(winner.nomeRazaoSocialFornecedor?.substring(0, 8))
                         );
                         
-                        // URL de Busca Estável (Evita 404 de IDs internos)
-                        // A URL de lista com parâmetros é 100% garantida de carregar os resultados certos
-                        empenhoUrl = `https://portaldatransparencia.gov.br/despesas/empenhos/lista?faf=true&aberto=false&cnpjOrgao=${cnpj}&cpfCnpj=${targetNi}`;
+                        // URL de Busca Estável (Evita 404 de IDs internos e atalhos quebrados)
+                        // Vai direto para o mecanismo de busca de despesas usando o CNPJ do vendedor
+                        empenhoUrl = `https://portaldatransparencia.gov.br/busca/despesas?termo=${targetNi}`;
 
                         if (matchEmpenho) {
                             empenhoDados = {
