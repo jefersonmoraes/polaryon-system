@@ -1706,6 +1706,65 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
         });
     };
 
+    const addQuoteSubItem = (itemId: string) => {
+        setFormData(prev => {
+            const newItems = (prev.items || []).map(item => {
+                if (item.id === itemId) {
+                    const newItem = {
+                        id: crypto.randomUUID(),
+                        description: '',
+                        quantity: 1,
+                        unitPrice: 0,
+                        totalPrice: 0
+                    };
+                    return { ...item, items: [...(item.items || []), newItem] };
+                }
+                return item;
+            });
+            isDirtyRef.current = true;
+            dirtyFieldsRef.current.add('items');
+            return { ...prev, items: newItems };
+        });
+    };
+
+    const removeQuoteSubItem = (itemId: string, subId: string) => {
+        setFormData(prev => {
+            const newItems = (prev.items || []).map(item => {
+                if (item.id === itemId) {
+                    const newSubItems = (item.items || []).filter(sub => sub.id !== subId);
+                    const totalPrice = newSubItems.reduce((sum, s) => sum + (s.totalPrice || 0), 0);
+                    return { ...item, items: newSubItems, totalPrice };
+                }
+                return item;
+            });
+            isDirtyRef.current = true;
+            dirtyFieldsRef.current.add('items');
+            return { ...prev, items: newItems, totalValue: calculateTotal(newItems) };
+        });
+    };
+
+    const cloneQuoteItem = (id: string) => {
+        const itemToClone = formData.items?.find(i => i.id === id);
+        if (!itemToClone) return;
+
+        const cloned = {
+            ...JSON.parse(JSON.stringify(itemToClone)),
+            id: crypto.randomUUID(),
+            items: itemToClone.items?.map(sub => ({ ...sub, id: crypto.randomUUID() }))
+        };
+
+        setFormData(prev => {
+            const newItems = [...(prev.items || []), cloned];
+            isDirtyRef.current = true;
+            dirtyFieldsRef.current.add('items');
+            return {
+                ...prev,
+                items: newItems,
+                totalValue: calculateTotal(newItems)
+            };
+        });
+    };
+
     const updateQuoteSubItem = (itemId: string, subId: string, field: string, value: any) => {
         setFormData(prev => {
             const newItems = (prev.items || []).map(item => {
@@ -1940,8 +1999,21 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
                                 {/* Financial Summary Mobile (EDITABLE) */}
                                 <div className="space-y-3 bg-card border border-border rounded-xl p-4 shadow-sm">
-                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5 border-b border-border pb-2">
-                                        <DollarSign className="h-3 w-3" /> Resumo Financeiro (Editável)
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center justify-between border-b border-border pb-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <DollarSign className="h-3 w-3" /> Resumo Financeiro
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="flex items-center gap-1.5 cursor-pointer lowercase font-normal italic">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!expandedQuote?.hasCashDiscount}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'hasCashDiscount', e.target.checked)}
+                                                    className="h-3 w-3 accent-green-600"
+                                                />
+                                                Desc. à vista?
+                                            </label>
+                                        </div>
                                     </h4>
                                     
                                     <div className="space-y-3">
@@ -2012,15 +2084,39 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
 
                                 {/* Items List Mobile (EDITABLE) */}
                                 <div className="space-y-3">
-                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
-                                        <Package className="h-3 w-3" /> Itens da Cotação ({expandedQuote?.items?.length || 0})
-                                    </h4>
+                                    <div className="flex items-center justify-between border-b border-border pb-2">
+                                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                                            <Package className="h-3 w-3" /> Itens da Cotação ({expandedQuote?.items?.length || 0})
+                                        </h4>
+                                        {canEdit && (
+                                            <button 
+                                                onClick={() => addQuoteSubItem(expandedQuote?.id as string)}
+                                                className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-md active:scale-95 transition-all flex items-center gap-1"
+                                            >
+                                                <Plus className="h-3 w-3" /> ADICIONAR ITEM
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="space-y-3">
                                         {(expandedQuote?.items || []).map((subI: any, sIdx: number) => (
-                                            <div key={subI.id} className="bg-secondary/20 border border-border/50 rounded-xl p-3 space-y-3">
-                                                <div className="flex justify-between items-start">
-                                                    <span className="text-xs font-bold text-foreground">#{sIdx + 1} {subI.description || 'Sem descrição'}</span>
-                                                    <span className="text-xs font-mono font-bold text-primary">{formatCurrency(subI.totalPrice || 0)}</span>
+                                            <div key={subI.id} className="bg-secondary/20 border border-border/50 rounded-xl p-3 space-y-3 relative group">
+                                                {canEdit && (
+                                                    <button 
+                                                        onClick={() => removeQuoteSubItem(expandedQuote?.id as string, subI.id)}
+                                                        className="absolute top-2 right-2 p-1.5 text-destructive rounded hover:bg-destructive/10"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                                <div className="space-y-1 pr-6">
+                                                    <label className="text-[9px] uppercase font-bold text-muted-foreground">Descrição do Item #{sIdx + 1}</label>
+                                                    <input 
+                                                        disabled={!canEdit}
+                                                        value={subI.description}
+                                                        onChange={(e) => updateQuoteSubItem(expandedQuote?.id as string, subI.id, 'description', e.target.value)}
+                                                        className="w-full bg-background border border-border rounded text-xs p-1.5"
+                                                        placeholder="Ex: Nome do produto..."
+                                                    />
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-3 pb-1">
                                                     <div className="space-y-1">
@@ -2052,8 +2148,9 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                 {/* Additional Info (EDITABLE) */}
                                 <div className="space-y-4 pt-2">
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border pb-2">
-                                        <Info className="h-3 w-3" /> Outras Condições (Editável)
+                                        <Info className="h-3 w-3" /> Condições Gerais
                                     </h4>
+                                    
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <span className="block text-[9px] font-bold text-muted-foreground uppercase">Cond. Pagamento</span>
@@ -2081,6 +2178,25 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                                 placeholder="ex: 15 dias"
                                             />
                                         </div>
+                                    </div>
+
+                                    {/* Parcelas Condicionais */}
+                                    {['Cartão de Crédito', 'Boleto'].includes(expandedQuote?.paymentTerms || '') && (
+                                        <div className="space-y-1 p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg animate-in fade-in">
+                                            <label className="text-[9px] font-bold uppercase text-orange-600 block">Número de Parcelas</label>
+                                            <input 
+                                                type="number"
+                                                min="1"
+                                                disabled={!canEdit}
+                                                value={expandedQuote?.installmentsCount || ''}
+                                                onChange={(e) => updateItemField(expandedQuote?.id as string, 'installmentsCount', Number(e.target.value))}
+                                                className="w-full bg-background border border-orange-500/20 rounded p-2 text-xs font-mono font-bold"
+                                                placeholder="Ex: 5"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <span className="block text-[9px] font-bold text-muted-foreground uppercase">Data Entrega</span>
                                             <input 
@@ -2103,6 +2219,40 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                         </div>
                                     </div>
 
+                                    {/* Mobile Checkboxes Section */}
+                                    <div className="space-y-2 bg-secondary/20 p-3 rounded-xl border border-border/50">
+                                        <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-1">Checkboxes Adicionais</span>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-background/40 rounded transition-colors border border-transparent hover:border-border/30">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!expandedQuote?.hasInsurance}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'hasInsurance', e.target.checked)}
+                                                    className="h-4 w-4 accent-primary"
+                                                />
+                                                <span className="text-[11px] font-medium text-muted-foreground">Seguro de Carga</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-background/40 rounded transition-colors border border-transparent hover:border-border/30">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!expandedQuote?.hasServiceContract}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'hasServiceContract', e.target.checked)}
+                                                    className="h-4 w-4 accent-primary"
+                                                />
+                                                <span className="text-[11px] font-medium text-muted-foreground">Fornece Contrato Serviço</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-background/40 rounded transition-colors border border-transparent hover:border-border/30">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!expandedQuote?.emitsResaleInvoice}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'emitsResaleInvoice', e.target.checked)}
+                                                    className="h-4 w-4 accent-primary"
+                                                />
+                                                <span className="text-[11px] font-medium text-muted-foreground">Emite NF de Revenda?</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
                                     <div className="space-y-1 mt-2">
                                         <span className="block text-[10px] font-bold text-muted-foreground uppercase">Observações:</span>
                                         <textarea 
@@ -2112,6 +2262,27 @@ const BudgetModal = ({ budget, onClose }: BudgetModalProps) => {
                                             className="w-full bg-yellow-500/5 border border-yellow-500/20 p-3 rounded-lg text-xs italic leading-relaxed min-h-[80px]"
                                             placeholder="Adicione observações para esta cotação..."
                                         />
+                                    </div>
+
+                                    {/* Danger Zone Actions Mobile */}
+                                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border mt-4">
+                                        <button 
+                                            onClick={() => cloneQuoteItem(expandedQuote?.id as string)}
+                                            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-secondary/80 text-[10px] font-bold uppercase rounded-lg border border-border active:scale-95 transition-all text-muted-foreground"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> CLONAR
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                if(confirm('Tem certeza que deseja excluir esta cotação?')) {
+                                                    removeItem(expandedQuote?.id as string);
+                                                    setExpandedQuoteId(null);
+                                                }
+                                            }}
+                                            className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-red-500/10 text-red-600 text-[10px] font-bold uppercase rounded-lg border border-red-500/20 active:scale-95 transition-all"
+                                        >
+                                            <Trash2 className="h-4 w-4" /> EXCLUIR
+                                        </button>
                                     </div>
                                 </div>
                             </div>
