@@ -171,6 +171,27 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
 });
 
 /**
+ * GET /api/transparency/pncp-detail/:cnpj/:ano/:sequencial
+ * Proxy para detalhes do PNCP (CORS Safe)
+ */
+router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Response) => {
+    try {
+        const { cnpj, ano, sequencial } = req.params;
+        // Consulta V1 (Informações detalhadas da compra/licitação)
+        const url = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+        const response = await axios.get(url, { 
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 10000 
+        });
+        res.json(response.data);
+    } catch (error: any) {
+        if (error.response?.status === 404) return res.status(404).json({ error: 'PNCP detail not found' });
+        console.error('PNCP Proxy Detail Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * GET /api/transparency/licitacoes
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {

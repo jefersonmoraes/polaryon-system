@@ -71,84 +71,135 @@ const formatCurrency = (val?: number) => {
 // Cache Global de Memória para detalhes do PNCP (evita requisições duplicadas entre componentes de data/valor)
 const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = {};
 
+// Gerenciador de Fila para Requisições PNCP (Throttling) para evitar bloqueios por concorrência
+const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void }[] = [];
+let activePncpRequests = 0;
+const MAX_CONCURRENT_PNCP = 5;
+
+async function processPncpQueue() {
+    if (activePncpRequests >= MAX_CONCURRENT_PNCP || pncpRequestQueue.length === 0) return;
+
+    activePncpRequests++;
+    const { cacheKey, item, resolve, reject } = pncpRequestQueue.shift()!;
+
+    try {
+        const parts = item.numero_controle_pncp?.split('-');
+        const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+        const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+        const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+
+        if (!orgaoCnpj || !ano || !seq) {
+            throw new Error("Missing keys for PNCP detail");
+        }
+
+        // USANDO PROXY DO BACKEND PARA EVITAR CORS E RATE LIMIT (REQUISITO PRODUÇÃO)
+        const res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+        const detail = res.data;
+
+        const result = {
+            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
+            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+            valor: detail.valorTotalEstimado || detail.valor_global,
+            raw: detail
+        };
+        
+        if (pncpDetailCache[cacheKey]) pncpDetailCache[cacheKey].data = result;
+        
+        // DISPARA EVENTO GLOBAL PARA ATUALIZAR TODOS OS COMPONENTES QUE USAM ESTE CACHEKEY
+        window.dispatchEvent(new CustomEvent('pncp-cache-updated', { detail: { cacheKey } }));
+        
+        resolve(result);
+    } catch (e: any) {
+        if (e.response?.status === 404) {
+            resolve(null);
+        } else {
+            console.warn(`[PNCP Worker] Failed for ${cacheKey}:`, e.message);
+            if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
+            reject(e);
+        }
+    } finally {
+        activePncpRequests--;
+        setTimeout(processPncpQueue, 100);
+    }
+}
+
+function queuePncpFetch(item: PncpItem): Promise<any> {
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+
+    if (pncpDetailCache[cacheKey]?.data) return Promise.resolve(pncpDetailCache[cacheKey].data);
+    if (pncpDetailCache[cacheKey]?.promise) return pncpDetailCache[cacheKey].promise;
+
+    const promise = new Promise((resolve, reject) => {
+        pncpRequestQueue.push({ cacheKey, item, resolve, reject });
+        processPncpQueue();
+    });
+
+    pncpDetailCache[cacheKey] = { promise };
+    return promise;
+}
+
 const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     const [dates, setDates] = useState<{ inicio?: string; fim?: string; loading: boolean }>({ loading: true });
+    
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+
+    const updateFromCache = useCallback(() => {
+        const cached = pncpDetailCache[cacheKey]?.data;
+        if (cached) {
+            setDates({
+                inicio: cached.start,
+                fim: cached.end,
+                loading: false
+            });
+            return true;
+        }
+        return false;
+    }, [cacheKey]);
 
     useEffect(() => {
         let isMounted = true;
-        async function load() {
-            const orgaoCnpj = item.orgao_cnpj;
-            const ano = (item as any).ano_compra || (item as any).ano || (item as any).numero_controle_pncp?.split('-')[1];
-            const seq = (item as any).numero_compra || (item as any).numero_sequencial || (item as any).numero_controle_pncp?.split('-')[2];
+        
+        // Tenta pegar do cache primeiro
+        if (updateFromCache()) return;
 
-            if (!orgaoCnpj || !ano || !seq) {
-                if (isMounted) setDates({ loading: false });
-                return;
-            }
-
-            const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
-            
-            if (pncpDetailCache[cacheKey]?.data) {
-                if (isMounted) {
-                    setDates({
-                        inicio: pncpDetailCache[cacheKey].data.start,
-                        fim: pncpDetailCache[cacheKey].data.end,
-                        loading: false
-                    });
-                }
-                return;
-            }
-
-            if (pncpDetailCache[cacheKey]?.promise) {
-                const data = await pncpDetailCache[cacheKey].promise;
-                if (isMounted && data) {
+        setDates({ loading: true });
+        queuePncpFetch(item).then((data) => {
+            if (isMounted) {
+                if (data) {
                     setDates({
                         inicio: data.start,
                         fim: data.end,
                         loading: false
                     });
-                } else if (isMounted) {
+                } else {
                     setDates({ loading: false });
                 }
-                return;
             }
+        }).catch(() => {
+            if (isMounted) setDates({ loading: false });
+        });
 
-            const fetchPromise = (async () => {
-                try {
-                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${orgaoCnpj}/compras/${ano}/${seq}`);
-                    if (res.ok) {
-                        const detail = await res.json();
-                        const result = {
-                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
-                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
-                            valor: detail.valorTotalEstimado || detail.valor_global,
-                            raw: detail // Armazena o objeto completo para o modal
-                        };
-                        pncpDetailCache[cacheKey].data = result;
-                        return result;
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch PNCP details", e);
-                }
-                return null;
-            })();
-
-            pncpDetailCache[cacheKey] = { promise: fetchPromise };
-            const finalData = await fetchPromise;
-            if (isMounted && finalData) {
-                setDates({
-                    inicio: finalData.start,
-                    fim: finalData.end,
-                    loading: false
-                });
-            } else if (isMounted) {
-                setDates({ loading: false });
+        // Listener para atualizações de cache vindo de outros componentes (ex: modal)
+        const handleUpdate = (e: any) => {
+            if (e.detail?.cacheKey === cacheKey && isMounted) {
+                updateFromCache();
             }
-        }
+        };
+        window.addEventListener('pncp-cache-updated', handleUpdate);
 
-        load();
-        return () => { isMounted = false; };
-    }, [item.orgao_cnpj, item.numero_controle_pncp]);
+        return () => { 
+            isMounted = false; 
+            window.removeEventListener('pncp-cache-updated', handleUpdate);
+        };
+    }, [item.orgao_cnpj, item.numero_controle_pncp, cacheKey, updateFromCache]);
 
     if (dates.loading) {
         return (
@@ -171,73 +222,52 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     );
 });
 
-// Novo Componente para buscar e renderizar o Valor Estimado (Lazy Load)
 const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?: boolean }) => {
     const [valor, setValor] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+
+    const updateFromCache = useCallback(() => {
+        const cached = pncpDetailCache[cacheKey]?.data;
+        if (cached) {
+            setValor(cached.valor);
+            setLoading(false);
+            return true;
+        }
+        return false;
+    }, [cacheKey]);
+
     useEffect(() => {
         let isMounted = true;
-        async function load() {
-            const orgaoCnpj = item.orgao_cnpj;
-            const ano = (item as any).ano_compra || (item as any).ano || (item as any).numero_controle_pncp?.split('-')[1];
-            const seq = (item as any).numero_compra || (item as any).numero_sequencial || (item as any).numero_controle_pncp?.split('-')[2];
+        if (updateFromCache()) return;
 
-            if (!orgaoCnpj || !ano || !seq) {
-                if (isMounted) setLoading(false);
-                return;
-            }
-
-            const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
-            
-            if (pncpDetailCache[cacheKey]?.data) {
-                if (isMounted) {
-                    setValor(pncpDetailCache[cacheKey].data.valor);
-                    setLoading(false);
-                }
-                return;
-            }
-
-            if (pncpDetailCache[cacheKey]?.promise) {
-                const data = await pncpDetailCache[cacheKey].promise;
-                if (isMounted) {
-                    setValor(data?.valor || null);
-                    setLoading(false);
-                }
-                return;
-            }
-
-            const fetchPromise = (async () => {
-                try {
-                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${orgaoCnpj}/compras/${ano}/${seq}`);
-                    if (res.ok) {
-                        const detail = await res.json();
-                        const result = {
-                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
-                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
-                            valor: detail.valorTotalEstimado || detail.valor_global,
-                            raw: detail
-                        };
-                        pncpDetailCache[cacheKey].data = result;
-                        return result;
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch PNCP value", e);
-                }
-                return null;
-            })();
-
-            pncpDetailCache[cacheKey] = { promise: fetchPromise };
-            const finalData = await fetchPromise;
+        setLoading(true);
+        queuePncpFetch(item).then((data) => {
             if (isMounted) {
-                setValor(finalData?.valor || null);
+                setValor(data?.valor || null);
                 setLoading(false);
             }
-        }
+        }).catch(() => {
+            if (isMounted) setLoading(false);
+        });
 
-        load();
-        return () => { isMounted = false; };
-    }, [item.orgao_cnpj, item.numero_controle_pncp]);
+        const handleUpdate = (e: any) => {
+            if (e.detail?.cacheKey === cacheKey && isMounted) {
+                updateFromCache();
+            }
+        };
+        window.addEventListener('pncp-cache-updated', handleUpdate);
+
+        return () => { 
+            isMounted = false; 
+            window.removeEventListener('pncp-cache-updated', handleUpdate);
+        };
+    }, [item.orgao_cnpj, item.numero_controle_pncp, cacheKey, updateFromCache]);
 
     if (isMobile) {
         return (
@@ -346,24 +376,9 @@ export default function OportunidadesSearch() {
             // 0. Fetch Main Purchase Detail (V1) - Para pegar Valores Estimados que faltam na busca
             setLoadingDetail(true);
             try {
-                const cacheKey = `${cnpj}-${ano}-${seq}`;
-                if (pncpDetailCache[cacheKey]?.data?.raw) {
-                    setItemDetail(pncpDetailCache[cacheKey].data.raw);
-                    setLoadingDetail(false);
-                } else {
-                    const res = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (res.ok) {
-                        const detail = await res.json();
-                        setItemDetail(detail);
-                        // Atualiza o cache para futuras consultas se ainda não existir
-                        if (!pncpDetailCache[cacheKey]) pncpDetailCache[cacheKey] = {};
-                        pncpDetailCache[cacheKey].data = {
-                            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
-                            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
-                            valor: detail.valorTotalEstimado || detail.valor_global,
-                            raw: detail
-                        };
-                    }
+                const data = await queuePncpFetch(selectedItem);
+                if (data?.raw) {
+                    setItemDetail(data.raw);
                 }
             } catch (e) {
                 console.error("Failed to fetch purchase detail", e);
