@@ -481,15 +481,17 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 [🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(selectedItem)})
         `.trim();
 
-        // Robustly extract estimated value
+        // Robustly extract estimated value - PRIORITIZE itemDetail if available
         const itemAny = selectedItem as any;
+        const detailAny = itemDetail as any;
+        
         const estimatedValue = 
+            detailAny?.valorTotalEstimado || 
             itemAny.valorTotalEstimado || 
             itemAny.valor_global || 
-            itemAny.valor_total_estimado || 
-            itemAny.valor_estimado || 
-            itemAny.valor_total ||
             itemAny.valor ||
+            itemAny.valor_total_estimado || 
+            detailAny?.valor ||
             0;
 
         const formattedValue = estimatedValue > 0 
