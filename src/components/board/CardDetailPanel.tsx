@@ -154,27 +154,29 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
+  const [isDirty, setIsDirty] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Sync relative to card change
+  // Sync relative to card change or external updates
   useEffect(() => {
-    if (card?.description !== undefined && card.description !== localDescription) {
+    if (card?.description !== undefined && card.description !== localDescription && !isDirty) {
       setLocalDescription(card.description || '');
       if (editorRef.current) {
         editorRef.current.innerHTML = card.description || '';
       }
     }
-  }, [card?.id]);
+  }, [card?.id, card?.description, isDirty]);
 
-  // Debounced Save
+  // Debounced Save - Only if dirty
   useEffect(() => {
+    if (!isDirty) return;
     const timer = setTimeout(() => {
       if (localDescription !== card?.description) {
         updateCard(cardId, { description: localDescription });
       }
     }, 1500);
     return () => clearTimeout(timer);
-  }, [localDescription, cardId, updateCard, card?.description]);
+  }, [localDescription, cardId, updateCard, card?.description, isDirty]);
 
   const execCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
@@ -1232,7 +1234,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <div
                     ref={editorRef}
                     contentEditable={canEdit}
-                    onInput={(e) => setLocalDescription(e.currentTarget.innerHTML)}
+                    onInput={(e) => {
+                        setLocalDescription(e.currentTarget.innerHTML);
+                        setIsDirty(true);
+                    }}
+                    onFocus={() => setIsDirty(true)}
                     onBlur={(e) => {
                         // Final sync on blur
                         const html = e.currentTarget.innerHTML;
@@ -1240,6 +1246,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         if (html !== card?.description) {
                             updateCard(cardId, { description: html });
                         }
+                        setIsDirty(false);
                     }}
                     className="w-full min-h-full outline-none prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed selection:bg-primary/30"
                     style={{ 

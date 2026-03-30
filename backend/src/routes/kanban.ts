@@ -186,31 +186,10 @@ router.get('/cards/:id', async (req: Request, res: Response) => {
         const cardId = req.params.id as string;
         let card = await prisma.card.findUnique({
             where: { id: cardId },
-            include: { labels: true, checklist: true, items: true, comments: true, attachments: true, milestones: true, timeEntries: true, descriptionEntries: true }
+            include: { labels: true, checklist: true, items: true, comments: true, attachments: true, milestones: true, timeEntries: true }
         });
         if (!card) return res.status(404).json({ error: 'Card not found' });
         
-        // RE-CONSOLIDATION: Move entries back to single string if they exist
-        if (card.descriptionEntries && card.descriptionEntries.length > 0) {
-            try {
-                // Only consolidate if description is currently null/empty
-                if (!card.description) {
-                    const consolidatedText = card.descriptionEntries
-                        .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                        .map((e: any) => e.text)
-                        .join('<br/><hr/><br/>');
-                    
-                    await prisma.card.update({
-                        where: { id: card.id },
-                        data: { description: consolidatedText }
-                    });
-                    card.description = consolidatedText;
-                }
-            } catch (e) {
-                console.error("Re-consolidation error for card description:", e);
-            }
-        }
-
         // Flatten labels
         const formattedCard = {
             ...card,
