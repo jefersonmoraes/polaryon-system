@@ -1254,7 +1254,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         lineHeight: '1.6',
                         fontFamily: 'Inter, system-ui, sans-serif'
                     }}
-                    dangerouslySetInnerHTML={{ __html: localDescription }}
                 />
               </div>
               
