@@ -229,16 +229,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     // Nunca sincronizar se o editor está no meio de um salvamento ou se o usuário acabou de digitar
     // e o estado local ainda não refletiu o que veio do servidor.
     const now = Date.now();
-    const recentlySaved = now - lastSaveTime.current < 4000; // Aumentado para 4s para segurança extra
+    const recentlySaved = now - lastSaveTime.current < 4000; 
 
     if (!isDirty && !isSyncing && !recentlySaved && editorRef.current.innerHTML !== storeDesc) {
-      // Se estamos vindo de um card vazio para um com dados, OK.
-      // Se estamos vindo de dados para vazio, APENAS se for o caso real do servidor.
-      // E só se não houver 'savingCards' no Store global (blindagem do KanbanStore).
       const store = useKanbanStore.getState();
       if (!store.savingCards.has(cardId)) {
           editorRef.current.innerHTML = storeDesc;
           setLocalDescription(storeDesc);
+          lastSavedDescription.current = storeDesc;
       }
     }
   }, [cardId, card?.description, isDirty, isSyncing]);
