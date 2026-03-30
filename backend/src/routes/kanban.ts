@@ -228,6 +228,37 @@ router.post('/cards', async (req: Request, res: Response) => {
 
         const card = await prisma.card.create({ data });
 
+        // Link nested collections on create
+        if (labels && labels.length > 0) {
+            await prisma.cardLabel.createMany({
+                data: labels.map((labelId: string) => ({ cardId: card.id, labelId }))
+            }).catch(e => console.error("Failed to link labels on create:", e));
+        }
+
+        if (checklist && checklist.length > 0) {
+            await prisma.checklistItem.createMany({
+                data: checklist.map((i: any) => ({ ...i, cardId: card.id }))
+            }).catch(e => console.error("Failed to link checklist on create:", e));
+        }
+
+        if (items && items.length > 0) {
+            await prisma.cardItem.createMany({
+                data: items.map((i: any) => ({ ...i, cardId: card.id }))
+            }).catch(e => console.error("Failed to link items on create:", e));
+        }
+
+        if (milestones && milestones.length > 0) {
+            await prisma.milestone.createMany({
+                data: milestones.map((i: any) => ({
+                    title: i.title,
+                    dueDate: i.dueDate ? new Date(i.dueDate) : null,
+                    hour: i.hour || null,
+                    completed: !!i.completed,
+                    cardId: card.id
+                }))
+            }).catch(e => console.error("Failed to link milestones on create:", e));
+        }
+
         if (attachments && attachments.length > 0) {
             await prisma.attachment.createMany({
                 data: attachments.map((att: any) => ({
