@@ -130,6 +130,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [labelHex, setLabelHex] = useState('#3b82f6');
   const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
+  const [showDescriptionPane, setShowDescriptionPane] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+
   const toggleDescriptionPane = (val: boolean) => {
     setShowDescriptionPane(val);
     if (val) setShowChat(false);
@@ -139,6 +142,16 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     setShowChat(val);
     if (val) setShowDescriptionPane(false);
   };
+
+  useEffect(() => {
+    if (card) {
+      if (card.description) {
+        toggleDescriptionPane(true);
+      } else if (card.comments.length > 0) {
+        toggleChat(true);
+      }
+    }
+  }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
   const editorRef = useRef<HTMLDivElement>(null);
