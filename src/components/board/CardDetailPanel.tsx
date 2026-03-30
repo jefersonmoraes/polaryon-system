@@ -130,9 +130,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [labelHex, setLabelHex] = useState('#3b82f6');
   const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
-  const [showDescriptionPane, setShowDescriptionPane] = useState(false);
-  const [showChat, setShowChat] = useState(false);
-  
   const toggleDescriptionPane = (val: boolean) => {
     setShowDescriptionPane(val);
     if (val) setShowChat(false);
@@ -143,17 +140,112 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     if (val) setShowDescriptionPane(false);
   };
 
+  const [localDescription, setLocalDescription] = useState(card?.description || '');
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  // Sync relative to card change
   useEffect(() => {
-    if (card) {
-      // Priority: Description first, then Comments
-      if (card.descriptionEntries && card.descriptionEntries.length > 0) {
-        toggleDescriptionPane(true);
-      } else if (card.comments && card.comments.length > 0) {
-        toggleChat(true);
+    if (card?.description !== undefined && card.description !== localDescription) {
+      setLocalDescription(card.description || '');
+      if (editorRef.current) {
+        editorRef.current.innerHTML = card.description || '';
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardId]);
+  }, [card?.id]);
+
+  // Debounced Save
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localDescription !== card?.description) {
+        updateCard(cardId, { description: localDescription });
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [localDescription, cardId, updateCard, card?.description]);
+
+  const execCommand = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    if (editorRef.current) {
+        setLocalDescription(editorRef.current.innerHTML);
+    }
+  };
+
+  const insertTable = () => {
+    const rows = prompt("Linhas:", "3");
+    const cols = prompt("Colunas:", "3");
+    if (rows && cols) {
+        const table = `
+            <div class="table-wrapper" style="overflow-x: auto; margin: 15px 0; border-radius: 8px; border: 1px solid #e2e8f0; width: 100%;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 400px; font-size: 13px;">
+                    ${Array(parseInt(rows)).fill(0).map(() => `
+                        <tr>
+                            ${Array(parseInt(cols)).fill(0).map(() => `<td style="border: 1px solid #cbd5e1; padding: 10px; min-width: 50px; background: white;">...</td>`).join('')}
+                        </tr>
+                    `).join('')}
+                </table>
+            </div>
+        `;
+        execCommand('insertHTML', table);
+    }
+  };
+
+  const getActiveTable = () => {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return null;
+    let node = selection.getRangeAt(0).startContainer;
+    while (node && node !== editorRef.current) {
+        if (node.nodeName === 'TABLE') return node as HTMLTableElement;
+        node = node.parentNode as any;
+    }
+    return null;
+  };
+
+  const tableAction = (action: 'addRow' | 'delRow' | 'addCol' | 'delCol') => {
+    const table = getActiveTable();
+    if (!table) return;
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    let cell = selection.getRangeAt(0).startContainer;
+    while (cell && cell.nodeName !== 'TD' && cell.nodeName !== 'TH') {
+        cell = cell.parentNode as any;
+    }
+    if (!cell) return;
+    
+    const td = cell as HTMLTableCellElement;
+    const tr = td.parentNode as HTMLTableRowElement;
+    const rowIndex = tr.rowIndex;
+    const colIndex = td.cellIndex;
+
+    if (action === 'addRow') {
+        const newRow = table.insertRow(rowIndex + 1);
+        for (let i = 0; i < table.rows[0].cells.length; i++) {
+            const newCell = newRow.insertCell(i);
+            newCell.style.border = '1px solid #cbd5e1';
+            newCell.style.padding = '10px';
+            newCell.innerHTML = '...';
+        }
+    } else if (action === 'delRow') {
+        if (table.rows.length > 1) table.deleteRow(rowIndex);
+    } else if (action === 'addCol') {
+        for (let i = 0; i < table.rows.length; i++) {
+            const newCell = table.rows[i].insertCell(colIndex + 1);
+            newCell.style.border = '1px solid #cbd5e1';
+            newCell.style.padding = '10px';
+            newCell.innerHTML = '...';
+        }
+    } else if (action === 'delCol') {
+        if (table.rows[0].cells.length > 1) {
+            for (let i = 0; i < table.rows.length; i++) {
+                table.rows[i].deleteCell(colIndex);
+            }
+        }
+    }
+    
+    if (editorRef.current) {
+        setLocalDescription(editorRef.current.innerHTML);
+    }
+  };
+
 
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
   const [isDescExpanded, setIsDescExpanded] = useState(false);
@@ -1035,96 +1127,125 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-        <motion.div
-           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-           className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[95vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[95vh] transition-all duration-300`}
+           className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[98vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[98vh] transition-all duration-300`}
          >
-          {/* Description Side Pane (Left 40%) */}
+          {/* Description Side Pane (Left 50%) */}
           {showDescriptionPane && (
-            <div className="w-[40%] border-r border-border bg-muted/10 flex flex-col shrink-0">
-               <div className="p-4 border-b border-border flex items-center justify-between bg-card text-foreground font-semibold">
-                <span className="flex items-center gap-2 text-primary"><AlignLeft className="h-4 w-4" /> Histórico da Descrição</span>
-                <button onClick={() => setShowDescriptionPane(false)} className="p-1 rounded hover:bg-secondary transition-colors text-muted-foreground"><X className="h-4 w-4" /></button>
+            <div className="w-[50%] border-r border-border bg-card flex flex-col shrink-0">
+               <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30 text-foreground font-bold text-sm tracking-tight">
+                <span className="flex items-center gap-2 text-primary uppercase"><AlignLeft className="h-4 w-4" /> Editor de Descrição</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground animate-pulse">Autossalvamento ativado</span>
+                    <button onClick={() => setShowDescriptionPane(false)} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"><X className="h-4 w-4" /></button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
-                {(!card.descriptionEntries || card.descriptionEntries.length === 0) ? (
-                  <p className="text-xs text-muted-foreground text-center mt-10 italic">Nenhuma descrição detalhada ainda.</p>
-                ) : (
-                  card.descriptionEntries.slice().reverse().map(entry => (
-                    <div key={entry.id} className="bg-background border border-border/60 rounded-lg p-3 shadow-sm hover:border-primary/30 transition-colors">
-                      <div className="flex items-center gap-2 mb-2 border-b border-border/30 pb-2">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-[10px] font-bold text-muted-foreground">
-                          {new Date(entry.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <button 
-                          onClick={() => { if (confirm('Excluir esta entrada da descrição?')) deleteDescriptionEntry(cardId, entry.id); }}
-                          className="ml-auto p-1 rounded hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                           <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <div 
-                        className="text-xs text-foreground/90 prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed" 
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.text) }} 
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
-              
+
+              {/* Advanced Superior Toolbar */}
               {canEdit && (
-                <div className="p-3 bg-card border-t border-border">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1 p-1 bg-secondary/50 rounded border border-border">
-                      <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Negrito"><Bold className="h-3 w-3" /></button>
-                      <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Itálico"><Italic className="h-3 w-3" /></button>
-                      <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Sublinhado"><Underline className="h-3 w-3" /></button>
-                      <div className="w-px h-3 bg-border mx-1" />
-                      <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Lista"><List className="h-3 w-3" /></button>
-                      <button 
-                        onClick={() => {
-                          const rows = prompt("Número de linhas:", "3");
-                          const cols = prompt("Número de colunas:", "3");
-                          if (rows && cols) {
-                            let table = '<table style="width:100%; border-collapse: collapse; border: 1px solid #ddd; margin: 10px 0;">';
-                            for (let i = 0; i < parseInt(rows); i++) {
-                              table += '<tr>';
-                              for (let j = 0; j < parseInt(cols); j++) {
-                                table += '<td style="border: 1px solid #ddd; padding: 8px; font-size: 11px;">...</td>';
-                              }
-                              table += '</tr>';
-                            }
-                            table += '</table>';
-                            execCommand('insertHTML', table);
-                          }
-                        }} 
-                        className="p-1.5 rounded hover:bg-primary/20 transition-colors" 
-                        title="Inserir Tabela"
-                      >
-                        <Table className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div
-                      ref={descRef}
-                      contentEditable
-                      className="w-full bg-secondary min-h-[100px] max-h-[200px] overflow-y-auto rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary prose prose-sm dark:prose-invert"
-                    />
-                    <button 
-                      onClick={() => {
-                        if (descRef.current?.innerHTML.trim()) {
-                          addDescriptionEntry(cardId, descRef.current.innerHTML);
-                          descRef.current.innerHTML = '';
-                        }
-                      }} 
-                      className="w-full py-2 rounded bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors shadow-sm"
+                <div className="p-2 bg-muted/20 border-b border-border flex flex-wrap gap-1 items-center sticky top-0 z-10 backdrop-blur-sm">
+                  {/* Text Style */}
+                  <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
+                    <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-primary/10 transition-colors" title="Negrito"><Bold className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-primary/10 transition-colors" title="Itálico"><Italic className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-primary/10 transition-colors" title="Sublinhado"><Underline className="h-3.5 w-3.5" /></button>
+                  </div>
+
+                  {/* Font Size */}
+                  <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
+                    <select 
+                        onChange={(e) => execCommand('fontSize', e.target.value)} 
+                        className="bg-transparent text-[10px] font-bold px-1 outline-none cursor-pointer"
+                        defaultValue="3"
                     >
-                      Salvar Atualização
+                        <option value="1">Pequeno</option>
+                        <option value="2">Normal</option>
+                        <option value="3">Médio</option>
+                        <option value="4">Grande</option>
+                        <option value="5">Título 3</option>
+                        <option value="6">Título 2</option>
+                        <option value="7">Título 1</option>
+                    </select>
+                  </div>
+
+                  {/* Colors */}
+                  <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
+                    <input type="color" className="w-5 h-5 p-0 bg-transparent border-none cursor-pointer rounded overflow-hidden" 
+                           onChange={(e) => execCommand('foreColor', e.target.value)} title="Cor do Texto" />
+                    <input type="color" className="w-5 h-5 p-0 bg-transparent border-none cursor-pointer rounded overflow-hidden" defaultValue="#ffff00"
+                           onChange={(e) => execCommand('hiliteColor', e.target.value)} title="Destaque" />
+                  </div>
+
+                  {/* Alignment */}
+                  <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
+                    <button onClick={() => execCommand('justifyLeft')} className="p-1.5 rounded hover:bg-primary/10 transition-colors"><AlignLeft className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => execCommand('justifyCenter')} className="p-1.5 rounded hover:bg-primary/10 transition-colors"><Plus className="h-3.5 w-3.5 rotate-45" /></button>
+                  </div>
+
+                  {/* Lists */}
+                  <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
+                    <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-primary/10 transition-colors"><List className="h-3.5 w-3.5" /></button>
+                  </div>
+
+                  {/* SPREADSHEET / TABLE CONTROLS */}
+                  <div className="flex items-center gap-0.5 bg-primary/5 rounded-md border border-primary/20 p-1">
+                    <button onClick={insertTable} className="p-1.5 rounded hover:bg-primary/20 text-primary transition-colors font-bold" title="Criar Planilha/Tabela"><Table className="h-3.5 w-3.5" /></button>
+                    <div className="w-px h-3 bg-primary/20 mx-1" />
+                    <button onClick={() => tableAction('addRow')} className="p-1 group relative rounded hover:bg-green-500/10 text-green-600 transition-colors" title="Adicionar Linha Abaixo">
+                        <Plus className="h-3 w-3" />
+                        <span className="absolute -bottom-1 -right-1 text-[7px] font-black">R</span>
+                    </button>
+                    <button onClick={() => tableAction('addCol')} className="p-1 group relative rounded hover:bg-blue-500/10 text-blue-600 transition-colors" title="Adicionar Coluna Direita">
+                        <Plus className="h-3 w-3" />
+                        <span className="absolute -bottom-1 -right-1 text-[7px] font-black">C</span>
+                    </button>
+                    <button onClick={() => tableAction('delRow')} className="p-1 group relative rounded hover:bg-red-500/10 text-red-600 transition-colors" title="Excluir Linha">
+                        <Trash2 className="h-3 w-3" />
+                        <span className="absolute -bottom-1 -right-1 text-[7px] font-black">R</span>
                     </button>
                   </div>
+
+                  <button 
+                    onClick={() => {
+                        const url = prompt("URL do Link:");
+                        if (url) execCommand('createLink', url);
+                    }} 
+                    className="p-1.5 bg-background rounded-md border border-border hover:bg-primary/10 transition-colors"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )}
+
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white dark:bg-zinc-950">
+                <div
+                    ref={editorRef}
+                    contentEditable={canEdit}
+                    onInput={(e) => setLocalDescription(e.currentTarget.innerHTML)}
+                    onBlur={(e) => {
+                        // Final sync on blur
+                        const html = e.currentTarget.innerHTML;
+                        setLocalDescription(html);
+                        if (html !== card?.description) {
+                            updateCard(cardId, { description: html });
+                        }
+                    }}
+                    className="w-full min-h-full outline-none prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed selection:bg-primary/30"
+                    style={{ 
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        fontFamily: 'Inter, system-ui, sans-serif'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: localDescription }}
+                />
+              </div>
+              
+              <style>{`
+                .prose table { border-collapse: collapse; width: 100%; margin: 2em 0; }
+                .prose td { border: 1px solid #e2e8f0; padding: 12px; min-width: 80px; vertical-align: top; }
+                .prose tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+                .dark .prose td { border-color: #27272a; }
+                .prose tr:hover td { border-color: #3b82f6 !important; }
+              `}</style>
             </div>
           )}
           {/* Main content scrollable area */}

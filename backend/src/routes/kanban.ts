@@ -190,23 +190,24 @@ router.get('/cards/:id', async (req: Request, res: Response) => {
         });
         if (!card) return res.status(404).json({ error: 'Card not found' });
         
-        // Migration: If has legacy description but no entries, create first entry
-        if (card.description && card.descriptionEntries.length === 0) {
+        // RE-CONSOLIDATION: Move entries back to single string if they exist
+        if (card.descriptionEntries && card.descriptionEntries.length > 0) {
             try {
-                const newEntry = await prisma.cardDescriptionEntry.create({
-                    data: {
-                        cardId: card.id,
-                        text: card.description
-                    }
-                });
-                card.descriptionEntries = [newEntry];
-                // Clear old description to avoid double migration
-                await prisma.card.update({
-                    where: { id: card.id },
-                    data: { description: null }
-                });
+                // Only consolidate if description is currently null/empty
+                if (!card.description) {
+                    const consolidatedText = card.descriptionEntries
+                        .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                        .map((e: any) => e.text)
+                        .join('<br/><hr/><br/>');
+                    
+                    await prisma.card.update({
+                        where: { id: card.id },
+                        data: { description: consolidatedText }
+                    });
+                    card.description = consolidatedText;
+                }
             } catch (e) {
-                console.error("Migration error for card description:", e);
+                console.error("Re-consolidation error for card description:", e);
             }
         }
 
