@@ -161,6 +161,20 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     if (val) setShowDescriptionPane(false);
   };
 
+  const handleClose = async () => {
+    if (isDirty && editorRef.current) {
+        const html = editorRef.current.innerHTML;
+        if (html !== lastSavedDescription.current) {
+            console.log(`[DEBUG_NET] SALVAMENTO FINAL AO FECHAR PANEL (${html.length} chars)`);
+            await updateCard(cardId, { description: html });
+            lastSaveTime.current = Date.now();
+            lastSavedDescription.current = html;
+        }
+    }
+    setIsDirty(false);
+    onClose();
+  };
+
   useEffect(() => {
     if (card) {
       if (card.description) {
@@ -1202,7 +1216,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   return (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} />
         <motion.div
            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
@@ -1407,7 +1421,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       </>
                     )}
                   </button>
-                  <button onClick={onClose} className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground">
+                  <button onClick={handleClose} className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
