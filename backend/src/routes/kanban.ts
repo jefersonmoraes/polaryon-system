@@ -297,8 +297,13 @@ router.post('/cards', async (req: Request, res: Response) => {
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
         const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, force, ...updateData } = req.body;
-        delete (updateData as any).updatedAt;
         const cardId = req.params.id as string;
+        
+        if (updateData.description !== undefined) {
+            console.log(`[DEBUG_DB] Recebendo atualização de descrição para o card ${cardId}: "${updateData.description.substring(0, 50)}..." (${updateData.description.length} chars)`);
+        }
+
+        delete (updateData as any).updatedAt;
 
         if (updateData.dueDate === '') updateData.dueDate = null;
         else if (updateData.dueDate && typeof updateData.dueDate === 'string' && updateData.dueDate.length === 10) {
@@ -320,16 +325,6 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             const oldDesc = currentCard.description || '';
             const newDesc = updateData.description || '';
 
-            // 1. Safety Lock: Prevent accidental wipes of long content
-            const isPotentialWipe = oldDesc.length > 300 && newDesc.length < 20;
-            if (isPotentialWipe && !force) {
-                console.warn(`[ZERO LOSS] Blocked potential accidental wipe on card ${cardId}`);
-                return res.status(403).json({ 
-                    error: 'BLOQUEIO DE SEGURANÇA: Tentativa de apagar descrição longa detectada. Use "force: true" para confirmar.',
-                    reason: 'PROTEÇÃO_DE_DADOS'
-                });
-            }
-
             // 2. Version History Log: If description changed and old was significant, log it
             if (oldDesc !== newDesc && oldDesc.length > 50) {
                 await prisma.auditLog.create({
@@ -348,6 +343,8 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         }
         // --- END ZERO LOSS POLICY ---
 
+        console.log(`[DEBUG_DB] Chaves para o Prisma Update: ${Object.keys(updateData).join(', ')}`);
+        
         const card = await prisma.card.update({ 
             where: { id: cardId }, 
             data: updateData 

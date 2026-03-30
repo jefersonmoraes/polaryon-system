@@ -1010,7 +1010,7 @@ export const useKanbanStore = create<KanbanState>()(
         socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_CARD', payload: createdCard });
         api.post('/kanban/cards', createdCard).catch(console.error);
       },
-      updateCard: (id, data) => {
+      updateCard: async (id, data) => {
         set(s => {
           const currentUser = useAuthStore.getState().currentUser;
           const targetCard = s.cards.find(c => c.id === id);
@@ -1112,7 +1112,7 @@ export const useKanbanStore = create<KanbanState>()(
         }
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
-        api.put(`/kanban/cards/${id}`, data).catch(console.error);
+        return await api.put(`/kanban/cards/${id}`, data);
       },
       updateCardDescriptionSync: (id: string, description: string) => {
         set(s => ({

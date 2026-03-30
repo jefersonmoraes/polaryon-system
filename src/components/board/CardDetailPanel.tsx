@@ -138,6 +138,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
         const html = editorRef.current.innerHTML;
         if (html !== card?.description) {
             await updateCard(cardId, { description: html });
+            lastSaveTime.current = Date.now();
         }
         setIsDirty(false);
     }
@@ -150,6 +151,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
         const html = editorRef.current.innerHTML;
         if (html !== card?.description) {
             await updateCard(cardId, { description: html });
+            lastSaveTime.current = Date.now();
         }
         setIsDirty(false);
     }
@@ -169,19 +171,27 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   // Reset dirty state on card change and FETCH LATEST DETAILS
   useEffect(() => {
-    // Before switching cards, ensure any pending change is flushed or at least dirty is reset
-    setIsDirty(false);
-    
-    if (cardId) {
-      const store = useKanbanStore.getState();
-      // Only fetch if we don't already have it, or if it's not the active card
-      store.fetchCardDetails(cardId).catch(console.error);
-    }
+    const handleCardChangeSave = async () => {
+        if (isDirty && editorRef.current) {
+            const html = editorRef.current.innerHTML;
+            if (html !== card?.description) {
+                await updateCard(cardId, { description: html });
+                lastSaveTime.current = Date.now();
+            }
+        }
+        setIsDirty(false);
+        if (cardId) {
+          const store = useKanbanStore.getState();
+          store.fetchCardDetails(cardId).catch(console.error);
+        }
+    };
+    handleCardChangeSave();
   }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const lastSaveTime = useRef<number>(0);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Sync relative to card change or external updates
@@ -192,8 +202,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     
     // SOURCE OF TRUTH PROTECTION:
     // Only update the DOM if the user is NOT editing (not dirty)
-    // This prevents the "poof" disappearance when server data arrives
-    if (!isDirty && editorRef.current.innerHTML !== storeDesc) {
+    // AND it has been more than 3 seconds since the last save (to avoid race with slow network)
+    const now = Date.now();
+    const recentlySaved = now - lastSaveTime.current < 3000;
+
+    if (!isDirty && !isSyncing && !recentlySaved && editorRef.current.innerHTML !== storeDesc) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
     }
@@ -205,9 +218,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     
     const timer = setTimeout(async () => {
       if (localDescription !== card?.description) {
+        const html = localDescription;
+        console.log(`[DEBUG_NET] Tentando salvar descrição no banco... (${html.length} chars)`);
         setIsSyncing(true);
         try {
-          await updateCard(cardId, { description: localDescription });
+          const res = await updateCard(cardId, { description: html });
+          console.log(`[DEBUG_NET] Sucesso ao salvar card ${cardId}:`, res);
+          lastSaveTime.current = Date.now();
+        } catch (err) {
+          console.error(`[DEBUG_NET] FALHA ao salvar card ${cardId}:`, err);
         } finally {
           setIsSyncing(false);
           // Once saved, we can potentially lower the dirty flag if no more changes happened
@@ -1291,6 +1310,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         if (html !== card?.description) {
                             setIsSyncing(true);
                             await updateCard(cardId, { description: html });
+                            lastSaveTime.current = Date.now();
                             setIsSyncing(false);
                         }
                         setIsDirty(false);
