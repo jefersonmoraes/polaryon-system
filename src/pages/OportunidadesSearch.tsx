@@ -625,12 +625,19 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
                 if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
 
+                // Nova Regra PNCP: arrays não aceitam mais vírgula. Precisam ser repetidos: &status=1&status=2
+                const formatArrayParam = (paramName: string, valuesStr: string) => {
+                    return valuesStr.split(',').filter(Boolean).map(val => `&${paramName}=${val.trim()}`).join('');
+                };
+
                 // PNCP fails if status is empty. If 'Todos' was selected, fetch all standard ones
-                url += `&status=${statusFilter || '1,2,3,4'}`;
+                const statusVals = statusFilter || '1,2,3,4';
+                url += formatArrayParam('status', statusVals);
 
                 // NEW PNCP RULE: tipos_documento is now REQUIRED by the Federal API. Cannot be empty.
                 const fallbackDocumentos = 'edital,aviso_contratacao_direta,ata,contrato';
-                url += `&tipos_documento=${instrumentoFilter || fallbackDocumentos}`;
+                const docVals = instrumentoFilter || fallbackDocumentos;
+                url += formatArrayParam('tipos_documento', docVals);
 
                 if (esferaFilter) url += `&esfera=${esferaFilter}`;
                 if (dataInicialFilter) url += `&dataInicial=${dataInicialFilter.replace(/-/g, '')}`;
