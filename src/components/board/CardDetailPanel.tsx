@@ -211,11 +211,13 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           // Importante: Ao trocar de card, force o preenchimento do editor com o valor do novo cardimediatamente 
           // caso já tenhamos os dados no cache local (evita o delay do fetch).
           const currentCard = store.cards.find(c => c.id === cardId);
-          if (currentCard && editorRef.current) {
+          if (currentCard) {
               const d = currentCard.description || '';
-              editorRef.current.innerHTML = d;
               setLocalDescription(d);
               lastSavedDescription.current = d;
+              if (editorRef.current) {
+                  editorRef.current.innerHTML = d;
+              }
           }
           
           store.fetchCardDetails(cardId).catch(console.error);
@@ -257,7 +259,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
          }
        }
     }
-  }, [cardId, card?.description, isDirty]);
+  }, [cardId, card?.description, isDirty, showDescriptionPane]);
 
   // Background Persistence (1.5s debounce para reduzir flutuao)
   useEffect(() => {
@@ -1330,6 +1332,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <div
                     ref={editorRef}
                     contentEditable={canEdit}
+                    dangerouslySetInnerHTML={{ __html: card?.description || '' }}
                     onInput={(e) => {
                         const html = e.currentTarget.innerHTML;
                         setLocalDescription(html);
