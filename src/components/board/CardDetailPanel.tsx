@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
   Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check,
-  ShoppingCart, Package
+  ShoppingCart, Package, RefreshCw
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
@@ -151,6 +151,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
         toggleChat(true);
       }
     }
+  }, [cardId, card?.description]);
+
+  // Reset dirty state on card change and FETCH LATEST DETAILS
+  useEffect(() => {
+    setIsDirty(false);
+    if (cardId) {
+      const store = useKanbanStore.getState();
+      store.fetchCardDetails(cardId).catch(console.error);
+    }
   }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
@@ -171,11 +180,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     }
   }, [card?.id, card?.description, isDirty]);
 
-  // Debounced Save - Only if dirty
+  // Debounced Save - Only if dirty and has content (safety against accidental wipe)
   useEffect(() => {
     if (!isDirty) return;
     const timer = setTimeout(() => {
-      if (localDescription !== card?.description) {
+      // Safety check: Don't overwrite a non-empty description with an empty one 
+      // unless the user intentionally cleared it and paused.
+      const isWipeAccident = (card?.description && card.description.length > 10) && (!localDescription || localDescription.length < 5);
+      
+      if (!isWipeAccident && localDescription !== card?.description) {
         updateCard(cardId, { description: localDescription });
       }
     }, 1500);
@@ -1150,11 +1163,27 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           {/* Description Side Pane (Left 50%) */}
           {showDescriptionPane && (
             <div className="w-[50%] border-r border-border bg-card flex flex-col shrink-0">
-               <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30 text-foreground font-bold text-sm tracking-tight">
-                <span className="flex items-center gap-2 text-primary uppercase"><AlignLeft className="h-4 w-4" /> Editor de Descrição</span>
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground animate-pulse">Autossalvamento ativado</span>
-                    <button onClick={() => setShowDescriptionPane(false)} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"><X className="h-4 w-4" /></button>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-zinc-900/50 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Editor de Descrição</h3>
+                    <div className="h-4 w-px bg-white/10" />
+                    <button 
+                        onClick={() => {
+                            fetchCardDetails(cardId);
+                            setIsDirty(false);
+                        }}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-bold transition-all border border-primary/20 active:scale-95"
+                        title="Sincronizar com o Servidor"
+                    >
+                        <RefreshCw className={cn("h-3 w-3", !card?.description && "animate-spin")} />
+                        RECUPERAR DO BANCO
+                    </button>
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className="text-[9px] text-muted-foreground italic">Autossalvamento ativado</span>
+                    <button onClick={() => toggleDescriptionPane(false)} className="text-muted-foreground hover:text-white transition-colors">
+                        <X className="h-4 w-4" />
+                    </button>
                 </div>
               </div>
 

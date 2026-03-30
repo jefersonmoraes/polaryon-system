@@ -1020,8 +1020,13 @@ export const useKanbanStore = create<KanbanState>()(
                 userName: currentUser.name,
                 action: 'EDITAR',
                 entity: 'CARTÃO',
-                details
+                details: `Atualizou dados do cartão "${targetCard.title}"${data.description ? ' (Descrição alterada)' : ''}`
               });
+              
+              // Adicional: Se for uma alteração de descrição crítica, logar mais detalhes
+              if (data.description && data.description.length > 500) {
+                  console.log(`[AUDIT] Alteração de descrição grande no cartão ${id} (${data.description.length} chars)`);
+              }
             }
           }
 
