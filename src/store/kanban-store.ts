@@ -355,7 +355,10 @@ export const useKanbanStore = create<KanbanState>()(
             if (get().savingCards.has(id)) return;
 
             set(s => ({
-              cards: s.cards.map(c => c.id === id ? card : c)
+              cards: s.cards.map(c => c.id === id ? { 
+                  ...card, 
+                  description: c.description !== null && c.description !== undefined ? c.description : card.description 
+              } : c)
             }));
         } catch (error) {
             console.error("Failed to fetch card details:", error);
