@@ -240,24 +240,24 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     
     // BLOQUEIO DE REGRESSÃO:
     const now = Date.now();
-    const recentlySaved = now - lastSaveTime.current < 4000; 
+    // Reduzido para 2s para ser mais responsivo à reabertura rápida
+    const recentlySaved = now - lastSaveTime.current < 2000; 
 
-    // THE FIX: Se o editor estiver vazio e o banco tiver dados, ou se a info no servidor mudou e não estamos mexendo...
-    if (!isDirty && !isSyncing && !recentlySaved) {
-       const editorHTML = editorRef.current.innerHTML;
-       
-       // Sincroniza se houver diferença e não houver salvamento global em curso
-       if (editorHTML !== storeDesc) {
+    // THE FIX: Se o editor estiver diferente do que está no store (vazio ou antigo)
+    const editorHTML = editorRef.current.innerHTML;
+    if (editorHTML !== storeDesc) {
+       // Se NÃO estamos digitando OU se acabamos de trocar de card (editorHTML vazio e store tem algo)
+       if (!isDirty || (editorHTML === '' && storeDesc !== '')) {
          const store = useKanbanStore.getState();
-         if (!store.savingCards.has(cardId)) {
-            console.log(`[EDITOR_SYNC] Forçando atualização do conteúdo do Banco para a tela.`);
+         if (!store.savingCards.has(cardId) && !recentlySaved) {
+            console.log(`[EDITOR_SYNC] Forçando preenchimento: "${storeDesc.substring(0, 20)}..."`);
             editorRef.current.innerHTML = storeDesc;
             setLocalDescription(storeDesc);
             lastSavedDescription.current = storeDesc;
          }
        }
     }
-  }, [cardId, card?.description, isDirty, isSyncing]);
+  }, [cardId, card?.description, isDirty]);
 
   // Background Persistence (1.5s debounce para reduzir flutuao)
   useEffect(() => {
