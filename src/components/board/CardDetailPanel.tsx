@@ -159,11 +159,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   // Sync relative to card change or external updates
   useEffect(() => {
-    if (card?.description !== undefined && card.description !== localDescription && !isDirty) {
-      setLocalDescription(card.description || '');
-      if (editorRef.current) {
-        editorRef.current.innerHTML = card.description || '';
-      }
+    if (!editorRef.current || isDirty) return;
+    
+    const storeDesc = card?.description || '';
+    const domDesc = editorRef.current.innerHTML;
+
+    // Use DOM innerHTML comparison to detect needs for initial or external sync
+    if (domDesc !== storeDesc) {
+      editorRef.current.innerHTML = storeDesc;
+      setLocalDescription(storeDesc);
     }
   }, [card?.id, card?.description, isDirty]);
 
