@@ -1120,8 +1120,13 @@ export const useKanbanStore = create<KanbanState>()(
         });
 
         try {
+            console.log(`[HTTP_PUT] Iniciando salvamento do card ${id}`, data);
             const response = await api.put(`/kanban/cards/${id}`, data);
+            console.log(`[HTTP_OK] Card ${id} salvo com sucesso.`);
             return response;
+        } catch (error: any) {
+            console.error(`[HTTP_ERR] Falha ao salvar card ${id}:`, error.message);
+            throw error;
         } finally {
             // Release the lock after some safety buffer (500ms) to ensure DB is consistent
             setTimeout(() => {

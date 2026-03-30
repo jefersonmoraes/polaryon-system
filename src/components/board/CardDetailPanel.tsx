@@ -132,16 +132,34 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
   const [showDescriptionPane, setShowDescriptionPane] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const pendingSaveHTML = useRef<string | null>(null);
+
+  const performSave = async (html: string) => {
+    if (html === lastSavedDescription.current) return;
+    
+    setSaveStatus('saving');
+    console.log(`[EDITOR_SAVE] Iniciando gravação... (${html.length} chars)`);
+    
+    try {
+        await updateCard(cardId, { description: html });
+        lastSaveTime.current = Date.now();
+        lastSavedDescription.current = html;
+        setSaveStatus('saved');
+        console.log(`[EDITOR_SAVE] Gravado com sucesso.`);
+        
+        // Limpar o status de "Salvo" após 3 segundos
+        setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 3000);
+    } catch (err) {
+        setSaveStatus('error');
+        console.error(`[EDITOR_SAVE] Erro catastrófico:`, err);
+    }
+  };
 
   const toggleDescriptionPane = async (val: boolean) => {
     if (isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
-        if (html !== lastSavedDescription.current) {
-            console.log(`[DEBUG_NET] SALVANDO AO ALTERAR PANE (${html.length} chars)`);
-            await updateCard(cardId, { description: html });
-            lastSaveTime.current = Date.now();
-            lastSavedDescription.current = html;
-        }
+        await performSave(html);
         setIsDirty(false);
     }
     setShowDescriptionPane(val);
@@ -151,11 +169,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const toggleChat = async (val: boolean) => {
     if (isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
-        if (html !== lastSavedDescription.current) {
-            await updateCard(cardId, { description: html });
-            lastSaveTime.current = Date.now();
-            lastSavedDescription.current = html;
-        }
+        await performSave(html);
         setIsDirty(false);
     }
     setShowChat(val);
@@ -163,16 +177,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
 
   const handleClose = async () => {
-    // CAPTURA IMEDIATA: Pegar o HTML antes de mexer em qualquer estado (Dirty/Sync/etc)
     const currentHTML = editorRef.current?.innerHTML;
-    
     if (isDirty && currentHTML !== undefined) {
-        if (currentHTML !== lastSavedDescription.current) {
-            console.log(`[DEBUG_NET] SALVAMENTO FINAL AO FECHAR PANEL (${currentHTML.length} chars)`);
-            await updateCard(cardId, { description: currentHTML });
-            lastSaveTime.current = Date.now();
-            lastSavedDescription.current = currentHTML;
-        }
+        await performSave(currentHTML);
     }
     setIsDirty(false);
     onClose();
@@ -193,13 +200,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     const handleCardChangeSave = async () => {
         if (isDirty && editorRef.current) {
             const html = editorRef.current.innerHTML;
-            if (html !== lastSavedDescription.current) {
-                await updateCard(cardId, { description: html });
-                lastSaveTime.current = Date.now();
-                lastSavedDescription.current = html;
-            }
+            await performSave(html);
         }
         setIsDirty(false);
+        setSaveStatus('idle');
         if (cardId) {
           const store = useKanbanStore.getState();
           store.fetchCardDetails(cardId).catch(console.error);
@@ -239,30 +243,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     }
   }, [cardId, card?.description, isDirty, isSyncing]);
 
-  // Background Persistence (500ms debounce)
+  // Background Persistence (1.5s debounce para reduzir flutuao)
   useEffect(() => {
     if (!isDirty) return;
     
     const timer = setTimeout(async () => {
-      // THE FIX: Compare local edit with the LAST SUCCESSFULLY PERSISTED string,
-      // not the global store (which is updated immediately for UI feedback)
-      if (localDescription !== lastSavedDescription.current) {
-        const html = localDescription;
-        console.log(`[DEBUG_NET] Tentando salvar descrição no banco... (${html.length} chars)`);
-        setIsSyncing(true);
-        try {
-          const res = await updateCard(cardId, { description: html });
-          console.log(`[DEBUG_NET] Sucesso ao salvar card ${cardId}:`, res);
-          lastSaveTime.current = Date.now();
-          lastSavedDescription.current = html;
-        } catch (err) {
-          console.error(`[DEBUG_NET] FALHA ao salvar card ${cardId}:`, err);
-        } finally {
-          setIsSyncing(false);
-          // ...
+        if (localDescription !== lastSavedDescription.current) {
+            await performSave(localDescription);
         }
-      }
-    }, 500);
+    }, 1500);
     return () => clearTimeout(timer);
   }, [localDescription, cardId, isDirty]);
 
@@ -1336,13 +1325,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     onFocus={() => setIsDirty(true)}
                     onBlur={async (e) => {
                         const html = e.currentTarget.innerHTML;
-                        if (html !== lastSavedDescription.current) {
-                            setIsSyncing(true);
-                            await updateCard(cardId, { description: html });
-                            lastSaveTime.current = Date.now();
-                            lastSavedDescription.current = html;
-                            setIsSyncing(false);
-                        }
+                        await performSave(html);
                         setIsDirty(false);
                     }}
                     className="w-full min-h-full outline-none prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed selection:bg-primary/30"
@@ -1352,6 +1335,28 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         fontFamily: 'Inter, system-ui, sans-serif'
                     }}
                 />
+                
+                {/* Status de Salvamento Badge */}
+                <AnimatePresence>
+                  {saveStatus !== 'idle' && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className={cn(
+                        "absolute bottom-4 right-4 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border",
+                        saveStatus === 'saving' && "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                        saveStatus === 'saved' && "bg-green-500/10 text-green-600 border-green-500/20",
+                        saveStatus === 'error' && "bg-red-500/10 text-red-600 border-red-500/20"
+                      )}
+                    >
+                      {saveStatus === 'saving' && <RefreshCw className="h-2.5 w-2.5 animate-spin" />}
+                      {saveStatus === 'saved' && <Check className="h-2.5 w-2.5" />}
+                      {saveStatus === 'error' && <X className="h-2.5 w-2.5" />}
+                      {saveStatus === 'saving' ? 'Gravando...' : saveStatus === 'saved' ? 'Salvo no Banco' : 'Erro ao Salvar'}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               
               <style>{`

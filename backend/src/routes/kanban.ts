@@ -277,14 +277,14 @@ router.post('/cards', async (req: Request, res: Response) => {
             }).catch(e => console.error("Failed to link attachments on create:", e));
         }
 
-        // Auto-sync to Google Calendar if due date is present
+        // Auto-sync to Google Calendar - No await to respond faster
         if (card.dueDate && !card.completed && !card.archived && !card.trashed) {
             pushEventToGoogle({
                 summary: `[Polaryon] ${(card as any).title}`,
                 description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático criado através do seu quadro Kanban.',
                 start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
                 end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
-            }, card.id).catch(err => console.error("Background sync failed:", err));
+            }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card create:", err.message));
         }
 
         res.json(card);
@@ -442,16 +442,16 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             }
         }
 
-        // Auto-sync or cleanup Google Calendar based on state
+        // Auto-sync or cleanup Google Calendar - No await to respond faster
         if (card.completed || card.archived || card.trashed) {
-            deleteEventFromGoogle(card.id).catch(err => console.error("Background sync delete failed:", err));
+            deleteEventFromGoogle(card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card delete:", err.message));
         } else if (card.dueDate) {
             pushEventToGoogle({
                 summary: `[Polaryon] ${(card as any).title}`,
                 description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático atualizado do seu quadro Kanban.',
                 start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
                 end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
-            }, card.id).catch(err => console.error("Background sync failed:", err));
+            }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card update:", err.message));
         }
 
         res.json(card);
