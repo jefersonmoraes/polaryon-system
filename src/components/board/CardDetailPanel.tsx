@@ -136,9 +136,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const toggleDescriptionPane = async (val: boolean) => {
     if (!val && isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
-        if (html !== card?.description) {
+        if (html !== lastSavedDescription.current) {
             await updateCard(cardId, { description: html });
             lastSaveTime.current = Date.now();
+            lastSavedDescription.current = html;
         }
         setIsDirty(false);
     }
@@ -149,9 +150,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const toggleChat = async (val: boolean) => {
     if (val && isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
-        if (html !== card?.description) {
+        if (html !== lastSavedDescription.current) {
             await updateCard(cardId, { description: html });
             lastSaveTime.current = Date.now();
+            lastSavedDescription.current = html;
         }
         setIsDirty(false);
     }
@@ -174,9 +176,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     const handleCardChangeSave = async () => {
         if (isDirty && editorRef.current) {
             const html = editorRef.current.innerHTML;
-            if (html !== card?.description) {
+            if (html !== lastSavedDescription.current) {
                 await updateCard(cardId, { description: html });
                 lastSaveTime.current = Date.now();
+                lastSavedDescription.current = html;
             }
         }
         setIsDirty(false);
@@ -192,6 +195,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const lastSaveTime = useRef<number>(0);
+  const lastSavedDescription = useRef<string>(card?.description || '');
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Sync relative to card change or external updates
@@ -217,7 +221,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     if (!isDirty) return;
     
     const timer = setTimeout(async () => {
-      if (localDescription !== card?.description) {
+      // THE FIX: Compare local edit with the LAST SUCCESSFULLY PERSISTED string,
+      // not the global store (which is updated immediately for UI feedback)
+      if (localDescription !== lastSavedDescription.current) {
         const html = localDescription;
         console.log(`[DEBUG_NET] Tentando salvar descrição no banco... (${html.length} chars)`);
         setIsSyncing(true);
@@ -225,12 +231,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           const res = await updateCard(cardId, { description: html });
           console.log(`[DEBUG_NET] Sucesso ao salvar card ${cardId}:`, res);
           lastSaveTime.current = Date.now();
+          lastSavedDescription.current = html;
         } catch (err) {
           console.error(`[DEBUG_NET] FALHA ao salvar card ${cardId}:`, err);
         } finally {
           setIsSyncing(false);
-          // Once saved, we can potentially lower the dirty flag if no more changes happened
-          // but we'll let onBlur or CardChange handle that for total safety
+          // ...
         }
       }
     }, 500);
@@ -1307,10 +1313,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     onFocus={() => setIsDirty(true)}
                     onBlur={async (e) => {
                         const html = e.currentTarget.innerHTML;
-                        if (html !== card?.description) {
+                        if (html !== lastSavedDescription.current) {
                             setIsSyncing(true);
                             await updateCard(cardId, { description: html });
                             lastSaveTime.current = Date.now();
+                            lastSavedDescription.current = html;
                             setIsSyncing(false);
                         }
                         setIsDirty(false);
