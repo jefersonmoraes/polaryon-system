@@ -166,46 +166,46 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const isInitialLoad = useRef(true);
+  const skipNextSync = useRef(false);
 
   // Sync relative to card change or external updates
   useEffect(() => {
     if (!editorRef.current) return;
     
+    // If the user is typing, only sync if the editor was actually empty (initial data arrival)
+    if (isDirty && editorRef.current.innerHTML !== "") {
+      return;
+    }
+
+    if (skipNextSync.current) {
+      skipNextSync.current = false;
+      return;
+    }
+
     const storeDesc = card?.description || '';
-    const domDesc = editorRef.current.innerHTML;
-
-    // Allow sync if it's the first load OR if the editor is currently empty 
-    // (prevents blockage when data arrives after user focus)
-    const shouldSync = isInitialLoad.current || (!isDirty && domDesc !== storeDesc) || (isDirty && !domDesc && storeDesc);
-
-    if (shouldSync) {
+    if (editorRef.current.innerHTML !== storeDesc) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
-      
-      // Only mark initial load as done if we actually have something or it's definitely not coming
-      if (storeDesc || !isSyncing) {
-        isInitialLoad.current = false;
-      }
     }
-  }, [cardId, card?.description, isDirty, isSyncing]);
+  }, [cardId, card?.description]);
 
-  // Debounced Save - Reduced delay for "instant" feel (500ms)
+  // Instant Debounced Save (200ms)
   useEffect(() => {
-    if (!isDirty || isInitialLoad.current) return;
+    if (!isDirty) return;
     
     const timer = setTimeout(async () => {
       if (localDescription !== card?.description) {
         setIsSyncing(true);
+        skipNextSync.current = true; // Avoid feedback loop from our own save
         try {
           await updateCard(cardId, { description: localDescription });
         } finally {
           setIsSyncing(false);
         }
       }
-    }, 500);
+    }, 200);
     return () => clearTimeout(timer);
-  }, [localDescription, cardId, updateCard, card?.description, isDirty]);
+  }, [localDescription, cardId, isDirty]);
 
   const execCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
@@ -1190,8 +1190,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       "flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
                       isSyncing ? "bg-blue-500/20 text-blue-400 animate-pulse" : isDirty ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"
                     )}>
-                      <div className={cn("h-1 w-1 rounded-full", isSyncing ? "bg-blue-400" : isDirty ? "bg-amber-400" : "bg-green-400")} />
-                      {isSyncing ? 'Sincronizando...' : isDirty ? 'Alterações Pendentes' : 'Sincronizado'}
+                      <div className={cn("h-1.5 w-1.5 rounded-full", (isSyncing || (!card?.description && !isDirty)) ? "bg-blue-400 animate-pulse outline outline-1 outline-blue-400/50" : isDirty ? "bg-amber-400" : "bg-green-400")} />
+                      {(isSyncing || (!card?.description && !isDirty)) ? 'Sincronizando...' : isDirty ? 'Alterações Pendentes' : 'Sincronizado'}
                     </div>
                     <button onClick={() => toggleDescriptionPane(false)} className="text-muted-foreground hover:text-white transition-colors">
                         <X className="h-4 w-4" />
@@ -1275,7 +1275,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white dark:bg-zinc-950">
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white dark:bg-zinc-950 relative">
+                {!card?.description && !isDirty && (
+                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/30 pointer-events-none select-none italic text-xs animate-pulse bg-card/20 border-2 border-dashed border-primary/10 rounded-xl m-8">
+                        Carregando banco de dados...
+                    </div>
+                )}
                 <div
                     ref={editorRef}
                     contentEditable={canEdit}
