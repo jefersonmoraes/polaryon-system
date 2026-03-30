@@ -133,12 +133,26 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [showDescriptionPane, setShowDescriptionPane] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
-  const toggleDescriptionPane = (val: boolean) => {
+  const toggleDescriptionPane = async (val: boolean) => {
+    if (!val && isDirty && editorRef.current) {
+        const html = editorRef.current.innerHTML;
+        if (html !== card?.description) {
+            await updateCard(cardId, { description: html });
+        }
+        setIsDirty(false);
+    }
     setShowDescriptionPane(val);
     if (val) setShowChat(false);
   };
   
-  const toggleChat = (val: boolean) => {
+  const toggleChat = async (val: boolean) => {
+    if (val && isDirty && editorRef.current) {
+        const html = editorRef.current.innerHTML;
+        if (html !== card?.description) {
+            await updateCard(cardId, { description: html });
+        }
+        setIsDirty(false);
+    }
     setShowChat(val);
     if (val) setShowDescriptionPane(false);
   };
@@ -155,11 +169,20 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   // Reset dirty state on card change and FETCH LATEST DETAILS
   useEffect(() => {
-    setIsDirty(false);
-    if (cardId) {
-      const store = useKanbanStore.getState();
-      store.fetchCardDetails(cardId).catch(console.error);
-    }
+    const handleCardChangeSave = async () => {
+        if (isDirty && editorRef.current) {
+            const html = editorRef.current.innerHTML;
+            if (html !== card?.description) {
+                await updateCard(cardId, { description: html });
+            }
+        }
+        setIsDirty(false);
+        if (cardId) {
+          const store = useKanbanStore.getState();
+          store.fetchCardDetails(cardId).catch(console.error);
+        }
+    };
+    handleCardChangeSave();
   }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
@@ -168,44 +191,17 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const skipNextSync = useRef(false);
 
-  // Sync relative to card change or external updates
+  // Instant Debounced Save - REMOVED for "Normal Field" feel
+  // We keep only the useEffect that syncs from Store to DOM on mount/change
   useEffect(() => {
     if (!editorRef.current) return;
     
-    // If the user is typing, only sync if the editor was actually empty (initial data arrival)
-    if (isDirty && editorRef.current.innerHTML !== "") {
-      return;
-    }
-
-    if (skipNextSync.current) {
-      skipNextSync.current = false;
-      return;
-    }
-
     const storeDesc = card?.description || '';
-    if (editorRef.current.innerHTML !== storeDesc) {
+    if (editorRef.current.innerHTML !== storeDesc && !isDirty) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
     }
-  }, [cardId, card?.description]);
-
-  // Instant Debounced Save (200ms)
-  useEffect(() => {
-    if (!isDirty) return;
-    
-    const timer = setTimeout(async () => {
-      if (localDescription !== card?.description) {
-        setIsSyncing(true);
-        skipNextSync.current = true; // Avoid feedback loop from our own save
-        try {
-          await updateCard(cardId, { description: localDescription });
-        } finally {
-          setIsSyncing(false);
-        }
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [localDescription, cardId, isDirty]);
+  }, [cardId, card?.description, isDirty]);
 
   const execCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
@@ -1178,21 +1174,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-zinc-900/50 backdrop-blur-md">
                 <div className="flex items-center gap-3">
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Editor de Descrição</h3>
-                    <div className="h-4 w-px bg-white/10" />
-                    {card?.description && (
-                      <span className="text-[9px] text-green-500/80 font-medium">
-                        ({card.description.length} caracteres no banco)
-                      </span>
-                    )}
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
-                      isSyncing ? "bg-blue-500/20 text-blue-400 animate-pulse" : isDirty ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"
-                    )}>
-                      <div className={cn("h-1.5 w-1.5 rounded-full", (isSyncing || (!card?.description && !isDirty)) ? "bg-blue-400 animate-pulse outline outline-1 outline-blue-400/50" : isDirty ? "bg-amber-400" : "bg-green-400")} />
-                      {(isSyncing || (!card?.description && !isDirty)) ? 'Sincronizando...' : isDirty ? 'Alterações Pendentes' : 'Sincronizado'}
-                    </div>
                     <button onClick={() => toggleDescriptionPane(false)} className="text-muted-foreground hover:text-white transition-colors">
                         <X className="h-4 w-4" />
                     </button>
@@ -1276,11 +1259,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               )}
 
               <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white dark:bg-zinc-950 relative">
-                {!card?.description && !isDirty && (
-                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/30 pointer-events-none select-none italic text-xs animate-pulse bg-card/20 border-2 border-dashed border-primary/10 rounded-xl m-8">
-                        Carregando banco de dados...
-                    </div>
-                )}
                 <div
                     ref={editorRef}
                     contentEditable={canEdit}
@@ -1289,14 +1267,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         setIsDirty(true);
                     }}
                     onFocus={() => setIsDirty(true)}
-                    onBlur={(e) => {
-                        // Final sync on blur
-                        const html = e.currentTarget.innerHTML;
-                        setLocalDescription(html);
-                        if (html !== card?.description) {
-                            updateCard(cardId, { description: html });
-                        }
+                    onBlur={async (e) => {
                         setIsDirty(false);
+                        const html = e.currentTarget.innerHTML;
+                        if (html !== card?.description) {
+                            await updateCard(cardId, { description: html });
+                        }
                     }}
                     className="w-full min-h-full outline-none prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed selection:bg-primary/30"
                     style={{ 
