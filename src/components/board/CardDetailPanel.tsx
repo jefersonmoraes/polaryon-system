@@ -202,10 +202,22 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             const html = editorRef.current.innerHTML;
             await performSave(html);
         }
+        
         setIsDirty(false);
         setSaveStatus('idle');
+        
         if (cardId) {
           const store = useKanbanStore.getState();
+          // Importante: Ao trocar de card, force o preenchimento do editor com o valor do novo cardimediatamente 
+          // caso já tenhamos os dados no cache local (evita o delay do fetch).
+          const currentCard = store.cards.find(c => c.id === cardId);
+          if (currentCard && editorRef.current) {
+              const d = currentCard.description || '';
+              editorRef.current.innerHTML = d;
+              setLocalDescription(d);
+              lastSavedDescription.current = d;
+          }
+          
           store.fetchCardDetails(cardId).catch(console.error);
         }
     };
@@ -223,21 +235,27 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   useEffect(() => {
     if (!editorRef.current) return;
     
+    // O valor que vem do Banco/Store
     const storeDesc = card?.description || '';
     
     // BLOQUEIO DE REGRESSÃO:
-    // Nunca sincronizar se o editor está no meio de um salvamento ou se o usuário acabou de digitar
-    // e o estado local ainda não refletiu o que veio do servidor.
     const now = Date.now();
     const recentlySaved = now - lastSaveTime.current < 4000; 
 
-    if (!isDirty && !isSyncing && !recentlySaved && editorRef.current.innerHTML !== storeDesc) {
-      const store = useKanbanStore.getState();
-      if (!store.savingCards.has(cardId)) {
-          editorRef.current.innerHTML = storeDesc;
-          setLocalDescription(storeDesc);
-          lastSavedDescription.current = storeDesc;
-      }
+    // THE FIX: Se o editor estiver vazio e o banco tiver dados, ou se a info no servidor mudou e não estamos mexendo...
+    if (!isDirty && !isSyncing && !recentlySaved) {
+       const editorHTML = editorRef.current.innerHTML;
+       
+       // Sincroniza se houver diferença e não houver salvamento global em curso
+       if (editorHTML !== storeDesc) {
+         const store = useKanbanStore.getState();
+         if (!store.savingCards.has(cardId)) {
+            console.log(`[EDITOR_SYNC] Forçando atualização do conteúdo do Banco para a tela.`);
+            editorRef.current.innerHTML = storeDesc;
+            setLocalDescription(storeDesc);
+            lastSavedDescription.current = storeDesc;
+         }
+       }
     }
   }, [cardId, card?.description, isDirty, isSyncing]);
 
