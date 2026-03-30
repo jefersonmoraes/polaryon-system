@@ -296,6 +296,9 @@ router.post('/cards', async (req: Request, res: Response) => {
 
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
+        console.log(`[DEBUG_DB] --- INÍCIO DE REQUISIÇÃO PUT /cards/${req.params.id} ---`);
+        console.log(`[DEBUG_DB] Chaves no req.body:`, Object.keys(req.body));
+        
         const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, force, ...updateData } = req.body;
         const cardId = req.params.id as string;
         

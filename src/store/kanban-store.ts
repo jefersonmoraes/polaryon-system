@@ -21,6 +21,7 @@ interface KanbanState {
   boards: Board[];
   lists: KanbanList[];
   cards: Card[];
+  savingCards: Set<string>;
   labels: Label[];
   members: WorkspaceMember[];
   companies: Company[];
@@ -128,6 +129,7 @@ export const useKanbanStore = create<KanbanState>()(
       boards: [],
       lists: [],
       cards: [],
+      savingCards: new Set(),
       labels: [...DEFAULT_LABELS],
       members: [],
       companies: [],
@@ -338,28 +340,25 @@ export const useKanbanStore = create<KanbanState>()(
         }
       },
 
-      fetchCardDetails: async (cardId: string) => {
-        // Skip if already has description (avoid delay)
-        const current = get().cards.find(c => c.id === cardId);
-        if (current?.description) return;
-        
+      fetchCardDetails: async (id: string) => {
+        // If we are currently saving this card, DONT fetch and overwrite local state
+        if (get().savingCards.has(id)) {
+            console.log(`[STASH] Ignorando fetchCardDetails para ${id} pois há salvamento em curso.`);
+            return;
+        }
+
         try {
-          const res = await api.get(`/kanban/cards/${cardId}`);
-          if (res.data) {
-            // Re-check before setting: if the user typed something in between, 
-            // the server data is now officially considered "OLD" and shouldn't overwrite.
-            const latest = get().cards.find(c => c.id === cardId);
-            if (latest?.description && !current?.description) {
-               // The user started from empty and now has data, don't overwrite
-               return;
-            }
+            const response = await api.get(`/kanban/cards/${id}`);
+            const card = response.data;
             
+            // Re-check before applying to avoid race conditions
+            if (get().savingCards.has(id)) return;
+
             set(s => ({
-              cards: s.cards.map(c => c.id === cardId ? { ...c, ...res.data } : c)
+              cards: s.cards.map(c => c.id === id ? card : c)
             }));
-          }
         } catch (error) {
-          console.error(`Failed to load card details for ${cardId}:`, error);
+            console.error("Failed to fetch card details:", error);
         }
       },
 
@@ -1112,7 +1111,27 @@ export const useKanbanStore = create<KanbanState>()(
         }
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
-        return await api.put(`/kanban/cards/${id}`, data);
+
+        // Lock the card during save to prevent fetchCardDetails overwrites
+        set(s => {
+            const newSaving = new Set(s.savingCards);
+            newSaving.add(id);
+            return { savingCards: newSaving };
+        });
+
+        try {
+            const response = await api.put(`/kanban/cards/${id}`, data);
+            return response;
+        } finally {
+            // Release the lock after some safety buffer (500ms) to ensure DB is consistent
+            setTimeout(() => {
+                set(s => {
+                    const newSaving = new Set(s.savingCards);
+                    newSaving.delete(id);
+                    return { savingCards: newSaving };
+                });
+            }, 500);
+        }
       },
       updateCardDescriptionSync: (id: string, description: string) => {
         set(s => ({
