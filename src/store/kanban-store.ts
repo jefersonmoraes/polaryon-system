@@ -338,6 +338,10 @@ export const useKanbanStore = create<KanbanState>()(
       },
 
       fetchCardDetails: async (cardId: string) => {
+        // Skip if already has description (avoid delay)
+        const current = get().cards.find(c => c.id === cardId);
+        if (current?.description) return;
+        
         try {
           const res = await api.get(`/kanban/cards/${cardId}`);
           if (res.data) {

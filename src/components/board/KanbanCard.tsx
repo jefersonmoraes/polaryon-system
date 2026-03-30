@@ -48,7 +48,18 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
   } : {};
 
   return (
-    <div className={`kanban-card group shadow-lg hover:shadow-xl transition-[box-shadow,border-color,background-color,transform] duration-200 backdrop-blur-sm border border-border/60 relative overflow-hidden ${card.completed ? 'opacity-70 grayscale-[0.3] bg-muted' : 'bg-card'}`} style={cardStyle} onClick={onClick}>
+    <div 
+        className={`kanban-card group shadow-lg hover:shadow-xl transition-[box-shadow,border-color,background-color,transform] duration-200 backdrop-blur-sm border border-border/60 relative overflow-hidden ${card.completed ? 'opacity-70 grayscale-[0.3] bg-muted' : 'bg-card'}`} 
+        style={cardStyle} 
+        onClick={onClick}
+        onMouseEnter={() => {
+            const store = useKanbanStore.getState();
+            // Pre-fetch details so they are ready when clicked
+            if (!card.description) {
+                store.fetchCardDetails(card.id).catch(() => {});
+            }
+        }}
+    >
       {/* Title */}
       <div className="flex items-start justify-between gap-2">
         <p className={`text-sm font-bold leading-snug text-foreground ${card.completed ? 'line-through text-muted-foreground' : ''}`}>{card.title}</p>

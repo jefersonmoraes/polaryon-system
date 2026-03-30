@@ -172,32 +172,38 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   useEffect(() => {
     if (!editorRef.current) return;
     
-    // Only skip if the user is ACTIVELY typing (not just focused)
-    if (isDirty && !isInitialLoad.current) return;
-    
     const storeDesc = card?.description || '';
     const domDesc = editorRef.current.innerHTML;
 
-    if (domDesc !== storeDesc || isInitialLoad.current) {
+    // Allow sync if it's the first load OR if the editor is currently empty 
+    // (prevents blockage when data arrives after user focus)
+    const shouldSync = isInitialLoad.current || (!isDirty && domDesc !== storeDesc) || (isDirty && !domDesc && storeDesc);
+
+    if (shouldSync) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
-      isInitialLoad.current = false;
+      
+      // Only mark initial load as done if we actually have something or it's definitely not coming
+      if (storeDesc || !isSyncing) {
+        isInitialLoad.current = false;
+      }
     }
-  }, [cardId, card?.description, isDirty]);
+  }, [cardId, card?.description, isDirty, isSyncing]);
 
-  // Debounced Save - Only if dirty and has content (safety against accidental wipe)
+  // Debounced Save - Reduced delay for "instant" feel (500ms)
   useEffect(() => {
     if (!isDirty || isInitialLoad.current) return;
     
     const timer = setTimeout(async () => {
-      // Check if we already have a newer version on the server we haven't seen yet
-      // unless we definitely want to overwrite.
       if (localDescription !== card?.description) {
         setIsSyncing(true);
-        await updateCard(cardId, { description: localDescription });
-        setIsSyncing(false);
+        try {
+          await updateCard(cardId, { description: localDescription });
+        } finally {
+          setIsSyncing(false);
+        }
       }
-    }, 1500);
+    }, 500);
     return () => clearTimeout(timer);
   }, [localDescription, cardId, updateCard, card?.description, isDirty]);
 
