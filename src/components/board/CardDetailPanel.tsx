@@ -134,9 +134,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [showChat, setShowChat] = useState(false);
 
   const toggleDescriptionPane = async (val: boolean) => {
-    if (!val && isDirty && editorRef.current) {
+    if (isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
         if (html !== lastSavedDescription.current) {
+            console.log(`[DEBUG_NET] SALVANDO AO ALTERAR PANE (${html.length} chars)`);
             await updateCard(cardId, { description: html });
             lastSaveTime.current = Date.now();
             lastSavedDescription.current = html;
@@ -148,7 +149,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
   
   const toggleChat = async (val: boolean) => {
-    if (val && isDirty && editorRef.current) {
+    if (isDirty && editorRef.current) {
         const html = editorRef.current.innerHTML;
         if (html !== lastSavedDescription.current) {
             await updateCard(cardId, { description: html });
@@ -162,13 +163,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
 
   const handleClose = async () => {
-    if (isDirty && editorRef.current) {
-        const html = editorRef.current.innerHTML;
-        if (html !== lastSavedDescription.current) {
-            console.log(`[DEBUG_NET] SALVAMENTO FINAL AO FECHAR PANEL (${html.length} chars)`);
-            await updateCard(cardId, { description: html });
+    // CAPTURA IMEDIATA: Pegar o HTML antes de mexer em qualquer estado (Dirty/Sync/etc)
+    const currentHTML = editorRef.current?.innerHTML;
+    
+    if (isDirty && currentHTML !== undefined) {
+        if (currentHTML !== lastSavedDescription.current) {
+            console.log(`[DEBUG_NET] SALVAMENTO FINAL AO FECHAR PANEL (${currentHTML.length} chars)`);
+            await updateCard(cardId, { description: currentHTML });
             lastSaveTime.current = Date.now();
-            lastSavedDescription.current = html;
+            lastSavedDescription.current = currentHTML;
         }
     }
     setIsDirty(false);
@@ -218,17 +221,23 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     
     const storeDesc = card?.description || '';
     
-    // SOURCE OF TRUTH PROTECTION:
-    // Only update the DOM if the user is NOT editing (not dirty)
-    // AND it has been more than 3 seconds since the last save (to avoid race with slow network)
+    // BLOQUEIO DE REGRESSÃO:
+    // Nunca sincronizar se o editor está no meio de um salvamento ou se o usuário acabou de digitar
+    // e o estado local ainda não refletiu o que veio do servidor.
     const now = Date.now();
-    const recentlySaved = now - lastSaveTime.current < 3000;
+    const recentlySaved = now - lastSaveTime.current < 4000; // Aumentado para 4s para segurança extra
 
     if (!isDirty && !isSyncing && !recentlySaved && editorRef.current.innerHTML !== storeDesc) {
-      editorRef.current.innerHTML = storeDesc;
-      setLocalDescription(storeDesc);
+      // Se estamos vindo de um card vazio para um com dados, OK.
+      // Se estamos vindo de dados para vazio, APENAS se for o caso real do servidor.
+      // E só se não houver 'savingCards' no Store global (blindagem do KanbanStore).
+      const store = useKanbanStore.getState();
+      if (!store.savingCards.has(cardId)) {
+          editorRef.current.innerHTML = storeDesc;
+          setLocalDescription(storeDesc);
+      }
     }
-  }, [cardId, card?.description, isDirty]);
+  }, [cardId, card?.description, isDirty, isSyncing]);
 
   // Background Persistence (500ms debounce)
   useEffect(() => {
