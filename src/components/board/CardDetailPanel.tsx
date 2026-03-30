@@ -1332,7 +1332,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <div
                     ref={editorRef}
                     contentEditable={canEdit}
-                    dangerouslySetInnerHTML={{ __html: card?.description || '' }}
                     onInput={(e) => {
                         const html = e.currentTarget.innerHTML;
                         setLocalDescription(html);
