@@ -169,39 +169,54 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   // Reset dirty state on card change and FETCH LATEST DETAILS
   useEffect(() => {
-    const handleCardChangeSave = async () => {
-        if (isDirty && editorRef.current) {
-            const html = editorRef.current.innerHTML;
-            if (html !== card?.description) {
-                await updateCard(cardId, { description: html });
-            }
-        }
-        setIsDirty(false);
-        if (cardId) {
-          const store = useKanbanStore.getState();
-          store.fetchCardDetails(cardId).catch(console.error);
-        }
-    };
-    handleCardChangeSave();
+    // Before switching cards, ensure any pending change is flushed or at least dirty is reset
+    setIsDirty(false);
+    
+    if (cardId) {
+      const store = useKanbanStore.getState();
+      // Only fetch if we don't already have it, or if it's not the active card
+      store.fetchCardDetails(cardId).catch(console.error);
+    }
   }, [cardId]);
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const skipNextSync = useRef(false);
 
-  // Instant Debounced Save - REMOVED for "Normal Field" feel
-  // We keep only the useEffect that syncs from Store to DOM on mount/change
+  // Sync relative to card change or external updates
   useEffect(() => {
     if (!editorRef.current) return;
     
     const storeDesc = card?.description || '';
-    if (editorRef.current.innerHTML !== storeDesc && !isDirty) {
+    
+    // SOURCE OF TRUTH PROTECTION:
+    // Only update the DOM if the user is NOT editing (not dirty)
+    // This prevents the "poof" disappearance when server data arrives
+    if (!isDirty && editorRef.current.innerHTML !== storeDesc) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
     }
   }, [cardId, card?.description, isDirty]);
+
+  // Background Persistence (500ms debounce)
+  useEffect(() => {
+    if (!isDirty) return;
+    
+    const timer = setTimeout(async () => {
+      if (localDescription !== card?.description) {
+        setIsSyncing(true);
+        try {
+          await updateCard(cardId, { description: localDescription });
+        } finally {
+          setIsSyncing(false);
+          // Once saved, we can potentially lower the dirty flag if no more changes happened
+          // but we'll let onBlur or CardChange handle that for total safety
+        }
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localDescription, cardId, isDirty]);
 
   const execCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
@@ -1263,16 +1278,22 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     ref={editorRef}
                     contentEditable={canEdit}
                     onInput={(e) => {
-                        setLocalDescription(e.currentTarget.innerHTML);
+                        const html = e.currentTarget.innerHTML;
+                        setLocalDescription(html);
                         setIsDirty(true);
+                        // SOURCE OF TRUTH: Update global store immediately so other 
+                        // components see the change and fetchCardDetails doesn't override it easily
+                        useKanbanStore.getState().updateCardDescriptionSync(cardId, html);
                     }}
                     onFocus={() => setIsDirty(true)}
                     onBlur={async (e) => {
-                        setIsDirty(false);
                         const html = e.currentTarget.innerHTML;
                         if (html !== card?.description) {
+                            setIsSyncing(true);
                             await updateCard(cardId, { description: html });
+                            setIsSyncing(false);
                         }
+                        setIsDirty(false);
                     }}
                     className="w-full min-h-full outline-none prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed selection:bg-primary/30"
                     style={{ 

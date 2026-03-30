@@ -96,6 +96,7 @@ interface KanbanState {
   addLabel: (name: string, color: string) => void;
   updateLabel: (id: string, data: Partial<Label>) => void;
   deleteLabel: (id: string) => void;
+  updateCardDescriptionSync: (id: string, description: string) => void;
   // description entries
   addDescriptionEntry: (cardId: string, text: string) => void;
   deleteDescriptionEntry: (cardId: string, entryId: string) => void;
@@ -345,6 +346,14 @@ export const useKanbanStore = create<KanbanState>()(
         try {
           const res = await api.get(`/kanban/cards/${cardId}`);
           if (res.data) {
+            // Re-check before setting: if the user typed something in between, 
+            // the server data is now officially considered "OLD" and shouldn't overwrite.
+            const latest = get().cards.find(c => c.id === cardId);
+            if (latest?.description && !current?.description) {
+               // The user started from empty and now has data, don't overwrite
+               return;
+            }
+            
             set(s => ({
               cards: s.cards.map(c => c.id === cardId ? { ...c, ...res.data } : c)
             }));
@@ -1104,6 +1113,11 @@ export const useKanbanStore = create<KanbanState>()(
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
         api.put(`/kanban/cards/${id}`, data).catch(console.error);
+      },
+      updateCardDescriptionSync: (id: string, description: string) => {
+        set(s => ({
+          cards: s.cards.map(c => c.id === id ? { ...c, description } : c)
+        }));
       },
       addDescriptionEntry: (cardId, text) => {
         const id = uid();
