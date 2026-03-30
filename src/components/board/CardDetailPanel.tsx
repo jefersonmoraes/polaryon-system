@@ -4,7 +4,8 @@ import {
   X, Calendar, Tag, CheckSquare, MessageSquare, Clock, Trash2, Plus,
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
-  Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check
+  Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check,
+  ShoppingCart, Package
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
@@ -27,7 +28,7 @@ interface Props {
   onClose: () => void;
 }
 
-const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'deliveryAddress', 'deliveryTime', 'estimated', 'description', 'attachments', 'budgets', 'checklist', 'timer', 'comments'];
+const DEFAULT_SECTIONS = ['summary', 'labels', 'assignee', 'dates', 'deliveryAddress', 'deliveryTime', 'estimated', 'description', 'items', 'attachments', 'budgets', 'checklist', 'timer', 'comments'];
 
 const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> = {
   summary: { icon: <FileText className="h-3.5 w-3.5" />, label: 'Resumo' },
@@ -38,6 +39,7 @@ const SECTION_LABELS: Record<string, { icon: React.ReactNode; label: string }> =
   deliveryTime: { icon: <Truck className="h-3.5 w-3.5" />, label: 'Prazo de Entrega' },
   estimated: { icon: <Timer className="h-3.5 w-3.5" />, label: 'Estimativa' },
   description: { icon: <AlignLeft className="h-3.5 w-3.5" />, label: 'Descrição' },
+  items: { icon: <ShoppingCart className="h-3.5 w-3.5" />, label: 'Itens' },
   attachments: { icon: <Paperclip className="h-3.5 w-3.5" />, label: 'Anexos' },
   budgets: { icon: <Calculator className="h-3.5 w-3.5" />, label: 'Orçamentos' },
   checklist: { icon: <CheckSquare className="h-3.5 w-3.5" />, label: 'Checklist' },
@@ -51,6 +53,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     addChecklistItem, toggleChecklistItem, deleteChecklistItem,
     addComment, startTimer, stopTimer, resetTimer,
     addLabel, updateLabel, deleteLabel,
+    addCardItem, updateCardItem, deleteCardItem,
     setUndoAction,
     recentMilestoneTitles, addRecentMilestoneTitle, budgets, companies,
     fetchCardDetails
@@ -111,6 +114,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [estimatedTime, setEstimatedTime] = useState(card?.estimatedTime?.toString() || '');
   const [deliveryAddress, setDeliveryAddress] = useState(card?.deliveryAddress || '');
   const [deliveryTime, setDeliveryTime] = useState(card?.deliveryTime || '');
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemValue, setNewItemValue] = useState<string>('');
+  const [newItemQuantity, setNewItemQuantity] = useState<string>('1');
 
   // Budget editing state
   const [selectedBudgetToEdit, setSelectedBudgetToEdit] = useState<Budget | undefined>();
@@ -191,6 +197,17 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const handleAddCheckItem = () => {
     if (!canEdit) return;
     if (newCheckItem.trim()) { addChecklistItem(cardId, newCheckItem.trim()); setNewCheckItem(''); }
+  };
+  const handleAddCardItem = () => {
+    if (!canEdit) return;
+    if (newItemName.trim()) {
+        const val = parseFloat(newItemValue.replace(',', '.')) || 0;
+        const qty = parseInt(newItemQuantity) || 1;
+        addCardItem(cardId, newItemName.trim(), val, qty);
+        setNewItemName('');
+        setNewItemValue('');
+        setNewItemQuantity('1');
+    }
   };
   const handleAddComment = () => {
     if (!canEdit) return;
@@ -496,6 +513,137 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 {recentMilestoneTitles.map(sug => (
                   <button key={sug} onClick={() => handleAddMilestone(sug)} className="px-2 py-1 rounded bg-secondary text-[10px] font-medium hover:bg-primary hover:text-primary-foreground transition-colors text-foreground">{sug}</button>
                 ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+      case 'items': {
+        const items = card.items || [];
+        const grandTotal = items.reduce((acc, item) => acc + (item.unitValue * item.quantity), 0);
+
+        return (
+          <div key={section} className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground mb-1">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-3.5 w-3.5" /> Itens da Oportunidade
+              </div>
+              {items.length > 0 && (
+                <div className="text-green-600 dark:text-green-400 font-bold">
+                  Total: {grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-secondary/30 rounded-lg overflow-hidden border border-border/50">
+              <table className="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr className="bg-secondary/50 text-muted-foreground border-b border-border/50">
+                    <th className="px-3 py-2 font-bold uppercase tracking-wider">Nome do Item</th>
+                    <th className="px-3 py-2 font-bold uppercase tracking-wider w-24">Valor Unit.</th>
+                    <th className="px-3 py-2 font-bold uppercase tracking-wider w-16">Qtd.</th>
+                    <th className="px-3 py-2 font-bold uppercase tracking-wider w-24 text-right">Subtotal</th>
+                    {canEdit && <th className="px-2 py-2 w-8"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={canEdit ? 5 : 4} className="px-3 py-4 text-center text-muted-foreground italic">
+                        Nenhum item cadastrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map(item => (
+                      <tr key={item.id} className="hover:bg-secondary/40 transition-colors group">
+                        <td className="px-3 py-2">
+                          {canEdit ? (
+                            <input 
+                              value={item.name}
+                              onChange={e => updateCardItem(cardId, item.id, { name: e.target.value })}
+                              className="w-full bg-transparent outline-none focus:text-primary"
+                            />
+                          ) : item.name}
+                        </td>
+                        <td className="px-3 py-2">
+                          {canEdit ? (
+                            <input 
+                              value={item.unitValue}
+                              type="number"
+                              step="0.01"
+                              onChange={e => updateCardItem(cardId, item.id, { unitValue: parseFloat(e.target.value) || 0 })}
+                              className="w-full bg-transparent outline-none focus:text-primary"
+                            />
+                          ) : item.unitValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="px-3 py-2">
+                          {canEdit ? (
+                            <input 
+                              value={item.quantity}
+                              type="number"
+                              onChange={e => updateCardItem(cardId, item.id, { quantity: parseInt(e.target.value) || 1 })}
+                              className="w-full bg-transparent outline-none focus:text-primary"
+                            />
+                          ) : item.quantity}
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium">
+                          {(item.unitValue * item.quantity).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        {canEdit && (
+                          <td className="px-2 py-2 text-center">
+                            <button 
+                              onClick={() => deleteCardItem(cardId, item.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {canEdit && (
+              <div className="grid grid-cols-[1fr,100px,70px,auto] gap-2 items-end bg-secondary/20 p-2 rounded-lg border border-dashed border-border/60">
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Novo Item</label>
+                  <input 
+                    value={newItemName}
+                    onChange={e => setNewItemName(e.target.value)}
+                    placeholder="Descrição do item..."
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Valor Unit.</label>
+                  <input 
+                    value={newItemValue}
+                    onChange={e => setNewItemValue(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Qtd</label>
+                  <input 
+                    value={newItemQuantity}
+                    onChange={e => setNewItemQuantity(e.target.value)}
+                    type="number"
+                    min="1"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+                <button 
+                  onClick={handleAddCardItem}
+                  disabled={!newItemName.trim()}
+                  className="bg-primary text-primary-foreground p-2 rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  title="Adicionar Item"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
             )}
           </div>

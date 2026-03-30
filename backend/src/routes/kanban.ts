@@ -186,7 +186,7 @@ router.get('/cards/:id', async (req: Request, res: Response) => {
         const cardId = req.params.id as string;
         const card = await prisma.card.findUnique({
             where: { id: cardId },
-            include: { labels: true, checklist: true, comments: true, attachments: true, milestones: true, timeEntries: true }
+            include: { labels: true, checklist: true, items: true, comments: true, attachments: true, milestones: true, timeEntries: true }
         });
         if (!card) return res.status(404).json({ error: 'Card not found' });
         
@@ -215,7 +215,7 @@ router.get('/cards', async (req: Request, res: Response) => {
 
 router.post('/cards', async (req: Request, res: Response) => {
     try {
-        const { labels, checklist, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        const { labels, checklist, items, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
 
         if (data.dueDate === '') data.dueDate = null;
         else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
@@ -259,7 +259,7 @@ router.post('/cards', async (req: Request, res: Response) => {
 
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
-        const { labels, checklist, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        const { labels, checklist, items, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
         delete (data as any).updatedAt;
         const cardId = req.params.id as string;
 
@@ -289,6 +289,15 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             if (checklist.length > 0) {
                 await prisma.checklistItem.createMany({
                     data: checklist.map((i: any) => ({ ...i, cardId }))
+                });
+            }
+        }
+
+        if (items !== undefined) {
+            await prisma.cardItem.deleteMany({ where: { cardId } });
+            if (items.length > 0) {
+                await prisma.cardItem.createMany({
+                    data: items.map((i: any) => ({ ...i, cardId }))
                 });
             }
         }
@@ -600,7 +609,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
                 // Incluindo anexos e comentários para garantir persistência na UI
-                include: { labels: true, checklist: true, milestones: true, timeEntries: true, attachments: true, comments: true }
+                include: { labels: true, checklist: true, items: true, milestones: true, timeEntries: true, attachments: true, comments: true }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),
@@ -652,6 +661,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             comments: c.comments || [],
             milestones: c.milestones || [],
             checklist: c.checklist || [],
+            items: c.items || [],
             timeEntries: c.timeEntries || []
         }));
 

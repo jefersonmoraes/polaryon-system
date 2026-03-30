@@ -100,6 +100,7 @@ model Card {
 
   labels      CardLabel[]
   checklist   ChecklistItem[]
+  items       CardItem[]
   comments    Comment[]
   timeEntries TimeEntry[]
   attachments Attachment[]
@@ -122,6 +123,15 @@ model ChecklistItem {
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   text      String
   completed Boolean  @default(false)
+}
+
+model CardItem {
+  id        String   @id @default(uuid())
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  name      String
+  unitValue Float    @default(0)
+  quantity  Int      @default(1)
 }
 
 model Comment {

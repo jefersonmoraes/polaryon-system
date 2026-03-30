@@ -544,6 +544,19 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
         }
 
+        // Inject Items from fullItems
+        const cardItems: any[] = [];
+        if (fullItems && fullItems.length > 0) {
+            fullItems.forEach((item: any) => {
+                cardItems.push({
+                    id: crypto.randomUUID(),
+                    name: item.descricao || "Item sem descrição",
+                    unitValue: item.valorUnitarioEstimado || 0,
+                    quantity: item.quantidade || 1
+                });
+            });
+        }
+
         // Create Full Card Object
         const newCardData = {
             id: crypto.randomUUID(),
@@ -551,6 +564,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             updatedAt: new Date().toISOString(),
             comments: [],
             attachments: cardAttachments,
+            items: cardItems,
             checklist: [],
             timeEntries: [],
             milestones: [],

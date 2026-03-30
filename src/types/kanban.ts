@@ -280,6 +280,13 @@ export interface ChecklistItem {
   completed: boolean;
 }
 
+export interface CardItem {
+  id: string;
+  name: string;
+  unitValue: number;
+  quantity: number;
+}
+
 export interface Comment {
   id: string;
   text: string;
@@ -335,6 +342,7 @@ export interface Card {
   };
   attachments: Attachment[];
   timeEntries: TimeEntry[];
+  items: CardItem[];
   estimatedTime?: number; // minutes
   customLink?: string; // Editável para links externos como PNCP
   pncpId?: string; // Para o botão interno de Acessar Oportunidade

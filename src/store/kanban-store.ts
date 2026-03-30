@@ -86,6 +86,10 @@ interface KanbanState {
   addChecklistItem: (cardId: string, text: string) => void;
   toggleChecklistItem: (cardId: string, itemId: string) => void;
   deleteChecklistItem: (cardId: string, itemId: string) => void;
+  // items
+  addCardItem: (cardId: string, name: string, unitValue: number, quantity: number) => void;
+  updateCardItem: (cardId: string, itemId: string, data: Partial<{ name: string, unitValue: number, quantity: number }>) => void;
+  deleteCardItem: (cardId: string, itemId: string) => void;
   // comments
   addComment: (cardId: string, text: string) => void;
   // labels
@@ -1194,6 +1198,22 @@ export const useKanbanStore = create<KanbanState>()(
         const c = get().cards.find(x => x.id === cardId);
         if (!c) return;
         get().updateCard(cardId, { checklist: c.checklist.filter(i => i.id !== itemId) });
+      },
+      // Items
+      addCardItem: (cardId, name, unitValue, quantity) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { items: [...(c.items || []), { id: uid(), name, unitValue, quantity }] });
+      },
+      updateCardItem: (cardId, itemId, data) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { items: c.items.map(i => i.id === itemId ? { ...i, ...data } : i) });
+      },
+      deleteCardItem: (cardId, itemId) => {
+        const c = get().cards.find(x => x.id === cardId);
+        if (!c) return;
+        get().updateCard(cardId, { items: c.items.filter(i => i.id !== itemId) });
       },
 
       // Comments
