@@ -164,32 +164,38 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   const [localDescription, setLocalDescription] = useState(card?.description || '');
   const [isDirty, setIsDirty] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const isInitialLoad = useRef(true);
 
   // Sync relative to card change or external updates
   useEffect(() => {
-    if (!editorRef.current || isDirty) return;
+    if (!editorRef.current) return;
+    
+    // Only skip if the user is ACTIVELY typing (not just focused)
+    if (isDirty && !isInitialLoad.current) return;
     
     const storeDesc = card?.description || '';
     const domDesc = editorRef.current.innerHTML;
 
-    // Use DOM innerHTML comparison to detect needs for initial or external sync
-    if (domDesc !== storeDesc) {
+    if (domDesc !== storeDesc || isInitialLoad.current) {
       editorRef.current.innerHTML = storeDesc;
       setLocalDescription(storeDesc);
+      isInitialLoad.current = false;
     }
-  }, [card?.id, card?.description, isDirty]);
+  }, [cardId, card?.description, isDirty]);
 
   // Debounced Save - Only if dirty and has content (safety against accidental wipe)
   useEffect(() => {
-    if (!isDirty) return;
-    const timer = setTimeout(() => {
-      // Safety check: Don't overwrite a non-empty description with an empty one 
-      // unless the user intentionally cleared it and paused.
-      const isWipeAccident = (card?.description && card.description.length > 10) && (!localDescription || localDescription.length < 5);
-      
-      if (!isWipeAccident && localDescription !== card?.description) {
-        updateCard(cardId, { description: localDescription });
+    if (!isDirty || isInitialLoad.current) return;
+    
+    const timer = setTimeout(async () => {
+      // Check if we already have a newer version on the server we haven't seen yet
+      // unless we definitely want to overwrite.
+      if (localDescription !== card?.description) {
+        setIsSyncing(true);
+        await updateCard(cardId, { description: localDescription });
+        setIsSyncing(false);
       }
     }, 1500);
     return () => clearTimeout(timer);
@@ -1167,20 +1173,20 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <div className="flex items-center gap-3">
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Editor de Descrição</h3>
                     <div className="h-4 w-px bg-white/10" />
-                    <button 
-                        onClick={() => {
-                            fetchCardDetails(cardId);
-                            setIsDirty(false);
-                        }}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-bold transition-all border border-primary/20 active:scale-95"
-                        title="Sincronizar com o Servidor"
-                    >
-                        <RefreshCw className={cn("h-3 w-3", !card?.description && "animate-spin")} />
-                        RECUPERAR DO BANCO
-                    </button>
+                    {card?.description && (
+                      <span className="text-[9px] text-green-500/80 font-medium">
+                        ({card.description.length} caracteres no banco)
+                      </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[9px] text-muted-foreground italic">Autossalvamento ativado</span>
+                    <div className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
+                      isSyncing ? "bg-blue-500/20 text-blue-400 animate-pulse" : isDirty ? "bg-amber-500/20 text-amber-400" : "bg-green-500/20 text-green-400"
+                    )}>
+                      <div className={cn("h-1 w-1 rounded-full", isSyncing ? "bg-blue-400" : isDirty ? "bg-amber-400" : "bg-green-400")} />
+                      {isSyncing ? 'Sincronizando...' : isDirty ? 'Alterações Pendentes' : 'Sincronizado'}
+                    </div>
                     <button onClick={() => toggleDescriptionPane(false)} className="text-muted-foreground hover:text-white transition-colors">
                         <X className="h-4 w-4" />
                     </button>

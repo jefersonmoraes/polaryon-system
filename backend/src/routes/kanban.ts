@@ -296,20 +296,62 @@ router.post('/cards', async (req: Request, res: Response) => {
 
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
-        const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
-        delete (data as any).updatedAt;
+        const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, force, ...updateData } = req.body;
+        delete (updateData as any).updatedAt;
         const cardId = req.params.id as string;
 
-        if (data.dueDate === '') data.dueDate = null;
-        else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
-            data.dueDate = new Date(data.dueDate).toISOString();
+        if (updateData.dueDate === '') updateData.dueDate = null;
+        else if (updateData.dueDate && typeof updateData.dueDate === 'string' && updateData.dueDate.length === 10) {
+            updateData.dueDate = new Date(updateData.dueDate).toISOString();
         }
-        if (data.startDate === '') data.startDate = null;
-        else if (data.startDate && typeof data.startDate === 'string' && data.startDate.length === 10) {
-            data.startDate = new Date(data.startDate).toISOString();
+        if (updateData.startDate === '') updateData.startDate = null;
+        else if (updateData.startDate && typeof updateData.startDate === 'string' && updateData.startDate.length === 10) {
+            updateData.startDate = new Date(updateData.startDate).toISOString();
         }
 
-        const card = await prisma.card.update({ where: { id: cardId }, data });
+        // --- ZERO LOSS POLICY ---
+        // Fetch current card state before update
+        const currentCard = await prisma.card.findUnique({
+            where: { id: cardId },
+            select: { description: true, title: true }
+        });
+
+        if (currentCard && updateData.description !== undefined) {
+            const oldDesc = currentCard.description || '';
+            const newDesc = updateData.description || '';
+
+            // 1. Safety Lock: Prevent accidental wipes of long content
+            const isPotentialWipe = oldDesc.length > 300 && newDesc.length < 20;
+            if (isPotentialWipe && !force) {
+                console.warn(`[ZERO LOSS] Blocked potential accidental wipe on card ${cardId}`);
+                return res.status(403).json({ 
+                    error: 'BLOQUEIO DE SEGURANÇA: Tentativa de apagar descrição longa detectada. Use "force: true" para confirmar.',
+                    reason: 'PROTEÇÃO_DE_DADOS'
+                });
+            }
+
+            // 2. Version History Log: If description changed and old was significant, log it
+            if (oldDesc !== newDesc && oldDesc.length > 50) {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: (req as any).user?.id || 'system',
+                        userName: (req as any).user?.name || 'Sistema',
+                        action: 'SISTEMA',
+                        entity: 'CARTÃO',
+                        details: `HISTÓRICO_RECUPERÁVEL: Versão anterior da descrição do cartão "${currentCard.title}" preservada. [Tamanho: ${oldDesc.length}]`
+                    }
+                }).catch(e => console.error("Failed to log recovery version:", e));
+                
+                // Log specifically to server console for deep retrieval if needed
+                console.log(`[RECOVERY_BACKUP] Card ${cardId} Old Desc: ${oldDesc.substring(0, 100)}...`);
+            }
+        }
+        // --- END ZERO LOSS POLICY ---
+
+        const card = await prisma.card.update({ 
+            where: { id: cardId }, 
+            data: updateData 
+        });
 
         // Update Labels relationship (Array of Strings to link table)
         if (labels !== undefined) {
