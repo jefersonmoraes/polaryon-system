@@ -96,6 +96,9 @@ interface KanbanState {
   addLabel: (name: string, color: string) => void;
   updateLabel: (id: string, data: Partial<Label>) => void;
   deleteLabel: (id: string) => void;
+  // description entries
+  addDescriptionEntry: (cardId: string, text: string) => void;
+  deleteDescriptionEntry: (cardId: string, entryId: string) => void;
   // time tracking
   startTimer: (cardId: string) => void;
   stopTimer: (cardId: string) => void;
@@ -1092,6 +1095,38 @@ export const useKanbanStore = create<KanbanState>()(
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
         api.put(`/kanban/cards/${id}`, data).catch(console.error);
+      },
+      addDescriptionEntry: (cardId, text) => {
+        const id = uid();
+        const createdAt = new Date().toISOString();
+        const newEntry = { id, text, createdAt };
+        
+        set(s => ({
+          cards: s.cards.map(c => c.id === cardId ? { 
+            ...c, 
+            descriptionEntries: [...(c.descriptionEntries || []), newEntry] 
+          } : c)
+        }));
+
+        const card = get().cards.find(c => c.id === cardId);
+        if (card) {
+          api.put(`/kanban/cards/${cardId}`, { descriptionEntries: card.descriptionEntries }).catch(console.error);
+          socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id: cardId, data: { descriptionEntries: card.descriptionEntries } } });
+        }
+      },
+      deleteDescriptionEntry: (cardId, entryId) => {
+        set(s => ({
+          cards: s.cards.map(c => c.id === cardId ? { 
+            ...c, 
+            descriptionEntries: (c.descriptionEntries || []).filter(e => e.id !== entryId) 
+          } : c)
+        }));
+
+        const card = get().cards.find(c => c.id === cardId);
+        if (card) {
+          api.put(`/kanban/cards/${cardId}`, { descriptionEntries: card.descriptionEntries }).catch(console.error);
+          socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id: cardId, data: { descriptionEntries: card.descriptionEntries } } });
+        }
       },
       deleteCard: (id) => {
         set(s => ({

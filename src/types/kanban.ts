@@ -294,6 +294,12 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface CardDescriptionEntry {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface TimeEntry {
   id: string;
   startedAt: string;
@@ -323,6 +329,7 @@ export interface Card {
   title: string;
   summary: string;
   description: string;
+  descriptionEntries: CardDescriptionEntry[];
   position: number;
   labels: string[]; // label ids
   checklist: ChecklistItem[];

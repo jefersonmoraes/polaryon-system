@@ -54,6 +54,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     addComment, startTimer, stopTimer, resetTimer,
     addLabel, updateLabel, deleteLabel,
     addCardItem, updateCardItem, deleteCardItem,
+    addDescriptionEntry, deleteDescriptionEntry,
     setUndoAction,
     recentMilestoneTitles, addRecentMilestoneTitle, budgets, companies,
     fetchCardDetails
@@ -129,7 +130,31 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [labelHex, setLabelHex] = useState('#3b82f6');
   const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState((card?.comments.length || 0) > 0);
+  const [showDescriptionPane, setShowDescriptionPane] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  
+  const toggleDescriptionPane = (val: boolean) => {
+    setShowDescriptionPane(val);
+    if (val) setShowChat(false);
+  };
+  
+  const toggleChat = (val: boolean) => {
+    setShowChat(val);
+    if (val) setShowDescriptionPane(false);
+  };
+
+  useEffect(() => {
+    if (card) {
+      // Priority: Description first, then Comments
+      if (card.descriptionEntries && card.descriptionEntries.length > 0) {
+        toggleDescriptionPane(true);
+      } else if (card.comments && card.comments.length > 0) {
+        toggleChat(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardId]);
+
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
@@ -1011,10 +1036,97 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
         <motion.div
-          initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className={`relative w-full ${showChat ? 'max-w-[95vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[95vh] transition-all duration-300`}
-        >
+           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+           className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[95vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[95vh] transition-all duration-300`}
+         >
+          {/* Description Side Pane (Left 40%) */}
+          {showDescriptionPane && (
+            <div className="w-[40%] border-r border-border bg-muted/10 flex flex-col shrink-0">
+               <div className="p-4 border-b border-border flex items-center justify-between bg-card text-foreground font-semibold">
+                <span className="flex items-center gap-2 text-primary"><AlignLeft className="h-4 w-4" /> Histórico da Descrição</span>
+                <button onClick={() => setShowDescriptionPane(false)} className="p-1 rounded hover:bg-secondary transition-colors text-muted-foreground"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
+                {(!card.descriptionEntries || card.descriptionEntries.length === 0) ? (
+                  <p className="text-xs text-muted-foreground text-center mt-10 italic">Nenhuma descrição detalhada ainda.</p>
+                ) : (
+                  card.descriptionEntries.slice().reverse().map(entry => (
+                    <div key={entry.id} className="bg-background border border-border/60 rounded-lg p-3 shadow-sm hover:border-primary/30 transition-colors">
+                      <div className="flex items-center gap-2 mb-2 border-b border-border/30 pb-2">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          {new Date(entry.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <button 
+                          onClick={() => { if (confirm('Excluir esta entrada da descrição?')) deleteDescriptionEntry(cardId, entry.id); }}
+                          className="ml-auto p-1 rounded hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                           <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div 
+                        className="text-xs text-foreground/90 prose prose-sm dark:prose-invert max-w-none break-words leading-relaxed" 
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.text) }} 
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+              
+              {canEdit && (
+                <div className="p-3 bg-card border-t border-border">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 p-1 bg-secondary/50 rounded border border-border">
+                      <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Negrito"><Bold className="h-3 w-3" /></button>
+                      <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Itálico"><Italic className="h-3 w-3" /></button>
+                      <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Sublinhado"><Underline className="h-3 w-3" /></button>
+                      <div className="w-px h-3 bg-border mx-1" />
+                      <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-primary/20 transition-colors" title="Lista"><List className="h-3 w-3" /></button>
+                      <button 
+                        onClick={() => {
+                          const rows = prompt("Número de linhas:", "3");
+                          const cols = prompt("Número de colunas:", "3");
+                          if (rows && cols) {
+                            let table = '<table style="width:100%; border-collapse: collapse; border: 1px solid #ddd; margin: 10px 0;">';
+                            for (let i = 0; i < parseInt(rows); i++) {
+                              table += '<tr>';
+                              for (let j = 0; j < parseInt(cols); j++) {
+                                table += '<td style="border: 1px solid #ddd; padding: 8px; font-size: 11px;">...</td>';
+                              }
+                              table += '</tr>';
+                            }
+                            table += '</table>';
+                            execCommand('insertHTML', table);
+                          }
+                        }} 
+                        className="p-1.5 rounded hover:bg-primary/20 transition-colors" 
+                        title="Inserir Tabela"
+                      >
+                        <Table className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div
+                      ref={descRef}
+                      contentEditable
+                      className="w-full bg-secondary min-h-[100px] max-h-[200px] overflow-y-auto rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary prose prose-sm dark:prose-invert"
+                    />
+                    <button 
+                      onClick={() => {
+                        if (descRef.current?.innerHTML.trim()) {
+                          addDescriptionEntry(cardId, descRef.current.innerHTML);
+                          descRef.current.innerHTML = '';
+                        }
+                      }} 
+                      className="w-full py-2 rounded bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors shadow-sm"
+                    >
+                      Salvar Atualização
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {/* Main content scrollable area */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="p-6 space-y-5">
@@ -1045,8 +1157,42 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     <Check className={cn("h-3.5 w-3.5", card.completed ? "scale-110" : "scale-90 opacity-70")} />
                     <span>{card.completed ? "CONCLUÍDO" : "CONCLUIR"}</span>
                   </button>
-                  <button onClick={() => setShowChat(!showChat)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors ${showChat ? 'bg-primary/20 text-primary' : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'} text-xs font-semibold`} title="Alternar Chat">
-                    <MessageSquare className="h-4 w-4" /> <span className="hidden sm:inline">Comentários</span> {card.comments.length > 0 && `(${card.comments.length})`}
+                  <button 
+                    onClick={() => toggleDescriptionPane(!showDescriptionPane)} 
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-all text-xs font-semibold",
+                      showDescriptionPane ? "bg-primary text-primary-foreground ring-2 ring-primary/20" : "bg-secondary hover:bg-secondary/80 text-muted-foreground"
+                    )}
+                    title="Histórico da Descrição"
+                  >
+                    <AlignLeft className="h-4 w-4" />
+                    <span className="hidden sm:inline">Descrição</span>
+                    {card.descriptionEntries?.length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-black/20 rounded-full text-[9px]">{card.descriptionEntries.length}</span>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => toggleChat(!showChat)} 
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-all text-xs font-semibold relative",
+                      showChat ? "bg-primary text-primary-foreground ring-2 ring-primary/20" : "bg-secondary hover:bg-secondary/80 text-muted-foreground"
+                    )}
+                    title="Alternar Chat"
+                  >
+                    <MessageSquare className="h-4 w-4" /> 
+                    <span className="hidden sm:inline">Comentários</span> 
+                    {card.comments.length > 0 && (
+                      <>
+                        <span className="ml-1 px-1.5 py-0.5 bg-black/20 rounded-full text-[9px]">({card.comments.length})</span>
+                        {!showChat && (
+                          <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                          </span>
+                        )}
+                      </>
+                    )}
                   </button>
                   <button onClick={onClose} className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground">
                     <X className="h-4 w-4" />
@@ -1117,7 +1263,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     <div className="absolute -left-5 top-1 opacity-0 group-hover:opacity-50 cursor-grab">
                       <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
-                    {renderSection(section)}
+                    {section === 'description' ? null : renderSection(section)}
                   </Reorder.Item>
                 ))}
               </Reorder.Group>
@@ -1170,9 +1316,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             </div>
           </div>
 
-          {/* Chat Side Pane */}
+          {/* Chat Side Pane (Fixed Width) */}
           {showChat && (
-            <div className="w-[320px] md:w-[380px] border-l border-border bg-muted/20 flex flex-col shrink-0">
+            <div className="w-[320px] md:w-[380px] border-l border-border bg-muted/20 flex flex-col shrink-0 flex-1">
               <div className="p-4 border-b border-border flex items-center justify-between bg-card text-foreground font-semibold">
                 <span className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Chat & Comentários</span>
                 <button onClick={() => setShowChat(false)} className="p-1 rounded hover:bg-secondary transition-colors text-muted-foreground"><X className="h-4 w-4" /></button>

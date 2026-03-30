@@ -102,6 +102,7 @@ model Card {
   checklist   ChecklistItem[]
   items       CardItem[]
   comments    Comment[]
+  descriptionEntries CardDescriptionEntry[]
   timeEntries TimeEntry[]
   attachments Attachment[]
   milestones  Milestone[]
@@ -140,6 +141,14 @@ model Comment {
   card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   text      String   @db.Text
   author    String
+  createdAt DateTime @default(now())
+}
+
+model CardDescriptionEntry {
+  id        String   @id @default(uuid())
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
   createdAt DateTime @default(now())
 }
 

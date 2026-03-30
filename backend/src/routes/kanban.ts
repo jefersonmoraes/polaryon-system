@@ -184,12 +184,32 @@ router.delete('/labels/:id', async (req: Request, res: Response) => {
 router.get('/cards/:id', async (req: Request, res: Response) => {
     try {
         const cardId = req.params.id as string;
-        const card = await prisma.card.findUnique({
+        let card = await prisma.card.findUnique({
             where: { id: cardId },
-            include: { labels: true, checklist: true, items: true, comments: true, attachments: true, milestones: true, timeEntries: true }
+            include: { labels: true, checklist: true, items: true, comments: true, attachments: true, milestones: true, timeEntries: true, descriptionEntries: true }
         });
         if (!card) return res.status(404).json({ error: 'Card not found' });
         
+        // Migration: If has legacy description but no entries, create first entry
+        if (card.description && card.descriptionEntries.length === 0) {
+            try {
+                const newEntry = await prisma.cardDescriptionEntry.create({
+                    data: {
+                        cardId: card.id,
+                        text: card.description
+                    }
+                });
+                card.descriptionEntries = [newEntry];
+                // Clear old description to avoid double migration
+                await prisma.card.update({
+                    where: { id: card.id },
+                    data: { description: null }
+                });
+            } catch (e) {
+                console.error("Migration error for card description:", e);
+            }
+        }
+
         // Flatten labels
         const formattedCard = {
             ...card,
@@ -215,7 +235,7 @@ router.get('/cards', async (req: Request, res: Response) => {
 
 router.post('/cards', async (req: Request, res: Response) => {
     try {
-        const { labels, checklist, items, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        const { labels, checklist, items, comments, descriptionEntries, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
 
         if (data.dueDate === '') data.dueDate = null;
         else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
@@ -245,6 +265,12 @@ router.post('/cards', async (req: Request, res: Response) => {
             await prisma.cardItem.createMany({
                 data: items.map((i: any) => ({ ...i, cardId: card.id }))
             }).catch(e => console.error("Failed to link items on create:", e));
+        }
+
+        if (descriptionEntries && descriptionEntries.length > 0) {
+            await prisma.cardDescriptionEntry.createMany({
+                data: descriptionEntries.map((i: any) => ({ ...i, cardId: card.id }))
+            }).catch(e => console.error("Failed to link description entries on create:", e));
         }
 
         if (milestones && milestones.length > 0) {
@@ -290,7 +316,7 @@ router.post('/cards', async (req: Request, res: Response) => {
 
 router.put('/cards/:id', async (req: Request, res: Response) => {
     try {
-        const { labels, checklist, items, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
         delete (data as any).updatedAt;
         const cardId = req.params.id as string;
 
@@ -329,6 +355,20 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             if (items.length > 0) {
                 await prisma.cardItem.createMany({
                     data: items.map((i: any) => ({ ...i, cardId }))
+                });
+            }
+        }
+
+        if (descriptionEntries !== undefined) {
+            await prisma.cardDescriptionEntry.deleteMany({ where: { cardId } });
+            if (descriptionEntries.length > 0) {
+                await prisma.cardDescriptionEntry.createMany({
+                    data: descriptionEntries.map((i: any) => ({ 
+                        id: i.id || undefined, // Keep ID if present for sync
+                        text: i.text,
+                        createdAt: i.createdAt || new Date(),
+                        cardId 
+                    }))
                 });
             }
         }
