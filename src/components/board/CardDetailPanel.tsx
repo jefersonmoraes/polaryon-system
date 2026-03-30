@@ -397,10 +397,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       setLabelColor(val);
     }
   };
-  const execCommand = (cmd: string, value?: string) => {
-    document.execCommand(cmd, false, value);
-    descRef.current?.focus();
-  };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -1127,6 +1123,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+        <motion.div
+           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
            className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[98vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[98vh] transition-all duration-300`}
          >
           {/* Description Side Pane (Left 50%) */}
