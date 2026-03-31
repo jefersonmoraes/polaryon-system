@@ -613,53 +613,44 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             const pncpPage1 = (currentPage * 2) - 1;
             const pncpPage2 = currentPage * 2;
 
-            const makeUrl = (p: number) => {
-                let url = `https://pncp.gov.br/api/search/?tamanho_pagina=50&pagina=${p}`;
-
-                // Smart Keyword Injection: Append State Name & Modalidade to query to force API to return target items
-                let searchQuery = keyword.trim();
-                const ufName = ufFilter ? (ESTADOS_MAP[ufFilter] || ufFilter) : '';
-
-                if (ufName) searchQuery = searchQuery ? `${searchQuery} ${ufName}` : ufName;
-                if (modalidadeFilter) searchQuery = searchQuery ? `${searchQuery} ${modalidadeFilter}` : modalidadeFilter;
-
-                if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
-
-                // Nova Regra PNCP: arrays não aceitam mais vírgula. Precisam ser repetidos: &status=1&status=2
-                const formatArrayParam = (paramName: string, valuesStr: string) => {
-                    return valuesStr.split(',').filter(Boolean).map(val => `&${paramName}=${val.trim()}`).join('');
+            const buildParams = (p: number) => {
+                const params: any = {
+                    tamanho_pagina: 50,
+                    pagina: p
                 };
 
-                // PNCP fails if status is empty. If 'Todos' was selected, fetch all standard ones
-                const statusVals = statusFilter || '1,2,3,4';
-                url += formatArrayParam('status', statusVals);
+                let searchQuery = keyword.trim();
+                const ufName = ufFilter ? (ESTADOS_MAP[ufFilter] || ufFilter) : '';
+                if (ufName) searchQuery = searchQuery ? `${searchQuery} ${ufName}` : ufName;
+                if (modalidadeFilter) searchQuery = searchQuery ? `${searchQuery} ${modalidadeFilter}` : modalidadeFilter;
+                if (searchQuery) params.q = searchQuery;
 
-                // NEW PNCP RULE: tipos_documento is now REQUIRED by the Federal API. Cannot be empty.
+                // Status: PNCP expects multiple status params like &status=1&status=2
+                const statusVals = (statusFilter || '1,2,3,4').split(',').filter(Boolean);
+                params.status = statusVals;
+
+                // Documentos
                 const fallbackDocumentos = 'edital,aviso_contratacao_direta,ata,contrato';
-                const docVals = instrumentoFilter || fallbackDocumentos;
-                url += formatArrayParam('tipos_documento', docVals);
+                const docVals = (instrumentoFilter || fallbackDocumentos).split(',').filter(Boolean);
+                params.tipos_documento = docVals;
 
-                if (esferaFilter) url += `&esfera=${esferaFilter}`;
-                if (dataInicialFilter) url += `&dataInicial=${dataInicialFilter.replace(/-/g, '')}`;
-                if (dataFinalFilter) url += `&dataFinal=${dataFinalFilter.replace(/-/g, '')}`;
+                if (esferaFilter) params.esfera = esferaFilter;
+                if (dataInicialFilter) params.dataInicial = dataInicialFilter.replace(/-/g, '');
+                if (dataFinalFilter) params.dataFinal = dataFinalFilter.replace(/-/g, '');
+                if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
-                // Force sorting on API (though Client side handles the rest)
-                if (ordenacaoFilter) url += `&ordenacao=${ordenacaoFilter}`;
-                return url;
+                return params;
             };
 
             const [res1, res2] = await Promise.all([
-                fetch(makeUrl(pncpPage1)).catch(() => ({ ok: false, json: async () => ({ items: [] }) } as any)),
-                fetch(makeUrl(pncpPage2)).catch(() => ({ ok: false, json: async () => ({ items: [] }) } as any))
+                api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })),
+                api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } }))
             ]);
 
-            if (!res1.ok && !res2.ok) throw new Error('Falha ao conectar na base de dados nacional.');
+            let data1 = res1.data || { items: [], total: 0 };
+            let data2 = res2.data || { items: [] };
 
-            let data1 = { items: [], total: 0 };
-            let data2 = { items: [] };
-
-            try { if (res1.ok) data1 = await res1.json(); } catch (e) { console.warn("Parse Error Page 1"); }
-            try { if (res2.ok) data2 = await res2.json(); } catch (e) { console.warn("Parse Error Page 2"); }
+            // Data already extracted from api.get calls above
 
             let items = [...(data1?.items || []), ...(data2?.items || [])];
 

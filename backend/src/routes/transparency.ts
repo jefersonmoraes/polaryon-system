@@ -192,13 +192,49 @@ router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Resp
 });
 
 /**
+ * GET /api/transparency/pncp-proxy
+ * Proxy universal para busca no PNCP (Evita CORS e centraliza User-Agent)
+ */
+router.get('/pncp-proxy', async (req: Request, res: Response) => {
+    try {
+        const response = await axios.get('https://pncp.gov.br/api/search/', {
+            params: req.query,
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 15000,
+            paramsSerializer: (params) => {
+                const parts: string[] = [];
+                Object.entries(params).forEach(([key, val]) => {
+                    if (val === undefined || val === null) return;
+                    if (Array.isArray(val)) {
+                        val.forEach(v => parts.push(`${key}=${encodeURIComponent(String(v))}`));
+                    } else {
+                        parts.push(`${key}=${encodeURIComponent(String(val))}`);
+                    }
+                });
+                return parts.join('&');
+            }
+        });
+        res.json(response.data);
+    } catch (error: any) {
+        console.error('PNCP Proxy Search Error:', error.message);
+        res.status(error.response?.status || 500).json({ 
+            error: error.message,
+            details: error.response?.data 
+        });
+    }
+});
+
+/**
  * GET /api/transparency/licitacoes
+ * Legado para compatibilidade com outras telas (Dashboard, etc)
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
         const { pagina = '1', termo, dataInicial, dataFinal, status, tam_pagina = '12' } = req.query;
         
-        // Mapeamento correto para a API de Busca (Legacy mas funcional)
         const statusMap: Record<string, string> = {
             'concluido': 'encerradas',
             '3': 'encerradas',
@@ -208,47 +244,37 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
 
         const sitParam = status && typeof status === 'string' && statusMap[status] ? statusMap[status] : '';
         
-        // URL Corrigida: tam_pagina, sem duplicidade de / e q obrigatório
         let url = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(termo ? termo.toString() : '*')}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=${tam_pagina}`;
         if (sitParam) url += `&status=${sitParam}`;
         if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
         if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
 
         const response = await axios.get(url, { 
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }, 
+            headers: { 'User-Agent': 'Mozilla/5.0' }, 
             timeout: 15000 
         });
         
         const data: any = response.data;
         let items = data.items || [];
 
-        // REQUISITO: Filtro de Segurança In-Memory para garantir precisão de status
-        // A API de busca legada do PNCP muitas vezes trava o status em "1" (Divulgada) mesmo após a conclusão.
-        // O indicador 100% confiável de conclusão é a presença real de um ganhador (`tem_resultado === true`).
         if (status === 'concluido' || status === '3') {
             items = items.filter((i: any) => i.tem_resultado === true);
         } else if (status === 'em-andamento' || status === '2') {
             items = items.filter((i: any) => String(i.situacao_id) === '2' && !i.tem_resultado);
         }
 
-        const results = items.map((item: any) => {
-            const isTrullyConcluded = item.tem_resultado === true;
-            return {
-                id: item.id || `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
-                numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
-                objeto: item.description || 'Sem descrição',
-                orgao: item.orgao_nome || 'Órgão Desconhecido',
-                dataAbertura: item.data_publicacao_pncp,
-                valorLicitacao: item.valor_global || 0,
-                situacao: isTrullyConcluded ? 'Concluída' : (item.situacao_nome || 'Desconhecida'),
-                cnpjOrgao: item.orgao_cnpj,
-                ano: item.ano,
-                sequencial: item.numero_sequencial,
-                isConcluidaCacheBug: isTrullyConcluded && (!item.valor_global || Number(item.valor_global) === 0)
-            };
-        });
+        const results = items.map((item: any) => ({
+            id: item.id || `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
+            numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
+            objeto: item.description || 'Sem descrição',
+            orgao: item.orgao_nome || 'Órgão Desconhecido',
+            dataAbertura: item.data_publicacao_pncp,
+            valorLicitacao: item.valor_global || 0,
+            situacao: item.tem_resultado === true ? 'Concluída' : (item.situacao_nome || 'Desconhecida'),
+            cnpjOrgao: item.orgao_cnpj,
+            ano: item.ano,
+            sequencial: item.numero_sequencial
+        }));
 
         res.json({
             items: results,
@@ -256,7 +282,6 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
             totalPages: Math.ceil((data.total || results.length) / Number(tam_pagina))
         });
     } catch (error: any) {
-        console.error('ERROR PNCP SEARCH LEGACY:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -622,170 +647,12 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/cgu', async (req: Request, res: R
     }
 });
 
-router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, res: Response) => {
-    try {
-        const { cnpj, ano, sequencial } = req.params;
-        const url = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
-        const response = await axios.get(url, { timeout: 5000 });
-        const files = response.data || [];
-        
-        const mappedFiles = files.map((f: any) => {
-            const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
-            const isWinnerDoc = /proposta|venc|ganhador|habilitac|lance|homolog|adj|vitoria|termo|ata/i.test(name);
-            return {
-                ...f,
-                id: f.id || f.sequencial,
-                nome: f.titulo || f.nome_arquivo,
-                url: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${f.sequencial}/documento`,
-                originalUrl: `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos/${f.sequencial}`,
-                dataPublicacao: f.dataPublicacao,
-                isWinnerDoc
-            };
-        });
-        
-        res.json(mappedFiles);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * GET /api/transparency/licitacoes
- */
-router.get('/licitacoes', async (req: Request, res: Response) => {
-    try {
-        const { pagina = '1', termo, dataInicial, dataFinal, status = 'encerradas', tam_pagina = '10' } = req.query;
-        let url = `${PNCP_SEARCH_URL}/?q=${termo || ''}&pagina=${pagina}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&tam_pagina=${tam_pagina}`;
-        if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
-        if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
-        
-        if (status && status !== 'todas') {
-            url += `&status=${status}`;
-        }
-
-        const response = await axios.get(url, { 
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*'
-            }, 
-            timeout: 15000 
-        });
-        const data: any = response.data;
-        
-        const totalElements = Math.min(data.total || data.total_items || data.total_elements || 0, 50);
-
-        const results = (data.items || []).map((item: any) => ({
-            id: `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`,
-            numeroLicitacao: item.title || `${item.numero_sequencial}/${item.ano}`,
-            objeto: item.description || 'Sem descrição',
-            orgao: item.orgao_nome,
-            dataAbertura: item.data_publicacao_pncp,
-            valorLicitacao: item.valor_global || 0,
-            situacao: item.situacao_nome,
-            cnpjOrgao: item.orgao_cnpj,
-            ano: item.ano,
-            sequencial: item.numero_sequencial
-        }));
-
-        res.json({
-            items: results,
-            totalItems: Number(totalElements),
-            totalPages: Math.ceil(Number(totalElements) / Number(tam_pagina))
-        });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// Removidos duplicados de licitacoes e arquivos (Mantida apenas a versão robusta no topo)
 
 /**
  * GET /api/transparency/analytics/global-brands
  */
-router.get('/analytics/global-brands', async (req: Request, res: Response) => {
-    try {
-        const { termo, dataInicial, dataFinal } = req.query;
-        if (!termo) return res.status(400).json({ error: 'Termo de busca é obrigatório' });
-
-        const keywords = termo.toString().toLowerCase().split(' ').filter(k => k.length > 2);
-        const brandCounts: Record<string, { value: number; totalGasto: number }> = {};
-        const allProcesses: any[] = [];
-        
-        try {
-            let searchUrl = `${PNCP_SEARCH_URL}/?q=${termo}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=50&status=encerradas`;
-            if (dataInicial) searchUrl += `&dataPublicacaoDataInicial=${dataInicial}`;
-            if (dataFinal) searchUrl += `&dataPublicacaoDataFinal=${dataFinal}`;
-            
-            const searchRes = await axios.get(searchUrl, { 
-                headers: { 
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/json'
-                }, 
-                timeout: 8000 
-            });
-            
-            if (searchRes.data && searchRes.data.items) {
-                const concluded = searchRes.data.items.filter((p: any) => p.tem_resultado === true);
-                allProcesses.push(...concluded);
-            }
-        } catch (e: any) { console.error('Error in ranking search:', e.message); }
-
-        if (allProcesses.length === 0) {
-            return res.json({ results: [], version: '2026-03-24-v5-concluded-only' });
-        }
-
-        const chunkSize = 2;
-        for (let i = 0; i < allProcesses.length; i += chunkSize) {
-            const chunk = allProcesses.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(async (proc: any) => {
-                try {
-                    const typePath = proc.document_type === 'contrato' ? 'contratos' : 'compras';
-                    const itemsUrl = `${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/${typePath}/${proc.ano}/${proc.numero_sequencial}/itens?pagina=1&tamanhoPagina=100`;
-                    const itemsRes = await axios.get(itemsUrl, { timeout: 4000 });
-                    const items = itemsRes.data || [];
-
-                    for (const item of items) {
-                        const desc = (item.descricao || '').toLowerCase();
-                        const isMatch = keywords.some(k => desc.includes(k));
-                        
-                        if (isMatch) {
-                            let brand = extractBrand(desc);
-                            
-                            if (item.temResultado) {
-                                try {
-                                    const rRes = await axios.get(`${PNCP_BASE_URL}/orgaos/${proc.orgao_cnpj}/compras/${proc.ano}/${proc.numero_sequencial}/itens/${item.numeroItem}/resultados`, { timeout: 2000 });
-                                    if (rRes.data && rRes.data.length > 0) {
-                                        const winner = rRes.data[0];
-                                        if (winner.marcaFornecedor) {
-                                            brand = winner.marcaFornecedor.toUpperCase().trim();
-                                        }
-                                    }
-                                } catch (e) {}
-                            }
-
-                            if ((brand === 'N/A' || !brand) && item.marca) {
-                                brand = item.marca.toUpperCase().trim();
-                            }
-
-                            if (brand && brand !== 'N/A' && brand.length > 1) {
-                                if (!brandCounts[brand]) brandCounts[brand] = { value: 0, totalGasto: 0 };
-                                brandCounts[brand].value++;
-                                brandCounts[brand].totalGasto += (item.valorUnitarioHomologado || item.valorUnitarioEstimado || item.valorUnitario || 0) * (item.quantidade || 1);
-                            }
-                        }
-                    }
-                } catch (e: any) { console.error(`Error processing ranking items:`, e.message); }
-            }));
-        }
-
-        const results = Object.entries(brandCounts)
-            .map(([name, data]) => ({ name, ...data }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 10);
-
-        res.json({ results, version: '2026-03-24-v5-winner-data' });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// Removido analytics duplicado (Mantida a versão refinada v21)
 
 router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-base', async (req: Request, res: Response) => {
     try {
