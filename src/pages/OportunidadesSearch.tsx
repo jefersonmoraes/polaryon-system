@@ -557,6 +557,23 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
         }
 
+        // Create Milestones (New: DATA E HORA DOS LANCES)
+        const endDateTime = itemDetail?.dataFimRecebimentoProposta || itemDetail?.dataEncerramentoProposta || selectedItem.data_encerramento_proposta;
+        const cardMilestones: any[] = [];
+
+        if (endDateTime) {
+            const d = new Date(endDateTime);
+            if (!isNaN(d.getTime())) {
+                cardMilestones.push({
+                    id: crypto.randomUUID(),
+                    title: "DATA E HORA DOS LANCES",
+                    dueDate: d.toISOString().split('T')[0],
+                    hour: d.toTimeString().split(' ')[0].substring(0, 5),
+                    completed: false
+                });
+            }
+        }
+
         // Create Full Card Object
         const newCardData = {
             id: crypto.randomUUID(),
@@ -567,7 +584,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             items: cardItems,
             checklist: [],
             timeEntries: [],
-            milestones: [],
+            milestones: cardMilestones,
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
         };
