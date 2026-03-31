@@ -253,7 +253,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
          const store = useKanbanStore.getState();
          if (!store.savingCards.has(cardId) && !recentlySaved) {
             console.log(`[EDITOR_SYNC] Forçando preenchimento: "${storeDesc.substring(0, 20)}..."`);
-            editorRef.current.innerHTML = storeDesc;
+            editorRef.current.innerHTML = DOMPurify.sanitize(storeDesc);
             setLocalDescription(storeDesc);
             lastSavedDescription.current = storeDesc;
          }
@@ -277,6 +277,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
         setLocalDescription(editorRef.current.innerHTML);
+        setIsDirty(true);
     }
   };
 
@@ -373,8 +374,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     '🏆', '🥇', '🎉', '🎈', '🎁', '🏃', '🚶', '🛑', '🚧'
   ];
 
-  // Rich text toolbar
-  const descRef = useRef<HTMLDivElement>(null);
+  // Rich text toolbar uses editorRef instead
 
   // Timer display
   const [timerDisplay, setTimerDisplay] = useState('00:00:00');
@@ -412,9 +412,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
   const handleSaveTitle = () => { if (title.trim()) updateCard(cardId, { title: title.trim() }); };
   const handleSaveSummary = () => updateCard(cardId, { summary });
-  const handleSaveDesc = () => {
-    if (descRef.current) {
-      updateCard(cardId, { description: DOMPurify.sanitize(descRef.current.innerHTML) });
+  const handleSaveDesc = async () => {
+    if (editorRef.current) {
+      await performSave(DOMPurify.sanitize(editorRef.current.innerHTML));
     }
   };
   const handleToggleLabel = (labelId: string) => {
@@ -961,11 +961,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             )}
             <div className="relative">
               <div
-                ref={descRef}
+                ref={editorRef}
                 contentEditable={canEdit}
                 onBlur={handleSaveDesc}
+                onInput={() => setIsDirty(true)}
                 onClick={() => !isDescExpanded && setIsDescExpanded(true)}
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(card.description) }}
                 className={`w-full bg-secondary rounded-b-lg px-3 py-2 text-xs outline-none border border-border focus:border-primary prose prose-sm max-w-none transition-all duration-300 ${isDescExpanded ? 'min-h-[120px]' : 'max-h-[60px] overflow-hidden cursor-pointer hover:bg-secondary/80'}`}
                 style={{ lineHeight: 1.6 }}
               />
@@ -1087,8 +1087,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                             </span>
                             {(() => {
                               const favorites = (budget.items || []).filter(i => i.isFavorite);
-                              const itemsToConsider = favorites.length > 0 ? favorites : budget.items || [];
-                              const typesSet = new Set(itemsToConsider.map(i => i.type || budget.type || 'Produto'));
+                              if (favorites.length === 0) return null; // So mostra tipo na miniatura se tiver favorito
+                              const typesSet = new Set(favorites.map(i => i.type || budget.type || 'Produto'));
                               const types = Array.from(typesSet);
                               
                               return types.map(t => (
@@ -1131,10 +1131,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                           
                           if (favorites.length > 0) {
                               const companiesList = Array.from(new Set(favorites.map(f => getCompanyName(f.companyId)))).join(', ');
+                              const totalSum = favorites.reduce((acc, f) => acc + (f.finalSellingPrice || f.totalPrice || 0), 0);
                               return (
                                 <div className="flex flex-col items-end">
                                   <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                    {(budget.totalValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    {totalSum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                   </span>
                                   <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={companiesList}>
                                     {favorites.length > 1 ? 'Múltiplos Favoritos' : (getCompanyName(favorites[0].companyId))}

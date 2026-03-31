@@ -1482,6 +1482,26 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                     initialData.title = `Orç. [${card.title}]`;
                     if (card.deliveryAddress) initialData.address = card.deliveryAddress;
                     if (card.deliveryTime) initialData.deliveryTime = card.deliveryTime;
+                    
+                    if (card.items && card.items.length > 0) {
+                        const prefilledItems = [{
+                            id: crypto.randomUUID(),
+                            type: 'Produto' as BudgetType,
+                            items: card.items.map(cardItem => ({
+                                id: crypto.randomUUID(),
+                                description: cardItem.name || '',
+                                quantity: cardItem.quantity || 1,
+                                unitPrice: 0,
+                                totalPrice: 0
+                            })),
+                            totalPrice: 0,
+                            taxValue: 0,
+                            difalValue: 0,
+                            finalSellingPrice: 0,
+                            taxesBreakdown: { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0, total: 0 }
+                        }];
+                        initialData.items = prefilledItems;
+                    }
                 }
             }
             
@@ -1533,6 +1553,10 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
             dirtyFieldsRef.current.forEach(field => {
                 dataToSave[field] = (currentFormData as any)[field];
             });
+
+            if (dirtyFieldsRef.current.has('items')) {
+                dataToSave.totalValue = currentFormData.totalValue;
+            }
 
             // If no fields are actually dirty after all, skip
             if (Object.keys(dataToSave).length === 0) {
