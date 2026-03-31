@@ -619,11 +619,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                     pagina: p
                 };
 
-                let searchQuery = keyword.trim();
-                const ufName = ufFilter ? (ESTADOS_MAP[ufFilter] || ufFilter) : '';
-                if (ufName) searchQuery = searchQuery ? `${searchQuery} ${ufName}` : ufName;
-                if (modalidadeFilter) searchQuery = searchQuery ? `${searchQuery} ${modalidadeFilter}` : modalidadeFilter;
-                if (searchQuery) params.q = searchQuery;
+                if (keyword.trim()) params.q = keyword.trim();
 
                 // Status: PNCP API expects textual states like recebendo_proposta, encerradas
                 const fallbackStatus = 'recebendo_proposta,propostas_encerradas,encerradas,suspensas,canceladas';
@@ -635,7 +631,22 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 const docVals = (instrumentoFilter || fallbackDocumentos).split(',').filter(Boolean);
                 params.tipos_documento = docVals;
 
-                if (esferaFilter) params.esfera = esferaFilter;
+                // PNCP API Plural filters (ufs, esferas, modalidades)
+                if (ufFilter) params.ufs = [ufFilter];
+                if (esferaFilter) params.esferas = [esferaFilter];
+                
+                if (modalidadeFilter) {
+                    const modMap: Record<string, string[]> = {
+                        'Pregão': ['6', '7', '18', '19'],
+                        'Dispensa': ['8'],
+                        'Concorrência': ['4', '5', '16', '17'],
+                        'Inexigibilidade': ['9']
+                    };
+                    if (modMap[modalidadeFilter]) {
+                        params.modalidades = modMap[modalidadeFilter];
+                    }
+                }
+
                 if (dataInicialFilter) params.data_publicacao_inicial = dataInicialFilter.replace(/-/g, '');
                 if (dataFinalFilter) params.data_publicacao_final = dataFinalFilter.replace(/-/g, '');
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
@@ -674,8 +685,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             }
 
             // --- Client-Side "Mega Filters" Fallback ---
-            if (ufFilter) items = items.filter((i: PncpItem) => i?.uf === ufFilter);
-            if (esferaFilter) items = items.filter((i: any) => i?.esfera_id === esferaFilter);
+            // NOTE: UF, Esfera and Modality are now handled at API level (server-side) via ufs, esferas, modalidades params.
             if (orgaoFilter) items = items.filter((i: PncpItem) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
             if (modalidadeFilter) items = items.filter((i: PncpItem) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
             if (municipioFilter) items = items.filter((i: PncpItem) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
