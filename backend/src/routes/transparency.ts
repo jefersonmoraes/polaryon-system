@@ -208,18 +208,20 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
                 const parts: string[] = [];
                 Object.entries(params).forEach(([key, val]) => {
                     if (val === undefined || val === null || val === '') return;
+                    
+                    // Express ou HPP podem manter o nome da chave com [] ou [0]. Remove-los sempre:
+                    const cleanKey = key.replace(/\[\d*\]$/, '');
+
                     if (Array.isArray(val)) {
                         // A API de pesquisa do PNCP exige valores unidos por pipe (status=A|B)
-                        // Remover [] do final da chave, pois o axios default adiciona "key[]" no front
-                        const cleanKey = key.replace(/\[\]$/, '');
                         const joined = val.join('|');
                         parts.push(`${encodeURIComponent(cleanKey)}=${joined}`);
                     } else {
                         if (typeof val === 'string' && val.includes('|')) {
                             // PNCP requires unencoded pipes for these filters
-                            parts.push(`${encodeURIComponent(key)}=${val}`);
+                            parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
                         } else {
-                            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`);
+                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
                         }
                     }
                 });
