@@ -289,7 +289,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
 export default function OportunidadesSearch() {
     const location = useLocation();
     const [keyword, setKeyword] = useState(location.state?.openPncpId || '');
-    const [statusFilter, setStatusFilter] = useState('1'); // Default = A Receber Propostas
+    const [statusFilter, setStatusFilter] = useState('recebendo_proposta'); // Default = A Receber Propostas
     const [ufFilter, setUfFilter] = useState('');
     const [instrumentoFilter, setInstrumentoFilter] = useState('edital');
     const [esferaFilter, setEsferaFilter] = useState('');
@@ -319,7 +319,7 @@ export default function OportunidadesSearch() {
         setConteudoNacionalFilter('');
         setMargemPreferenciaFilter('');
         setUnidadeFilter('');
-        setStatusFilter('1');
+        setStatusFilter('recebendo_proposta');
         setDataInicialFilter('');
         setDataFinalFilter('');
         setValorMinFilter('');
@@ -625,8 +625,9 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 if (modalidadeFilter) searchQuery = searchQuery ? `${searchQuery} ${modalidadeFilter}` : modalidadeFilter;
                 if (searchQuery) params.q = searchQuery;
 
-                // Status: PNCP expects multiple status params like &status=1&status=2
-                const statusVals = (statusFilter || '1,2,3,4').split(',').filter(Boolean);
+                // Status: PNCP API expects textual states like recebendo_proposta, encerradas
+                const fallbackStatus = 'recebendo_proposta,propostas_encerradas,encerradas,suspensas,canceladas';
+                const statusVals = (statusFilter || fallbackStatus).split(',').filter(Boolean);
                 params.status = statusVals;
 
                 // Documentos
@@ -635,8 +636,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 params.tipos_documento = docVals;
 
                 if (esferaFilter) params.esfera = esferaFilter;
-                if (dataInicialFilter) params.dataInicial = dataInicialFilter.replace(/-/g, '');
-                if (dataFinalFilter) params.dataFinal = dataFinalFilter.replace(/-/g, '');
+                if (dataInicialFilter) params.data_publicacao_inicial = dataInicialFilter.replace(/-/g, '');
+                if (dataFinalFilter) params.data_publicacao_final = dataFinalFilter.replace(/-/g, '');
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
                 return params;
@@ -838,10 +839,11 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Status</label>
                                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todos os Status</option>
-                                        <option value="1">Divulgada (Recente)</option>
-                                        <option value="2">Em Andamento (Licitação)</option>
-                                        <option value="3">Concluída (Ranking Disponível)</option>
-                                        <option value="4">Suspensa</option>
+                                        <option value="recebendo_proposta">Abertas (Recebendo Propostas)</option>
+                                        <option value="propostas_encerradas">Em Julgamento (Propostas Encerradas)</option>
+                                        <option value="encerradas">Concluída / Encerrada</option>
+                                        <option value="suspensas">Suspensa</option>
+                                        <option value="canceladas">Cancelada</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">

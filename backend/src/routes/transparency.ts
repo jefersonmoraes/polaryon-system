@@ -5,7 +5,7 @@ const router = express.Router();
 
 const PNCP_BASE_URL = 'https://pncp.gov.br/api/pncp/v1';
 const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search/';
-const CGU_BASE_URL = 'https://api.portaldatransparencia.gov.br/api-v1';
+const CGU_BASE_URL = 'https://api.portaldatransparencia.gov.br/api-de-dados';
 
 const normalizeCnpj = (val: string) => (val || '').replace(/\D/g, '');
 
@@ -209,7 +209,12 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
                 Object.entries(params).forEach(([key, val]) => {
                     if (val === undefined || val === null) return;
                     if (Array.isArray(val)) {
-                        val.forEach(v => parts.push(`${key}=${encodeURIComponent(String(v))}`));
+                        // PNCP API now prefers piped values for some fields like tipos_documento and status
+                        if (key === 'tipos_documento' || key === 'status') {
+                            parts.push(`${key}=${encodeURIComponent(val.join('|'))}`);
+                        } else {
+                            val.forEach(v => parts.push(`${key}=${encodeURIComponent(String(v))}`));
+                        }
                     } else {
                         parts.push(`${key}=${encodeURIComponent(String(val))}`);
                     }
@@ -238,19 +243,24 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         const statusMap: Record<string, string> = {
             'concluido': 'encerradas',
             '3': 'encerradas',
-            'em-andamento': 'em-andamento',
-            '2': 'em-andamento'
+            'em-andamento': 'recebendo_proposta',
+            '2': 'recebendo_proposta',
+            'suspenso': 'suspensas',
+            'cancelado': 'canceladas'
         };
 
         const sitParam = status && typeof status === 'string' && statusMap[status] ? statusMap[status] : '';
         
-        let url = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(termo ? termo.toString() : '*')}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=${tam_pagina}`;
+        let url = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(termo ? termo.toString() : '*')}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${pagina}&tam_pagina=${tam_pagina}`;
         if (sitParam) url += `&status=${sitParam}`;
-        if (dataInicial) url += `&dataPublicacaoDataInicial=${dataInicial}`;
-        if (dataFinal) url += `&dataPublicacaoDataFinal=${dataFinal}`;
+        if (dataInicial && typeof dataInicial === 'string') url += `&data_publicacao_inicial=${dataInicial.replace(/-/g, '')}`; 
+        if (dataFinal && typeof dataFinal === 'string') url += `&data_publicacao_final=${dataFinal.replace(/-/g, '')}`;
 
         const response = await axios.get(url, { 
-            headers: { 'User-Agent': 'Mozilla/5.0' }, 
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            }, 
             timeout: 15000 
         });
         
@@ -302,9 +312,12 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
         
         try {
             // API Busca Legada (Amostra 100)
-            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital&ordenacao=-data&pagina=1&tam_pagina=100&status=encerradas`;
+            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=1&tam_pagina=100&status=encerradas`;
             const searchRes = await axios.get(searchUrl, { 
-                headers: { 'User-Agent': 'Mozilla/5.0' }, 
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*'
+                }, 
                 timeout: 12000 
             });
             
@@ -431,10 +444,16 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
         while (totalMarcasDiversas < META_MARCAS && pagina <= LIMITE_PAGINAS && buscouMais) {
             sendEvent('progress', { message: `Recuperando página ${pagina} do arquivo (lotes de 100)...`, found: totalMarcasDiversas, checked: procsAnalisados });
             
-            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=100&status=encerradas`;
+            const searchUrl = `${PNCP_SEARCH_URL}?q=${encodeURIComponent(searchKeyword)}&tipos_documento=edital%7Cata%7Ccontrato&ordenacao=-data&pagina=${pagina}&tam_pagina=100&status=encerradas`;
             let searchRes;
             try {
-                searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 12000 });
+                searchRes = await axios.get(searchUrl, { 
+                    headers: { 
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        'Accept': 'application/json, text/plain, */*'
+                    }, 
+                    timeout: 12000 
+                });
             } catch (e) {
                 buscouMais = false;
                 break;
