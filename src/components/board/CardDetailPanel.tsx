@@ -1132,11 +1132,30 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                           if (favorites.length > 0) {
                               const companiesList = Array.from(new Set(favorites.map(f => getCompanyName(f.companyId)))).join(', ');
                               const totalSum = favorites.reduce((acc, f) => acc + (f.finalSellingPrice || f.totalPrice || 0), 0);
+                              const totalProfit = favorites.reduce((acc, f) => {
+                                const sell = f.finalSellingPrice || f.totalPrice || 0;
+                                const cost = f.totalPrice || 0;
+                                const tax = f.taxValue || 0;
+                                const difal = f.difalValue || 0;
+                                return acc + (sell - cost - tax - difal);
+                              }, 0);
+
                               return (
-                                <div className="flex flex-col items-end">
-                                  <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                    {totalSum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {totalProfit !== 0 && (
+                                    <div className={cn(
+                                      "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tighter whitespace-nowrap",
+                                      totalProfit > 0 ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                                    )}>
+                                      LUCRO EMPRESA: {totalProfit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-muted-foreground">$</span>
+                                    <span className="text-xs font-bold text-primary/90">
+                                      {totalSum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </span>
+                                  </div>
                                   <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={companiesList}>
                                     {favorites.length > 1 ? 'Múltiplos Favoritos' : (getCompanyName(favorites[0].companyId))}
                                   </span>
@@ -1144,18 +1163,35 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                               );
                           }
                           
-                          // Fallback to lowest overall
+                          // Fallback to lowest overall (when no favorites exist)
                           const winningQuotation = [...budget.items].sort((a, b) => {
                               const vA = a.finalSellingPrice || a.totalPrice || 0;
                               const vB = b.finalSellingPrice || b.totalPrice || 0;
                               return vA - vB;
                           })[0];
+
+                          const fallbackSell = winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0;
+                          const fallbackCost = winningQuotation.totalPrice || 0;
+                          const fallbackTax = winningQuotation.taxValue || 0;
+                          const fallbackDifal = winningQuotation.difalValue || 0;
+                          const fallbackProfit = fallbackSell - fallbackCost - fallbackTax - fallbackDifal;
                           
                           return (
-                            <div className="flex flex-col items-end">
-                              <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                {(winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </span>
+                            <div className="flex flex-col items-end gap-0.5">
+                              {fallbackProfit !== 0 && (
+                                <div className={cn(
+                                  "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tighter whitespace-nowrap",
+                                  fallbackProfit > 0 ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                                )}>
+                                  LUCRO EMPRESA: {fallbackProfit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-muted-foreground">$</span>
+                                <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                                  {fallbackSell.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                              </div>
                               <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={getCompanyName(winningQuotation.companyId)}>
                                 {(() => {
                                   const fav = getCompanyFavicon(winningQuotation.companyId);
