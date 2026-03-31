@@ -209,11 +209,11 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
                 Object.entries(params).forEach(([key, val]) => {
                     if (val === undefined || val === null || val === '') return;
                     if (Array.isArray(val)) {
-                        if (key === 'tipos_documento' || key === 'status') {
-                            parts.push(`${encodeURIComponent(key)}=${val.join('|')}`);
-                        } else {
-                            val.forEach(v => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`));
-                        }
+                        // A API de pesquisa do PNCP não aceita múltiplos parâmetros com a mesma chave (ex: status=A&status=B).
+                        // Ela exige os valores separados por pipe (ex: status=A|B).
+                        // Nota: Não fazemos url encoding do pipe para não quebrar a regex do PNCP
+                        const joined = val.join('|');
+                        parts.push(`${encodeURIComponent(key)}=${joined}`);
                     } else {
                         if (typeof val === 'string' && val.includes('|')) {
                             // PNCP requires unencoded pipes for these filters
