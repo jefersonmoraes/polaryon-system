@@ -209,11 +209,11 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
                 Object.entries(params).forEach(([key, val]) => {
                     if (val === undefined || val === null || val === '') return;
                     if (Array.isArray(val)) {
-                        // A API de pesquisa do PNCP não aceita múltiplos parâmetros com a mesma chave (ex: status=A&status=B).
-                        // Ela exige os valores separados por pipe (ex: status=A|B).
-                        // Nota: Não fazemos url encoding do pipe para não quebrar a regex do PNCP
+                        // A API de pesquisa do PNCP exige valores unidos por pipe (status=A|B)
+                        // Remover [] do final da chave, pois o axios default adiciona "key[]" no front
+                        const cleanKey = key.replace(/\[\]$/, '');
                         const joined = val.join('|');
-                        parts.push(`${encodeURIComponent(key)}=${joined}`);
+                        parts.push(`${encodeURIComponent(cleanKey)}=${joined}`);
                     } else {
                         if (typeof val === 'string' && val.includes('|')) {
                             // PNCP requires unencoded pipes for these filters
