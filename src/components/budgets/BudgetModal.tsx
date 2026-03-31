@@ -1755,13 +1755,26 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
     };
 
     const addItem = () => {
+        const card = cards.find(c => c.id === formData.cardId);
+        let initialItems: QuotationSubItem[] = [];
+
+        if (card && card.items && card.items.length > 0) {
+            initialItems = card.items.map(cardItem => ({
+                id: crypto.randomUUID(),
+                description: cardItem.name || '',
+                quantity: cardItem.quantity || 1,
+                unitPrice: 0,
+                totalPrice: 0
+            }));
+        }
+
         const newGroup: BudgetItem = {
             id: crypto.randomUUID(),
             companyId: undefined,
             transporterId: undefined,
             validity: '',
             notes: '',
-            items: [],
+            items: initialItems,
             totalPrice: 0,
             taxValue: 0,
             difalValue: 0,
