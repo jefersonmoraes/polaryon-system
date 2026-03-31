@@ -33,7 +33,7 @@ const statusIcons: Record<BudgetStatus, React.ReactNode> = {
 
 interface QuotationItemCardProps {
     item: BudgetItem;
-    budgetType: 'Produto' | 'Serviço' | 'Frete'; // Passed from parent
+    budgetType: BudgetType; // Passed from parent as fallback
     totalQuotes: number;
     highestCost: number;
     lowestCost: number;
@@ -198,6 +198,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         adminId?: string,
         destState?: string,
         marginPercent?: number,
+        itemType?: BudgetType,
         installmentsCost: number = 0 // Stubbing backwards compatibility
     ) => {
         const productsTotal = currentItems.reduce((sum: number, sub: any) => sum + (sub.totalPrice || 0), 0);
@@ -223,7 +224,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             // DIFAL (only for Products logically, but system allows configuration)
             // Reativado para Simples Nacional/MEI conforme pedido do usuário (ignorando ADI 5464 por opção estratégica/conservadora).
             const isSimplesOrMei = adminCompany.porte === 'MEI' || adminCompany.taxRegime === 'Simples Nacional';
-            if (budgetType === 'Produto' && adminCompany.state && destState && adminCompany.state !== destState) {
+            const currentType = itemType || budgetType;
+            if (currentType === 'Produto' && adminCompany.state && destState && adminCompany.state !== destState) {
                 const difalDetails = calculateDifalDetailed(adminCompany.state, destState);
                 if (difalDetails && difalDetails.percent > 0) {
                     difalPercent = difalDetails.percent;
@@ -234,7 +236,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             // Normal Taxes if NOT MEI
             if (adminCompany.porte !== 'MEI') {
                 // Apply specific rule: Services pay ISS, Products pay ICMS and IPI
-                const isService = budgetType === 'Serviço';
+                const isService = currentType === 'Serviço';
 
                 adminP.pis = adminCompany.pis || 0;
                 adminP.cofins = adminCompany.cofins || 0;
@@ -303,10 +305,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         discountValue: number,
         adminId: string | undefined,
         destState: string | undefined,
-        margin: number | undefined
+        margin: number | undefined,
+        itemType: BudgetType | undefined
     ) => {
         const result = recalculateTotal(
-            subItems, freight, discountValue, discountOpt, adminId, destState, margin
+            subItems, freight, discountValue, discountOpt, adminId, destState, margin, itemType
         );
 
         // Batch update all calculated fields at once
@@ -334,7 +337,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             Number(item.cashDiscount || 0),
             item.mainCompanyId,
             item.destinationState,
-            item.profitMargin
+            item.profitMargin,
+            item.type
         );
     }, [
         item.items,
@@ -344,6 +348,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         item.mainCompanyId,
         item.destinationState,
         item.profitMargin,
+        item.type,
         flushRecalculation
     ]);
 
@@ -516,9 +521,24 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                     {/* Basic Companies Link */}
 
                     {/* --- PARAMS BOX: ADMIN, STATE AND MARGIN --- */}
-                    <div className="bg-card border border-border/60 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end shadow-sm mb-2">
+                    <div className="bg-card border border-border/60 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-5 gap-4 items-end shadow-sm mb-2">
 
-                        <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[60]" ref={adminRef}>
+                        <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[60]">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-muted-foreground">
+                                <Package className="h-3 w-3" /> Natureza (Tipo)
+                            </label>
+                            <select
+                                value={item.type || budgetType || 'Produto'}
+                                disabled={!canEdit}
+                                onChange={(e) => handleFieldChangeImpactingTotal('type', e.target.value as BudgetType)}
+                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <option value="Produto">Produto</option>
+                                <option value="Serviço">Serviço</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[50]" ref={adminRef}>
                             <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-muted-foreground">
                                 <Building2 className="h-3 w-3" /> Administradora Local
                             </label>
@@ -1751,7 +1771,22 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
     }, []);
 
     const calculateTotal = (items: BudgetItem[]) => {
-        return items.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
+        if (!items || items.length === 0) return 0;
+        
+        const favorites = items.filter(i => i.isFavorite);
+        if (favorites.length > 0) {
+            // Se tem favoritos (1 ou mais), o total do orçamento é a soma final de vendas de todos os favoritos combinados
+            return favorites.reduce((acc, item) => acc + (item.finalSellingPrice || item.totalPrice || 0), 0);
+        }
+
+        // Se não tem nenhum favorito, usa o menor preço de venda como fallback visual (cotação mais vantajosa)
+        const sorted = [...items].sort((a, b) => {
+            const valA = a.finalSellingPrice || a.totalPrice || 0;
+            const valB = b.finalSellingPrice || b.totalPrice || 0;
+            return valA - valB;
+        });
+
+        return sorted[0].finalSellingPrice || sorted[0].totalPrice || 0;
     };
 
     const addItem = () => {
@@ -2729,21 +2764,9 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tipo</label>
-                                            <select
-                                                value={formData.type}
-                                                onChange={e => handleUpdateField('type', e.target.value as BudgetType)}
-                                                disabled={!canEdit}
-                                                className="w-full bg-secondary border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                <option value="Produto">Produto</option>
-                                                <option value="Serviço">Serviço</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status do Orçamento</label>
                                             <select
                                                 value={formData.status}
                                                 onChange={e => handleUpdateField('status', e.target.value as BudgetStatus)}

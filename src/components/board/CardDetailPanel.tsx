@@ -1085,6 +1085,18 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${statusStyles[budget.status]}`}>
                               {budget.status}
                             </span>
+                            {(() => {
+                              const favorites = (budget.items || []).filter(i => i.isFavorite);
+                              const itemsToConsider = favorites.length > 0 ? favorites : budget.items || [];
+                              const typesSet = new Set(itemsToConsider.map(i => i.type || budget.type || 'Produto'));
+                              const types = Array.from(typesSet);
+                              
+                              return types.map(t => (
+                                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 bg-primary/10 text-primary">
+                                  {t}
+                                </span>
+                              ));
+                            })()}
                           </div>
                           <div className="text-xs text-muted-foreground flex items-center gap-3">
                             {(() => {
@@ -1115,11 +1127,33 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                           if (!budget.items || budget.items.length === 0) {
                             return <span className="text-xs font-bold text-muted-foreground">R$ 0,00</span>;
                           }
-                          const winningQuotation = [...budget.items].sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0))[0];
+                          const favorites = budget.items.filter(i => i.isFavorite);
+                          
+                          if (favorites.length > 0) {
+                              const companiesList = Array.from(new Set(favorites.map(f => getCompanyName(f.companyId)))).join(', ');
+                              return (
+                                <div className="flex flex-col items-end">
+                                  <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                                    {(budget.totalValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={companiesList}>
+                                    {favorites.length > 1 ? 'Múltiplos Favoritos' : (getCompanyName(favorites[0].companyId))}
+                                  </span>
+                                </div>
+                              );
+                          }
+                          
+                          // Fallback to lowest overall
+                          const winningQuotation = [...budget.items].sort((a, b) => {
+                              const vA = a.finalSellingPrice || a.totalPrice || 0;
+                              const vB = b.finalSellingPrice || b.totalPrice || 0;
+                              return vA - vB;
+                          })[0];
+                          
                           return (
                             <div className="flex flex-col items-end">
                               <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                {(winningQuotation.totalPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                {(winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </span>
                               <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={getCompanyName(winningQuotation.companyId)}>
                                 {(() => {

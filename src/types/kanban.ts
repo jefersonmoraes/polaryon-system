@@ -45,6 +45,9 @@ export interface BudgetItem {
   validity?: string; // e.g. "15 dias"
   notes?: string;
 
+  // Phase 4.1: Mixed Quotation Types (Moving type from Budget to Quotation)
+  type?: BudgetType;
+
   // Fase 3: Favoritos e Avaliações de Empresas
   isFavorite?: boolean;
   supplierRating?: number; // 0 to 5 estrelas
