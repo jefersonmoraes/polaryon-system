@@ -730,11 +730,21 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         valorMinFilter, valorMaxFilter
     ]);
 
-    // Auto-load abertas recentes
+    // Auto-fetch inteligente com debounce para recarregar quando o usuário digitar ou alterar filtros
     useEffect(() => {
-        fetchOportunidades(1);
+        const timer = setTimeout(() => {
+            fetchOportunidades(1);
+        }, 500); // 500ms de atraso para evitar flood na API enquanto o usuário digita
+        
+        return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [
+        keyword, ufFilter, modalidadeFilter, statusFilter, instrumentoFilter,
+        esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
+        orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
+        fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
+        valorMinFilter, valorMaxFilter
+    ]);
 
     const handleSearch = useCallback((e: React.FormEvent) => {
         e.preventDefault();
