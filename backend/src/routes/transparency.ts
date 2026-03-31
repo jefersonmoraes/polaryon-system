@@ -207,16 +207,20 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
             paramsSerializer: (params) => {
                 const parts: string[] = [];
                 Object.entries(params).forEach(([key, val]) => {
-                    if (val === undefined || val === null) return;
+                    if (val === undefined || val === null || val === '') return;
                     if (Array.isArray(val)) {
-                        // PNCP API now prefers piped values for some fields like tipos_documento and status
                         if (key === 'tipos_documento' || key === 'status') {
-                            parts.push(`${key}=${encodeURIComponent(val.join('|'))}`);
+                            parts.push(`${encodeURIComponent(key)}=${val.join('|')}`);
                         } else {
-                            val.forEach(v => parts.push(`${key}=${encodeURIComponent(String(v))}`));
+                            val.forEach(v => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`));
                         }
                     } else {
-                        parts.push(`${key}=${encodeURIComponent(String(val))}`);
+                        if (typeof val === 'string' && val.includes('|')) {
+                            // PNCP requires unencoded pipes for these filters
+                            parts.push(`${encodeURIComponent(key)}=${val}`);
+                        } else {
+                            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`);
+                        }
                     }
                 });
                 return parts.join('&');
