@@ -210,9 +210,22 @@ const BudgetsPage = () => {
                                             {statusIcons[budget.status]}
                                             {budget.status}
                                         </span>
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${typeStyles[budget.type]}`}>
-                                            {budget.type}
-                                        </span>
+                                        {(() => {
+                                            const favorites = (budget.items || []).filter(i => i.isFavorite);
+                                            if (favorites.length === 0) {
+                                                return (
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${typeStyles[budget.type || 'Produto']}`}>
+                                                        {budget.type || 'Produto'}
+                                                    </span>
+                                                );
+                                            }
+                                            const typesSet = new Set(favorites.map(i => i.type || budget.type || 'Produto'));
+                                            return Array.from(typesSet).map(t => (
+                                                <span key={t} className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${typeStyles[t as BudgetType]}`}>
+                                                    {t}
+                                                </span>
+                                            ));
+                                        })()}
                                     </div>
 
                                     <Popover>
@@ -326,14 +339,54 @@ const BudgetsPage = () => {
                                         </div>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5 mt-2">Melhor Cotação</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 mt-2">
+                                            {(() => {
+                                                const favorites = (budget.items || []).filter(i => i.isFavorite);
+                                                return favorites.length > 1 ? 'Cotações Favoritas' : 'Melhor Cotação';
+                                            })()}
+                                        </p>
                                         {(() => {
                                             if (!budget.items || budget.items.length === 0) {
                                                 return <p className="font-bold text-muted-foreground text-sm leading-none tracking-tight">R$ 0,00</p>;
                                             }
+                                            
+                                            const favorites = budget.items.filter(i => i.isFavorite);
+                                            
+                                            if (favorites.length > 0) {
+                                                const totalSum = favorites.reduce((acc, f) => acc + (f.finalSellingPrice || f.totalPrice || 0), 0);
+                                                const totalProfit = favorites.reduce((acc, f) => {
+                                                    const sell = f.finalSellingPrice || f.totalPrice || 0;
+                                                    const cost = f.totalPrice || 0;
+                                                    const tax = f.taxValue || 0;
+                                                    const difal = f.difalValue || 0;
+                                                    return acc + (sell - cost - tax - difal);
+                                                }, 0);
+                                                
+                                                const companiesList = Array.from(new Set(favorites.map(f => getCompanyName(f.companyId)))).join(', ');
+                                                
+                                                return (
+                                                    <div className="flex flex-col items-end">
+                                                        {(totalProfit !== 0) && (
+                                                            <span className={cn(
+                                                                "text-[10px] uppercase font-bold px-2 rounded mb-1 border",
+                                                                totalProfit > 0 ? "text-green-600 bg-green-500/10 border-green-500/20" : "text-red-600 bg-red-500/10 border-red-500/20"
+                                                            )} title="Lucro Bruto Agregado das Cotações Favoritas">
+                                                                LUCRO EMPRESA: {formatCurrency(totalProfit)}
+                                                            </span>
+                                                        )}
+                                                        <p className="font-bold text-primary flex items-center gap-1 text-base leading-none tracking-tight">
+                                                            <DollarSign className="h-4 w-4" />
+                                                            {formatCurrency(totalSum)}
+                                                        </p>
+                                                        <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5 truncate max-w-[150px]" title={companiesList}>
+                                                            {favorites.length > 1 ? 'Múltiplos Favoritos' : getCompanyName(favorites[0].companyId)}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            }
+
+                                            // Fallback to lowest overall (when no favorites exist)
                                             const winningQuotation = [...budget.items].sort((a, b) => {
-                                                if (a.isFavorite && !b.isFavorite) return -1;
-                                                if (!a.isFavorite && b.isFavorite) return 1;
                                                 const aPrice = a.finalSellingPrice || a.totalPrice || 0;
                                                 const bPrice = b.finalSellingPrice || b.totalPrice || 0;
                                                 return aPrice - bPrice;
@@ -343,8 +396,11 @@ const BudgetsPage = () => {
 
                                             return (
                                                 <div className="flex flex-col items-end">
-                                                    {(bestProfit > 0) && (
-                                                        <span className="text-[10px] uppercase font-bold text-green-600 bg-green-500/10 px-2 rounded mb-1 border border-green-500/20" title="Lucro Bruto da Empresa nesta cotação">
+                                                    {(bestProfit !== 0) && (
+                                                        <span className={cn(
+                                                            "text-[10px] uppercase font-bold px-2 rounded mb-1 border",
+                                                            bestProfit > 0 ? "text-green-600 bg-green-500/10 border-green-500/20" : "text-red-600 bg-red-500/10 border-red-500/20"
+                                                        )} title="Lucro Bruto da Empresa nesta cotação">
                                                             LUCRO EMPRESA: {formatCurrency(bestProfit)}
                                                         </span>
                                                     )}
@@ -352,11 +408,8 @@ const BudgetsPage = () => {
                                                         <DollarSign className="h-4 w-4" />
                                                         {formatCurrency(winningQuotation.finalSellingPrice || winningQuotation.totalPrice || 0)}
                                                     </p>
-                                                    <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5">
-                                                        {(() => {
-                                                            const winComp = companies.find(c => c.id === winningQuotation.companyId);
-                                                            return winComp ? (winComp.nickname || winComp.nome_fantasia || winComp.razao_social) : (winningQuotation.companyId || 'Sem Empresa');
-                                                        })()}
+                                                    <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5 truncate max-w-[150px]" title={getCompanyName(winningQuotation.companyId)}>
+                                                        {getCompanyName(winningQuotation.companyId)}
                                                     </span>
                                                 </div>
                                             );
