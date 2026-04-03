@@ -144,25 +144,29 @@ const AppContent = () => {
     };
 
     const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
-        console.log("🚀 Socket: REC_CONNECT", user);
+        // Don't notify about self
+        if (user.id === authUser.id) return;
+        
         playPresenceSound('connect');
         toast.success(`${user.name} entrou no sistema`, {
-            description: 'Online agora no Polaryon',
-            duration: 8000,
+            description: 'Online agora',
+            duration: 5000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full border-2 border-emerald-500 shadow-sm" alt="" />
+                <img src={user.picture} className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
             ) : undefined
         });
     };
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
-        console.log("🚀 Socket: REC_DISCONNECT", user);
+        // Don't notify about self
+        if (user.id === authUser.id) return;
+        
         playPresenceSound('disconnect');
         toast.info(`${user.name} saiu do sistema`, {
-            description: 'Desconectado',
-            duration: 8000,
+            description: 'Offline',
+            duration: 5000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full opacity-60 grayscale border-2 border-slate-400" alt="" />
+                <img src={user.picture} className="w-10 h-10 rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
             ) : undefined
         });
     };

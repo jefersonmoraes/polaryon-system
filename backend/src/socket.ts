@@ -28,17 +28,21 @@ export const initSocket = (server: HttpServer) => {
                 const userId = userData.id;
                 
                 // If it's the first connection for this user ID, notify others
+                const existingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
+                
                 onlineUsers.set(socket.id, userId);
                 userProfiles.set(userId, { name: userData.name, picture: userData.picture });
                 
                 broadcastOnlineUsers();
                 
-                console.log(`🔔 FORCE Global join notify: ${userData.name}`);
-                io.emit('user_presence_connect', { 
-                    id: userId, 
-                    name: userData.name, 
-                    picture: userData.picture 
-                });
+                if (existingConnections === 0) {
+                    console.log(`🔔 User Join Notify: ${userData.name}`);
+                    socket.broadcast.emit('user_presence_connect', { 
+                        id: userId, 
+                        name: userData.name, 
+                        picture: userData.picture 
+                    });
+                }
             }
         });
 
@@ -55,15 +59,21 @@ export const initSocket = (server: HttpServer) => {
         socket.on('disconnect', () => {
             const userId = onlineUsers.get(socket.id);
             if (userId) {
-                const profile = userProfiles.get(userId);
                 onlineUsers.delete(socket.id);
                 
-                console.log(`🔕 FORCE Global leave notify: ${profile?.name || userId}`);
-                io.emit('user_presence_disconnect', { 
-                    id: userId, 
-                    name: profile?.name || 'Usuário',
-                    picture: profile?.picture 
-                });
+                // If this was the last connection for this user ID, notify others
+                const remainingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
+                
+                if (remainingConnections === 0) {
+                    const profile = userProfiles.get(userId);
+                    console.log(`🔕 User Leave Notify: ${profile?.name || userId}`);
+                    socket.broadcast.emit('user_presence_disconnect', { 
+                        id: userId, 
+                        name: profile?.name || 'Usuário',
+                        picture: profile?.picture 
+                    });
+                    userProfiles.delete(userId);
+                }
                 
                 broadcastOnlineUsers();
             }
