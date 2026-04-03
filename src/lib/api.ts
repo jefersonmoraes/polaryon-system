@@ -40,8 +40,23 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 401) {
             // Token expired or invalid
             console.error('Session expired or unauthorized');
-            // If you want to automatically log out here, you could dispatch an event
-            // or call a store method.
+            
+            // INSTRUCTIONAL FEEDBACK: Tell the user exactly what to do
+            import('sonner').then(({ toast }) => {
+                toast.error('Sua sessão expirou por segurança.', {
+                    description: 'Clique em "Sair" e entre novamente para continuar seu trabalho sem interrupções.',
+                    duration: 10000,
+                    id: 'session-expired-error',
+                    action: {
+                        label: 'Refazer Login',
+                        onClick: () => {
+                            sessionStorage.removeItem('polaryon-auth-v2');
+                            localStorage.removeItem('polaryon-auth-v2');
+                            window.location.href = '/login?expired=true';
+                        }
+                    }
+                });
+            });
         }
         
         // Data Loss Protection: Alert user if a write operation failed

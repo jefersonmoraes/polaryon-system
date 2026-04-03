@@ -103,7 +103,7 @@ router.post('/google', async (req: Request, res: Response) => {
                 name: user.name
             },
             JWT_SECRET,
-            { expiresIn: '7d' } // 7 Dias logado
+            { expiresIn: '90d' } // 90 Dias logado (Fluidez Máxima)
         );
 
         res.status(200).json({
@@ -122,6 +122,30 @@ router.post('/google', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Google Auth Error:', error);
         res.status(401).json({ error: 'Authentication failed. Token may be expired or invalid.' });
+    }
+});
+
+// GET /api/auth/verify - Quick check if session is valid
+router.get('/verify', async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Session invalid' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        res.status(200).json({ 
+            valid: true, 
+            user: { 
+                id: decoded.id, 
+                email: decoded.email, 
+                role: decoded.role,
+                name: decoded.name
+            } 
+        });
+    } catch (err) {
+        res.status(401).json({ error: 'Session expired' });
     }
 });
 

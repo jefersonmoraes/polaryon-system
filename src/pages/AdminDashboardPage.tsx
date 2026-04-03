@@ -3,7 +3,7 @@ import { useAuthStore, SystemUser, UserRole } from '@/store/auth-store';
 import { toast } from 'sonner';
 import {
     Users, ShieldAlert, KeyRound, Mail, Trash2,
-    Save, Plus, ShieldCheck, RefreshCcw, LayoutDashboard, Monitor
+    Save, Plus, ShieldCheck, RefreshCcw, LayoutDashboard, Monitor, LogIn
 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { AuditMetricsDash } from './AuditMetricsDash';
@@ -306,15 +306,33 @@ export default function AdminDashboardPage() {
                                         <div className="flex flex-col items-center justify-center gap-4">
                                             <ShieldAlert className="w-10 h-10 text-destructive/50" />
                                             <div className="max-w-md">
-                                                <p className="text-foreground font-bold mb-1">{errorOccurred}</p>
-                                                <p className="text-xs text-muted-foreground">Se o erro persistir, tente recarregar a página ou refazer o login.</p>
+                                                <p className="text-foreground font-bold mb-1">
+                                                    {errorOccurred.includes("expirou") ? "Sessão Expirada por Segurança" : errorOccurred}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground mb-4">
+                                                    Para garantir a fluidez do seu trabalho, clique no botão abaixo para renovar sua conexão. Você não perderá seus dados salvos.
+                                                </p>
+                                                <div className="flex items-center justify-center gap-3">
+                                                    <button 
+                                                        onClick={() => { setErrorOccurred(null); loadUsers(); }}
+                                                        className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 flex items-center gap-2"
+                                                    >
+                                                        <RefreshCcw className="w-4 h-4" /> Tentar Re-sincronizar
+                                                    </button>
+                                                    {errorOccurred.includes("expirou") && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                sessionStorage.removeItem('polaryon-auth-v2');
+                                                                localStorage.removeItem('polaryon-auth-v2');
+                                                                window.location.href = '/login?expired=true';
+                                                            }}
+                                                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 flex items-center gap-2"
+                                                        >
+                                                            <LogIn className="w-4 h-4" /> Renovar Conexão Agora
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <button 
-                                                onClick={() => { setErrorOccurred(null); loadUsers(); }}
-                                                className="mt-2 text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                                            >
-                                                <RefreshCcw className="w-3 h-3" /> Tentar Novamente
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
