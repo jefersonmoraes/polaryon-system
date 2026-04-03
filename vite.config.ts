@@ -21,4 +21,20 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('lucide-react')) return 'ui-icons';
+            if (id.includes('recharts')) return 'charts';
+            if (id.includes('framer-motion')) return 'animations';
+            if (id.includes('date-fns')) return 'date-utils';
+            if (id.includes('@radix-ui')) return 'ui-core';
+            return 'vendor';
+          }
+        }
+      }
+    }
+  }
 }));

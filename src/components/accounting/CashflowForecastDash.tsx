@@ -4,7 +4,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { CreditCard, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowRight, Filter, Settings, Calculator, Activity, Calculator as CalcIcon, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
-export const CashflowForecastDash = () => {
+const CashflowForecastDash = () => {
     const { entries, bankAccounts, updateBankAccount } = useAccountingStore();
     const { mainCompanies, budgets } = useKanbanStore();
     const activeCompany = mainCompanies.find(c => c.isDefault) || mainCompanies[0];
@@ -286,3 +286,5 @@ export const CashflowForecastDash = () => {
         </div >
     );
 };
+
+export default CashflowForecastDash;

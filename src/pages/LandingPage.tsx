@@ -17,8 +17,8 @@ import {
 
 import api from '@/lib/api';
 import logo from '@/assets/sem-fundo.svg';
-import jef from '@/assets/jef.svg';
-import belt from '@/assets/belt.svg';
+import jef from '@/assets/jef.webp';
+import belt from '@/assets/belt.webp';
 import whatsappQR from '@/assets/whatsapp-qr.png';
 import qrJef from '@/assets/qr-jef.svg';
 import qrBelt from '@/assets/qr-belt.svg';

@@ -179,6 +179,7 @@ export interface Company {
   trashed?: boolean;
   trashedAt?: string;
   createdAt: string;
+  isSkeleton?: boolean;
 }
 
 export interface Notification {
@@ -297,12 +298,14 @@ export interface Comment {
   text: string;
   author: string;
   createdAt: string;
+  isSkeleton?: boolean;
 }
 
 export interface CardDescriptionEntry {
   id: string;
   text: string;
   createdAt: string;
+  isSkeleton?: boolean;
 }
 
 export interface TimeEntry {

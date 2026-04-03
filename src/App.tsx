@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useDocumentStore } from '@/store/document-store';
@@ -19,30 +19,34 @@ import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { socketService } from '@/lib/socket';
 import LoginPage from "./pages/LoginPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import AuditLogPage from "./pages/AuditLogPage";
-import OportunidadesSearch from './pages/OportunidadesSearch';
-import OportunidadesDashboard from './pages/OportunidadesDashboard';
-import DashboardPage from "./pages/DashboardPage";
-import FolderPage from "./pages/FolderPage";
-import BoardPage from "./pages/BoardPage";
-import GlobalCalendarPage from "./pages/GlobalCalendarPage";
-import TeamWorkloadPage from "./pages/TeamWorkloadPage";
-import SuppliersPage from "./pages/SuppliersPage";
-import CompanyListPage from "./pages/CompanyListPage";
-import BudgetsPage from "./pages/BudgetsPage";
-import CompanyProfilePage from "./pages/CompanyProfilePage";
-import DocumentationPage from "./pages/DocumentationPage";
-import CapacityCertificatesPage from "./pages/CapacityCertificatesPage";
-import EssentialDocumentModelsPage from "./pages/EssentialDocumentModelsPage";
-import AccountingDashboard from "./pages/AccountingDashboard";
-import AccountingEntries from "./pages/AccountingEntries";
-import { CashflowForecastDash } from "./components/accounting/CashflowForecastDash"; // Added import
-import KanbanPage from "./pages/KanbanPage";
-import ConnectionPage from "./pages/ConnectionPage";
-import LandingPage from "./pages/LandingPage";
-import TransparencySearchPage from "./pages/TransparencySearchPage";
-import NotFound from "./pages/NotFound";
+
+// Lazy Loading V5.1 Turbo
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const AuditLogPage = lazy(() => import("./pages/AuditLogPage"));
+const OportunidadesSearch = lazy(() => import("./pages/OportunidadesSearch"));
+const OportunidadesDashboard = lazy(() => import("./pages/OportunidadesDashboard"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const FolderPage = lazy(() => import("./pages/FolderPage"));
+const BoardPage = lazy(() => import("./pages/BoardPage"));
+const GlobalCalendarPage = lazy(() => import("./pages/GlobalCalendarPage"));
+const TeamWorkloadPage = lazy(() => import("./pages/TeamWorkloadPage"));
+const SuppliersPage = lazy(() => import("./pages/SuppliersPage"));
+const CompanyListPage = lazy(() => import("./pages/CompanyListPage"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
+const CompanyProfilePage = lazy(() => import("./pages/CompanyProfilePage"));
+const DocumentationPage = lazy(() => import("./pages/DocumentationPage"));
+const CapacityCertificatesPage = lazy(() => import("./pages/CapacityCertificatesPage"));
+const EssentialDocumentModelsPage = lazy(() => import("./pages/EssentialDocumentModelsPage"));
+const AccountingDashboard = lazy(() => import("./pages/AccountingDashboard"));
+const AccountingEntries = lazy(() => import("./pages/AccountingEntries"));
+const KanbanPage = lazy(() => import("./pages/KanbanPage"));
+const ConnectionPage = lazy(() => import("./pages/ConnectionPage"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const TransparencySearchPage = lazy(() => import("./pages/TransparencySearchPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Heavy component split-out
+const CashflowForecastDash = lazy(() => import("./components/accounting/CashflowForecastDash"));
 
 const queryClient = new QueryClient();
 
@@ -354,6 +358,14 @@ const AppContent = () => {
   }, []);
 
   return (
+    <Suspense fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4">
+                <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-lg text-primary"></div>
+                <p className="text-sm font-medium text-muted-foreground animate-pulse">Polaryon está carregando...</p>
+            </div>
+        </div>
+    }>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -382,6 +394,7 @@ const AppContent = () => {
       <Route path="/conexao" element={<ProtectedRoute><ConnectionPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 };
 

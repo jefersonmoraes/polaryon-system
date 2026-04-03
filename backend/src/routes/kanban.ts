@@ -774,7 +774,6 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                // Skeleton selection: exclude heavy content (desc, comments, checklists, items)
                 select: {
                     id: true,
                     listId: true,
@@ -825,9 +824,40 @@ router.get('/sync', async (req: Request, res: Response) => {
                 }
             }),
             prisma.label.findMany(),
-            prisma.companyDocument.findMany(),
-            prisma.essentialDocument.findMany(),
-            prisma.certificate.findMany(), // Reduced: exclude attachments for initial view
+            prisma.companyDocument.findMany({
+                select: {
+                    id: true,
+                    title: true,
+                    type: true,
+                    issueDate: true,
+                    expirationDate: true,
+                    status: true,
+                    companyId: true,
+                    fileName: true,
+                    fileSize: true,
+                    updatedAt: true
+                    // fileData: false
+                }
+            }),
+            prisma.essentialDocument.findMany({
+                select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    updatedAt: true
+                    // attachments: false 
+                }
+            }),
+            prisma.certificate.findMany({
+                select: {
+                    id: true,
+                    type: true,
+                    issuingAgency: true,
+                    executionDate: true,
+                    description: true,
+                    updatedAt: true
+                }
+            }),
             prisma.accountingCategory.findMany(),
             prisma.bankAccount.findMany(),
             prisma.accountingEntry.findMany({ take: 500, orderBy: { date: 'desc' } }), // Added limit for performance
