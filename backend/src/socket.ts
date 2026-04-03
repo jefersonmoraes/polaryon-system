@@ -36,7 +36,7 @@ export const initSocket = (server: HttpServer) => {
                 broadcastOnlineUsers();
                 
                 if (existingConnections === 0) {
-                    console.log(`🔔 User Join Notify: ${userData.name}`);
+                    console.log(`🔔 Broadcasting presence join: ${userData.name} (${userId})`);
                     socket.broadcast.emit('user_presence_connect', { 
                         id: userId, 
                         name: userData.name, 
@@ -66,13 +66,12 @@ export const initSocket = (server: HttpServer) => {
                 
                 if (remainingConnections === 0) {
                     const profile = userProfiles.get(userId);
-                    console.log(`🔕 User Leave Notify: ${profile?.name || userId}`);
+                    console.log(`🔕 Broadcasting presence leave: ${profile?.name || userId}`);
                     socket.broadcast.emit('user_presence_disconnect', { 
                         id: userId, 
                         name: profile?.name || 'Usuário',
                         picture: profile?.picture 
                     });
-                    // Optional: delay cleanup to handle rapid refresh
                     userProfiles.delete(userId);
                 }
                 

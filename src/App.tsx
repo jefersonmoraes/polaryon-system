@@ -144,31 +144,33 @@ const AppContent = () => {
     };
 
     const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
+        console.log("🌐 Socket: Recv Join Notify", user);
         // Don't notify about self
         if (user.id === authUser.id) return;
         
-        import('sonner').then(({ toast }) => {
-            playPresenceSound('connect');
+        playPresenceSound('connect');
+        import('@/components/ui/sonner').then(({ toast }) => {
             toast.success(`${user.name} entrou no sistema`, {
                 description: 'Online agora',
-                duration: 4000,
+                duration: 5000,
                 icon: user.picture ? (
-                    <img src={user.picture} className="w-6 h-6 rounded-full border border-primary/20 shadow-sm" alt="" />
+                    <img src={user.picture} className="w-8 h-8 rounded-full border border-primary/20 shadow-sm" alt="" />
                 ) : undefined
             });
         });
     };
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
+        console.log("🌐 Socket: Recv Leave Notify", user);
         if (user.id === authUser.id) return;
         
-        import('sonner').then(({ toast }) => {
-            playPresenceSound('disconnect');
+        playPresenceSound('disconnect');
+        import('@/components/ui/sonner').then(({ toast }) => {
             toast.info(`${user.name} saiu do sistema`, {
                 description: 'Offline',
-                duration: 4000,
+                duration: 5000,
                 icon: user.picture ? (
-                    <img src={user.picture} className="w-6 h-6 rounded-full opacity-60 border border-muted" alt="" />
+                    <img src={user.picture} className="w-8 h-8 rounded-full opacity-60 border border-muted" alt="" />
                 ) : undefined
             });
         });
@@ -178,6 +180,11 @@ const AppContent = () => {
     socketService.on('connection_change', handleConnectionChange);
     socketService.on('user_presence_connect', handlePresenceConnect);
     socketService.on('user_presence_disconnect', handlePresenceDisconnect);
+
+    // Initial alert to confirm notifications are working locally
+    import('@/components/ui/sonner').then(({ toast }) => {
+        toast.message(`Sistema Pronto: Conectado como ${authUser.name}`, { duration: 2000 });
+    });
 
     // Initial identify if already connected (or queue it)
     socketService.emit('user_join', {
