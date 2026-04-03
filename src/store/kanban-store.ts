@@ -1354,11 +1354,13 @@ export const useKanbanStore = create<KanbanState>()(
       },
     }),
     { 
-      name: 'jj-kanban-v2', // bumped version to wipe corrupted localstorage with large images
+      name: 'jj-kanban-v3', // bumped version to wipe corrupted localstorage with large images (exclude attachments)
       /**
        * PROTECTED SECTION: Critical for performance and persistence.
        * Do not remove lists, companies, routes, or budgets from partialize.
        * This prevents the "blank board" effect on page refresh.
+       * 
+       * V3: Strip "attachments" from cards and budgets to avoid 5MB LocalStorage Quota Exceeded errors.
        */
       partialize: (state) => ({
         googleEvents: state.googleEvents,
@@ -1367,10 +1369,21 @@ export const useKanbanStore = create<KanbanState>()(
         lists: state.lists,
         companies: state.companies,
         routes: state.routes,
-        budgets: state.budgets,
         labels: state.labels,
         members: state.members,
-        cards: state.cards
+        // Strip attachments from budgets to keep localstorage light
+        budgets: state.budgets.map(b => ({
+          ...b,
+          items: b.items.map(item => {
+            const { attachments, ...rest } = item;
+            return rest;
+          })
+        })),
+        // Strip attachments from cards to keep localstorage light
+        cards: state.cards.map(c => {
+          const { attachments, ...rest } = c;
+          return rest;
+        })
       })
     }
   )
@@ -1378,7 +1391,7 @@ export const useKanbanStore = create<KanbanState>()(
 
 // Initialize theme on load
 const initTheme = () => {
-  const stored = localStorage.getItem('jj-kanban-v2');
+  const stored = localStorage.getItem('jj-kanban-v3');
   if (stored) {
     const parsed = JSON.parse(stored);
     if (parsed.state?.isDark) {
