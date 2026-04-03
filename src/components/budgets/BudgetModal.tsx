@@ -112,11 +112,17 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         let loaded = 0;
         const newAttachments: Attachment[] = [];
 
+        // Safe UUID generation fallback
+        const generateId = () => {
+             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+             return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        };
+
         files.forEach(file => {
             const reader = new FileReader();
             reader.onload = () => {
                 newAttachments.push({
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     name: file.name,
                     url: reader.result as string,
                     type: file.type,
@@ -1743,8 +1749,12 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                 dirtyItemIdsRef.current.clear(); // Limpa itens alterados após persistência
                 syncLockRef.current = Date.now();
                 setSaveStatus('saved');
-            } catch (err) {
+            } catch (err: any) {
                 console.error("BudgetModal - Save failed:", err);
+                const errorMessage = err.response?.data?.message || err.message || "Erro desconhecido";
+                import('sonner').then(({ toast }) => {
+                    toast.error(`ERRO AO SALVAR: ${errorMessage}`);
+                });
                 setSaveStatus('error');
             } finally {
                 savingPromiseRef.current = null;
