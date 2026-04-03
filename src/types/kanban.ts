@@ -103,6 +103,7 @@ export interface BudgetItem {
   finalSellingPrice?: number; // Preço Final do Fornecedor baseado no Custo + Margem
 
   items: QuotationSubItem[]; // The products/services inside this quote
+  attachments?: Attachment[]; // Attached images/PDFs specifically for this supplier/quote
   totalPrice: number; // Sum of all inner items + freightValue - cashDiscount + Installments (CUSTO INICIAL)
 }
 

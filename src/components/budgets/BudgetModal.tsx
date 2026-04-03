@@ -2,11 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company, MainCompanyProfile } from '@/types/kanban';
+import { Budget, BudgetStatus, BudgetType, BudgetItem, QuotationSubItem, Company, MainCompanyProfile, Attachment } from '@/types/kanban';
 import {
     X, Plus, Calculator, Trash2, Building2, Calendar, FileText,
     CheckCircle2, Clock, XCircle, FileSearch, Save, Link as LinkIcon, Truck, Search, ChevronsUpDown, ChevronDown, ChevronUp, MapPin, DollarSign, Percent, Star, AlertTriangle,
-    Phone, Mail, MessageCircle, ExternalLink, ClipboardList, Package, Info, ChevronLeft
+    Phone, Mail, MessageCircle, ExternalLink, ClipboardList, Package, Info, ChevronLeft, Paperclip, Download, Eye, Image as ImageIcon
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { cn, getFaviconUrl } from '@/lib/utils';
@@ -68,6 +68,40 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const ufRef = useRef<HTMLDivElement>(null);
     const taxRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
     const difalRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+
+        let loaded = 0;
+        const newAttachments: Attachment[] = [];
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                newAttachments.push({
+                    id: crypto.randomUUID(),
+                    name: file.name,
+                    url: reader.result as string,
+                    type: file.type,
+                    addedAt: new Date().toISOString(),
+                });
+                loaded++;
+                if (loaded === files.length) {
+                    const currentAttachments = item.attachments || [];
+                    updateItem(item.id, 'attachments', [...currentAttachments, ...newAttachments]);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+    };
+
+    const handleRemoveAttachment = (attId: string) => {
+        const currentAttachments = item.attachments || [];
+        updateItem(item.id, 'attachments', currentAttachments.filter(a => a.id !== attId));
+    };
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -1343,6 +1377,98 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <p className="text-xs text-muted-foreground px-2 py-1 bg-secondary/30 rounded border border-border/10 truncate cursor-pointer hover:bg-secondary/50" onClick={() => setIsNotesExpanded(true)}>
                                 {item.notes}
                             </p>
+                        )}
+                    </div>
+
+                    {/* Attachments Section */}
+                    <div className="space-y-3 mt-4 pt-4 border-t border-border/40">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5 text-muted-foreground">
+                                <Paperclip className="h-3 w-3" /> Anexos e Comprovantes
+                            </label>
+                            {canEdit && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="text-[10px] font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded transition-colors flex items-center gap-1 border border-primary/20"
+                                >
+                                    <Plus className="h-3 w-3" /> ADICIONAR IMAGEM/PDF
+                                </button>
+                            )}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                multiple
+                                accept="image/*,.pdf"
+                                className="hidden"
+                            />
+                        </div>
+
+                        {(!item.attachments || item.attachments.length === 0) ? (
+                            <div className="text-center py-6 border-2 border-dashed border-border/50 rounded-lg bg-secondary/10">
+                                <Paperclip className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                                <p className="text-[11px] text-muted-foreground">Nenhum documento anexado a esta cotação.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {item.attachments.map((att) => {
+                                    const isImage = att.type.startsWith('image/');
+                                    const isPdf = att.type === 'application/pdf';
+
+                                    return (
+                                        <div key={att.id} className="group relative bg-card border border-border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all">
+                                            {/* Preview Area */}
+                                            <div className="aspect-video bg-muted/30 flex items-center justify-center overflow-hidden">
+                                                {isImage ? (
+                                                    <img src={att.url} alt={att.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                                ) : isPdf ? (
+                                                    <div className="flex flex-col items-center gap-1 text-red-500/70">
+                                                        <FileText className="h-10 w-10" />
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest">PDF</span>
+                                                    </div>
+                                                ) : (
+                                                    <FileText className="h-10 w-10 text-muted-foreground/40" />
+                                                )}
+                                            </div>
+
+                                            {/* Info Area */}
+                                            <div className="p-2 border-t border-border/50 bg-background/50">
+                                                <p className="text-[10px] font-medium truncate text-foreground/80 pr-6" title={att.name}>
+                                                    {att.name}
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <a 
+                                                        href={att.url} 
+                                                        download={att.name}
+                                                        className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
+                                                        title="Download"
+                                                    >
+                                                        <Download className="h-3 w-3" />
+                                                    </a>
+                                                    <button 
+                                                        onClick={() => window.open(att.url, '_blank')}
+                                                        className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
+                                                        title="Visualizar"
+                                                    >
+                                                        <Eye className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Quick Actions Overlay */}
+                                            {canEdit && (
+                                                <button
+                                                    onClick={() => handleRemoveAttachment(att.id)}
+                                                    className="absolute top-1 right-1 p-1.5 bg-destructive/90 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity translate-y-[-10px] group-hover:translate-y-0 shadow-lg"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
 
