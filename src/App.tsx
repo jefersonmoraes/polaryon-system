@@ -104,12 +104,19 @@ const AppContent = () => {
 
     const handleConnectionChange = (connected: boolean) => {
         setSocketConnected(connected);
+        if (connected && authUser) {
+            // Re-identify on every connection/reconnection
+            socketService.emit('user_join', authUser.id);
+        } else {
+            // Clear online list on disconnect to avoid ghost statuses
+            setOnlineUsers([]);
+        }
     };
 
     socketService.on('online_users', handleOnlineUsers);
     socketService.on('connection_change', handleConnectionChange);
 
-    // Emit join event
+    // Initial identify if already connected (or queue it)
     socketService.emit('user_join', authUser.id);
 
     return () => {

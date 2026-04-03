@@ -97,7 +97,7 @@ export const useAuthStore = create<AuthState>()(
             onlineUsers: [],
             isSocketConnected: true,
 
-            setOnlineUsers: (userIds) => set({ onlineUsers: userIds }),
+            setOnlineUsers: (userIds) => set({ onlineUsers: Array.isArray(userIds) ? userIds : [] }),
             setSocketConnected: (connected) => set({ isSocketConnected: connected }),
 
             loginWithGoogle: (userData: SystemUser, token: string, rememberMe = false) => {
