@@ -117,7 +117,7 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
       </div>
 
       {/* Metadata */}
-      {(checkTotal > 0 || card.comments.length > 0 || card.attachments.length > 0 || card.timeEntries.length > 0 || card.assignee || hasOverdueMilestone || (card.milestones && card.milestones.length > 0)) && (
+      {(checkTotal > 0 || (card.comments?.length || 0) > 0 || (card.attachments?.length || 0) > 0 || (card.timeEntries?.length || 0) > 0 || card.assignee || hasOverdueMilestone || (card.milestones && card.milestones.length > 0)) && (
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           {hasOverdueMilestone && (
             <span className="flex items-center gap-0.5 text-[10px] text-label-red bg-label-red/10 px-1 py-0.5 rounded font-bold shadow-sm" title="Existem etapas (milestones) atrasadas neste cartão!">
@@ -147,10 +147,10 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
               {card.attachments?.length}
             </span>
           )}
-          {card.timeEntries.length > 0 && (
+          {(card.timeEntries?.length || 0) > 0 && (
             <span className="flex items-center gap-0.5 text-[10px] text-foreground/70 font-bold">
               <Clock className="h-2.5 w-2.5" />
-              {Math.round(card.timeEntries.reduce((t, e) => t + e.duration, 0) / 60)}m
+              {Math.round(card.timeEntries!.reduce((t, e) => t + e.duration, 0) / 60)}m
             </span>
           )}
           {assignedMember && (

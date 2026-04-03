@@ -326,21 +326,32 @@ export const useKanbanStore = create<KanbanState>()(
             // SKELETON-AWARE MERGE V5: Don't let server skeletons overwrite local detailed cards
             const finalCards = mergedCards.map(sc => {
                 const local = localCards.find(lc => lc.id === sc.id);
+                const safeDefaults = {
+                    comments: [],
+                    attachments: [],
+                    timeEntries: [],
+                    checklist: [],
+                    milestones: [],
+                    items: [],
+                    descriptionEntries: []
+                };
+
                 if (local && !local.isSkeleton && sc.isSkeleton) {
                     // Keep detailed local fields
-                    return { ...sc, ...local, isSkeleton: false };
+                    return { ...safeDefaults, ...sc, ...local, isSkeleton: false };
                 }
-                return sc;
+                return { ...safeDefaults, ...sc };
             });
 
             // Same for budgets
             const serverBudgets = res.data.budgets || [];
             const finalBudgets = serverBudgets.map(sb => {
                 const local = get().budgets.find(lb => lb.id === sb.id);
+                const safeDefaults = { items: [] };
                 if (local && !local.isSkeleton && sb.isSkeleton) {
-                    return { ...sb, ...local, isSkeleton: false };
+                    return { ...safeDefaults, ...sb, ...local, isSkeleton: false };
                 }
-                return sb;
+                return { ...safeDefaults, ...sb };
             });
 
             set({
