@@ -16,8 +16,10 @@ export const initSocket = (server: HttpServer) => {
     const pendingDisconnects = new Map<string, NodeJS.Timeout>(); // userId -> Timeout object
 
     const broadcastOnlineUsers = () => {
-        const userIds = Array.from(new Set(onlineUsers.values()));
-        io.emit('online_users', userIds);
+        const activeIds = Array.from(onlineUsers.values());
+        const pendingIds = Array.from(pendingDisconnects.keys());
+        const allOnlineIds = Array.from(new Set([...activeIds, ...pendingIds]));
+        io.emit('online_users', allOnlineIds);
     };
 
     io.on('connection', (socket: Socket) => {
@@ -28,22 +30,20 @@ export const initSocket = (server: HttpServer) => {
             if (userData && userData.id) {
                 const userId = userData.id;
                 
-                // If it's the first connection for this user ID, notify others
-                const existingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
+                // Reconnection check: Was this user already online (even if in grace period)?
+                const isStillConnected = Array.from(onlineUsers.values()).some(id => id === userId);
+                const wasWaitingToLeave = pendingDisconnects.has(userId);
                 
                 onlineUsers.set(socket.id, userId);
                 userProfiles.set(userId, { name: userData.name, picture: userData.picture });
                 
-                // Clear any pending disconnect timeout for this user (they've reconnected/refreshed)
-                if (pendingDisconnects.has(userId)) {
-                    console.log(`⏱️ DEBOUNCE: Join cancelled disconnect for ${userData.name}`);
+                // CRITICAL: If they were in grace period, CANCEL the leave notice and DON'T send a join notice
+                if (wasWaitingToLeave) {
+                    console.log(`⏱️ DEBOUNCE: ${userData.name} refreshed. Disconnect cancelled. Suppressing Join alert.`);
                     clearTimeout(pendingDisconnects.get(userId));
                     pendingDisconnects.delete(userId);
-                }
-
-                broadcastOnlineUsers();
-                
-                if (existingConnections === 0) {
+                } else if (!isStillConnected) {
+                    // Only notify if they were NOT connected at all and NOT in grace period (real new session)
                     console.log(`🔔 User Join Notify: ${userData.name}`);
                     socket.broadcast.emit('user_presence_connect', { 
                         id: userId, 
@@ -51,6 +51,8 @@ export const initSocket = (server: HttpServer) => {
                         picture: userData.picture 
                     });
                 }
+
+                broadcastOnlineUsers();
             }
         });
 
