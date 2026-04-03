@@ -143,65 +143,102 @@ const AppContent = () => {
         }
     };
 
+    // Defensive refs for notification cooldowns
+    const lastNotificationTimes = useRef<Record<string, number>>({});
+
     const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
-        // Don't notify about self
-        if (user.id === authUser.id) return;
-        
-        playPresenceSound('connect');
-        toast.success(
-            <div className="flex items-center gap-3">
-                {user.picture && (
-                    <div className="w-10 h-10 flex-shrink-0">
-                        <img src={user.picture} className="w-full h-full rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+        try {
+            // Don't notify about self
+            if (!user.id || user.id === authUser.id) return;
+            
+            // Notification Cooldown (Shield against rapid re-triggers)
+            const now = Date.now();
+            const lastTime = lastNotificationTimes.current[user.id] || 0;
+            if (now - lastTime < 2000) return; // 2 seconds threshold
+            lastNotificationTimes.current[user.id] = now;
+
+            playPresenceSound('connect');
+            toast.success(
+                <div className="flex items-center gap-3 max-w-[280px]">
+                    {user.picture && (
+                        <div className="w-10 h-10 flex-shrink-0">
+                            <img src={user.picture} className="w-full h-full rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+                        </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm truncate">{user.name} entrou</span>
+                        <span className="text-xs opacity-70">Online agora</span>
                     </div>
-                )}
-                <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{user.name} entrou</span>
-                    <span className="text-xs opacity-70">Online agora</span>
-                </div>
-            </div>,
-            { duration: 5000 }
-        );
+                </div>,
+                { duration: 5000 }
+            );
+        } catch (error) {
+            console.error("Error in handlePresenceConnect:", error);
+        }
     };
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
-        // Don't notify about self
-        if (user.id === authUser.id) return;
-        
-        playPresenceSound('disconnect');
-        toast.info(
-            <div className="flex items-center gap-3">
-                {user.picture && (
-                    <div className="w-10 h-10 flex-shrink-0">
-                        <img src={user.picture} className="w-full h-full rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+        try {
+            // Don't notify about self
+            if (!user.id || user.id === authUser.id) return;
+            
+            // Notification Cooldown
+            const now = Date.now();
+            const lastTime = lastNotificationTimes.current[user.id] || 0;
+            if (now - lastTime < 2000) return;
+            lastNotificationTimes.current[user.id] = now;
+
+            playPresenceSound('disconnect');
+            toast.info(
+                <div className="flex items-center gap-3 max-w-[280px]">
+                    {user.picture && (
+                        <div className="w-10 h-10 flex-shrink-0">
+                            <img src={user.picture} className="w-full h-full rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+                        </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm truncate">{user.name} saiu</span>
+                        <span className="text-xs opacity-70">Desconectado</span>
                     </div>
-                )}
-                <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{user.name} saiu</span>
-                    <span className="text-xs opacity-70">Desconectado</span>
-                </div>
-            </div>,
-            { duration: 5000 }
-        );
+                </div>,
+                { duration: 5000 }
+            );
+        } catch (error) {
+            console.error("Error in handlePresenceDisconnect:", error);
+        }
+    };
+
+    const identifyUser = () => {
+        if (isAuthenticated && authUser?.id) {
+            socketService.emit('user_join', {
+                id: authUser.id,
+                name: authUser.name,
+                picture: authUser.photoURL
+            });
+        }
+    };
+
+    // Auto-reidentification handle
+    const handleReconnect = () => {
+        console.log("🔄 Socket reconnected, re-identifying user...");
+        identifyUser();
     };
 
     socketService.on('online_users', handleOnlineUsers);
     socketService.on('connection_change', handleConnectionChange);
     socketService.on('user_presence_connect', handlePresenceConnect);
     socketService.on('user_presence_disconnect', handlePresenceDisconnect);
+    socketService.on('connect', handleReconnect); // SHIELD: Re-identify on every connection
 
-    // Initial identify if already connected (or queue it)
-    socketService.emit('user_join', {
-        id: authUser.id,
-        name: authUser.name,
-        picture: authUser.photoURL
-    });
+    // Initial identify
+    identifyUser();
 
     return () => {
       socketService.off('online_users', handleOnlineUsers);
       socketService.off('connection_change', handleConnectionChange);
       socketService.off('user_presence_connect', handlePresenceConnect);
       socketService.off('user_presence_disconnect', handlePresenceDisconnect);
+      socketService.off('connect', handleReconnect);
     };
   }, [isAuthenticated, authUser, setOnlineUsers, setSocketConnected]);
 
