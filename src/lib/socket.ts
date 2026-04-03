@@ -36,6 +36,7 @@ class SocketService {
 
             this.socket.on('connect', () => {
                 console.log('🔗 Connected to realtime server');
+                this.trigger('connection_change', true);
             });
 
             this.socket.on('kanban_sync', (data) => {
@@ -50,9 +51,12 @@ class SocketService {
                 this.trigger('online_users', data);
             });
 
-            this.socket.on('connect', () => {
-                console.log('🔗 Connected to realtime server');
-                this.trigger('connection_change', true);
+            this.socket.on('user_presence_connect', (data) => {
+                this.trigger('user_presence_connect', data);
+            });
+
+            this.socket.on('user_presence_disconnect', (data) => {
+                this.trigger('user_presence_disconnect', data);
             });
 
             this.socket.on('disconnect', () => {
