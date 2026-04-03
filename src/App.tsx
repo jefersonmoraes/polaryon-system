@@ -152,7 +152,9 @@ const AppContent = () => {
             description: 'Online agora',
             duration: 5000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+                <div className="w-12 h-12 flex-shrink-0">
+                    <img src={user.picture} className="w-full h-full rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+                </div>
             ) : undefined
         });
     };
@@ -166,7 +168,9 @@ const AppContent = () => {
             description: 'Offline',
             duration: 5000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+                <div className="w-12 h-12 flex-shrink-0">
+                    <img src={user.picture} className="w-full h-full rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+                </div>
             ) : undefined
         });
     };
