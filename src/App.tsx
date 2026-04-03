@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useDocumentStore } from '@/store/document-store';
