@@ -148,15 +148,20 @@ const AppContent = () => {
         if (user.id === authUser.id) return;
         
         playPresenceSound('connect');
-        toast.success(`${user.name} entrou no sistema`, {
-            description: 'Online agora',
-            duration: 5000,
-            icon: user.picture ? (
-                <div className="w-12 h-12 flex-shrink-0">
-                    <img src={user.picture} className="w-full h-full rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+        toast.success(
+            <div className="flex items-center gap-3">
+                {user.picture && (
+                    <div className="w-10 h-10 flex-shrink-0">
+                        <img src={user.picture} className="w-full h-full rounded-full object-cover border-2 border-emerald-500 shadow-sm" alt="" />
+                    </div>
+                )}
+                <div className="flex flex-col">
+                    <span className="font-semibold text-sm">{user.name} entrou</span>
+                    <span className="text-xs opacity-70">Online agora</span>
                 </div>
-            ) : undefined
-        });
+            </div>,
+            { duration: 5000 }
+        );
     };
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
@@ -164,15 +169,20 @@ const AppContent = () => {
         if (user.id === authUser.id) return;
         
         playPresenceSound('disconnect');
-        toast.info(`${user.name} saiu do sistema`, {
-            description: 'Offline',
-            duration: 5000,
-            icon: user.picture ? (
-                <div className="w-12 h-12 flex-shrink-0">
-                    <img src={user.picture} className="w-full h-full rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+        toast.info(
+            <div className="flex items-center gap-3">
+                {user.picture && (
+                    <div className="w-10 h-10 flex-shrink-0">
+                        <img src={user.picture} className="w-full h-full rounded-full object-cover opacity-60 grayscale border-2 border-slate-400" alt="" />
+                    </div>
+                )}
+                <div className="flex flex-col">
+                    <span className="font-semibold text-sm">{user.name} saiu</span>
+                    <span className="text-xs opacity-70">Desconectado</span>
                 </div>
-            ) : undefined
-        });
+            </div>,
+            { duration: 5000 }
+        );
     };
 
     socketService.on('online_users', handleOnlineUsers);
