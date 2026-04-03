@@ -48,6 +48,41 @@ interface QuotationItemCardProps {
     canEdit: boolean;
 }
 
+const handleViewAttachment = (att: Attachment) => {
+    try {
+        // Se já for uma URL Blob ou externa, abre direto
+        if (att.url.startsWith('blob:') || att.url.startsWith('http')) {
+            window.open(att.url, '_blank');
+            return;
+        }
+
+        // Converte Base64 para Blob para visualização estável
+        const [header, base64Data] = att.url.split(',');
+        const mime = header.split(':')[1].split(';')[0];
+        const binary = atob(base64Data);
+        const array = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([array], { type: mime });
+        const url = URL.createObjectURL(blob);
+        
+        // Abre em nova aba
+        const newWindow = window.open(url, '_blank');
+        
+        // Limpa a URL da memória após algum tempo ou quando a janela fechar
+        if (newWindow) {
+            newWindow.onload = () => {
+                // Opcional: revogar após carregar, mas pode quebrar PDFs em alguns browsers
+                // URL.revokeObjectURL(url);
+            };
+        }
+    } catch (error) {
+        console.error("Error viewing attachment:", error);
+        window.open(att.url, '_blank');
+    }
+};
+
 const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit }) => {
     const { routes } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
@@ -1446,7 +1481,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         <Download className="h-3 w-3" />
                                                     </a>
                                                     <button 
-                                                        onClick={() => window.open(att.url, '_blank')}
+                                                        onClick={() => handleViewAttachment(att)}
                                                         className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
                                                         title="Visualizar"
                                                     >
@@ -1551,6 +1586,8 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
     const [mobileTransporterSearch, setMobileTransporterSearch] = useState('');
     const [isChangingSupplier, setIsChangingSupplier] = useState(false);
     const [isChangingTransporter, setIsChangingTransporter] = useState(false);
+
+
     const isDirtyRef = useRef(false);
     const saveStatusRef = useRef<'idle' | 'saving' | 'saved' | 'error'>(saveStatus);
     useEffect(() => {
