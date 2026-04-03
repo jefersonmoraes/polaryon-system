@@ -4,6 +4,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
+import { socketService } from '@/lib/socket';
 import logo from '@/assets/logo-polaryon.svg';
 import { useState } from 'react';
 import GlobalArchiveViewer from './GlobalArchiveViewer';
@@ -44,6 +45,8 @@ const AppHeader = () => {
 
   const handleLogout = () => {
     setShowMoreActions(false);
+    // Notify others immediately before local logout
+    socketService.emit('user_logout', {});
     logout();
     toast.info("Você saiu do sistema.");
   };

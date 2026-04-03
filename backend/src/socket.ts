@@ -13,6 +13,7 @@ export const initSocket = (server: HttpServer) => {
 
     const onlineUsers = new Map<string, string>(); // socket.id -> userId
     const userProfiles = new Map<string, { name: string, picture?: string }>(); // userId -> profile details
+    const pendingDisconnects = new Map<string, NodeJS.Timeout>(); // userId -> Timeout object
 
     const broadcastOnlineUsers = () => {
         const userIds = Array.from(new Set(onlineUsers.values()));
@@ -33,6 +34,13 @@ export const initSocket = (server: HttpServer) => {
                 onlineUsers.set(socket.id, userId);
                 userProfiles.set(userId, { name: userData.name, picture: userData.picture });
                 
+                // Clear any pending disconnect timeout for this user (they've reconnected/refreshed)
+                if (pendingDisconnects.has(userId)) {
+                    console.log(`⏱️ DEBOUNCE: Join cancelled disconnect for ${userData.name}`);
+                    clearTimeout(pendingDisconnects.get(userId));
+                    pendingDisconnects.delete(userId);
+                }
+
                 broadcastOnlineUsers();
                 
                 if (existingConnections === 0) {
@@ -43,6 +51,39 @@ export const initSocket = (server: HttpServer) => {
                         picture: userData.picture 
                     });
                 }
+            }
+        });
+
+        // HANDLE EXPLICIT LOGOUT (Immediate notification)
+        socket.on('user_logout', () => {
+            const userId = onlineUsers.get(socket.id);
+            if (userId) {
+                const profile = userProfiles.get(userId);
+                console.log(`🚪 EXPLICIT LOGOUT: ${profile?.name || userId}`);
+                
+                // Clear any pending timeout just in case
+                if (pendingDisconnects.has(userId)) {
+                    clearTimeout(pendingDisconnects.get(userId));
+                    pendingDisconnects.delete(userId);
+                }
+
+                // Notify others IMMEDIATELY
+                socket.broadcast.emit('user_presence_disconnect', { 
+                    id: userId, 
+                    name: profile?.name || 'Usuário',
+                    picture: profile?.picture 
+                });
+
+                // Cleanup connections for this socket
+                onlineUsers.delete(socket.id);
+                
+                // Check if totally offline
+                const isStillOnline = Array.from(onlineUsers.values()).some(id => id === userId);
+                if (!isStillOnline) {
+                    userProfiles.delete(userId);
+                }
+
+                broadcastOnlineUsers();
             }
         });
 
@@ -61,18 +102,26 @@ export const initSocket = (server: HttpServer) => {
             if (userId) {
                 onlineUsers.delete(socket.id);
                 
-                // If this was the last connection for this user ID, notify others
+                // If this was the last connection for this user ID, schedule notify after grace period
                 const remainingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
                 
                 if (remainingConnections === 0) {
                     const profile = userProfiles.get(userId);
-                    console.log(`🔕 User Leave Notify: ${profile?.name || userId}`);
-                    socket.broadcast.emit('user_presence_disconnect', { 
-                        id: userId, 
-                        name: profile?.name || 'Usuário',
-                        picture: profile?.picture 
-                    });
-                    userProfiles.delete(userId);
+                    console.log(`⏱️ GRACE PERIOD: Scheduling leave notify for ${profile?.name || userId}`);
+                    
+                    const timeout = setTimeout(() => {
+                        console.log(`🔕 User Leave Notify EXPIRED: ${profile?.name || userId}`);
+                        socket.broadcast.emit('user_presence_disconnect', { 
+                            id: userId, 
+                            name: profile?.name || 'Usuário',
+                            picture: profile?.picture 
+                        });
+                        userProfiles.delete(userId);
+                        pendingDisconnects.delete(userId);
+                        broadcastOnlineUsers();
+                    }, 3000); // 3 seconds grace period
+
+                    pendingDisconnects.set(userId, timeout);
                 }
                 
                 broadcastOnlineUsers();

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { LogOut, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { socketService } from '@/lib/socket';
 
 export default function UserProfile() {
     const { currentUser, logout } = useAuthStore();
@@ -28,6 +29,8 @@ export default function UserProfile() {
 
     const handleLogout = () => {
         setIsOpen(false);
+        // Notify others immediately before local logout
+        socketService.emit('user_logout', {});
         logout();
         toast.info("Você saiu do sistema.");
     };
