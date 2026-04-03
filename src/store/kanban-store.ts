@@ -105,6 +105,7 @@ interface KanbanState {
   startTimer: (cardId: string) => void;
   stopTimer: (cardId: string) => void;
   resetTimer: (cardId: string) => void;
+  loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<void>;
   fetchKanbanData: () => Promise<void>;
   fetchCardDetails: (cardId: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
@@ -1352,38 +1353,54 @@ export const useKanbanStore = create<KanbanState>()(
         if (!c) return;
         get().updateCard(cardId, { timeEntries: [] });
       },
+      
+      /**
+       * Lazy load binary content for attachments
+       */
+      loadAttachmentContent: async (attachmentId: string, parentId: string, type: 'card' | 'budget') => {
+        const { default: api } = await import('../lib/api');
+        
+        try {
+            if (type === 'card') {
+                const res = await api.get(`/kanban/attachments/${attachmentId}/content`);
+                const url = res.data.url;
+                set(state => ({
+                    cards: state.cards.map(c => c.id === parentId ? {
+                        ...c,
+                        attachments: (c.attachments || []).map(a => a.id === attachmentId ? { ...a, url } : a)
+                    } : c)
+                }));
+            } else {
+                const res = await api.get(`/kanban/budgets/${parentId}/attachment-content/${attachmentId}`);
+                const url = res.data.url;
+                set(state => ({
+                    budgets: state.budgets.map(b => b.id === parentId ? {
+                        ...b,
+                        items: (b.items as any[]).map((item: any) => ({
+                            ...item,
+                            attachments: (item.attachments || []).map((a: any) => a.id === attachmentId ? { ...a, url } : a)
+                        }))
+                    } : b)
+                }));
+            }
+        } catch (err) {
+            console.error("Failed to lazy load attachment:", err);
+        }
+      }
     }),
     { 
-      name: 'jj-kanban-v3', // bumped version to wipe corrupted localstorage with large images (exclude attachments)
+      name: 'jj-kanban-v4', // V4: Minimal persistence (Structural only) to avoid LocalStorage Quota errors
       /**
        * PROTECTED SECTION: Critical for performance and persistence.
-       * Do not remove lists, companies, routes, or budgets from partialize.
-       * This prevents the "blank board" effect on page refresh.
-       * 
-       * V3: Strip "attachments" from cards and budgets to avoid 5MB LocalStorage Quota Exceeded errors.
+       * V4 strictly persists ONLY hierarchy and metadata.
+       * Large collections (cards, budgets, companies) are loaded via API.
        */
       partialize: (state) => ({
         googleEvents: state.googleEvents,
         folders: state.folders,
         boards: state.boards,
         lists: state.lists,
-        companies: state.companies,
-        routes: state.routes,
         labels: state.labels,
-        members: state.members,
-        // Strip attachments from budgets to keep localstorage light
-        budgets: state.budgets.map(b => ({
-          ...b,
-          items: b.items.map(item => {
-            const { attachments, ...rest } = item;
-            return rest;
-          })
-        })),
-        // Strip attachments from cards to keep localstorage light
-        cards: state.cards.map(c => {
-          const { attachments, ...rest } = c;
-          return rest;
-        })
       })
     }
   )
@@ -1391,7 +1408,7 @@ export const useKanbanStore = create<KanbanState>()(
 
 // Initialize theme on load
 const initTheme = () => {
-  const stored = localStorage.getItem('jj-kanban-v3');
+  const stored = localStorage.getItem('jj-kanban-v4');
   if (stored) {
     const parsed = JSON.parse(stored);
     if (parsed.state?.isDark) {

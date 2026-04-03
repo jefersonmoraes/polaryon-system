@@ -46,18 +46,51 @@ interface QuotationItemCardProps {
     isExpanded: boolean;
     onToggleExpand: () => void;
     canEdit: boolean;
+    activeBudgetId: string;
+    loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<void>;
 }
 
-const handleViewAttachment = (att: Attachment) => {
+const handleViewAttachment = async (att: Attachment, parentId: string, type: 'card' | 'budget', loadContent: (aid: string, pid: string, t: 'card' | 'budget') => Promise<void>) => {
     try {
+        let currentUrl = att.url;
+
+        // Se a URL estiver vazia, significa que precisamos carregar o conteúdo (Lazy Load)
+        if (!currentUrl) {
+            import('sonner').then(({ toast }) => toast.loading('Baixando arquivo...', { id: 'lazy-load' }));
+            await loadContent(att.id, parentId, type);
+            // Após carregar, buscamos novamente no store (ou esperamos que o store atualize)
+            // No entanto, para simplicidade e UX imediata, o loadContent atualiza o Zustand.
+            // Precisamos pegar a nova URL do store.
+            const updatedState = useKanbanStore.getState();
+            if (type === 'card') {
+                const card = updatedState.cards.find(c => c.id === parentId);
+                const updatedAtt = card?.attachments?.find(a => a.id === att.id);
+                currentUrl = updatedAtt?.url || '';
+            } else {
+                const budget = updatedState.budgets.find(b => b.id === parentId);
+                let foundUrl = '';
+                budget?.items?.forEach(item => {
+                    const found = item.attachments?.find(a => a.id === att.id);
+                    if (found) foundUrl = found.url;
+                });
+                currentUrl = foundUrl;
+            }
+            import('sonner').then(({ toast }) => toast.dismiss('lazy-load'));
+        }
+
+        if (!currentUrl) {
+            import('sonner').then(({ toast }) => toast.error('Não foi possível carregar o conteúdo do arquivo.'));
+            return;
+        }
+
         // Se já for uma URL Blob ou externa, abre direto
-        if (att.url.startsWith('blob:') || att.url.startsWith('http')) {
-            window.open(att.url, '_blank');
+        if (currentUrl.startsWith('blob:') || currentUrl.startsWith('http')) {
+            window.open(currentUrl, '_blank');
             return;
         }
 
         // Converte Base64 para Blob para visualização estável
-        const [header, base64Data] = att.url.split(',');
+        const [header, base64Data] = currentUrl.split(',');
         const mime = header.split(':')[1].split(';')[0];
         const binary = atob(base64Data);
         const array = new Uint8Array(binary.length);
@@ -70,20 +103,18 @@ const handleViewAttachment = (att: Attachment) => {
         // Abre em nova aba
         const newWindow = window.open(url, '_blank');
         
-        // Limpa a URL da memória após algum tempo ou quando a janela fechar
         if (newWindow) {
             newWindow.onload = () => {
-                // Opcional: revogar após carregar, mas pode quebrar PDFs em alguns browsers
-                // URL.revokeObjectURL(url);
+                // Opcional: revogar após carregar
             };
         }
     } catch (error) {
         console.error("Error viewing attachment:", error);
-        window.open(att.url, '_blank');
+        if (att.url) window.open(att.url, '_blank');
     }
 };
 
-const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit }) => {
+const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit, activeBudgetId, loadAttachmentContent }) => {
     const { routes } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
@@ -1487,7 +1518,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         <Download className="h-3 w-3" />
                                                     </a>
                                                     <button 
-                                                        onClick={() => handleViewAttachment(att)}
+                                                        onClick={() => handleViewAttachment(att, activeBudgetId!, 'budget', loadAttachmentContent)}
                                                         className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
                                                         title="Visualizar"
                                                     >
@@ -1547,7 +1578,8 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
         cards,
         lists,
         boards,
-        routes
+        routes,
+        loadAttachmentContent
     } = useKanbanStore();
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
@@ -3028,6 +3060,8 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                         if (newVal) setMobileTab('details'); // Reset para 'detalhes' ao abrir nova cotação
                                                     }}
                                                     canEdit={!!canEdit}
+                                                    activeBudgetId={activeBudgetId!}
+                                                    loadAttachmentContent={loadAttachmentContent}
                                                 />
                                             ))}
 

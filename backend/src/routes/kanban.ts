@@ -643,7 +643,42 @@ router.delete('/routes/:id', async (req: Request, res: Response) => {
 router.get('/budgets', async (req: Request, res: Response) => {
     try {
         const budgets = await prisma.budget.findMany();
-        res.json(budgets);
+        // Strip heavy base64 url from items JSON for the general listing if needed
+        const stripped = budgets.map(b => ({
+            ...b,
+            items: (b.items as any[] || []).map(item => ({
+                ...item,
+                attachments: (item.attachments || []).map((a: any) => ({ ...a, url: "" }))
+            }))
+        }));
+        res.json(stripped);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// New endpoint for single budget full detail (with attachments)
+router.get('/budgets/:id', async (req: Request, res: Response) => {
+    try {
+        const budget = await prisma.budget.findUnique({ where: { id: req.params.id as string } });
+        res.json(budget);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// New endpoint for specific attachment content inside a budget
+router.get('/budgets/:budgetId/attachment-content/:attachmentId', async (req: Request, res: Response) => {
+    try {
+        const budget = await prisma.budget.findUnique({ where: { id: req.params.budgetId as string } });
+        if (!budget) return res.status(404).json({ error: 'Budget not found' });
+        
+        const items = budget.items as any[] || [];
+        for (const item of items) {
+           const att = (item.attachments || []).find((a: any) => a.id === (req.params.attachmentId as string));
+           if (att) return res.json({ url: att.url });
+        }
+        res.status(404).json({ error: 'Attachment not found in budget' });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
@@ -714,6 +749,17 @@ router.delete('/notifications/:id', async (req: Request, res: Response) => {
     }
 });
 
+// New endpoint for standalone attachment content (Card Attachments)
+router.get('/attachments/:id/content', async (req: Request, res: Response) => {
+    try {
+        const att = await prisma.attachment.findUnique({ where: { id: req.params.id as string } });
+        if (!att) return res.status(404).json({ error: 'Not found' });
+        res.json({ url: att.url });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // SYNC ALL (Pull state to client)
 router.get('/sync', async (req: Request, res: Response) => {
     try {
@@ -728,8 +774,25 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                // Incluindo anexos e comentários para garantir persistência na UI
-                include: { labels: true, checklist: true, items: true, milestones: true, timeEntries: true, attachments: true, comments: true }
+                // Optimized selection for sync: exclude the heavy "url" from attachments
+                include: { 
+                    labels: true, 
+                    checklist: true, 
+                    items: true, 
+                    milestones: true, 
+                    timeEntries: true, 
+                    comments: true,
+                    attachments: {
+                        select: {
+                            id: true,
+                            cardId: true,
+                            name: true,
+                            type: true,
+                            addedAt: true,
+                            url: false // EXCLUDE binary in sync
+                        }
+                    }
+                }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),
@@ -762,7 +825,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.taxObligation.findMany(),
             prisma.accountingSettings.findMany(),
             prisma.accountantExport.findMany(),
-            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 5000 })
+            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 200 }) // Drastically reduced for performance
         ]);
 
         const members = usersDb
@@ -785,9 +848,17 @@ router.get('/sync', async (req: Request, res: Response) => {
             timeEntries: c.timeEntries || []
         }));
 
+        const strippedBudgets = budgets.map(b => ({
+            ...b,
+            items: (b.items as any[] || []).map(item => ({
+                ...item,
+                attachments: (item.attachments || []).map((a: any) => ({ ...a, url: "" }))
+            }))
+        }));
+
         res.json({ 
             folders, boards, lists, cards: formattedCards, companies, 
-            mainCompanies, routes, budgets, notifications, members, 
+            mainCompanies, routes, budgets: strippedBudgets, notifications, members, 
             labels, companyDocs, essentialDocs, certificates,
             accounting: {
                 categories: accountingCategories,
