@@ -16,7 +16,7 @@ const cguApi = axios.create({
     headers: {
         'chave-api-dados': PORTAL_TRANSPARENCIA_TOKEN || ''
     },
-    timeout: 10000
+    timeout: 5000
 });
 
 /**
@@ -177,13 +177,56 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/arquivos', async (req: Request, r
 router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Response) => {
     try {
         const { cnpj, ano, sequencial } = req.params;
-        // Consulta V1 (Informações detalhadas da compra/licitação)
-        const url = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
-        const response = await axios.get(url, { 
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000 
+        
+        // URLs para diferentes endpoints do PNCP
+        const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+        const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
+        const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
+
+        const commonHeaders = { 'User-Agent': 'Mozilla/5.0' };
+
+        // Executa as chamadas em paralelo (usando settled para não quebrar se um falhar)
+        const [detailRes, countRes, itemsRes] = await Promise.allSettled([
+            axios.get(detailUrl, { headers: commonHeaders, timeout: 5000 }),
+            axios.get(itemsCountUrl, { headers: commonHeaders, timeout: 5000 }),
+            axios.get(itemsListUrl, { headers: commonHeaders, timeout: 5000 })
+        ]);
+
+        const detailData = detailRes.status === 'fulfilled' ? detailRes.value.data : {};
+        const itemCount = countRes.status === 'fulfilled' ? countRes.value.data : 0;
+        const itemsResponse = itemsRes.status === 'fulfilled' ? itemsRes.value.data : [];
+        
+        // Trata o formato de resposta da lista de itens (pode ser array direto ou paginado)
+        const items = Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse.data || []);
+
+        // Lógica de metadados baseada nos itens (primeiros 100)
+        let hasMeEppBenefit = false;
+        let minItemValue = Infinity;
+        let maxItemValue = -Infinity;
+
+        if (Array.isArray(items)) {
+            items.forEach((item: any) => {
+                // Benefícios ME/EPP: 1 (Exclusiva), 2 (Cota), 3 (Subcontratação)
+                if ([1, 2, 3].includes(item.tipoBeneficio)) {
+                    hasMeEppBenefit = true;
+                }
+                
+                // Pega o valor unitário estimado
+                const val = item.valorUnitarioEstimado || (item.quantidade > 0 ? (item.valorTotalEstimado / item.quantidade) : 0) || 0;
+                if (val > 0) {
+                    if (val < minItemValue) minItemValue = val;
+                    if (val > maxItemValue) maxItemValue = val;
+                }
+            });
+        }
+
+        res.json({
+            ...detailData,
+            itemCount: itemCount || detailData.quantidadeItens || 0,
+            hasMeEppBenefit,
+            minItemValue: minItemValue === Infinity ? 0 : minItemValue,
+            maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue
         });
-        res.json(response.data);
     } catch (error: any) {
         if (error.response?.status === 404) return res.status(404).json({ error: 'PNCP detail not found' });
         console.error('PNCP Proxy Detail Error:', error.message);
@@ -557,7 +600,7 @@ router.get('/licitacoes/:cnpj/:ano/:sequencial/itens-completos', async (req: Req
         const { cnpj, ano, sequencial } = req.params;
         const { termo } = req.query; // Para filtragem do empenho específico
         const urlItems = `${PNCP_BASE_URL}/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=500`;
-        const itemsRes = await axios.get(urlItems, { timeout: 10000 });
+        const itemsRes = await axios.get(urlItems, { timeout: 5000 });
         const items = itemsRes.data || [];
 
         // Buscar empenhos relacionados na CGU antecipadamente (opcional, mas ajuda a vincular)

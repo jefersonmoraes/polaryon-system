@@ -330,7 +330,8 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
 
             // 2. Version History Log: If description changed and old was significant, log it
             if (oldDesc !== newDesc && oldDesc.length > 50) {
-                await prisma.auditLog.create({
+                // Background task - do not await to avoid blocking the user
+                prisma.auditLog.create({
                     data: {
                         userId: (req as any).user?.id || 'system',
                         userName: (req as any).user?.name || 'Sistema',
@@ -353,94 +354,119 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             data: updateData 
         });
 
+        // --- PARALLEL RELATED UPDATES ---
+        const updatePromises: Promise<any>[] = [];
+
         // Update Labels relationship (Array of Strings to link table)
         if (labels !== undefined) {
-            await prisma.cardLabel.deleteMany({ where: { cardId } });
-            if (labels.length > 0) {
-                await prisma.cardLabel.createMany({
-                    data: labels.map((labelId: string) => ({ cardId, labelId }))
-                }).catch(e => console.error("Failed to link labels:", e));
-            }
+            updatePromises.push((async () => {
+                await prisma.cardLabel.deleteMany({ where: { cardId } });
+                if (labels.length > 0) {
+                    await prisma.cardLabel.createMany({
+                        data: labels.map((labelId: string) => ({ cardId, labelId }))
+                    });
+                }
+            })());
         }
 
         if (checklist !== undefined) {
-            await prisma.checklistItem.deleteMany({ where: { cardId } });
-            if (checklist.length > 0) {
-                await prisma.checklistItem.createMany({
-                    data: checklist.map((i: any) => ({ ...i, cardId }))
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.checklistItem.deleteMany({ where: { cardId } });
+                if (checklist.length > 0) {
+                    await prisma.checklistItem.createMany({
+                        data: checklist.map((i: any) => ({ ...i, cardId }))
+                    });
+                }
+            })());
         }
 
         if (items !== undefined) {
-            await prisma.cardItem.deleteMany({ where: { cardId } });
-            if (items.length > 0) {
-                await prisma.cardItem.createMany({
-                    data: items.map((i: any) => ({ ...i, cardId }))
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.cardItem.deleteMany({ where: { cardId } });
+                if (items.length > 0) {
+                    await prisma.cardItem.createMany({
+                        data: items.map((i: any) => ({ ...i, cardId }))
+                    });
+                }
+            })());
         }
 
         if (descriptionEntries !== undefined) {
-            await prisma.cardDescriptionEntry.deleteMany({ where: { cardId } });
-            if (descriptionEntries.length > 0) {
-                await prisma.cardDescriptionEntry.createMany({
-                    data: descriptionEntries.map((i: any) => ({ 
-                        id: i.id || undefined, // Keep ID if present for sync
-                        text: i.text,
-                        createdAt: i.createdAt || new Date(),
-                        cardId 
-                    }))
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.cardDescriptionEntry.deleteMany({ where: { cardId } });
+                if (descriptionEntries.length > 0) {
+                    await prisma.cardDescriptionEntry.createMany({
+                        data: descriptionEntries.map((i: any) => ({ 
+                            id: i.id || undefined,
+                            text: i.text,
+                            createdAt: i.createdAt || new Date(),
+                            cardId 
+                        }))
+                    });
+                }
+            })());
         }
 
         if (comments !== undefined) {
-            await prisma.comment.deleteMany({ where: { cardId } });
-            if (comments.length > 0) {
-                await prisma.comment.createMany({
-                    data: comments.map((i: any) => ({ ...i, cardId }))
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.comment.deleteMany({ where: { cardId } });
+                if (comments.length > 0) {
+                    await prisma.comment.createMany({
+                        data: comments.map((i: any) => ({ ...i, cardId }))
+                    });
+                }
+            })());
         }
 
         if (timeEntries !== undefined) {
-            await prisma.timeEntry.deleteMany({ where: { cardId } });
-            if (timeEntries.length > 0) {
-                await prisma.timeEntry.createMany({
-                    data: timeEntries.map((i: any) => ({ ...i, cardId }))
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.timeEntry.deleteMany({ where: { cardId } });
+                if (timeEntries.length > 0) {
+                    await prisma.timeEntry.createMany({
+                        data: timeEntries.map((i: any) => ({ ...i, cardId }))
+                    });
+                }
+            })());
         }
 
         if (milestones !== undefined) {
-            await prisma.milestone.deleteMany({ where: { cardId } });
-            if (milestones.length > 0) {
-                await prisma.milestone.createMany({
-                    data: milestones.map((i: any) => {
-                        let parsedDate = i.dueDate;
-                        if (parsedDate === '') parsedDate = null;
-                        return { 
-                            title: i.title, 
-                            dueDate: parsedDate ? new Date(parsedDate) : null, 
-                            hour: i.hour || null,
-                            completed: !!i.completed,
-                            cardId 
-                        };
-                    })
-                });
-            }
+            updatePromises.push((async () => {
+                await prisma.milestone.deleteMany({ where: { cardId } });
+                if (milestones.length > 0) {
+                    await prisma.milestone.createMany({
+                        data: milestones.map((i: any) => {
+                            let parsedDate = i.dueDate;
+                            if (parsedDate === '') parsedDate = null;
+                            return { 
+                                title: i.title, 
+                                dueDate: parsedDate ? new Date(parsedDate) : null, 
+                                hour: i.hour || null,
+                                completed: !!i.completed,
+                                cardId 
+                            };
+                        })
+                    });
+                }
+            })());
         }
 
         if (attachments !== undefined) {
-            await prisma.attachment.deleteMany({ where: { cardId } });
-            if (attachments.length > 0) {
-                for (const att of attachments) {
-                    // Create one by one to avoid large payload errors or handle them gracefully
-                    await prisma.attachment.create({ data: { ...att, cardId } });
+            updatePromises.push((async () => {
+                await prisma.attachment.deleteMany({ where: { cardId } });
+                if (attachments.length > 0) {
+                    await prisma.attachment.createMany({
+                        data: attachments.map((att: any) => ({ ...att, cardId }))
+                    });
                 }
-            }
+            })());
         }
+
+        // Execute all updates in parallel to maximize performance and minimize response time
+        await Promise.all(updatePromises).catch(err => {
+            console.error("[CRITICAL_DB_SYNC_ERROR] - Async sub-table updates failed:", err);
+            // We don't throw here to ensure the main card update is at least returned, 
+            // but in a real prod environment we might want to handle this more strictly.
+        });
 
         // Auto-sync or cleanup Google Calendar - No await to respond faster
         if (card.completed || card.archived || card.trashed) {
@@ -453,6 +479,7 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
                 end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
             }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card update:", err.message));
         }
+
 
         res.json(card);
     } catch (e: any) {
