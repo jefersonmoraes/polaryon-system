@@ -115,7 +115,7 @@ const handleViewAttachment = async (att: Attachment, parentId: string, type: 'ca
 };
 
 const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit, activeBudgetId, loadAttachmentContent }) => {
-    const { routes } = useKanbanStore();
+    const { routes, fetchBudgetDetails } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
     const [selectedSupplierArea, setSelectedSupplierArea] = useState<string | null>(null);
@@ -1579,7 +1579,8 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
         lists,
         boards,
         routes,
-        loadAttachmentContent
+        loadAttachmentContent,
+        fetchBudgetDetails
     } = useKanbanStore();
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
@@ -1587,6 +1588,15 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
 
     const [activeBudgetId, setActiveBudgetId] = useState<string | undefined>(budget?.id);
     const budgetFromStore = budgets.find(b => b.id === activeBudgetId);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Skeleton Sync V5: Load full budget details if currently a skeleton
+    useEffect(() => {
+        if (activeBudgetId && budgetFromStore?.isSkeleton) {
+            console.log(`[V5] Budget ${activeBudgetId} is skeleton. Fetching full details...`);
+            fetchBudgetDetails(activeBudgetId);
+        }
+    }, [activeBudgetId, budgetFromStore?.isSkeleton, fetchBudgetDetails]);
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',

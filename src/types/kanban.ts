@@ -122,6 +122,7 @@ export interface Budget {
   trashedAt?: string;
   archived?: boolean;
   createdAt: string;
+  isSkeleton?: boolean;
 }
 
 export interface Folder {
@@ -360,6 +361,7 @@ export interface Card {
   deliveryAddress?: string;
   deliveryTime?: string;
   createdAt: string;
+  isSkeleton?: boolean;
 }
 
 export const DEFAULT_LABELS: Label[] = [

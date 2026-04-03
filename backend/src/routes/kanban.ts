@@ -774,31 +774,43 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                // Optimized selection for sync: exclude the heavy "url" from attachments
-                include: { 
-                    labels: true, 
-                    checklist: true, 
-                    items: true, 
-                    milestones: true, 
-                    timeEntries: true, 
-                    comments: true,
-                    attachments: {
-                        select: {
-                            id: true,
-                            cardId: true,
-                            name: true,
-                            type: true,
-                            addedAt: true,
-                            url: false // EXCLUDE binary in sync
-                        }
-                    }
+                // Skeleton selection: exclude heavy content (desc, comments, checklists, items)
+                select: {
+                    id: true,
+                    listId: true,
+                    title: true,
+                    position: true,
+                    assignee: true,
+                    dueDate: true,
+                    startDate: true,
+                    completed: true,
+                    archived: true,
+                    trashed: true,
+                    summary: true, // Small summary is OK
+                    createdAt: true,
+                    updatedAt: true,
+                    labels: true, // Need labels for colors on card
                 }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),
             prisma.route.findMany(),
-            prisma.budget.findMany(),
-            prisma.notification.findMany(),
+            prisma.budget.findMany({
+                select: {
+                   id: true,
+                   title: true,
+                   status: true,
+                   type: true,
+                   totalValue: true,
+                   cardId: true,
+                   userId: true,
+                   createdAt: true,
+                   archived: true,
+                   trashed: true
+                   // items: false // EXCLUDE heavy JSON in skeleton sync
+                }
+            }),
+            prisma.notification.findMany({ take: 50, orderBy: { createdAt: 'desc' } }),
             prisma.user.findMany({
                 where: {
                     role: {
@@ -815,17 +827,17 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.label.findMany(),
             prisma.companyDocument.findMany(),
             prisma.essentialDocument.findMany(),
-            prisma.certificate.findMany({ include: { attachments: true } }),
+            prisma.certificate.findMany(), // Reduced: exclude attachments for initial view
             prisma.accountingCategory.findMany(),
             prisma.bankAccount.findMany(),
-            prisma.accountingEntry.findMany(),
+            prisma.accountingEntry.findMany({ take: 500, orderBy: { date: 'desc' } }), // Added limit for performance
             prisma.recurringExpense.findMany(),
-            prisma.invoice.findMany(),
-            prisma.bankTransaction.findMany(),
+            prisma.invoice.findMany({ take: 100, orderBy: { issueDate: 'desc' } }), // Added limit
+            prisma.bankTransaction.findMany({ take: 200, orderBy: { date: 'desc' } }), // Added limit
             prisma.taxObligation.findMany(),
             prisma.accountingSettings.findMany(),
-            prisma.accountantExport.findMany(),
-            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 200 }) // Drastically reduced for performance
+            prisma.accountantExport.findMany({ take: 20, orderBy: { createdAt: 'desc' } }),
+            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 50 }) // Reduced from 200 to 50 for V5
         ]);
 
         const members = usersDb
@@ -839,26 +851,18 @@ router.get('/sync', async (req: Request, res: Response) => {
 
         const formattedCards = cards.map((c: any) => ({
             ...c,
-            labels: (c.labels || []).map((l: any) => l.labelId), // flatten intersection table into string array
-            attachments: c.attachments || [],
-            comments: c.comments || [],
-            milestones: c.milestones || [],
-            checklist: c.checklist || [],
-            items: c.items || [],
-            timeEntries: c.timeEntries || []
+            labels: (c.labels || []).map((l: any) => l.labelId),
+            isSkeleton: true // Mark for frontend to know details are missing
         }));
 
-        const strippedBudgets = budgets.map(b => ({
+        const skeletonBudgets = budgets.map((b: any) => ({
             ...b,
-            items: (b.items as any[] || []).map(item => ({
-                ...item,
-                attachments: (item.attachments || []).map((a: any) => ({ ...a, url: "" }))
-            }))
+            isSkeleton: true
         }));
 
         res.json({ 
             folders, boards, lists, cards: formattedCards, companies, 
-            mainCompanies, routes, budgets: strippedBudgets, notifications, members, 
+            mainCompanies, routes, budgets: skeletonBudgets, notifications, members, 
             labels, companyDocs, essentialDocs, certificates,
             accounting: {
                 categories: accountingCategories,

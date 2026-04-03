@@ -108,6 +108,7 @@ interface KanbanState {
   loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<void>;
   fetchKanbanData: () => Promise<void>;
   fetchCardDetails: (cardId: string) => Promise<void>;
+  fetchBudgetDetails: (budgetId: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
 
   // Members Sync
@@ -321,18 +322,38 @@ export const useKanbanStore = create<KanbanState>()(
                     mergedCards.unshift(lc);
                 }
             });
+            
+            // SKELETON-AWARE MERGE V5: Don't let server skeletons overwrite local detailed cards
+            const finalCards = mergedCards.map(sc => {
+                const local = localCards.find(lc => lc.id === sc.id);
+                if (local && !local.isSkeleton && sc.isSkeleton) {
+                    // Keep detailed local fields
+                    return { ...sc, ...local, isSkeleton: false };
+                }
+                return sc;
+            });
+
+            // Same for budgets
+            const serverBudgets = res.data.budgets || [];
+            const finalBudgets = serverBudgets.map(sb => {
+                const local = get().budgets.find(lb => lb.id === sb.id);
+                if (local && !local.isSkeleton && sb.isSkeleton) {
+                    return { ...sb, ...local, isSkeleton: false };
+                }
+                return sb;
+            });
 
             set({
               folders: res.data.folders || [],
               boards: res.data.boards || [],
               lists: res.data.lists || [],
-              cards: mergedCards,
+              cards: finalCards,
               members: res.data.members || [],
               labels: (res.data.labels && res.data.labels.length > 0) ? res.data.labels : (get().labels.length > 0 ? get().labels : [...DEFAULT_LABELS]),
               companies: res.data.companies || [],
               mainCompanies: res.data.mainCompanies || [],
               routes: res.data.routes || [],
-              budgets: res.data.budgets || [],
+              budgets: finalBudgets,
               notifications: res.data.notifications || [],
             });
           }
@@ -342,7 +363,9 @@ export const useKanbanStore = create<KanbanState>()(
       },
 
       fetchCardDetails: async (id: string) => {
-        // If we are currently saving this card, DONT fetch and overwrite local state
+        const currentCard = get().cards.find(c => c.id === id);
+        if (currentCard && !currentCard.isSkeleton) return; // Already loaded
+
         if (get().savingCards.has(id)) {
             console.log(`[STASH] Ignorando fetchCardDetails para ${id} pois há salvamento em curso.`);
             return;
@@ -352,17 +375,35 @@ export const useKanbanStore = create<KanbanState>()(
             const response = await api.get(`/kanban/cards/${id}`);
             const card = response.data;
             
-            // Re-check before applying to avoid race conditions
             if (get().savingCards.has(id)) return;
 
             set(s => ({
               cards: s.cards.map(c => c.id === id ? { 
                   ...card, 
-                  description: c.description !== null && c.description !== undefined ? c.description : card.description 
+                  isSkeleton: false 
               } : c)
             }));
         } catch (error) {
             console.error("Failed to fetch card details:", error);
+        }
+      },
+
+      fetchBudgetDetails: async (id: string) => {
+        const currentBudget = get().budgets.find(b => b.id === id);
+        if (currentBudget && !currentBudget.isSkeleton) return; // Already loaded
+
+        try {
+            const response = await api.get(`/kanban/budgets/${id}`);
+            const budgetData = response.data;
+            
+            set(s => ({
+              budgets: s.budgets.map(b => b.id === id ? { 
+                  ...budgetData, 
+                  isSkeleton: false 
+              } : b)
+            }));
+        } catch (error) {
+            console.error("Failed to fetch budget details:", error);
         }
       },
 
