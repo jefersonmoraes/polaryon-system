@@ -774,41 +774,21 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                select: {
-                    id: true,
-                    listId: true,
-                    title: true,
-                    position: true,
-                    assignee: true,
-                    dueDate: true,
-                    startDate: true,
-                    completed: true,
-                    archived: true,
-                    trashed: true,
-                    summary: true, // Small summary is OK
-                    createdAt: true,
-                    updatedAt: true,
-                    labels: true, // Need labels for colors on card
+                include: { 
+                    labels: true, 
+                    checklist: true, 
+                    milestones: true, 
+                    comments: true, 
+                    timeEntries: true, 
+                    items: true,
+                    attachments: true,
+                    descriptionEntries: true
                 }
             }),
             prisma.company.findMany(),
             prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),
             prisma.route.findMany(),
-            prisma.budget.findMany({
-                select: {
-                   id: true,
-                   title: true,
-                   status: true,
-                   type: true,
-                   totalValue: true,
-                   cardId: true,
-                   userId: true,
-                   createdAt: true,
-                   archived: true,
-                   trashed: true
-                   // items: false // EXCLUDE heavy JSON in skeleton sync
-                }
-            }),
+            prisma.budget.findMany(),
             prisma.notification.findMany({ take: 50, orderBy: { createdAt: 'desc' } }),
             prisma.user.findMany({
                 where: {
@@ -882,17 +862,27 @@ router.get('/sync', async (req: Request, res: Response) => {
         const formattedCards = cards.map((c: any) => ({
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId),
-            isSkeleton: true // Mark for frontend to know details are missing
+            // Strip out base64 attachment URLs to save bandwidth
+            attachments: (c.attachments || []).map((a: any) => ({ ...a, url: "" })),
+            items: (c.items || []).map((i: any) => ({
+                ...i,
+                attachments: (i.attachments || []).map((a: any) => ({ ...a, url: "" }))
+            })),
+            isSkeleton: false 
         }));
 
-        const skeletonBudgets = budgets.map((b: any) => ({
+        const fullBudgets = budgets.map((b: any) => ({
             ...b,
-            isSkeleton: true
+            items: (b.items || []).map((i: any) => ({
+                ...i,
+                attachments: (i.attachments || []).map((a: any) => ({ ...a, url: "" }))
+            })),
+            isSkeleton: false
         }));
 
         res.json({ 
             folders, boards, lists, cards: formattedCards, companies, 
-            mainCompanies, routes, budgets: skeletonBudgets, notifications, members, 
+            mainCompanies, routes, budgets: fullBudgets, notifications, members, 
             labels, companyDocs, essentialDocs, certificates,
             accounting: {
                 categories: accountingCategories,

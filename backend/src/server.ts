@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
@@ -28,6 +29,7 @@ import { initComplianceCron } from './services/compliance-service';
 initComplianceCron();
 
 // Security and Parsing Middlewares
+app.use(compression());
 app.use(helmet({
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     crossOriginResourcePolicy: false,
