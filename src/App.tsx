@@ -98,6 +98,33 @@ const AppContent = () => {
   useEffect(() => {
     if (!isAuthenticated || !authUser) return;
 
+    const playPresenceSound = (type: 'connect' | 'disconnect') => {
+        try {
+            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            if (type === 'connect') {
+                oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+                oscillator.frequency.exponentialRampToValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+            } else {
+                oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime); 
+                oscillator.frequency.exponentialRampToValueAtTime(523.25, audioContext.currentTime + 0.1);
+            }
+
+            gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.1);
+        } catch (e) {
+            // Silently fail if audio is blocked or unsupported
+        }
+    };
+
     const handleOnlineUsers = (ids: string[]) => {
         setOnlineUsers(ids);
     };
@@ -105,23 +132,65 @@ const AppContent = () => {
     const handleConnectionChange = (connected: boolean) => {
         setSocketConnected(connected);
         if (connected && authUser) {
-            // Re-identify on every connection/reconnection
-            socketService.emit('user_join', authUser.id);
+            // Re-identify with full profile on every connection/reconnection
+            socketService.emit('user_join', {
+                id: authUser.id,
+                name: authUser.name,
+                picture: authUser.photoURL
+            });
         } else {
-            // Clear online list on disconnect to avoid ghost statuses
             setOnlineUsers([]);
         }
     };
 
+    const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
+        // Don't notify about self
+        if (user.id === authUser.id) return;
+        
+        import('sonner').then(({ toast }) => {
+            playPresenceSound('connect');
+            toast.success(`${user.name} entrou no sistema`, {
+                description: 'Online agora',
+                duration: 4000,
+                icon: user.picture ? (
+                    <img src={user.picture} className="w-6 h-6 rounded-full border border-primary/20 shadow-sm" alt="" />
+                ) : undefined
+            });
+        });
+    };
+
+    const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
+        if (user.id === authUser.id) return;
+        
+        import('sonner').then(({ toast }) => {
+            playPresenceSound('disconnect');
+            toast.info(`${user.name} saiu do sistema`, {
+                description: 'Offline',
+                duration: 4000,
+                icon: user.picture ? (
+                    <img src={user.picture} className="w-6 h-6 rounded-full opacity-60 border border-muted" alt="" />
+                ) : undefined
+            });
+        });
+    };
+
     socketService.on('online_users', handleOnlineUsers);
     socketService.on('connection_change', handleConnectionChange);
+    socketService.on('user_presence_connect', handlePresenceConnect);
+    socketService.on('user_presence_disconnect', handlePresenceDisconnect);
 
     // Initial identify if already connected (or queue it)
-    socketService.emit('user_join', authUser.id);
+    socketService.emit('user_join', {
+        id: authUser.id,
+        name: authUser.name,
+        picture: authUser.photoURL
+    });
 
     return () => {
       socketService.off('online_users', handleOnlineUsers);
       socketService.off('connection_change', handleConnectionChange);
+      socketService.off('user_presence_connect', handlePresenceConnect);
+      socketService.off('user_presence_disconnect', handlePresenceDisconnect);
     };
   }, [isAuthenticated, authUser, setOnlineUsers, setSocketConnected]);
 
