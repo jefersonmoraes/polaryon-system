@@ -5,6 +5,7 @@ import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner, toast } from "@/components/ui/sonner";
+import { useToast } from "@/hooks/use-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fixDateToBRT } from "@/lib/utils";
@@ -57,6 +58,9 @@ const AppContent = () => {
   const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
   const { cleanOldTrash: cleanEssentialDocsTrash } = useEssentialDocumentStore();
   const { cleanOldTrash: cleanCertificateTrash } = useCertificateStore();
+  
+  // Defensive ref for presence notifications (Industrial-grade shielding)
+  const lastNotificationTimes = useRef<Record<string, number>>({});
 
   useEffect(() => {
     document.body.style.zoom = uiZoom as any;
@@ -132,7 +136,6 @@ const AppContent = () => {
     const handleConnectionChange = (connected: boolean) => {
         setSocketConnected(connected);
         if (connected && authUser) {
-            // Re-identify with full profile on every connection/reconnection
             socketService.emit('user_join', {
                 id: authUser.id,
                 name: authUser.name,
@@ -143,18 +146,14 @@ const AppContent = () => {
         }
     };
 
-    // Defensive refs for notification cooldowns
-    const lastNotificationTimes = useRef<Record<string, number>>({});
-
     const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
         try {
-            // Don't notify about self
             if (!user.id || user.id === authUser.id) return;
             
-            // Notification Cooldown (Shield against rapid re-triggers)
+            // Cooldown de 2s para evitar flood de notificações
             const now = Date.now();
             const lastTime = lastNotificationTimes.current[user.id] || 0;
-            if (now - lastTime < 2000) return; // 2 seconds threshold
+            if (now - lastTime < 2000) return;
             lastNotificationTimes.current[user.id] = now;
 
             playPresenceSound('connect');
@@ -179,10 +178,8 @@ const AppContent = () => {
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
         try {
-            // Don't notify about self
             if (!user.id || user.id === authUser.id) return;
             
-            // Notification Cooldown
             const now = Date.now();
             const lastTime = lastNotificationTimes.current[user.id] || 0;
             if (now - lastTime < 2000) return;
@@ -218,19 +215,14 @@ const AppContent = () => {
         }
     };
 
-    // Auto-reidentification handle
-    const handleReconnect = () => {
-        console.log("🔄 Socket reconnected, re-identifying user...");
-        identifyUser();
-    };
+    const handleReconnect = () => identifyUser();
 
     socketService.on('online_users', handleOnlineUsers);
     socketService.on('connection_change', handleConnectionChange);
     socketService.on('user_presence_connect', handlePresenceConnect);
     socketService.on('user_presence_disconnect', handlePresenceDisconnect);
-    socketService.on('connect', handleReconnect); // SHIELD: Re-identify on every connection
+    socketService.on('connect', handleReconnect);
 
-    // Initial identify
     identifyUser();
 
     return () => {
@@ -245,13 +237,11 @@ const AppContent = () => {
 
   // Background CNPJ Monitor - Checks status every 7 days
   useEffect(() => {
-    const CHECK_INTERVAL = 60000; // Check one company every minute to be very gentle
+    const CHECK_INTERVAL = 60000;
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
     const monitorInterval = setInterval(async () => {
       const store = useKanbanStore.getState();
-
-      // Find one company that hasn't been checked in 7 days
       const now = new Date();
       const needsCheck = store.companies.find(c => {
         if (!c.lastCnpjCheck) return true;
@@ -270,7 +260,6 @@ const AppContent = () => {
               const currentStatus = data.descricao_situacao_cadastral?.toUpperCase();
 
               if (invalidStatuses.includes(currentStatus)) {
-                // UPDATE status but DONT delete automatically (user requested alert/warning)
                 store.updateCompany(needsCheck.id, { 
                   descricao_situacao_cadastral: currentStatus,
                   lastCnpjCheck: new Date().toISOString() 
@@ -278,29 +267,24 @@ const AppContent = () => {
                 
                 useKanbanStore.getState().addNotification(
                   '⚠️ ALERTA: Empresa Inativa Detectada',
-                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) consta agora como "${currentStatus}" na Receita Federal. Recomendamos a exclusão manual deste contato.`,
+                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) consta agora como "${currentStatus}" na Receita Federal.`,
                   `/suppliers-list?id=${needsCheck.id}`,
                   'warning'
                 );
               } else {
-                // Otherwise, just timestamp it to prevent re-checking for 7 days
                 store.updateCompany(needsCheck.id, { 
                   descricao_situacao_cadastral: currentStatus || needsCheck.descricao_situacao_cadastral,
                   lastCnpjCheck: new Date().toISOString() 
                 });
               }
             } else if (response.status === 404) {
-                // CNPJ not found anymore?
                 useKanbanStore.getState().addNotification(
                   '⚠️ ALERTA: CNPJ Não Encontrado',
-                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) não foi retornado pela API. Verifique a validade deste contato.`,
+                  `O CNPJ ${needsCheck.cnpj} não foi retornado pela API.`,
                   undefined,
                   'warning'
                 );
                 store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
-            } else {
-              // Rate limit or API error, skip for now but mark as checked to circle through others
-              // store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
             }
           }
         } catch (error) {
@@ -310,34 +294,24 @@ const AppContent = () => {
     }, CHECK_INTERVAL);
 
     return () => clearInterval(monitorInterval);
-  }, []); // Run only once
+  }, []);
 
-  // Initialize Kanban Store data (e.g., fetch from API if not local)
   useEffect(() => {
-    // This runs once when the app mounts
-    // Placeholder for actual data initialization
     useKanbanStore.getState();
     useAccountingStore.getState().generateRecurringExpenses();
   }, []);
 
-  // Document Expiration Monitor
   useEffect(() => {
-    // Run validation on load and then periodically
     useDocumentStore.getState().validateDocumentStatuses();
-
-    // Check every hour
     const interval = setInterval(() => {
       useDocumentStore.getState().validateDocumentStatuses();
     }, 60 * 60 * 1000);
-
     return () => clearInterval(interval);
-  }, []); // Run only once
+  }, []);
 
-  // Background Notification Monitor for Instant Bell Updates
   useEffect(() => {
-    const NOTIF_INTERVAL = 10000; // Check every 10 seconds
+    const NOTIF_INTERVAL = 10000;
     const interval = setInterval(() => {
-      // Only fetch if logged in
       if (useKanbanStore.getState().members.length > 0) {
         useKanbanStore.getState().fetchNotifications();
       }
@@ -346,8 +320,7 @@ const AppContent = () => {
   }, []);
 
   useEffect(() => {
-    // Check for expiring documents and notify
-    const CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+    const CHECK_INTERVAL = 60 * 60 * 1000;
     const checkDocs = () => {
       const docStore = useDocumentStore.getState();
       const now = new Date();
@@ -355,19 +328,14 @@ const AppContent = () => {
 
       docStore.documents.forEach(doc => {
         if (!doc.expirationDate || doc.trashed) return;
-
         const expDate = fixDateToBRT(doc.expirationDate);
         if (!expDate) return;
-
         const target = new Date(expDate.getFullYear(), expDate.getMonth(), expDate.getDate());
         const diffDays = Math.floor((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        // Only notify if within thresholds (Exactly 10 days, 5 days, or expired)
-        // This prevents spamming notifications every hour
         let notifyKey = -1;
-        if (diffDays < 0) notifyKey = 0; // Expired
-        else if (diffDays <= 5) notifyKey = 5; // Very soon
-        else if (diffDays <= 10) notifyKey = 10; // Threshold reached
+        if (diffDays < 0) notifyKey = 0;
+        else if (diffDays <= 5) notifyKey = 5;
+        else if (diffDays <= 10) notifyKey = 10;
 
         if (notifyKey !== -1 && doc.lastNotifiedIndex !== notifyKey) {
           const isExpired = diffDays < 0;
@@ -380,18 +348,15 @@ const AppContent = () => {
         }
       });
     };
-
-    checkDocs(); // initial check
+    checkDocs();
     const docInterval = setInterval(checkDocs, CHECK_INTERVAL);
     return () => clearInterval(docInterval);
-  }, []); // Run only once
+  }, []);
 
   return (
     <Routes>
-      {/* Public Routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
-      {/* Protected Routes Wrapper */}
       <Route path="/tarefas" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/kanban" element={<ProtectedRoute><KanbanPage /></ProtectedRoute>} />
       <Route path="/folder/:folderId" element={<ProtectedRoute><FolderPage /></ProtectedRoute>} />
