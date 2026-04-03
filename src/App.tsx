@@ -4,7 +4,7 @@ import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner, toast } from "sonner";
+import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fixDateToBRT } from "@/lib/utils";
@@ -144,27 +144,25 @@ const AppContent = () => {
     };
 
     const handlePresenceConnect = (user: { id: string, name: string, picture?: string }) => {
-        console.log("🌐 Socket: Recv Join Notify", user);
-        
+        console.log("🚀 Socket: REC_CONNECT", user);
         playPresenceSound('connect');
         toast.success(`${user.name} entrou no sistema`, {
-            description: 'Acabou de se conectar',
-            duration: 9000,
+            description: 'Online agora no Polaryon',
+            duration: 8000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full border-2 border-primary shadow-md" alt="" />
+                <img src={user.picture} className="w-10 h-10 rounded-full border-2 border-emerald-500 shadow-sm" alt="" />
             ) : undefined
         });
     };
 
     const handlePresenceDisconnect = (user: { id: string, name: string, picture?: string }) => {
-        console.log("🌐 Socket: Recv Leave Notify", user);
-        
+        console.log("🚀 Socket: REC_DISCONNECT", user);
         playPresenceSound('disconnect');
         toast.info(`${user.name} saiu do sistema`, {
-            description: 'Acabou de se desconectar',
-            duration: 9000,
+            description: 'Desconectado',
+            duration: 8000,
             icon: user.picture ? (
-                <img src={user.picture} className="w-10 h-10 rounded-full opacity-60 grayscale border-2 border-muted" alt="" />
+                <img src={user.picture} className="w-10 h-10 rounded-full opacity-60 grayscale border-2 border-slate-400" alt="" />
             ) : undefined
         });
     };

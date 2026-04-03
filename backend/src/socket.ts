@@ -28,21 +28,17 @@ export const initSocket = (server: HttpServer) => {
                 const userId = userData.id;
                 
                 // If it's the first connection for this user ID, notify others
-                const existingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
-                
                 onlineUsers.set(socket.id, userId);
                 userProfiles.set(userId, { name: userData.name, picture: userData.picture });
                 
                 broadcastOnlineUsers();
                 
-                if (existingConnections === 0) {
-                    console.log(`🔔 Global emitting presence join: ${userData.name} (${userId})`);
-                    io.emit('user_presence_connect', { 
-                        id: userId, 
-                        name: userData.name, 
-                        picture: userData.picture 
-                    });
-                }
+                console.log(`🔔 FORCE Global join notify: ${userData.name}`);
+                io.emit('user_presence_connect', { 
+                    id: userId, 
+                    name: userData.name, 
+                    picture: userData.picture 
+                });
             }
         });
 
@@ -59,21 +55,15 @@ export const initSocket = (server: HttpServer) => {
         socket.on('disconnect', () => {
             const userId = onlineUsers.get(socket.id);
             if (userId) {
+                const profile = userProfiles.get(userId);
                 onlineUsers.delete(socket.id);
                 
-                // If this was the last connection for this user ID, notify others
-                const remainingConnections = Array.from(onlineUsers.values()).filter(id => id === userId).length;
-                
-                if (remainingConnections === 0) {
-                    const profile = userProfiles.get(userId);
-                    console.log(`🔕 Global emitting presence leave: ${profile?.name || userId}`);
-                    io.emit('user_presence_disconnect', { 
-                        id: userId, 
-                        name: profile?.name || 'Usuário',
-                        picture: profile?.picture 
-                    });
-                    userProfiles.delete(userId);
-                }
+                console.log(`🔕 FORCE Global leave notify: ${profile?.name || userId}`);
+                io.emit('user_presence_disconnect', { 
+                    id: userId, 
+                    name: profile?.name || 'Usuário',
+                    picture: profile?.picture 
+                });
                 
                 broadcastOnlineUsers();
             }
