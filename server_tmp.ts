@@ -1,14 +1,16 @@
-import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
-import { PORT } from './config';
+
+dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
+const PORT = process.env.PORT || 3000;
 
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
@@ -39,41 +41,27 @@ app.use(helmet({
 // Rate Limiting (Anti-DDoS / Brute Force)
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 2000, // Limit each IP to 2000 requests per 15 min
+    limit: 1000, // Limit each IP to 1000 requests per 15 min
     standardHeaders: true,
     legacyHeaders: false,
-    message: { status: 'ERROR', message: 'Muitas requisiÃ§Ãµes originadas deste IP. Tente novamente mais tarde.' }
+    message: { status: 'ERROR', message: 'Muitas requisições originadas deste IP. Tente novamente mais tarde.' }
 });
+// app.use('\/api', apiLimiter);
 
-app.use('/api', apiLimiter);
-
-// Restrict CORS for Production
-const allowedOrigins = ['https://polaryon.com.br', 'https://www.polaryon.com.br'];
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: '*', // To be restricted in production
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Data Sanitization against XSS
-// xss-clean removed due to Express 5 getter issue. 
-// Helmet and manual sanitization in controllers are preferred.
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Prevent HTTP Parameter Pollution
 app.use(hpp());
 
 // Basic Health Check Route
-app.get('/api/health', async (req: Request, res: Response) => {
+app.get('/health', async (req: Request, res: Response) => {
     try {
         // Ping DB to test connection
         await prisma.$queryRaw`SELECT 1`;
@@ -99,7 +87,7 @@ app.use('/api/transparency', transparencyRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {
-    console.log(`ðŸš€ Polaryon Backend Kernel running on port ${PORT}`);
+    console.log(`?? Polaryon Backend Kernel running on port ${PORT}`);
 });
 
 // Initialize WebSockets

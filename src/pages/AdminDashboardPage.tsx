@@ -25,6 +25,7 @@ export default function AdminDashboardPage() {
     const { currentUser, addUser, updateUser, removeUser, onlineUsers } = useAuthStore();
     const [systemsUsersDb, setSystemsUsersDb] = useState<SystemUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [errorOccurred, setErrorOccurred] = useState<string | null>(null);
 
     // Prevent non-admins from rendering this (fallback as layout should protect it ideally)
     if (currentUser?.role !== 'ADMIN') {
@@ -41,26 +42,38 @@ export default function AdminDashboardPage() {
     const loadUsers = async () => {
         try {
             setIsLoading(true);
+            console.log("DIAGNOSTIC: Current user role from store:", currentUser?.role);
             const res = await api.get('/users');
+            console.log("AdminDashboard: Resposta /api/users carregada", res.data);
+            
             // Map the pure database user to our frontend structure
             const mappedUsers = res.data.map((u: any) => ({
                 id: u.id,
                 email: u.email,
-                name: u.name,
+                name: u.name || 'Sem Nome',
                 photoURL: u.picture,
-                role: u.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : (u.role.toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER'),
-                permissions: u.permissions || (u.role === 'admin'
+                // Normalized role check
+                role: (u.role || 'default').toUpperCase() === 'ADMIN' ? 'ADMIN' : ((u.role || 'default').toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER'),
+                permissions: u.permissions || ((u.role || '').toLowerCase() === 'admin'
                     ? { canView: true, canEdit: true, canDownload: true, allowedScreens: ['ALL'] }
-                    : (u.role === 'contador'
+                    : ((u.role || '').toLowerCase() === 'contador'
                         ? { canView: true, canEdit: false, canDownload: true, allowedScreens: ['ACCOUNTING'] }
                         : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KANBAN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] })),
-                status: u.role === 'disabled' ? 'disabled' : (u.role === 'pending' ? 'invited' : 'active'),
-                createdAt: u.createdAt
+                status: (u.role || '').toLowerCase() === 'disabled' ? 'disabled' : ((u.role || '').toLowerCase() === 'pending' ? 'invited' : 'active'),
+                createdAt: u.createdAt || new Date().toISOString()
             }));
             setSystemsUsersDb(mappedUsers);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to load users", error);
-            toast.error("Erro ao carregar a lista de usuários da Nuvem.");
+            if (error.response?.status === 401) {
+                setErrorOccurred("Sua sessão expirou ou o acesso foi negado. Por favor, saia e entre novamente no sistema.");
+            } else if (error.response?.status === 429) {
+                toast.error("Muitas requisições ao servidor. Aguarde 1 minuto e clique em Sincronizar.", { duration: 8000 });
+                setErrorOccurred("Limite de requisições excedido.");
+            } else {
+                toast.error("Erro ao carregar a lista de usuários da Nuvem.");
+                setErrorOccurred("Não foi possível carregar os dados dos usuários.");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -204,20 +217,29 @@ export default function AdminDashboardPage() {
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-3">
                         <ShieldCheck className="w-8 h-8 text-primary" />
-                        Acesso e Permissões
+                        Acesso e Permissões (v1.0.3)
                     </h1>
                     <p className="text-muted-foreground mt-1">
                         Gerencie quem pode acessar o Polaryon, seus níveis de edição administrativa e permissões.
                     </p>
                 </div>
-                {!isAdding && (
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setIsAdding(true)}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md font-bold text-sm tracking-wide transition-all shadow-sm flex items-center gap-2"
+                        onClick={() => loadUsers()}
+                        className="bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-md font-bold text-sm tracking-wide transition-all shadow-sm flex items-center gap-2 border border-border"
+                        title="Recarregar dados forçado"
                     >
-                        <Plus className="w-4 h-4" /> Cadastrar E-mail Autorizado
+                        <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} /> Sincronizar Agora
                     </button>
-                )}
+                    {!isAdding && (
+                        <button
+                            onClick={() => setIsAdding(true)}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md font-bold text-sm tracking-wide transition-all shadow-sm flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> Cadastrar E-mail Autorizado
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="mb-10">
@@ -254,7 +276,7 @@ export default function AdminDashboardPage() {
                 </div>
             )}
 
-            <div className="bg-neutral-900 border border-border rounded-xl flex-1 flex flex-col relative z-10 shadow-lg mt-8 overflow-hidden">
+            <div className="bg-neutral-900 border border-border rounded-xl flex-1 flex flex-col relative z-10 shadow-lg mt-8 overflow-hidden min-h-[450px]">
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left text-sm whitespace-nowrap">
@@ -275,6 +297,33 @@ export default function AdminDashboardPage() {
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <RefreshCcw className="w-5 h-5 animate-spin text-primary" />
                                             Sincronizando Banco de Dados PostgreSQL...
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : errorOccurred ? (
+                                <tr>
+                                    <td colSpan={6} className="px-5 py-12 text-center">
+                                        <div className="flex flex-col items-center justify-center gap-4">
+                                            <ShieldAlert className="w-10 h-10 text-destructive/50" />
+                                            <div className="max-w-md">
+                                                <p className="text-foreground font-bold mb-1">{errorOccurred}</p>
+                                                <p className="text-xs text-muted-foreground">Se o erro persistir, tente recarregar a página ou refazer o login.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => { setErrorOccurred(null); loadUsers(); }}
+                                                className="mt-2 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                                            >
+                                                <RefreshCcw className="w-3 h-3" /> Tentar Novamente
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : systemsUsersDb.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
+                                        <div className="flex flex-col items-center justify-center gap-2 opacity-50">
+                                            <Users className="w-8 h-8" />
+                                            Nenhum usuário encontrado no banco de dados.
                                         </div>
                                     </td>
                                 </tr>
@@ -398,6 +447,13 @@ export default function AdminDashboardPage() {
                         <div className="px-5 py-12 text-center text-muted-foreground animate-pulse">
                             <RefreshCcw className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
                             Sincronizando Banco de Dados...
+                        </div>
+                    ) : systemsUsersDb.length === 0 ? (
+                        <div className="px-5 py-16 text-center text-muted-foreground bg-neutral-900">
+                             <div className="flex flex-col items-center justify-center gap-3 opacity-50">
+                                 <Users className="w-10 h-10" />
+                                 <span className="font-medium">Nenhum usuário encontrado no sistema.</span>
+                             </div>
                         </div>
                     ) : systemsUsersDb.map(user => {
                         const isMe = user.id === currentUser?.id;

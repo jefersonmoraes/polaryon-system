@@ -65,7 +65,7 @@ export const AuditMetricsDash = () => {
         return Object.values(counts)
             .sort((a, b) => b.count - a.count)
             .slice(0, 5)
-            .map(item => ({ name: item.name.split(' ')[0], acoes: item.count }));
+            .map(item => ({ name: (item.name || 'Desconhecido').split(' ')[0], acoes: item.count }));
     }, [logs]);
 
     // 4. Activity Types

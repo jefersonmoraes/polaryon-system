@@ -3,13 +3,12 @@ import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
+import { GOOGLE_CLIENT_ID, JWT_SECRET } from '../config';
+
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Use an environment variable or a fallback for dev
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "MOCK_CLIENT_ID_REQUIRED";
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_dev_7281';
 
 router.post('/google', async (req: Request, res: Response) => {
     const { credential, accessToken } = req.body;

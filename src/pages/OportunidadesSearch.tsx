@@ -10,6 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
 import { socketService } from '@/lib/socket';
 
+const getStatusStyle = (situacao: string) => {
+    const lower = (situacao || '').toLowerCase();
+    if (lower.includes('divulgada')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+    if (lower.includes('suspensa')) return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+    if (lower.includes('encerrada') || lower.includes('revogada')) return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+    return 'bg-secondary text-foreground border-border';
+};
+
 interface PncpItem {
     id: string;
     title: string;
@@ -39,6 +47,10 @@ interface PncpItem {
     srp?: boolean;
     tipo_instrumento_convocacao_nome?: string;
     numero_controle_pncp?: string;
+    itemCount?: number;
+    hasMeEppBenefit?: boolean;
+    minItemValue?: number;
+    maxItemValue?: number;
 }
 
 const ESTADOS_BR = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -101,6 +113,10 @@ async function processPncpQueue() {
             start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
             end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
             valor: detail.valorTotalEstimado || detail.valor_global,
+            itemCount: detail.itemCount,
+            hasMeEppBenefit: detail.hasMeEppBenefit,
+            minItemValue: detail.minItemValue,
+            maxItemValue: detail.maxItemValue,
             raw: detail
         };
         
@@ -144,145 +160,146 @@ function queuePncpFetch(item: PncpItem): Promise<any> {
 }
 
 const ProposalDates = memo(({ item }: { item: PncpItem }) => {
-    const [dates, setDates] = useState<{ inicio?: string; fim?: string; loading: boolean }>({ loading: true });
-    
-    const parts = item.numero_controle_pncp?.split('-');
-    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
-    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
-    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
-    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
-
-    const updateFromCache = useCallback(() => {
-        const cached = pncpDetailCache[cacheKey]?.data;
-        if (cached) {
-            setDates({
-                inicio: cached.start,
-                fim: cached.end,
-                loading: false
-            });
-            return true;
+    // Usar datas nativas da listagem se disponíveis, caso contrário mostrar traço
+    const formatNativeDate = (dateStr?: string) => {
+        if (!dateStr) return '-';
+        try {
+            return new Date(dateStr).toLocaleDateString('pt-BR');
+        } catch {
+            return '-';
         }
-        return false;
-    }, [cacheKey]);
-
-    useEffect(() => {
-        let isMounted = true;
-        
-        // Tenta pegar do cache primeiro
-        if (updateFromCache()) return;
-
-        setDates({ loading: true });
-        queuePncpFetch(item).then((data) => {
-            if (isMounted) {
-                if (data) {
-                    setDates({
-                        inicio: data.start,
-                        fim: data.end,
-                        loading: false
-                    });
-                } else {
-                    setDates({ loading: false });
-                }
-            }
-        }).catch(() => {
-            if (isMounted) setDates({ loading: false });
-        });
-
-        // Listener para atualizações de cache vindo de outros componentes (ex: modal)
-        const handleUpdate = (e: any) => {
-            if (e.detail?.cacheKey === cacheKey && isMounted) {
-                updateFromCache();
-            }
-        };
-        window.addEventListener('pncp-cache-updated', handleUpdate);
-
-        return () => { 
-            isMounted = false; 
-            window.removeEventListener('pncp-cache-updated', handleUpdate);
-        };
-    }, [item.orgao_cnpj, item.numero_controle_pncp, cacheKey, updateFromCache]);
-
-    if (dates.loading) {
-        return (
-            <>
-                <td className="px-4 py-3.5 align-top text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin opacity-50 block mx-auto" /></td>
-                <td className="px-4 py-3.5 align-top text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin opacity-50 block mx-auto" /></td>
-            </>
-        );
-    }
+    };
 
     return (
         <>
             <td className="px-4 py-3.5 align-top text-muted-foreground font-medium text-[11px]">
-                {dates.inicio ? new Date(dates.inicio).toLocaleDateString('pt-BR') : '-'}
+                {formatNativeDate(item.data_inicio_proposta || item.data_inicio_vigencia)}
             </td>
             <td className="px-4 py-3.5 align-top text-[11px] font-medium text-destructive">
-                {dates.fim ? new Date(dates.fim).toLocaleDateString('pt-BR') : '-'}
+                {formatNativeDate(item.data_encerramento_proposta || item.data_fim_vigencia)}
             </td>
         </>
     );
 });
 
 const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?: boolean }) => {
-    const [valor, setValor] = useState<number | null>(null);
-    const [loading, setLoading] = useState(true);
-
     const parts = item.numero_controle_pncp?.split('-');
     const orgaoCnpj = item.orgao_cnpj || parts?.[0];
     const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
     const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
     const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
 
-    const updateFromCache = useCallback(() => {
-        const cached = pncpDetailCache[cacheKey]?.data;
-        if (cached) {
-            setValor(cached.valor);
-            setLoading(false);
-            return true;
-        }
-        return false;
-    }, [cacheKey]);
+    const [detail, setDetail] = useState(pncpDetailCache[cacheKey]?.data || null);
 
     useEffect(() => {
-        let isMounted = true;
-        if (updateFromCache()) return;
-
-        setLoading(true);
-        queuePncpFetch(item).then((data) => {
-            if (isMounted) {
-                setValor(data?.valor || null);
-                setLoading(false);
-            }
-        }).catch(() => {
-            if (isMounted) setLoading(false);
-        });
+        // Dispara busca em background se não houver no cache nem no item original
+        const hasInitialValue = item.valorTotalEstimado || item.valor_global;
+        if (!detail && !hasInitialValue) {
+            queuePncpFetch(item);
+        }
 
         const handleUpdate = (e: any) => {
-            if (e.detail?.cacheKey === cacheKey && isMounted) {
-                updateFromCache();
+            if (e.detail.cacheKey === cacheKey) {
+                setDetail(pncpDetailCache[cacheKey]?.data || null);
             }
         };
-        window.addEventListener('pncp-cache-updated', handleUpdate);
 
-        return () => { 
-            isMounted = false; 
-            window.removeEventListener('pncp-cache-updated', handleUpdate);
-        };
-    }, [item.orgao_cnpj, item.numero_controle_pncp, cacheKey, updateFromCache]);
+        window.addEventListener('pncp-cache-updated', handleUpdate as any);
+        return () => window.removeEventListener('pncp-cache-updated', handleUpdate as any);
+    }, [cacheKey, item, detail]);
+
+    const valor = detail?.valor || item.valorTotalEstimado || item.valor_global;
+    const isLoading = !valor && pncpDetailCache[cacheKey]?.promise;
 
     if (isMobile) {
         return (
-            <div className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shadow-sm ml-auto">
-                <DollarSign className="h-2.5 w-2.5" />
-                {loading ? <Loader2 className="h-2.5 w-2.5 animate-spin opacity-50" /> : formatCurrency(valor)}
+            <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border shadow-sm ${
+                    isLoading 
+                    ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
+                    : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                }`}>
+                    <DollarSign className="h-2.5 w-2.5" />
+                    <span>{valor ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Carregando...' : 'V. não inf.')}</span>
+                </div>
             </div>
         );
     }
 
     return (
-        <td className="px-4 py-3.5 align-top font-black text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto opacity-30" /> : formatCurrency(valor)}
+        <td className="px-4 py-3.5 align-top text-right min-w-[140px]">
+            <div className="flex flex-col items-end">
+                <div className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${
+                    isLoading 
+                    ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
+                    : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                }`}>
+                    <DollarSign className="h-3 w-3" />
+                    <span>{valor ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Carregando...' : 'V. não inf.')}</span>
+                </div>
+            </div>
         </td>
+    );
+});
+
+const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+    
+    const [detail, setDetail] = useState(pncpDetailCache[cacheKey]?.data || null);
+
+    useEffect(() => {
+        // Dispara busca se não houver dados detalhados (itemCount/hasMeEppBenefit)
+        const hasInitialExtra = item.itemCount !== undefined || item.hasMeEppBenefit !== undefined;
+        if (!detail && !hasInitialExtra) {
+            queuePncpFetch(item);
+        }
+
+        const handleUpdate = (e: any) => {
+            if (e.detail.cacheKey === cacheKey) {
+                setDetail(pncpDetailCache[cacheKey]?.data || null);
+            }
+        };
+
+        window.addEventListener('pncp-cache-updated', handleUpdate as any);
+        return () => window.removeEventListener('pncp-cache-updated', handleUpdate as any);
+    }, [cacheKey, item, detail]);
+
+    const itemCount = detail?.itemCount || item.itemCount;
+    const hasMeEppBenefit = detail?.hasMeEppBenefit || item.hasMeEppBenefit;
+    const isLoading = itemCount === undefined && pncpDetailCache[cacheKey]?.promise;
+
+    return (
+        <div className="flex flex-col gap-1.5 min-w-[120px]">
+             <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold border truncate ${getStatusStyle(item.situacao_nome)}`}>
+                {item.situacao_nome}
+            </span>
+            <div className="flex flex-wrap gap-1">
+                {isLoading ? (
+                    <span className="px-1.5 py-0.5 bg-muted animate-pulse text-muted-foreground border border-border/50 rounded text-[9px] font-medium uppercase flex items-center gap-1 shadow-sm">
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        Itens...
+                    </span>
+                ) : (
+                    itemCount !== undefined && itemCount > 0 && (
+                        <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded text-[9px] font-black uppercase flex items-center gap-1 shadow-sm transition-all hover:bg-indigo-500/20">
+                            <Package className="h-2.5 w-2.5" />
+                            {itemCount} Itens
+                        </span>
+                    )
+                )}
+                
+                {hasMeEppBenefit && !isLoading && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[9px] font-black uppercase flex items-center gap-1 shadow-sm">
+                        <Award className="h-2.5 w-2.5" />
+                        ME/EPP
+                    </span>
+                )}
+            </div>
+        </div>
     );
 });
 
@@ -558,7 +575,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         }
 
         // Create Milestones (New: DATA E HORA DOS LANCES)
-        const endDateTime = itemDetail?.dataFimRecebimentoProposta || itemDetail?.dataEncerramentoProposta || selectedItem.data_encerramento_proposta;
+        const endDateTime = itemDetail?.dataFimRecebimentoProposta || 
+                          itemDetail?.dataEncerramentoProposta || 
+                          selectedItem.data_encerramento_proposta ||
+                          selectedItem.data_fim_vigencia;
         const cardMilestones: any[] = [];
 
         if (endDateTime) {
@@ -585,6 +605,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             checklist: [],
             timeEntries: [],
             milestones: cardMilestones,
+            descriptionEntries: [],
             pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
             ...cardParams
         };
@@ -683,23 +704,9 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
             let items = [...(data1?.items || []), ...(data2?.items || [])];
 
-            // GREEDY FETCH: Se houver filtros de valor, precisamos buscar os detalhes ANTES de filtrar,
-            // pois a API de pesquisa do PNCP não retorna o valor estimado.
-            const hasValueFilter = (valorMinFilter && !isNaN(parseFloat(valorMinFilter))) || 
-                                   (valorMaxFilter && !isNaN(parseFloat(valorMaxFilter)));
-            
-            if (hasValueFilter && items.length > 0) {
-                setLoadingMessage("Aplicando filtros de valor (consultando detalhes oficiais)...");
-                const detailedItems = await Promise.all(items.map(async (item) => {
-                    try {
-                        const detail = await queuePncpFetch(item);
-                        return { ...item, valorTotalEstimado: detail?.valor || 0, valor_global: detail?.valor || 0 };
-                    } catch (e) {
-                        return item;
-                    }
-                }));
-                items = detailedItems;
-            }
+            // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
+            // Os detalhes agora são carregados apenas no Modal ou se já estiverem no cache.
+
 
             // --- Client-Side "Mega Filters" Fallback ---
             // NOTE: UF, Esfera and Modality are now handled at API level (server-side) via ufs, esferas, modalidades params.
@@ -717,17 +724,23 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
             if (margemPreferenciaFilter) items = items.filter((i: any) => (i?.tipo_margem_preferencia_nome?.toLowerCase() || '').includes(margemPreferenciaFilter.toLowerCase()));
 
-            // Valor Min/Max Filter - AGORA FUNCIONA POIS TEMOS OS DADOS DO DETALHAMENTO
+            // Valor Min/Max Filter - Ajustado para 'best-effort' (ignora itens sem valor carregado)
             if (valorMinFilter) {
                 const min = parseFloat(valorMinFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(min)) {
-                    items = items.filter((i: any) => (i.valorTotalEstimado || i.valor_global || 0) >= min);
+                    items = items.filter((i: any) => {
+                        const val = i.valorTotalEstimado || i.valor_global;
+                        return val === undefined || val === null || val >= min;
+                    });
                 }
             }
             if (valorMaxFilter) {
                 const max = parseFloat(valorMaxFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(max)) {
-                    items = items.filter((i: any) => (i.valorTotalEstimado || i.valor_global || 0) <= max);
+                    items = items.filter((i: any) => {
+                        const val = i.valorTotalEstimado || i.valor_global;
+                        return val === undefined || val === null || val <= max;
+                    });
                 }
             }
 
@@ -778,13 +791,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         fetchOportunidades(1);
     }, [fetchOportunidades]);
 
-    const getStatusStyle = useCallback((situacao: string) => {
-        const lower = situacao.toLowerCase();
-        if (lower.includes('divulgada')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
-        if (lower.includes('suspensa')) return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
-        if (lower.includes('encerrada') || lower.includes('revogada')) return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
-        return 'bg-secondary text-foreground border-border';
-    }, []);
+
 
     const handlePageInputSubmit = () => {
         let p = parseInt(pageInput);
@@ -1039,9 +1046,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                             className="hover:bg-muted/50 cursor-pointer transition-colors group"
                                         >
                                             <td className="px-4 py-3.5 align-top">
-                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold border truncate max-w-[120px] ${getStatusStyle(item.situacao_nome)}`}>
-                                                    {item.situacao_nome}
-                                                </span>
+                                                <PncpBadgeStatus item={item} />
                                             </td>
                                             <td className="px-4 py-3.5 align-top text-muted-foreground">
                                                 {formatDate(item.data_publicacao_pncp)}
@@ -1089,9 +1094,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3 active:scale-[0.98] transition-all"
                                 >
                                     <div className="flex justify-between items-start gap-2">
-                                        <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold border ${getStatusStyle(item.situacao_nome)}`}>
-                                            {item.situacao_nome}
-                                        </span>
+                                        <PncpBadgeStatus item={item} />
                                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded">
                                             <Calendar className="h-3 w-3" />
                                             {formatDate(item.data_publicacao_pncp)}
