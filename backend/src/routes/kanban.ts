@@ -1,4 +1,5 @@
 import axios from 'axios';
+import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { pushEventToGoogle, deleteEventFromGoogle } from '../services/GoogleCalendarService';
 
