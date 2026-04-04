@@ -241,9 +241,15 @@ export const FilePreviewModal = ({
 
                     <div className="flex items-center gap-2 mr-8">
                         <button 
-                            onClick={async () => {
-                                const targetUrl = blobUrl || normalizedFileUrl;
-                                window.open(targetUrl, '_blank');
+                            onClick={() => {
+                                const targetUrl = blobUrl || normalizedFileUrl || fileUrl;
+                                const link = document.createElement('a');
+                                link.href = targetUrl;
+                                link.target = '_blank';
+                                link.rel = 'noopener noreferrer';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
                             }}
                             className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-bold hover:bg-secondary/80 transition-all border border-border/50"
                             title="Abrir em Nova Aba"
@@ -303,39 +309,23 @@ export const FilePreviewModal = ({
 
                             {fileType === 'pdf' && (
                                 <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-inner overflow-hidden relative group/pdf">
-                                    <object 
-                                        data={blobUrl || normalizedFileUrl} 
-                                        type="application/pdf" 
+                                    <iframe 
+                                        src={blobUrl || normalizedFileUrl || fileUrl} 
                                         className="w-full h-full border-none"
-                                        aria-label={fileName}
+                                        title={fileName}
                                         onLoad={() => setIsLoading(false)}
-                                    >
-                                        <embed 
-                                            src={blobUrl || normalizedFileUrl} 
-                                            type="application/pdf" 
-                                            className="w-full h-full"
-                                        />
-                                        <div className="flex flex-col items-center justify-center p-8 text-center gap-4 h-full bg-muted/5">
-                                            <AlertTriangle className="h-12 w-12 text-yellow-500 animate-pulse" />
-                                            <div className="space-y-2">
-                                                <p className="text-sm font-bold text-foreground max-w-xs">
-                                                    Não foi possível carregar a prévia nativa no seu navegador.
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Alguns filtros de rede empresarial podem bloquear a visualização direta.
-                                                </p>
-                                            </div>
-                                            <button 
-                                                onClick={handleDownload}
-                                                className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-xs font-black shadow-lg hover:shadow-primary/20 transition-all active:scale-95"
-                                            >
-                                                BAIXAR PARA VISUALIZAR
-                                            </button>
-                                        </div>
-                                    </object>
+                                    />
                                     <div className="absolute top-2 right-2 px-3 py-1 bg-black/40 backdrop-blur-sm rounded text-[9px] text-white font-bold opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none uppercase tracking-widest">
-                                        Modo Visualizador Nativo
+                                        Modo Visualizador Seguro
                                     </div>
+                                    
+                                    {/* Fallback caso o iframe demore ou falhe */}
+                                    {isLoading && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 backdrop-blur-sm z-10">
+                                            <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                                            <p className="text-sm font-bold">Preparando documento...</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
