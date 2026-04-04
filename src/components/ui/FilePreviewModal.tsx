@@ -58,24 +58,46 @@ export const FilePreviewModal = ({
         // Detect file type if not provided
         let type = initialFileType || '';
         if (!type) {
-            const fileNameLower = fileName.toLowerCase();
-            const ext = fileNameLower.split('.').pop();
-            if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext || '')) type = 'image';
-            else if (ext === 'pdf') type = 'pdf';
-            else if (ext === 'xml') type = 'xml';
-            else if (['txt', 'csv', 'log', 'sped', 'sintegra'].includes(ext || '')) type = 'text';
+            if (fileUrl.startsWith('data:application/pdf')) type = 'pdf';
+            else if (fileUrl.startsWith('data:image')) type = 'image';
+            else if (fileUrl.startsWith('data:text')) type = 'text';
+            else {
+                const fileNameLower = fileName.toLowerCase();
+                const ext = fileNameLower.split('.').pop();
+                if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext || '')) type = 'image';
+                else if (ext === 'pdf') type = 'pdf';
+                else if (ext === 'xml') type = 'xml';
+                else if (['txt', 'csv', 'log', 'sped', 'sintegra'].includes(ext || '')) type = 'text';
+            }
         }
         setFileType(type);
 
         const setupPreview = async () => {
             if (fileUrl.startsWith('data:')) {
                 try {
-                    const response = await fetch(fileUrl);
-                    const blob = await response.blob();
-                    const url = URL.createObjectURL(blob);
-                    setBlobUrl(url);
+                    // Para Data URIs de PDF, vamos usar Blob URL para evitar problemas de iframe
+                    const parts = fileUrl.split(';base64,');
+                    if (parts.length === 2) {
+                        const contentType = parts[0].split(':')[1];
+                        const byteCharacters = atob(parts[1]);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const blob = new Blob([byteArray], { type: contentType });
+                        const url = URL.createObjectURL(blob);
+                        setBlobUrl(url);
+                    } else {
+                        // Fallback simpler fetch
+                        const response = await fetch(fileUrl);
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        setBlobUrl(url);
+                    }
                 } catch (e) {
                     console.error("Failed to create blob from data URI", e);
+                    setBlobUrl(null);
                 }
             } else {
                 setBlobUrl(fileUrl);
@@ -86,7 +108,8 @@ export const FilePreviewModal = ({
             } else if (type === 'text') {
                 await fetchText();
             } else {
-                setIsLoading(false);
+                // Pequeno delay para garantir que o blob esteja pronto antes de tirar o loader
+                setTimeout(() => setIsLoading(false), 200);
             }
         };
 
@@ -259,11 +282,18 @@ export const FilePreviewModal = ({
                             )}
 
                             {fileType === 'pdf' && (
-                                <iframe 
-                                    src={blobUrl ? (blobUrl.startsWith('blob:') ? blobUrl : `${blobUrl}#toolbar=1`) : fileUrl} 
-                                    className="w-full h-full border-none rounded-lg shadow-lg bg-card"
-                                    title={fileName}
-                                />
+                                <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-inner overflow-hidden relative group/pdf">
+                                    <iframe 
+                                        src={blobUrl && blobUrl.startsWith('blob:') ? blobUrl : (blobUrl ? `${blobUrl}#toolbar=0` : fileUrl)} 
+                                        className="w-full h-full border-0"
+                                        title={fileName}
+                                        onLoad={() => setIsLoading(false)}
+                                    />
+                                    {/* Link de redundância caso o iframe falhe ou seja bloqueado pelas políticas das empresas */}
+                                    <div className="absolute top-2 right-2 px-3 py-1 bg-black/40 backdrop-blur-sm rounded text-[9px] text-white font-bold opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none">
+                                        Modo Visualizador Estendido
+                                    </div>
+                                </div>
                             )}
 
                             {fileType === 'xml' && xmlData && (
