@@ -164,6 +164,26 @@ export const FilePreviewModal = ({
 
                     <div className="flex items-center gap-2 mr-8">
                         <button 
+                            onClick={async () => {
+                                if (fileUrl.startsWith('data:')) {
+                                    try {
+                                        const blob = await (await fetch(fileUrl)).blob();
+                                        const url = URL.createObjectURL(blob);
+                                        window.open(url, '_blank');
+                                    } catch (e) {
+                                        window.open(fileUrl, '_blank');
+                                    }
+                                } else {
+                                    window.open(fileUrl, '_blank');
+                                }
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-bold hover:bg-secondary/80 transition-all border border-border/50"
+                            title="Abrir em Nova Aba"
+                        >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Nova Aba</span>
+                        </button>
+                        <button 
                             onClick={handleDownload}
                             className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-all shadow-sm"
                         >
@@ -212,7 +232,7 @@ export const FilePreviewModal = ({
 
                             {fileType === 'pdf' && (
                                 <iframe 
-                                    src={`${fileUrl}#toolbar=1`} 
+                                    src={fileUrl.startsWith('http') ? `${fileUrl}#toolbar=1` : fileUrl} 
                                     className="w-full h-full border-none rounded-lg shadow-lg bg-card"
                                     title={fileName}
                                 />

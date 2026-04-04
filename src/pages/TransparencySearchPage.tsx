@@ -1124,19 +1124,10 @@ export default function TransparencySearchPage() {
                                                                     </div>
                                                                     <div className="flex gap-2 mt-2">
                                                                         <button 
-                                                                            onClick={() => {
-                                                                                const isPdf = file.url.toLowerCase().endsWith('.pdf');
-                                                                                const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
-                                                                                setPreviewData({
-                                                                                    isOpen: true,
-                                                                                    url: file.url,
-                                                                                    name: file.nome,
-                                                                                    type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
-                                                                                });
-                                                                            }}
+                                                                            onClick={() => window.open(file.url, '_blank')}
                                                                             className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
                                                                         >
-                                                                            <Search className="h-3 w-3" /> VISUALIZAR
+                                                                            <ExternalLink className="h-3 w-3" /> VISUALIZAR
                                                                         </button>
                                                                         <a 
                                                                             href={file.url}
@@ -1175,19 +1166,10 @@ export default function TransparencySearchPage() {
                                                                 </div>
                                                                 <div className="flex gap-2 mt-2">
                                                                     <button 
-                                                                        onClick={() => {
-                                                                            const isPdf = file.url.toLowerCase().endsWith('.pdf');
-                                                                            const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
-                                                                            setPreviewData({
-                                                                                isOpen: true,
-                                                                                url: file.url,
-                                                                                name: file.nome,
-                                                                                type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
-                                                                            });
-                                                                        }}
+                                                                        onClick={() => window.open(file.url, '_blank')}
                                                                         className="flex-1 h-8 bg-primary text-primary-foreground text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
                                                                     >
-                                                                        <Search className="h-3 w-3" /> VISUALIZAR
+                                                                        <ExternalLink className="h-3 w-3" /> VISUALIZAR
                                                                     </button>
                                                                     <a 
                                                                         href={file.originalUrl}

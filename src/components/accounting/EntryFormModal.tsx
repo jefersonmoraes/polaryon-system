@@ -320,7 +320,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent 
-                className="sm:max-w-[550px] bg-background border border-border text-foreground max-h-[90vh] overflow-y-auto custom-scrollbar relative"
+                className="sm:max-w-[550px] bg-background border border-border text-foreground max-h-[90vh] overflow-y-auto custom-scrollbar"
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}

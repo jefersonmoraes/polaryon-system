@@ -164,19 +164,19 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
             return;
         }
 
+        const payload = {
+            ...formData,
+            attachments,
+            // Mantém compatibilidade com o esquema atual do banco (campos legados)
+            fileData: attachments.length > 0 ? attachments[0].fileData : undefined,
+            fileName: attachments.length > 0 ? attachments[0].fileName : undefined,
+            fileSize: attachments.length > 0 ? attachments[0].fileSize : undefined,
+        };
+
         if (editingDoc) {
-            updateDocument(editingDoc.id, {
-                ...formData,
-                attachments,
-                fileData: undefined,
-                fileName: undefined,
-                fileSize: undefined
-            });
+            updateDocument(editingDoc.id, payload);
         } else {
-            addDocument({
-                ...formData,
-                attachments
-            });
+            addDocument(payload);
         }
 
         onClose();

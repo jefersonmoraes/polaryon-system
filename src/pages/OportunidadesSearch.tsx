@@ -1535,19 +1535,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                                     </div>
                                                                     <div className="flex gap-2 shrink-0">
                                                                         <button 
-                                                                            onClick={() => {
-                                                                                const isPdf = file.url.toLowerCase().endsWith('.pdf');
-                                                                                const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
-                                                                                setPreviewData({
-                                                                                    isOpen: true,
-                                                                                    url: file.url,
-                                                                                    name: file.titulo || file.nome || 'Arquivo PNCP',
-                                                                                    type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
-                                                                                });
-                                                                            }}
+                                                                            onClick={() => window.open(file.url, '_blank')}
                                                                             className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 active:scale-95 transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
                                                                         >
-                                                                            <Search className="h-4 w-4" /> VISUALIZAR
+                                                                            <ExternalLink className="h-4 w-4" /> VISUALIZAR
                                                                         </button>
                                                                         <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary hover:scale-110 active:scale-95 transition-all" title="Download Arquivo PNCP">
                                                                             <Download className="h-4.5 w-4.5" />
