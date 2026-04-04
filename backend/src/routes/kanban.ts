@@ -18,8 +18,15 @@ router.get('/file-proxy', async (req: Request, res: Response) => {
             timeout: 15000,
             headers: { 'User-Agent': 'Mozilla/5.0' }
         });
-        res.setHeader('Content-Type', response.headers['content-type'] || 'application/pdf');
+        
+        // Remove security headers that prevent iframing
+        res.removeHeader('X-Frame-Options');
+        res.removeHeader('Content-Security-Policy');
+        
+        // Force PDF type for direct rendering
+        res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'inline');
+        
         response.data.pipe(res);
     } catch (e: any) {
         res.status(500).json({ error: 'Failed to fetch file' });
