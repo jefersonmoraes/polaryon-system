@@ -57,10 +57,25 @@ export const FilePreviewModal = ({
 
         // Detect file type if not provided
         let type = initialFileType || '';
+        
+        // Normalização para URLs Base64 puras (comuns em dados legados)
+        let normalizedFileUrl = fileUrl;
+        if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')) {
+            // Se parece Base64 e o nome é PDF, injeta o cabeçalho
+            if (fileName.toLowerCase().endsWith('.pdf')) {
+                normalizedFileUrl = `data:application/pdf;base64,${fileUrl}`;
+                if (!type) type = 'pdf';
+            } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext => fileName.toLowerCase().endsWith(ext))) {
+                const ext = fileName.split('.').pop()?.toLowerCase();
+                normalizedFileUrl = `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fileUrl}`;
+                if (!type) type = 'image';
+            }
+        }
+
         if (!type) {
-            if (fileUrl.startsWith('data:application/pdf')) type = 'pdf';
-            else if (fileUrl.startsWith('data:image')) type = 'image';
-            else if (fileUrl.startsWith('data:text')) type = 'text';
+            if (normalizedFileUrl.startsWith('data:application/pdf')) type = 'pdf';
+            else if (normalizedFileUrl.startsWith('data:image')) type = 'image';
+            else if (normalizedFileUrl.startsWith('data:text')) type = 'text';
             else {
                 const fileNameLower = fileName.toLowerCase();
                 const ext = fileNameLower.split('.').pop();
@@ -73,13 +88,13 @@ export const FilePreviewModal = ({
         setFileType(type);
 
         const setupPreview = async () => {
-            if (fileUrl.startsWith('data:')) {
+            if (normalizedFileUrl.startsWith('data:')) {
                 try {
                     // Para Data URIs de PDF, vamos usar Blob URL para evitar problemas de iframe
-                    const parts = fileUrl.split(';base64,');
+                    const parts = normalizedFileUrl.split(';base64,');
                     if (parts.length === 2) {
                         const contentType = parts[0].split(':')[1];
-                        const byteCharacters = atob(parts[1]);
+                        const byteCharacters = atob(parts[1].trim()); // Trim para evitar espaços em branco
                         const byteNumbers = new Array(byteCharacters.length);
                         for (let i = 0; i < byteCharacters.length; i++) {
                             byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -90,7 +105,7 @@ export const FilePreviewModal = ({
                         setBlobUrl(url);
                     } else {
                         // Fallback simpler fetch
-                        const response = await fetch(fileUrl);
+                        const response = await fetch(normalizedFileUrl);
                         const blob = await response.blob();
                         const url = URL.createObjectURL(blob);
                         setBlobUrl(url);
@@ -100,13 +115,17 @@ export const FilePreviewModal = ({
                     setBlobUrl(null);
                 }
             } else {
-                setBlobUrl(fileUrl);
+                setBlobUrl(normalizedFileUrl);
             }
 
             if (type === 'xml') {
                 await fetchXml();
             } else if (type === 'text') {
                 await fetchText();
+            } else if (type === 'pdf') {
+                // PDF loads inside iframe, we hide loader via iframe.onLoad or timeout
+                const timer = setTimeout(() => setIsLoading(false), 5000);
+                return () => clearTimeout(timer);
             } else {
                 // Pequeno delay para garantir que o blob esteja pronto antes de tirar o loader
                 setTimeout(() => setIsLoading(false), 200);
@@ -244,7 +263,10 @@ export const FilePreviewModal = ({
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-auto bg-muted/10 relative custom-scrollbar flex flex-col items-center justify-center p-4">
+                <div className={cn(
+                    "flex-1 overflow-auto bg-muted/10 relative custom-scrollbar flex flex-col items-center justify-center",
+                    fileType !== 'pdf' && "p-4"
+                )}>
                     {isLoading ? (
                         <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
                             <Loader2 className="h-10 w-10 text-primary animate-spin" />

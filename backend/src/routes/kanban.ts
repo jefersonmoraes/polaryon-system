@@ -866,11 +866,10 @@ router.get('/sync', async (req: Request, res: Response) => {
         const formattedCards = cards.map((c: any) => ({
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId),
-            // Strip out base64 attachment URLs to save bandwidth
-            attachments: (c.attachments || []).map((a: any) => ({ ...a, url: "" })),
+            attachments: c.attachments || [],
             items: (c.items || []).map((i: any) => ({
                 ...i,
-                attachments: (i.attachments || []).map((a: any) => ({ ...a, url: "" }))
+                attachments: i.attachments || []
             })),
             isSkeleton: false 
         }));
@@ -879,7 +878,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             ...b,
             items: (b.items || []).map((i: any) => ({
                 ...i,
-                attachments: (i.attachments || []).map((a: any) => ({ ...a, url: "" }))
+                attachments: i.attachments || []
             })),
             isSkeleton: false
         }));
