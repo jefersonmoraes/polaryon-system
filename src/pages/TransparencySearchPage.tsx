@@ -1124,18 +1124,24 @@ export default function TransparencySearchPage() {
                                                                     </div>
                                                                     <div className="flex gap-2 mt-2">
                                                                         <button 
-                                                                            onClick={() => window.open(file.url, '_blank')}
+                                                                            onClick={() => setPreviewData({
+                                                                                isOpen: true,
+                                                                                url: file.url,
+                                                                                name: file.nome || 'Documento Vencedor',
+                                                                                type: 'pdf'
+                                                                            })}
                                                                             className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
                                                                         >
-                                                                            <ExternalLink className="h-3 w-3" /> VISUALIZAR
+                                                                            <FileText className="h-3 w-3" /> VISUALIZAR
                                                                         </button>
                                                                         <a 
                                                                             href={file.url}
+                                                                            download
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="px-3 h-8 border border-emerald-600/30 text-emerald-600 text-[10px] font-bold rounded flex items-center justify-center hover:bg-emerald-500/10 transition-colors"
                                                                         >
-                                                                            LINK DIRETO
+                                                                            BAIXAR
                                                                         </a>
                                                                     </div>
                                                                 </div>
@@ -1166,19 +1172,25 @@ export default function TransparencySearchPage() {
                                                                 </div>
                                                                 <div className="flex gap-2 mt-2">
                                                                     <button 
-                                                                        onClick={() => window.open(file.url, '_blank')}
+                                                                        onClick={() => setPreviewData({
+                                                                            isOpen: true,
+                                                                            url: file.url,
+                                                                            name: file.nome || 'Documento PNCP',
+                                                                            type: 'pdf'
+                                                                        })}
                                                                         className="flex-1 h-8 bg-primary text-primary-foreground text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
                                                                     >
-                                                                        <ExternalLink className="h-3 w-3" /> VISUALIZAR
+                                                                        <FileText className="h-3 w-3" /> VISUALIZAR
                                                                     </button>
                                                                     <a 
-                                                                        href={file.originalUrl}
+                                                                        href={file.url}
+                                                                        download
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="px-3 h-8 border border-border text-muted-foreground text-[10px] font-bold rounded flex items-center justify-center hover:bg-muted transition-colors"
-                                                                        title="Abrir no PNCP / Download"
+                                                                        title="Download Arquivo"
                                                                     >
-                                                                        <ExternalLink className="h-3.5 w-3.5" />
+                                                                        <Download className="h-4 w-4" />
                                                                     </a>
                                                                 </div>
                                                             </div>

@@ -38,10 +38,17 @@ export const FilePreviewModal = ({
     const [isLoading, setIsLoading] = useState(true);
     const [xmlData, setXmlData] = useState<any>(null);
     const [textContent, setTextContent] = useState<string | null>(null);
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [zoom, setZoom] = useState(1);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen) {
+            if (blobUrl) {
+                URL.revokeObjectURL(blobUrl);
+                setBlobUrl(null);
+            }
+            return;
+        }
         
         setIsLoading(true);
         setXmlData(null);
@@ -51,7 +58,8 @@ export const FilePreviewModal = ({
         // Detect file type if not provided
         let type = initialFileType || '';
         if (!type) {
-            const ext = fileName.split('.').pop()?.toLowerCase();
+            const fileNameLower = fileName.toLowerCase();
+            const ext = fileNameLower.split('.').pop();
             if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext || '')) type = 'image';
             else if (ext === 'pdf') type = 'pdf';
             else if (ext === 'xml') type = 'xml';
@@ -59,13 +67,39 @@ export const FilePreviewModal = ({
         }
         setFileType(type);
 
-        if (type === 'xml') {
-            fetchXml();
-        } else if (type === 'text') {
-            fetchText();
-        } else {
-            setIsLoading(false);
-        }
+        const setupPreview = async () => {
+            if (fileUrl.startsWith('data:')) {
+                try {
+                    const response = await fetch(fileUrl);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    setBlobUrl(url);
+                } catch (e) {
+                    console.error("Failed to create blob from data URI", e);
+                }
+            } else {
+                setBlobUrl(fileUrl);
+            }
+
+            if (type === 'xml') {
+                await fetchXml();
+            } else if (type === 'text') {
+                await fetchText();
+            } else {
+                setIsLoading(false);
+            }
+        };
+
+        setupPreview();
+
+        return () => {
+            if (blobUrl && !fileUrl.startsWith('data:')) {
+                // Do not revoke if it's the original external URL
+            } else if (blobUrl) {
+                // Revoke if it was created locally
+                // URL.revokeObjectURL(blobUrl); // We'll do this in the next effect or on close
+            }
+        };
     }, [isOpen, fileUrl, fileName, initialFileType]);
 
     const fetchXml = async () => {
@@ -165,14 +199,8 @@ export const FilePreviewModal = ({
                     <div className="flex items-center gap-2 mr-8">
                         <button 
                             onClick={async () => {
-                                if (fileUrl.startsWith('data:')) {
-                                    try {
-                                        const blob = await (await fetch(fileUrl)).blob();
-                                        const url = URL.createObjectURL(blob);
-                                        window.open(url, '_blank');
-                                    } catch (e) {
-                                        window.open(fileUrl, '_blank');
-                                    }
+                                if (blobUrl) {
+                                    window.open(blobUrl, '_blank');
                                 } else {
                                     window.open(fileUrl, '_blank');
                                 }
@@ -205,7 +233,7 @@ export const FilePreviewModal = ({
                                 <div className="flex flex-col items-center gap-4 w-full h-full justify-center">
                                     <div className="relative group overflow-hidden rounded-lg shadow-xl bg-card border border-border">
                                         <img 
-                                            src={fileUrl} 
+                                            src={blobUrl || fileUrl} 
                                             alt={fileName} 
                                             className="max-w-full max-h-[70vh] object-contain transition-transform duration-200 ease-out cursor-zoom-in"
                                             style={{ transform: `scale(${zoom})` }}
@@ -232,7 +260,7 @@ export const FilePreviewModal = ({
 
                             {fileType === 'pdf' && (
                                 <iframe 
-                                    src={fileUrl.startsWith('http') ? `${fileUrl}#toolbar=1` : fileUrl} 
+                                    src={blobUrl ? (blobUrl.startsWith('blob:') ? blobUrl : `${blobUrl}#toolbar=1`) : fileUrl} 
                                     className="w-full h-full border-none rounded-lg shadow-lg bg-card"
                                     title={fileName}
                                 />

@@ -815,8 +815,12 @@ router.get('/sync', async (req: Request, res: Response) => {
                     companyId: true,
                     fileName: true,
                     fileSize: true,
+                    fileData: true,
+                    attachments: true,
+                    description: true,
+                    link: true,
+                    trashed: true,
                     updatedAt: true
-                    // fileData: false
                 }
             }),
             prisma.essentialDocument.findMany({

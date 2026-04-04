@@ -51,8 +51,8 @@ const DocumentationPage = () => {
     const filteredDocs = documents.filter(doc => {
         if (doc.trashed) return false;
 
-        const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            doc.type.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = (doc.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (doc.type || '').toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchesType = selectedType === 'Todos' || doc.type === selectedType;
         const matchesStatus = selectedStatus === 'Todos' || doc.status === selectedStatus;
