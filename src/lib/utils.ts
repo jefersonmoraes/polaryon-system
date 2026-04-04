@@ -62,3 +62,61 @@ export function hexToRgba(hex: string | undefined, alpha: number): string {
 
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
+
+/**
+ * Comprime uma imagem via Canvas no Client-side para reduzir o tamanho do Base64.
+ * Redimensiona proporcionalmente se exceder o maxWidth/maxHeight.
+ */
+export async function compressImage(
+    file: File | string,
+    maxWidth: number = 1920,
+    maxHeight: number = 1080,
+    quality: number = 0.7
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const process = (src: string) => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height *= maxWidth / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width *= maxHeight / height;
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Não foi possível obter o contexto do Canvas"));
+
+                // Desenha a imagem no canvas redimensionada
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Converte para WebP (muito menor que PNG/JPG)
+                // O navegador faz fallback automático se não suportar webp (raro hoje em dia)
+                const result = canvas.toDataURL('image/webp', quality);
+                resolve(result);
+            };
+            img.onerror = (e) => reject(new Error("Falha ao carregar a imagem para compressão"));
+        };
+
+        if (typeof file === 'string') {
+            process(file);
+        } else {
+            const reader = new FileReader();
+            reader.onload = (e) => process(e.target?.result as string);
+            reader.onerror = (e) => reject(new Error("Falha ao ler o arquivo de imagem"));
+            reader.readAsDataURL(file);
+        }
+    });
+}

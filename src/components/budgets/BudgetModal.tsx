@@ -9,7 +9,7 @@ import {
     Phone, Mail, MessageCircle, ExternalLink, ClipboardList, Package, Info, ChevronLeft, Paperclip, Download, Eye, Image as ImageIcon
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
-import { cn, getFaviconUrl } from '@/lib/utils';
+import { cn, getFaviconUrl, compressImage } from '@/lib/utils';
 
 interface BudgetModalProps {
     budget?: Budget;
@@ -138,10 +138,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const difalRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const processFiles = (files: File[]) => {
+    const processFiles = async (files: File[]) => {
         if (!files.length) return;
 
-        let loaded = 0;
         const newAttachments: Attachment[] = [];
 
         // Safe UUID generation fallback
@@ -150,24 +149,42 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         };
 
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onload = () => {
+        for (const file of files) {
+            try {
+                let finalUrl = "";
+                let finalType = file.type;
+
+                // Turbo-Upload: Comprime imagens automaticamente para WebP 0.7
+                if (file.type.startsWith('image/')) {
+                    finalUrl = await compressImage(file);
+                    finalType = 'image/webp';
+                } else {
+                    // Mantém PDFs e outros arquivos originais via Base64 padrão
+                    finalUrl = await new Promise((res, rej) => {
+                        const r = new FileReader();
+                        r.onload = () => res(r.result as string);
+                        r.onerror = (e) => rej(e);
+                        r.readAsDataURL(file);
+                    });
+                }
+
                 newAttachments.push({
                     id: generateId(),
                     name: file.name,
-                    url: reader.result as string,
-                    type: file.type,
+                    url: finalUrl,
+                    type: finalType,
                     addedAt: new Date().toISOString(),
                 });
-                loaded++;
-                if (loaded === files.length) {
-                    const currentAttachments = item.attachments || [];
-                    updateItem(item.id, 'attachments', [...currentAttachments, ...newAttachments]);
-                }
-            };
-            reader.readAsDataURL(file);
-        });
+            } catch (err) {
+                console.error("Erro ao processar arquivo:", file.name, err);
+                import('sonner').then(({ toast }) => toast.error(`Erro ao processar ${file.name}`));
+            }
+        }
+
+        if (newAttachments.length > 0) {
+            const currentAttachments = item.attachments || [];
+            updateItem(item.id, 'attachments', [...currentAttachments, ...newAttachments]);
+        }
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
