@@ -127,6 +127,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const [isTaxTooltipOpen, setIsTaxTooltipOpen] = useState(false); // Novo state para o balão de impostos
     const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
     const [isNotesExpanded, setIsNotesExpanded] = useState(false); // Estado para expandir/recolher observações
+    const [isDragging, setIsDragging] = useState(false);
 
     const supRef = useRef<HTMLDivElement>(null);
     const transRef = useRef<HTMLDivElement>(null);
@@ -136,8 +137,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const difalRef = useRef<HTMLDivElement>(null); // Nova ref para fechar no click outside
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+    const processFiles = (files: File[]) => {
         if (!files.length) return;
 
         let loaded = 0;
@@ -145,8 +145,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         // Safe UUID generation fallback
         const generateId = () => {
-             if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-             return Math.random().toString(36).substring(2) + Date.now().toString(36);
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+            return Math.random().toString(36).substring(2) + Date.now().toString(36);
         };
 
         files.forEach(file => {
@@ -167,7 +167,35 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             };
             reader.readAsDataURL(file);
         });
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        processFiles(files);
         e.target.value = '';
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (canEdit) setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        if (!canEdit) return;
+
+        const files = Array.from(e.dataTransfer.files);
+        processFiles(files);
     };
 
     const handleRemoveAttachment = (attId: string) => {
@@ -1453,7 +1481,24 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                     </div>
 
                     {/* Attachments Section */}
-                    <div className="space-y-3 mt-4 pt-4 border-t border-border/40">
+                    <div 
+                        className={cn(
+                            "space-y-3 mt-4 pt-4 border-t border-border/40 transition-all duration-200 relative",
+                            isDragging && "bg-primary/5 rounded-lg p-2 border-2 border-dashed border-primary/50"
+                        )}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
+                        {isDragging && (
+                            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg border-2 border-dashed border-primary animate-pulse">
+                                <div className="bg-primary text-white p-3 rounded-full shadow-lg mb-2">
+                                    <Plus className="h-6 w-6" />
+                                </div>
+                                <p className="text-sm font-bold text-primary">Solte para anexar arquivos</p>
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                             <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1.5 text-muted-foreground">
                                 <Paperclip className="h-3 w-3" /> Anexos e Comprovantes
@@ -1477,9 +1522,13 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                         </div>
 
                         {(!item.attachments || item.attachments.length === 0) ? (
-                            <div className="text-center py-6 border-2 border-dashed border-border/50 rounded-lg bg-secondary/10">
-                                <Paperclip className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                                <p className="text-[11px] text-muted-foreground">Nenhum documento anexado a esta cotação.</p>
+                            <div className={cn(
+                                "text-center py-8 border-2 border-dashed rounded-lg transition-colors",
+                                isDragging ? "border-transparent bg-transparent" : "border-border/50 bg-secondary/10"
+                            )}>
+                                <Paperclip className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
+                                <p className="text-[11px] text-muted-foreground">Arraste arquivos aqui ou use o botão para anexar.</p>
+                                <p className="text-[9px] text-muted-foreground/50 mt-1">Imagens e PDFs suportados</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
