@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { cn, getFaviconUrl, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface BudgetModalProps {
     budget?: Budget;
@@ -48,73 +51,12 @@ interface QuotationItemCardProps {
     canEdit: boolean;
     activeBudgetId: string;
     loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<void>;
+    onViewAttachment: (att: Attachment) => void;
 }
 
-const handleViewAttachment = async (att: Attachment, parentId: string, type: 'card' | 'budget', loadContent: (aid: string, pid: string, t: 'card' | 'budget') => Promise<void>) => {
-    try {
-        let currentUrl = att.url;
+// handleViewAttachment moved inside component to access state
 
-        // Se a URL estiver vazia, significa que precisamos carregar o conteúdo (Lazy Load)
-        if (!currentUrl) {
-            import('sonner').then(({ toast }) => toast.loading('Baixando arquivo...', { id: 'lazy-load' }));
-            await loadContent(att.id, parentId, type);
-            // Após carregar, buscamos novamente no store (ou esperamos que o store atualize)
-            // No entanto, para simplicidade e UX imediata, o loadContent atualiza o Zustand.
-            // Precisamos pegar a nova URL do store.
-            const updatedState = useKanbanStore.getState();
-            if (type === 'card') {
-                const card = updatedState.cards.find(c => c.id === parentId);
-                const updatedAtt = card?.attachments?.find(a => a.id === att.id);
-                currentUrl = updatedAtt?.url || '';
-            } else {
-                const budget = updatedState.budgets.find(b => b.id === parentId);
-                let foundUrl = '';
-                budget?.items?.forEach(item => {
-                    const found = item.attachments?.find(a => a.id === att.id);
-                    if (found) foundUrl = found.url;
-                });
-                currentUrl = foundUrl;
-            }
-            import('sonner').then(({ toast }) => toast.dismiss('lazy-load'));
-        }
-
-        if (!currentUrl) {
-            import('sonner').then(({ toast }) => toast.error('Não foi possível carregar o conteúdo do arquivo.'));
-            return;
-        }
-
-        // Se já for uma URL Blob ou externa, abre direto
-        if (currentUrl.startsWith('blob:') || currentUrl.startsWith('http')) {
-            window.open(currentUrl, '_blank');
-            return;
-        }
-
-        // Converte Base64 para Blob para visualização estável
-        const [header, base64Data] = currentUrl.split(',');
-        const mime = header.split(':')[1].split(';')[0];
-        const binary = atob(base64Data);
-        const array = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-            array[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([array], { type: mime });
-        const url = URL.createObjectURL(blob);
-        
-        // Abre em nova aba
-        const newWindow = window.open(url, '_blank');
-        
-        if (newWindow) {
-            newWindow.onload = () => {
-                // Opcional: revogar após carregar
-            };
-        }
-    } catch (error) {
-        console.error("Error viewing attachment:", error);
-        if (att.url) window.open(att.url, '_blank');
-    }
-};
-
-const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit, activeBudgetId, loadAttachmentContent }) => {
+const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType, totalQuotes, highestCost, lowestCost, companies, mainCompanies, updateItem, removeItem, cloneItem, formatCurrency, isExpanded, onToggleExpand, canEdit, activeBudgetId, loadAttachmentContent, onViewAttachment }) => {
     const { routes, fetchBudgetDetails } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
@@ -1594,7 +1536,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         <Download className="h-3 w-3" />
                                                     </a>
                                                     <button 
-                                                        onClick={() => handleViewAttachment(att, activeBudgetId!, 'budget', loadAttachmentContent)}
+                                                        onClick={() => onViewAttachment(att)}
                                                         className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
                                                         title="Visualizar"
                                                     >
@@ -1687,6 +1629,54 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
 
     const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
     const [mobileTab, setMobileTab] = useState<'details' | 'supplier' | 'transporter'>('details');
+
+    // Preview State for Universal Visualization
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
+
+    const handleViewAttachment = async (att: Attachment) => {
+        try {
+            let currentUrl = att.url;
+            const parentId = activeBudgetId;
+            const type = 'budget';
+
+            // Se a URL estiver vazia, significa que precisamos carregar o conteúdo (Lazy Load)
+            if (!currentUrl && parentId) {
+                const toastId = toast.loading('Baixando arquivo...');
+                await loadAttachmentContent(att.id, parentId, type);
+                
+                // Após carregar, buscamos novamente no store
+                const updatedState = useKanbanStore.getState();
+                const budget = updatedState.budgets.find(b => b.id === parentId);
+                let foundUrl = '';
+                budget?.items?.forEach(item => {
+                    const found = item.attachments?.find(a => a.id === att.id);
+                    if (found) foundUrl = found.url;
+                });
+                currentUrl = foundUrl;
+                toast.dismiss(toastId);
+            }
+
+            if (!currentUrl) {
+                toast.error('Não foi possível carregar o conteúdo do arquivo.');
+                return;
+            }
+
+            // Integrado com o FilePreviewModal no lugar do window.open
+            setPreviewData({
+                isOpen: true,
+                url: currentUrl,
+                name: att.name,
+                type: att.type
+            });
+        } catch (error) {
+            console.error("Error viewing attachment:", error);
+            toast.error("Erro ao abrir visualização.");
+        }
+    };
 
 
     const allowedCards = cards.filter(c => {
@@ -3148,6 +3138,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                     canEdit={!!canEdit}
                                                     activeBudgetId={activeBudgetId!}
                                                     loadAttachmentContent={loadAttachmentContent}
+                                                    onViewAttachment={handleViewAttachment}
                                                 />
                                             ))}
 
@@ -3396,6 +3387,14 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                     {/* Actions will be replaced or omitted depending on the exact UX need - For now just spacing */}
                 </div>
             </div>
+
+            <FilePreviewModal 
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 };

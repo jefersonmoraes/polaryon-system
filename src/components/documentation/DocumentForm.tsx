@@ -1,6 +1,10 @@
 import { useState, useRef } from 'react';
 import { useDocumentStore, CompanyDocument, DocumentAttachment } from '@/store/document-store';
-import { X, Upload, FileText, Link as LinkIcon, AlertCircle, Building2, AlignLeft, Trash2 } from 'lucide-react';
+import { X, Upload, FileText, Link as LinkIcon, AlertCircle, Building2, AlignLeft, Trash2, Search, Paperclip } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface DocumentFormProps {
     onClose: () => void;
@@ -25,6 +29,7 @@ const documentTypes = [
 const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
     const { addDocument, updateDocument } = useDocumentStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const dragCounter = useRef(0);
 
     const [formData, setFormData] = useState({
         title: editingDoc?.title || '',
@@ -52,25 +57,97 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
         return [];
     });
 
+    const [isDragging, setIsDragging] = useState(false);
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
+
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+        
+        const toastId = toast.loading(`Processando ${files.length} arquivo(s)...`);
+        
+        try {
+            const newAttachments: DocumentAttachment[] = [];
+            
+            for (const file of files) {
+                let fileData: string;
+
+                if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                    try {
+                        fileData = await compressImage(file);
+                    } catch (err) {
+                        fileData = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                } else {
+                    fileData = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
+
+                newAttachments.push({
+                    id: crypto.randomUUID(),
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileData
+                });
+            }
+
+            setAttachments(prev => [...prev, ...newAttachments]);
+            toast.success(`${files.length} arquivo(s) anexados.`, { id: toastId });
+        } catch (error) {
+            toast.error("Erro ao processar arquivos.", { id: toastId });
+        }
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        if (files.length > 0) {
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const newAttachment: DocumentAttachment = {
-                        id: crypto.randomUUID(),
-                        fileName: file.name,
-                        fileSize: file.size,
-                        fileData: reader.result as string
-                    };
-                    setAttachments(prev => [...prev, newAttachment]);
-                };
-                reader.readAsDataURL(file);
-            });
-        }
+        processFiles(files);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFiles(files);
         }
     };
 
@@ -108,7 +185,30 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
     return (
         <>
             <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-card w-full max-w-2xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh]">
+                <div 
+                    className="bg-card w-full max-w-2xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh] relative overflow-hidden"
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                >
+                    {/* Drag & Drop Overlay */}
+                    <AnimatePresence>
+                        {isDragging && (
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 z-[100] bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+                            >
+                                <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                                    <Paperclip className="h-16 w-16 text-primary" />
+                                </div>
+                                <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte para anexar documentos</h3>
+                                <p className="text-sm font-bold text-muted-foreground mt-2">Imagens serão otimizadas automaticamente</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     <div className="flex items-center justify-between p-4 px-6 border-b border-border/10 bg-muted/10 shrink-0">
                         <h2 className="font-bold text-lg">
                             {editingDoc ? 'Editar Documento' : 'Novo Documento'}
@@ -249,27 +349,47 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
-                                        {attachments.map((att) => (
-                                            <div key={att.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card shadow-sm hover:border-primary/30 transition-colors group">
-                                                <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                                                    <FileText className="h-4 w-4 text-primary" />
+                                        {attachments.map((att) => {
+                                            const isImage = att.fileData.startsWith('data:image');
+                                            const isPdf = att.fileData.startsWith('data:application/pdf');
+                                            const fileType = isImage ? 'image' : isPdf ? 'pdf' : undefined;
+
+                                            return (
+                                                <div key={att.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card shadow-sm hover:border-primary/30 transition-colors group">
+                                                    <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                                                        {isImage ? (
+                                                            <img src={att.fileData} className="w-full h-full object-cover" alt="" />
+                                                        ) : (
+                                                            <FileText className="h-4 w-4 text-primary" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-medium truncate" title={att.fileName}>{att.fileName}</p>
+                                                        <p className="text-[10px] text-muted-foreground">
+                                                            {(att.fileSize / 1024 / 1024).toFixed(2)} MB
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreviewData({ isOpen: true, url: att.fileData, name: att.fileName, type: fileType })}
+                                                            className="p-1.5 text-primary hover:bg-primary/10 rounded transition-colors"
+                                                            title="Visualizar"
+                                                        >
+                                                            <Search className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => removeAttachment(att.id, e)}
+                                                            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                                                            title="Remover anexo"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-medium truncate" title={att.fileName}>{att.fileName}</p>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        {(att.fileSize / 1024 / 1024).toFixed(2)} MB
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => removeAttachment(att.id, e)}
-                                                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                                    title="Remover anexo"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
 
@@ -303,6 +423,13 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
                     </div>
                 </div>
             </div>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </>
     );
 };

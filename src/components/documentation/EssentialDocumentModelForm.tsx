@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useEssentialDocumentStore, EssentialDocumentModel, EssentialDocumentAttachment } from '@/store/essential-document-store';
-import { X, Upload, FileText, Trash2, Save, File } from 'lucide-react';
+import { X, Upload, FileText, Trash2, Save, File, Search, Paperclip } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface EssentialDocumentModelFormProps {
     onClose: () => void;
@@ -10,39 +14,103 @@ interface EssentialDocumentModelFormProps {
 const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocumentModelFormProps) => {
     const { addModel, updateModel } = useEssentialDocumentStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const dragCounter = useRef(0);
 
     const [title, setTitle] = useState(editingModel?.title || '');
     const [description, setDescription] = useState(editingModel?.description || '');
     const [attachments, setAttachments] = useState<EssentialDocumentAttachment[]>(editingModel?.attachments || []);
     const [error, setError] = useState('');
+    const [isDragging, setIsDragging] = useState(false);
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+        
+        const toastId = toast.loading(`Processando ${files.length} arquivo(s)...`);
+        
+        try {
+            const newAttachments: EssentialDocumentAttachment[] = [];
+            
+            for (const file of files) {
+                let fileData: string;
 
-        files.forEach(file => {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                alert(`O arquivo ${file.name} é muito grande. O limite é 5MB.`);
-                return;
-            }
+                if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                    try {
+                        fileData = await compressImage(file);
+                    } catch (err) {
+                        fileData = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                } else {
+                    fileData = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const base64Data = event.target?.result as string;
-                const newAttachment: EssentialDocumentAttachment = {
+                newAttachments.push({
                     id: crypto.randomUUID(),
                     fileName: file.name,
                     fileSize: file.size,
-                    fileData: base64Data
-                };
+                    fileData
+                });
+            }
 
-                setAttachments(prev => [...prev, newAttachment]);
-            };
-            reader.readAsDataURL(file);
-        });
+            setAttachments(prev => [...prev, ...newAttachments]);
+            toast.success(`${files.length} arquivo(s) anexados.`, { id: toastId });
+        } catch (error) {
+            toast.error("Erro ao processar arquivos.", { id: toastId });
+        }
+    };
 
-        // Reset file input
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        processFiles(files);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFiles(files);
         }
     };
 
@@ -84,7 +152,30 @@ const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocument
 
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card w-full max-w-2xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh]">
+            <div 
+                className="bg-card w-full max-w-2xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh] relative overflow-hidden"
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+            >
+                {/* Drag & Drop Overlay */}
+                <AnimatePresence>
+                    {isDragging && (
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[100] bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+                        >
+                            <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                                <Paperclip className="h-16 w-16 text-primary" />
+                            </div>
+                            <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte para anexar modelos</h3>
+                            <p className="text-sm font-bold text-muted-foreground mt-2">Imagens serão otimizadas automaticamente</p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <div className="flex items-center justify-between p-4 px-6 border-b border-border/10">
                     <h2 className="font-bold text-lg flex items-center gap-2">
                         <FileText className="h-5 w-5 text-primary" />
@@ -138,37 +229,55 @@ const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocument
                                 <div className="space-y-3">
                                     {attachments.length > 0 && (
                                         <div className="space-y-2">
-                                            {attachments.map(att => (
-                                                <div key={att.id} className="flex items-center justify-between p-2.5 bg-muted/30 border border-border/50 rounded-lg">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className="p-1.5 bg-primary/10 text-primary rounded shrink-0">
-                                                            <File className="h-4 w-4" />
+                                            {attachments.map(att => {
+                                                const isImage = att.fileData.startsWith('data:image');
+                                                const isPdf = att.fileData.startsWith('data:application/pdf');
+                                                const fileType = isImage ? 'image' : isPdf ? 'pdf' : undefined;
+
+                                                return (
+                                                    <div key={att.id} className="flex items-center justify-between p-2.5 bg-muted/30 border border-border/50 rounded-lg group">
+                                                        <div className="flex items-center gap-3 overflow-hidden">
+                                                            <div className="p-1.5 bg-primary/10 text-primary rounded shrink-0 overflow-hidden w-8 h-8 flex items-center justify-center">
+                                                                {isImage ? (
+                                                                    <img src={att.fileData} className="w-full h-full object-cover" alt="" />
+                                                                ) : (
+                                                                    <File className="h-4 w-4" />
+                                                                )}
+                                                            </div>
+                                                            <div className="truncate">
+                                                                <p className="text-sm font-medium truncate">{att.fileName}</p>
+                                                                <p className="text-[10px] text-muted-foreground">{formatFileSize(att.fileSize)}</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="truncate">
-                                                            <p className="text-sm font-medium truncate">{att.fileName}</p>
-                                                            <p className="text-[10px] text-muted-foreground">{formatFileSize(att.fileSize)}</p>
+                                                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewData({ isOpen: true, url: att.fileData, name: att.fileName, type: fileType })}
+                                                                className="p-1.5 text-primary hover:bg-primary/10 rounded-md transition-colors"
+                                                                title="Visualizar"
+                                                            >
+                                                                <Search className="h-4 w-4" />
+                                                            </button>
+                                                            <a
+                                                                href={att.fileData}
+                                                                download={att.fileName}
+                                                                className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-md transition-colors"
+                                                                title="Baixar arquivo"
+                                                            >
+                                                                <Upload className="h-4 w-4 rotate-180" />
+                                                            </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeAttachment(att.id)}
+                                                                className="p-1.5 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                                                                title="Remover arquivo"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        <a
-                                                            href={att.fileData}
-                                                            download={att.fileName}
-                                                            className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors"
-                                                            title="Baixar arquivo"
-                                                        >
-                                                            <Upload className="h-4 w-4 rotate-180" />
-                                                        </a>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeAttachment(att.id)}
-                                                            className="p-1.5 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                                                            title="Remover arquivo"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
 
@@ -216,6 +325,13 @@ const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocument
                     </button>
                 </div>
             </div>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 };

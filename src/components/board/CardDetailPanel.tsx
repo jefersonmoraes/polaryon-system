@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
   Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check,
-  ShoppingCart, Package, RefreshCw
+  ShoppingCart, Package, RefreshCw, Search, Download
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
@@ -14,7 +14,9 @@ import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
-import { getFaviconUrl, cn } from '@/lib/utils';
+import { getFaviconUrl, cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { toast } from 'sonner';
 
 const statusStyles: Record<BudgetStatus, string> = {
   Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
@@ -130,6 +132,19 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [labelHex, setLabelHex] = useState('#3b82f6');
   const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
+  
+  // Drag and Drop & Upload State
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Preview State
+  const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+    isOpen: false,
+    url: '',
+    name: '',
+  });
+
   const [showDescriptionPane, setShowDescriptionPane] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -507,31 +522,97 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       setLabelColor(val);
     }
   };
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+  const processFiles = async (files: File[]) => {
+    if (!files.length || !cardId) return;
+    
+    setIsUploading(true);
+    const toastId = toast.loading(`Processando ${files.length} arquivo(s)...`);
+    
+    try {
+      const newAttachments: Attachment[] = [];
+      
+      for (const file of files) {
+        let fileUrl: string;
 
-    let loaded = 0;
-    const newAttachments: Attachment[] = [];
+        // Turbo-Upload: Compress images but keep PDFs/others intact
+        if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+          try {
+            fileUrl = await compressImage(file);
+          } catch (err) {
+            console.error("Compression failed, using original", err);
+            fileUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(file);
+            });
+          }
+        } else {
+          // Non-image or SVG: Original file
+          fileUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+        }
 
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = () => {
         newAttachments.push({
           id: crypto.randomUUID(),
-          name: file.name,
-          url: reader.result as string,
-          type: file.type,
+          name: file.name.split('.')[0] + (file.type.startsWith('image/') ? '.webp' : `.${file.name.split('.').pop()}`),
+          url: fileUrl,
+          type: file.type.startsWith('image/') ? 'image/webp' : file.type,
           addedAt: new Date().toISOString(),
         });
-        loaded++;
-        if (loaded === files.length) {
-          updateCard(cardId, { attachments: [...card.attachments, ...newAttachments] });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      }
+
+      updateCard(cardId, { attachments: [...card.attachments, ...newAttachments] });
+      toast.success(`${files.length} arquivo(s) anexado(s) com sucesso!`, { id: toastId });
+    } catch (error) {
+      console.error("Upload failed", error);
+      toast.error("Erro ao processar arquivos.", { id: toastId });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    processFiles(files);
     e.target.value = '';
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      processFiles(files);
+    }
   };
   const handleRemoveAttachment = (attId: string) => {
     updateCard(cardId, { attachments: card.attachments.filter(a => a.id !== attId) });
@@ -1015,11 +1096,20 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       <p className="text-[11px] font-medium truncate">{att.name}</p>
                       <p className="text-[9px] text-muted-foreground">{new Date(att.addedAt).toLocaleDateString('pt-BR')}</p>
                     </div>
-                    {canDownload && (
-                      <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
-                        <Image className="h-3 w-3" />
-                      </a>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => setPreviewData({ isOpen: true, url: att.url, name: att.name, type: att.type.startsWith('image/') ? 'image' : att.type === 'application/pdf' ? 'pdf' : undefined })}
+                        className="p-1 rounded hover:bg-primary/20 text-primary transition-colors"
+                        title="Visualizar"
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </button>
+                      {canDownload && (
+                        <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                     {canEdit && (
                       <button onClick={() => handleRemoveAttachment(att.id)} className="p-1 rounded hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
                         <X className="h-3 w-3 text-destructive" />
@@ -1307,8 +1397,29 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
         <motion.div
            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-           className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[98vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[98vh] transition-all duration-300`}
-         >
+            className={`relative w-full ${showChat || showDescriptionPane ? 'max-w-[98vw]' : 'max-w-[85vw]'} bg-background border border-border shadow-2xl rounded-xl overflow-hidden flex max-h-[98vh] transition-all duration-300`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+          {/* Drag & Drop Overlay */}
+          <AnimatePresence>
+            {isDragging && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-[100] bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+              >
+                <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                  <Paperclip className="h-16 w-16 text-primary" />
+                </div>
+                <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte para anexar ao Card</h3>
+                <p className="text-sm font-bold text-muted-foreground mt-2">Imagens serão comprimidas automaticamente (Turbo-Upload)</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {/* Description Side Pane (Left 50%) */}
           {showDescriptionPane && (
             <div className="w-[50%] border-r border-border bg-card flex flex-col shrink-0">
@@ -1734,6 +1845,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
           }}
         />
       )}
+
+      <FilePreviewModal 
+        isOpen={previewData.isOpen}
+        onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+        fileUrl={previewData.url}
+        fileName={previewData.name}
+        fileType={previewData.type}
+      />
     </AnimatePresence>
   );
 };

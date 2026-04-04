@@ -7,8 +7,9 @@ import api from '@/lib/api';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap, Paperclip } from 'lucide-react';
 import { socketService } from '@/lib/socket';
+import { FilePreviewModal } from '@/components/ui/FilePreviewModal';
 
 const getStatusStyle = (situacao: string) => {
     const lower = (situacao || '').toLowerCase();
@@ -367,9 +368,15 @@ export default function OportunidadesSearch() {
     const [itemDetail, setItemDetail] = useState<any>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
     
-    // Estados para o Preview de Empenho no Sistema
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    // Estado para Visualização Universal de Arquivos PNCP
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
     const getOfficialLink = useCallback((item: PncpItem) => {
         if (!item?.item_url) return '#';
@@ -1526,9 +1533,26 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center justify-center h-10 w-10 rounded-xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all shadow-md shadow-primary/20" title="Download Arquivo PNCP">
-                                                                        <Download className="h-4.5 w-4.5" />
-                                                                    </a>
+                                                                    <div className="flex gap-2 shrink-0">
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                const isPdf = file.url.toLowerCase().endsWith('.pdf');
+                                                                                const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
+                                                                                setPreviewData({
+                                                                                    isOpen: true,
+                                                                                    url: file.url,
+                                                                                    name: file.titulo || file.nome || 'Arquivo PNCP',
+                                                                                    type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
+                                                                                });
+                                                                            }}
+                                                                            className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 active:scale-95 transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
+                                                                        >
+                                                                            <Search className="h-4 w-4" /> VISUALIZAR
+                                                                        </button>
+                                                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary hover:scale-110 active:scale-95 transition-all" title="Download Arquivo PNCP">
+                                                                            <Download className="h-4.5 w-4.5" />
+                                                                        </a>
+                                                                    </div>
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -1717,6 +1741,13 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                     </Dialog>
                 )}
             </AnimatePresence>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 }

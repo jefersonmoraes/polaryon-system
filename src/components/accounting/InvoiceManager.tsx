@@ -5,6 +5,11 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { FileText, Plus, Receipt, X, Download, ExternalLink, Copy, Check, Info, Upload, Edit, Trash2, Search, RotateCcw, Filter } from 'lucide-react';
 import { InvoiceType, InvoiceStatus } from '@/types/accounting';
 import { toast } from 'sonner';
+import { useRef } from 'react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Paperclip } from 'lucide-react';
 
 export const InvoiceManager = () => {
     const { invoices, addInvoice, updateInvoice, deleteInvoice, addEntry } = useAccountingStore();
@@ -37,6 +42,17 @@ export const InvoiceManager = () => {
 
     // Manage local copy states for icon feedback
     const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    // Drag and Drop State
+    const [isDragging, setIsDragging] = useState(false);
+    const dragCounter = useRef(0);
+
+    // Preview State
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
     const isMEI = activeCompany?.porte === 'MEI';
     const isMEIService = isMEI && invoiceType === 'service';
@@ -91,60 +107,92 @@ export const InvoiceManager = () => {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+
+        const file = files[0]; // Process only one for now (XML import)
+        
+        if (file.name.toLowerCase().endsWith('.xml')) {
+            const toastId = toast.loading("Processando XML...");
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const xmlText = event.target?.result as string;
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+                    const parseError = xmlDoc.getElementsByTagName("parsererror");
+                    if (parseError.length > 0) {
+                        toast.error("Erro ao ler o arquivo XML. Formato inválido.", { id: toastId });
+                        return;
+                    }
+                    const prod = xmlDoc.getElementsByTagName('prod')[0];
+                    if (!prod) {
+                        toast.error("Nenhum produto (tag <prod>) encontrado no XML.", { id: toastId });
+                        return;
+                    }
+                    const xProd = prod.getElementsByTagName('xProd')[0]?.textContent || '';
+                    const ncm = prod.getElementsByTagName('NCM')[0]?.textContent || '';
+                    const uCom = prod.getElementsByTagName('uCom')[0]?.textContent || '';
+                    const qCom = prod.getElementsByTagName('qCom')[0]?.textContent || '1';
+                    setDraftDescription(xProd);
+                    setDraftNcm(ncm);
+                    setDraftUnit(uCom.toUpperCase());
+                    const parsedQtd = parseFloat(qCom);
+                    setDraftQuantity(isNaN(parsedQtd) ? '1' : parsedQtd.toString().replace('.', ','));
+                    setDraftUnitPrice('');
+                    setDraftCfop(isInterstate ? '6102' : '5102');
+                    setIsFormOpen(true);
+                    toast.success("Dados do produto importados via Drop!", { id: toastId });
+                } catch (err) {
+                    toast.error("Falha ao processar o XML.", { id: toastId });
+                }
+            };
+            reader.readAsText(file);
+        } else {
+            toast.info("Apenas arquivos XML são aceitos para importação rápida.");
+        }
+    };
+
     const handleXmlImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const xmlText = event.target?.result as string;
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-
-                // Check for parsing errors
-                const parseError = xmlDoc.getElementsByTagName("parsererror");
-                if (parseError.length > 0) {
-                    toast.error("Erro ao ler o arquivo XML. Formato inválido.");
-                    return;
-                }
-
-                // Extract first product (det nItem="1")
-                const prod = xmlDoc.getElementsByTagName('prod')[0];
-                if (!prod) {
-                    toast.error("Nenhum produto (tag <prod>) encontrado no XML.");
-                    return;
-                }
-
-                const xProd = prod.getElementsByTagName('xProd')[0]?.textContent || '';
-                const ncm = prod.getElementsByTagName('NCM')[0]?.textContent || '';
-                const uCom = prod.getElementsByTagName('uCom')[0]?.textContent || '';
-                const qCom = prod.getElementsByTagName('qCom')[0]?.textContent || '1';
-                const vUnCom = prod.getElementsByTagName('vUnCom')[0]?.textContent || '';
-
-                setDraftDescription(xProd);
-                setDraftNcm(ncm);
-                setDraftUnit(uCom.toUpperCase());
-
-                const parsedQtd = parseFloat(qCom);
-                setDraftQuantity(isNaN(parsedQtd) ? '1' : parsedQtd.toString().replace('.', ','));
-
-                // O usuário pediu para NÃO preencher o valor unitário automaticamente.
-                setDraftUnitPrice('');
-
-                // Set default CFOP to 5102 (Revenda) or 6102 depending on the toggle
-                setDraftCfop(isInterstate ? '6102' : '5102');
-
-                toast.success("Dados do produto importados com sucesso! Preencha o valor de venda.");
-            } catch (err) {
-                console.error(err);
-                toast.error("Falha ao processar o XML.");
-            }
-        };
-        reader.readAsText(file);
-
-        // Reset input value so the same file can be selected again
+        processFiles([file]);
         e.target.value = '';
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFiles(files);
+        }
     };
 
     const handleIssueInvoice = (e: React.FormEvent<HTMLFormElement>) => {
@@ -299,9 +347,10 @@ export const InvoiceManager = () => {
         toast.success(`Nota Fiscal ${invoice.number} restaurada com sucesso.`);
     };
 
-    const handleDownloadInvoice = (invoice: any) => {
-        // Since we are tracking manually now, we just output a text summary
-        const content = `
+    const handlePreviewInvoice = (invoice: any) => {
+        // In local storage context, we might not have a real XML file, 
+        // but we can generate one mock XML or just show the summary as a TXT
+        const summary = `
 =========================================
             NOTA FISCAL (${invoice.type === 'service' ? 'NFS-e' : 'NF-e'})
 =========================================
@@ -323,21 +372,55 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
 -----------------------------------------
         `.trim();
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        
+        setPreviewData({
+            isOpen: true,
+            url: url,
+            name: `${invoice.number}.txt`,
+            type: 'text'
+        });
+    };
+
+    const handleDownloadInvoice = (invoice: any) => {
+        const summary = `NF: ${invoice.number}\nCliente: ${invoice.clientName}\nValor: R$ ${invoice.amount.toFixed(2)}`;
+        const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${invoice.number}.txt`; // Use .txt for the simulation
+        link.download = `${invoice.number}.txt`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-
         toast.success(`Download da nota ${invoice.number} concluído.`);
     };
 
     return (
-        <div className="kanban-card rounded-xl border border-border shadow-sm flex flex-col h-full">
+        <div 
+            className="kanban-card rounded-xl border border-border shadow-sm flex flex-col h-full relative overflow-hidden"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            <AnimatePresence>
+                {isDragging && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+                    >
+                        <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                            <Upload className="h-16 w-16 text-primary" />
+                        </div>
+                        <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte o XML para importar</h3>
+                        <p className="text-sm font-bold text-muted-foreground mt-2">Dados do produto e cliente serão extraídos</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="font-bold flex items-center gap-2">
                     <Receipt className="h-4 w-4 text-primary" />
@@ -438,9 +521,16 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                         <span className="text-[10px] text-muted-foreground/60 mr-1">{new Date(invoice.issueDate).toLocaleDateString('pt-BR')}</span>
 
                                         <button
+                                            onClick={() => handlePreviewInvoice(invoice)}
+                                            className="p-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                                            title="Visualizar Nota"
+                                        >
+                                            <Search className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
                                             onClick={() => handleDownloadInvoice(invoice)}
                                             className="p-1.5 rounded-md bg-muted/50 hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-colors"
-                                            title="Ver Resumo (TXT)"
+                                            title="Baixar Resumo"
                                         >
                                             <Download className="h-3.5 w-3.5" />
                                         </button>
@@ -967,6 +1057,14 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                 </div>,
                 document.body
             ) : null}
+
+            <FilePreviewModal 
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 };

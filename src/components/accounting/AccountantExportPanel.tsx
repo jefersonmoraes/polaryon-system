@@ -1,9 +1,10 @@
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Download, FileDown, FileText, FileCode2, History, Trash2, RotateCcw, Activity } from 'lucide-react';
+import { Download, FileDown, FileText, FileCode2, History, Trash2, RotateCcw, Activity, Eye, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { jsPDF } from 'jspdf';
 import { PdfDreReport } from './PdfDreReport';
 import { PdfHealthReport } from './PdfHealthReport';
@@ -26,6 +27,13 @@ export const AccountantExportPanel = () => {
     const [isGeneratingHealth, setIsGeneratingHealth] = useState(false);
     const dreRef = useRef<HTMLDivElement>(null);
     const healthRef = useRef<HTMLDivElement>(null);
+
+    // Estado para Visualização Universal
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
     const generatePdf = async (element: HTMLElement, filename: string, type: 'pdf_dre' | 'pdf_health', displayName: string) => {
         try {
@@ -400,6 +408,31 @@ export const AccountantExportPanel = () => {
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => {
+                                                const isPdf = exp.type.includes('pdf');
+                                                const isCsv = exp.type === 'csv';
+                                                
+                                                let url = exp.fileContent;
+                                                // Se for texto puro (CSV/TXT), converter para data URL para o FilePreviewModal carregar no iframe se necessário
+                                                // ou passar como está se o modal souber lidar.
+                                                if (!url.startsWith('data:')) {
+                                                    const mime = isCsv ? 'text/csv' : 'text/plain';
+                                                    url = `data:${mime};base64,${btoa(unescape(encodeURIComponent(exp.fileContent)))}`;
+                                                }
+
+                                                setPreviewData({
+                                                    isOpen: true,
+                                                    url: url,
+                                                    name: exp.fileName,
+                                                    type: isPdf ? 'pdf' : (isCsv ? 'text' : 'text')
+                                                });
+                                            }}
+                                            className="text-muted-foreground hover:text-primary p-1 rounded-md hover:bg-primary/10 transition-colors"
+                                            title="Visualizar Arquivo"
+                                        >
+                                            <Search className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => {
                                                 const link = document.createElement('a');
                                                 link.href = exp.fileContent.startsWith('data:') ? exp.fileContent : `data:text/plain;charset=utf-8,${encodeURIComponent(exp.fileContent)}`;
                                                 link.download = exp.fileName + (exp.type.includes('pdf') ? '.pdf' : exp.type === 'csv' ? '.csv' : '.txt');
@@ -435,6 +468,13 @@ export const AccountantExportPanel = () => {
                 <PdfDreReport ref={dreRef} activeCompany={activeCompany} />
                 <PdfHealthReport ref={healthRef} activeCompany={activeCompany} />
             </div>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 };

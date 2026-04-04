@@ -19,8 +19,11 @@ import {
     DollarSign,
     UserCheck,
     ShieldCheck,
-    X
+    X,
+    Paperclip
 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { FilePreviewModal } from '../components/ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
 import { toast } from 'sonner';
@@ -58,6 +61,7 @@ interface Licitacao {
     cnpjOrgao: string;
     ano: number;
     sequencial: string;
+    isConcluidaCacheBug?: boolean; // Flag para valores apurados na íntegra
 }
 
 interface ItemLicitacao {
@@ -126,10 +130,16 @@ export default function TransparencySearchPage() {
     const [suggestionIndex, setSuggestionIndex] = useState(-1);
     const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
     
-    // Estados para o Preview de Empenho (Dentro do Sistema)
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [previewEmpenhoData, setPreviewEmpenhoData] = useState<any>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+    // Estado para Visualização Universal de Arquivos PNCP
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
     // Set default dates to last 2 years on mount
     useEffect(() => {
@@ -942,21 +952,44 @@ export default function TransparencySearchPage() {
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     {winnerFiles.map((file, idx) => (
-                                                        <a 
-                                                            key={idx}
-                                                            href={file.url_bucket || file.url_origem}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-4 p-4 bg-white dark:bg-card border border-border rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group"
-                                                        >
-                                                            <div className="p-3 bg-muted group-hover:bg-emerald-50 rounded-lg group-hover:text-emerald-600 transition-colors">
-                                                                <Download className="h-5 w-5" />
+                                                        <div className="flex flex-col gap-2 p-4 bg-white dark:bg-card border border-border rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group relative overflow-hidden">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="p-3 bg-muted group-hover:bg-emerald-50 rounded-lg group-hover:text-emerald-600 transition-colors">
+                                                                    <FileText className="h-5 w-5" />
+                                                                </div>
+                                                                <div className="flex-1 overflow-hidden">
+                                                                    <p className="text-sm font-bold truncate uppercase">{file.titulo || file.nome_arquivo}</p>
+                                                                    <p className="text-[10px] text-muted-foreground font-medium uppercase">Tipo: Documento do Ganhador</p>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex-1 overflow-hidden">
-                                                                <p className="text-sm font-bold truncate uppercase">{file.titulo || file.nome_arquivo}</p>
-                                                                <p className="text-[10px] text-muted-foreground font-medium uppercase">Tipo: Documento do Ganhador</p>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const url = file.url_bucket || file.url_origem;
+                                                                        const isPdf = url.toLowerCase().endsWith('.pdf');
+                                                                        const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(url);
+                                                                        setPreviewData({
+                                                                            isOpen: true,
+                                                                            url,
+                                                                            name: file.titulo || file.nome_arquivo,
+                                                                            type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
+                                                                        });
+                                                                    }}
+                                                                    className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                                                                >
+                                                                    <Search className="h-3 w-3" /> VISUALIZAR
+                                                                </button>
+                                                                <a 
+                                                                    href={file.url_bucket || file.url_origem}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="p-2 h-8 border border-emerald-600/30 text-emerald-600 rounded flex items-center justify-center hover:bg-emerald-50 transition-colors"
+                                                                    title="Abrir em nova aba / Download"
+                                                                >
+                                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                                </a>
                                                             </div>
-                                                        </a>
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
@@ -1090,21 +1123,28 @@ export default function TransparencySearchPage() {
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex gap-2 mt-2">
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                const isPdf = file.url.toLowerCase().endsWith('.pdf');
+                                                                                const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
+                                                                                setPreviewData({
+                                                                                    isOpen: true,
+                                                                                    url: file.url,
+                                                                                    name: file.nome,
+                                                                                    type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
+                                                                                });
+                                                                            }}
+                                                                            className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                                                                        >
+                                                                            <Search className="h-3 w-3" /> VISUALIZAR
+                                                                        </button>
                                                                         <a 
                                                                             href={file.url}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
-                                                                            className="flex-1 h-8 bg-emerald-600 text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
-                                                                        >
-                                                                            <Download className="h-3 w-3" /> DOWNLOAD OFICIAL
-                                                                        </a>
-                                                                        <a 
-                                                                            href={file.originalUrl}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
                                                                             className="px-3 h-8 border border-emerald-600/30 text-emerald-600 text-[10px] font-bold rounded flex items-center justify-center hover:bg-emerald-500/10 transition-colors"
                                                                         >
-                                                                            LINK DIRETO (PNCP)
+                                                                            LINK DIRETO
                                                                         </a>
                                                                     </div>
                                                                 </div>
@@ -1134,21 +1174,29 @@ export default function TransparencySearchPage() {
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex gap-2 mt-2">
-                                                                    <a 
-                                                                        href={file.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            const isPdf = file.url.toLowerCase().endsWith('.pdf');
+                                                                            const isImage = /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(file.url);
+                                                                            setPreviewData({
+                                                                                isOpen: true,
+                                                                                url: file.url,
+                                                                                name: file.nome,
+                                                                                type: isPdf ? 'pdf' : (isImage ? 'image' : undefined)
+                                                                            });
+                                                                        }}
                                                                         className="flex-1 h-8 bg-primary text-primary-foreground text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
                                                                     >
-                                                                        <Download className="h-3 w-3" /> DOWNLOAD
-                                                                    </a>
+                                                                        <Search className="h-3 w-3" /> VISUALIZAR
+                                                                    </button>
                                                                     <a 
                                                                         href={file.originalUrl}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="px-3 h-8 border border-border text-muted-foreground text-[10px] font-bold rounded flex items-center justify-center hover:bg-muted transition-colors"
+                                                                        title="Abrir no PNCP / Download"
                                                                     >
-                                                                        ABRIR NO PNCP
+                                                                        <ExternalLink className="h-3.5 w-3.5" />
                                                                     </a>
                                                                 </div>
                                                             </div>
@@ -1243,6 +1291,13 @@ export default function TransparencySearchPage() {
                     </Dialog>
                 )}
             </AnimatePresence>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 }

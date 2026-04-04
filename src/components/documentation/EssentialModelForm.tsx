@@ -1,6 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useModelStore, EssentialModel, ModelAttachment } from '@/store/model-store';
-import { X, Upload, FileText, CheckCircle, AlignLeft, Type } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle, AlignLeft, Type, Paperclip, Search, Trash2 } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface EssentialModelFormProps {
     onClose: () => void;
@@ -22,23 +26,97 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
             : null
     );
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setAttachment({
-                    id: crypto.randomUUID(),
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileData: reader.result as string
-                });
-            };
-            reader.readAsDataURL(file);
-        }
+    // Drag and Drop State
+    const [isDragging, setIsDragging] = useState(false);
+    const dragCounter = useRef(0);
 
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
+    // Preview State
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
+
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+        
+        const toastId = toast.loading(`Processando arquivo...`);
+        const file = files[0]; // Este formulário suporta apenas um arquivo base
+
+        try {
+            let fileData: string;
+
+            if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                try {
+                    fileData = await compressImage(file);
+                } catch (err) {
+                    console.error("Compression failed", err);
+                    fileData = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
+            } else {
+                fileData = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            setAttachment({
+                id: crypto.randomUUID(),
+                fileName: file.name,
+                fileSize: file.size,
+                fileData: fileData
+            });
+            
+            toast.success(`Arquivo pronto para cadastro.`, { id: toastId });
+        } catch (error) {
+            toast.error("Erro ao processar arquivo.", { id: toastId });
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        processFiles(files);
+        e.target.value = '';
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFiles(files);
         }
     };
 
@@ -74,7 +152,30 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
 
     return (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-card w-full max-w-xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh]">
+            <div 
+                className="bg-card w-full max-w-xl rounded-xl shadow-2xl border border-border/50 flex flex-col max-h-[90vh] relative overflow-hidden"
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+            >
+                {/* Drag & Drop Overlay */}
+                <AnimatePresence>
+                    {isDragging && (
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[100] bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+                        >
+                            <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                                <Paperclip className="h-16 w-16 text-primary" />
+                            </div>
+                            <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte para anexar o modelo</h3>
+                            <p className="text-sm font-bold text-muted-foreground mt-2">Imagens serão otimizadas automaticamente</p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <div className="flex items-center justify-between p-4 px-6 border-b border-border/10 bg-muted/10 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-primary/10 text-primary rounded-lg">
@@ -145,35 +246,55 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
                                 {attachment ? (
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-sm font-bold text-foreground">Arquivo Anexado</span>
+                                            <span className="text-sm font-bold text-foreground uppercase tracking-widest text-[10px]">Arquivo Anexado</span>
                                             <CheckCircle className="h-4 w-4 text-emerald-500" />
                                         </div>
-                                        <div className="flex items-center gap-2 overflow-hidden bg-background p-2 rounded border border-border/50">
-                                            <FileText className="h-5 w-5 text-primary shrink-0" />
-                                            <span className="text-xs truncate text-muted-foreground flex-1">
-                                                {attachment.fileName}
-                                            </span>
+                                        <div className="group relative flex items-center gap-3 overflow-hidden bg-background p-3 rounded-xl border border-border/50 hover:border-primary/30 transition-all">
+                                            <div className="p-2 bg-primary/10 rounded-lg">
+                                                <FileText className="h-5 w-5 text-primary shrink-0" />
+                                            </div>
+                                            <div className="flex flex-col flex-1 min-w-0">
+                                                <span className="text-xs font-bold truncate text-foreground">
+                                                    {attachment.fileName}
+                                                </span>
+                                                <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                                                    {(attachment.fileSize / 1024).toFixed(1)} KB
+                                                </span>
+                                            </div>
+
+                                            {/* Ações Rápidas */}
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewData({ isOpen: true, url: attachment.fileData, name: attachment.fileName, type: attachment.fileData.startsWith('data:image') ? 'image' : attachment.fileData.startsWith('data:application/pdf') ? 'pdf' : undefined })}
+                                                    className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-all shadow-sm"
+                                                    title="Visualizar Digitalmente"
+                                                >
+                                                    <Search className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={removeAttachment}
+                                                    className="p-2 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive hover:text-white transition-all shadow-sm"
+                                                    title="Remover Anexo"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={removeAttachment}
-                                            className="text-xs text-destructive hover:underline font-medium w-full text-center py-2 bg-destructive/5 hover:bg-destructive/10 rounded transition-colors mt-2"
-                                        >
-                                            Remover Arquivo
-                                        </button>
                                     </div>
                                 ) : (
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="w-full py-8 flex flex-col items-center justify-center gap-3 group"
+                                        className="w-full py-8 flex flex-col items-center justify-center gap-3 group bg-muted/5 hover:bg-primary/5 rounded-xl border-2 border-dashed border-border/50 hover:border-primary/40 transition-all"
                                     >
-                                        <div className="p-3 bg-muted rounded-full group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                        <div className="p-4 bg-muted rounded-full group-hover:bg-primary/10 group-hover:text-primary transition-all group-hover:scale-110">
                                             <Upload className="h-6 w-6" />
                                         </div>
                                         <div className="text-center">
-                                            <p className="text-sm font-medium group-hover:text-primary transition-colors">Clique para anexar arquivo base</p>
-                                            <p className="text-xs text-muted-foreground mt-1">PDF ou Word (.doc, .docx)</p>
+                                            <p className="text-xs font-bold uppercase tracking-wider group-hover:text-primary transition-colors">Arraste ou clique aqui</p>
+                                            <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">Suporta PDF, Word (.doc, .docx) ou Imagens</p>
                                         </div>
                                     </button>
                                 )}
@@ -200,6 +321,13 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
                     </button>
                 </div>
             </div>
+            <FilePreviewModal 
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </div>
     );
 };

@@ -4,6 +4,11 @@ import { useAccountingStore } from '@/store/accounting-store';
 import { EntryType, AccountingCategory } from '@/types/accounting';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
+import { useRef } from 'react';
+import { Paperclip, Search, Download, Trash2, RefreshCw } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface EntryFormModalProps {
     open: boolean;
@@ -56,6 +61,18 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
     const [recurrenceFrequency, setRecurrenceFrequency] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
     const [recurrenceCount, setRecurrenceCount] = useState(2);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Drag and Drop State
+    const [isDragging, setIsDragging] = useState(false);
+    const dragCounter = useRef(0);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Preview State
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
 
     useEffect(() => {
         if (open) {
@@ -117,19 +134,86 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
         return dateObj.toISOString();
     };
 
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+        
+        const toastId = toast.loading(`Processando ${files.length} arquivo(s)...`);
+        
+        try {
+            const newAttachments: string[] = [];
+            
+            for (const file of files) {
+                let fileUrl: string;
+
+                if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                    try {
+                        fileUrl = await compressImage(file);
+                    } catch (err) {
+                        console.error("Compression failed", err);
+                        fileUrl = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                } else {
+                    fileUrl = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
+                newAttachments.push(fileUrl);
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                attachments: [...(prev.attachments || []), ...newAttachments]
+            }));
+            toast.success(`${files.length} arquivo(s) prontos.`, { id: toastId });
+        } catch (error) {
+            toast.error("Erro ao processar arquivos.", { id: toastId });
+        }
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            Array.from(e.target.files).forEach((file) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64String = reader.result as string;
-                    setFormData((prev) => ({
-                        ...prev,
-                        attachments: [...(prev.attachments || []), base64String],
-                    }));
-                };
-                reader.readAsDataURL(file);
-            });
+        const files = Array.from(e.target.files || []);
+        processFiles(files);
+        e.target.value = '';
+    };
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current++;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFiles(files);
         }
     };
 
@@ -235,7 +319,30 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[550px] bg-background border border-border text-foreground max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <DialogContent 
+                className="sm:max-w-[550px] bg-background border border-border text-foreground max-h-[90vh] overflow-y-auto custom-scrollbar relative"
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+            >
+                {/* Drag & Drop Overlay */}
+                <AnimatePresence>
+                    {isDragging && (
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[100] bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary flex flex-col items-center justify-center p-6 pointer-events-none"
+                        >
+                            <div className="bg-background/90 p-8 rounded-full shadow-2xl border-2 border-primary animate-pulse">
+                                <Paperclip className="h-16 w-16 text-primary" />
+                            </div>
+                            <h3 className="mt-6 text-2xl font-black text-primary uppercase tracking-tighter">Solte para anexar comprovantes</h3>
+                            <p className="text-sm font-bold text-muted-foreground mt-2">Imagens serão otimizadas automaticamente</p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <DialogHeader>
                     <DialogTitle className={`flex items-center gap-2 ${isRevenue ? 'text-emerald-500' : 'text-rose-500'}`}>
                         {existingEntryId ? (isRevenue ? 'Editar Entrada (Receita)' : 'Editar Saída (Despesa)') : (isRevenue ? 'Nova Entrada (Receita)' : 'Nova Saída (Despesa)')}
@@ -406,36 +513,54 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                             <label className="text-[10px] font-semibold uppercase text-muted-foreground">Comprovantes e Anexos (PDF / Imagem)</label>
 
                             <div className="flex flex-col gap-2">
-                                <label className="flex items-center justify-center gap-2 cursor-pointer w-full border border-dashed border-border/50 rounded hover:bg-secondary/30 transition-colors p-3 py-4 bg-background">
+                                <label className="flex items-center justify-center gap-2 cursor-pointer w-full border border-dashed border-border/50 rounded hover:bg-secondary/30 transition-colors p-3 py-4 bg-background group">
                                     <input
+                                        ref={fileInputRef}
                                         type="file"
                                         className="hidden"
                                         multiple
                                         accept="image/png, image/jpeg, application/pdf"
                                         onChange={handleFileChange}
                                     />
-                                    <span className="text-xs text-muted-foreground font-medium">Clique para arrastar ou adicionar arquivo</span>
+                                    <Paperclip className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                    <span className="text-xs text-muted-foreground font-medium group-hover:text-primary transition-colors">Clique para arrastar ou adicionar comprovante</span>
                                 </label>
 
                                 {formData.attachments && formData.attachments.length > 0 && (
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                                         {formData.attachments.map((file, index) => {
                                             const isImage = file.startsWith('data:image');
+                                            const fileType = isImage ? 'image' : file.startsWith('data:application/pdf') ? 'pdf' : undefined;
+                                            
                                             return (
-                                                <div key={index} className="relative group rounded border border-border bg-secondary overflow-hidden h-16 flex items-center justify-center">
+                                                <div key={index} className="relative group rounded border border-border bg-secondary overflow-hidden h-20 flex flex-col items-center justify-center">
                                                     {isImage ? (
-                                                        <img src={file} className="object-cover w-full h-full opacity-80 group-hover:opacity-50 transition-opacity" alt="Anexo" />
+                                                        <img src={file} className="object-cover w-full h-full opacity-80 group-hover:opacity-40 transition-opacity" alt="Anexo" />
                                                     ) : (
-                                                        <div className="text-xs font-bold text-muted-foreground uppercase">PDF</div>
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <div className="text-xs font-bold text-muted-foreground uppercase">{fileType === 'pdf' ? 'PDF' : 'DOC'}</div>
+                                                        </div>
                                                     )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeAttachment(index)}
-                                                        className="absolute inset-0 m-auto w-6 h-6 bg-destructive/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        title="Remover anexo"
-                                                    >
-                                                        ✕
-                                                    </button>
+                                                    
+                                                    {/* Toolbar de Ações */}
+                                                    <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreviewData({ isOpen: true, url: file, name: `Comprovante-${index + 1}`, type: fileType })}
+                                                            className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                                                            title="Visualizar"
+                                                        >
+                                                            <Search className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeAttachment(index)}
+                                                            className="w-8 h-8 bg-destructive text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                                                            title="Remover"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -540,6 +665,13 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                     </div>
                 </form>
             </DialogContent>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </Dialog>
     );
 };

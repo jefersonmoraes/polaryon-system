@@ -1,6 +1,10 @@
 import { useState, useRef } from 'react';
 import { useCertificateStore, CapacityCertificate, CertificateAttachment } from '@/store/certificate-store';
-import { X, Upload, FileText, AlertCircle, Building2, AlignLeft, Calendar, FileBadge, CheckCircle, Search } from 'lucide-react';
+import { X, Upload, FileText, AlertCircle, Building2, AlignLeft, Calendar, FileBadge, CheckCircle, Search, Paperclip, Trash2 } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
+import { FilePreviewModal } from '../ui/FilePreviewModal';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { useKanbanStore } from '@/store/kanban-store';
 
 interface CertificateFormProps {
@@ -21,13 +25,17 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
     const { cards } = useKanbanStore();
 
     // Hidden file inputs mapped by slot
-    const fileInputRefs = {
+    const fileInputRefs: Record<string, React.RefObject<HTMLInputElement>> = {
         'Atestado': useRef<HTMLInputElement>(null),
         'NF': useRef<HTMLInputElement>(null),
         'Contrato': useRef<HTMLInputElement>(null),
         'Nota de Empenho': useRef<HTMLInputElement>(null),
         'Relatório de execução': useRef<HTMLInputElement>(null),
     };
+
+    const dragCounter = useRef(0);
+    const [isDraggingOverall, setIsDraggingOverall] = useState(false);
+    const [draggingSlot, setDraggingSlot] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         type: editingCert?.type || ['Serviço'],
@@ -62,30 +70,90 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
         return initialMap;
     });
 
+    const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
+        isOpen: false,
+        url: '',
+        name: '',
+    });
+
+    const processFile = async (slot: CertificateAttachment['fileSlot'], file: File) => {
+        const toastId = toast.loading(`Processando ${file.name}...`);
+        
+        try {
+            let fileData: string;
+
+            if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                try {
+                    fileData = await compressImage(file);
+                } catch (err) {
+                    fileData = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
+            } else {
+                fileData = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            const newAttachment: CertificateAttachment = {
+                id: crypto.randomUUID(),
+                fileSlot: slot,
+                fileName: file.name,
+                fileSize: file.size,
+                fileData
+            };
+
+            setAttachments(prev => ({
+                ...prev,
+                [slot]: newAttachment
+            }));
+            
+            toast.success(`Arquivo adicionado em ${slot}.`, { id: toastId });
+        } catch (error) {
+            toast.error("Erro ao processar arquivo.", { id: toastId });
+        }
+    };
+
     const handleFileChange = (slot: CertificateAttachment['fileSlot'], e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const newAttachment: CertificateAttachment = {
-                    id: crypto.randomUUID(),
-                    fileSlot: slot,
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileData: reader.result as string
-                };
-
-                setAttachments(prev => ({
-                    ...prev,
-                    [slot]: newAttachment
-                }));
-            };
-            reader.readAsDataURL(file);
+            processFile(slot, file);
         }
-
-        // Reset the input value so the same file could be selected again if needed
         if (fileInputRefs[slot].current) {
             fileInputRefs[slot].current!.value = '';
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleSlotDragEnter = (slot: string, e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDraggingSlot(slot);
+    };
+
+    const handleSlotDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDraggingSlot(null);
+    };
+
+    const handleSlotDrop = (slot: CertificateAttachment['fileSlot'], e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDraggingSlot(null);
+        
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            processFile(slot, files[0]);
         }
     };
 
@@ -291,9 +359,33 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                     {documentSlots.map((slot) => {
                                         const attachment = attachments[slot];
+                                        const isDraggingThisSlot = draggingSlot === slot;
 
                                         return (
-                                            <div key={slot} className={`border rounded-lg p-3 transition-colors ${attachment ? 'bg-primary/5 border-primary/30' : 'bg-card border-border border-dashed hover:border-primary/50'}`}>
+                                            <div 
+                                                key={slot} 
+                                                className={cn(
+                                                    "border rounded-lg p-3 transition-all relative overflow-hidden",
+                                                    attachment ? 'bg-primary/5 border-primary/30' : 'bg-card border-border border-dashed hover:border-primary/50',
+                                                    isDraggingThisSlot && "border-primary bg-primary/10 border-solid"
+                                                )}
+                                                onDragEnter={(e) => handleSlotDragEnter(slot, e)}
+                                                onDragLeave={handleSlotDragLeave}
+                                                onDragOver={handleDragOver}
+                                                onDrop={(e) => handleSlotDrop(slot, e)}
+                                            >
+                                                <AnimatePresence>
+                                                    {isDraggingThisSlot && (
+                                                        <motion.div 
+                                                            initial={{ opacity: 0 }}
+                                                            animate={{ opacity: 1 }}
+                                                            exit={{ opacity: 0 }}
+                                                            className="absolute inset-0 z-10 flex items-center justify-center bg-primary/20 backdrop-blur-[1px] pointer-events-none"
+                                                        >
+                                                            <Upload className="h-6 w-6 text-primary animate-bounce" />
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
                                                 <input
                                                     type="file"
                                                     ref={fileInputRefs[slot]}
@@ -312,18 +404,40 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                                 {attachment ? (
                                                     <div className="flex flex-col gap-2">
                                                         <div className="flex items-center gap-2 overflow-hidden bg-background p-1.5 rounded border border-border/50">
-                                                            <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                            {attachment.fileData.startsWith('data:image') ? (
+                                                                <img src={attachment.fileData} className="w-5 h-5 rounded object-cover shrink-0" alt="" />
+                                                            ) : (
+                                                                <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                            )}
                                                             <span className="text-[10px] truncate text-muted-foreground flex-1">
                                                                 {attachment.fileName}
                                                             </span>
                                                         </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => removeAttachment(slot, e)}
-                                                            className="text-[10px] text-destructive hover:underline font-medium w-full text-center py-1 bg-destructive/5 hover:bg-destructive/10 rounded transition-colors"
-                                                        >
-                                                            Remover
-                                                        </button>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const isImage = attachment.fileData.startsWith('data:image');
+                                                                    const isPdf = attachment.fileData.startsWith('data:application/pdf');
+                                                                    setPreviewData({
+                                                                        isOpen: true,
+                                                                        url: attachment.fileData,
+                                                                        name: attachment.fileName,
+                                                                        type: isImage ? 'image' : isPdf ? 'pdf' : undefined
+                                                                    });
+                                                                }}
+                                                                className="flex-1 text-[10px] text-primary hover:bg-primary/10 py-1 rounded border border-primary/20 transition-all font-bold flex items-center justify-center gap-1"
+                                                            >
+                                                                <Search className="h-2.5 w-2.5" /> Preview
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => removeAttachment(slot, e)}
+                                                                className="p-1 px-2 text-destructive hover:bg-destructive/10 rounded transition-colors border border-destructive/20"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <button
@@ -363,6 +477,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                     </div>
                 </div>
             </div>
+            <FilePreviewModal
+                isOpen={previewData.isOpen}
+                onClose={() => setPreviewData(prev => ({ ...prev, isOpen: false }))}
+                fileUrl={previewData.url}
+                fileName={previewData.name}
+                fileType={previewData.type}
+            />
         </>
     );
 };
