@@ -6,17 +6,18 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { 
-    X, 
-    Download, 
+    X,
     FileText, 
+    FileCode, 
+    Loader2, 
     ExternalLink, 
-    Search, 
+    Download, 
     Maximize2, 
     Minimize2,
-    FileCode,
     FileType,
-    Loader2
-} from 'lucide-react';
+    AlertTriangle,
+    Search
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FilePreviewModalProps {
@@ -41,6 +42,19 @@ export const FilePreviewModal = ({
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [zoom, setZoom] = useState(1);
 
+    // Normalização inicial para URLs Base64 puras (comuns em dados legados) no escopo do componente
+    const normalizedFileUrl = (() => {
+        if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')) {
+            if (fileName.toLowerCase().endsWith('.pdf')) {
+                return `data:application/pdf;base64,${fileUrl}`;
+            } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext => fileName.toLowerCase().endsWith(ext))) {
+                const ext = fileName.split('.').pop()?.toLowerCase();
+                return `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fileUrl}`;
+            }
+        }
+        return fileUrl;
+    })();
+
     useEffect(() => {
         if (!isOpen) {
             if (blobUrl) {
@@ -58,20 +72,6 @@ export const FilePreviewModal = ({
         // Detect file type if not provided
         let type = initialFileType || '';
         
-        // Normalização para URLs Base64 puras (comuns em dados legados)
-        let normalizedFileUrl = fileUrl;
-        if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')) {
-            // Se parece Base64 e o nome é PDF, injeta o cabeçalho
-            if (fileName.toLowerCase().endsWith('.pdf')) {
-                normalizedFileUrl = `data:application/pdf;base64,${fileUrl}`;
-                if (!type) type = 'pdf';
-            } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext => fileName.toLowerCase().endsWith(ext))) {
-                const ext = fileName.split('.').pop()?.toLowerCase();
-                normalizedFileUrl = `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fileUrl}`;
-                if (!type) type = 'image';
-            }
-        }
-
         if (!type) {
             if (normalizedFileUrl.startsWith('data:application/pdf')) type = 'pdf';
             else if (normalizedFileUrl.startsWith('data:image')) type = 'image';
@@ -210,7 +210,8 @@ export const FilePreviewModal = ({
 
     const handleDownload = () => {
         const link = document.createElement('a');
-        link.href = fileUrl;
+        // Priorizar Blob URL para downloads seguros de arquivos grandes no ecossistema Polaryon
+        link.href = blobUrl || normalizedFileUrl;
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
@@ -241,11 +242,8 @@ export const FilePreviewModal = ({
                     <div className="flex items-center gap-2 mr-8">
                         <button 
                             onClick={async () => {
-                                if (blobUrl) {
-                                    window.open(blobUrl, '_blank');
-                                } else {
-                                    window.open(fileUrl, '_blank');
-                                }
+                                const targetUrl = blobUrl || normalizedFileUrl;
+                                window.open(targetUrl, '_blank');
                             }}
                             className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-bold hover:bg-secondary/80 transition-all border border-border/50"
                             title="Abrir em Nova Aba"
@@ -305,15 +303,38 @@ export const FilePreviewModal = ({
 
                             {fileType === 'pdf' && (
                                 <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-inner overflow-hidden relative group/pdf">
-                                    <iframe 
-                                        src={blobUrl && blobUrl.startsWith('blob:') ? blobUrl : (blobUrl ? `${blobUrl}#toolbar=0` : fileUrl)} 
-                                        className="w-full h-full border-0"
-                                        title={fileName}
+                                    <object 
+                                        data={blobUrl || normalizedFileUrl} 
+                                        type="application/pdf" 
+                                        className="w-full h-full border-none"
+                                        aria-label={fileName}
                                         onLoad={() => setIsLoading(false)}
-                                    />
-                                    {/* Link de redundância caso o iframe falhe ou seja bloqueado pelas políticas das empresas */}
-                                    <div className="absolute top-2 right-2 px-3 py-1 bg-black/40 backdrop-blur-sm rounded text-[9px] text-white font-bold opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none">
-                                        Modo Visualizador Estendido
+                                    >
+                                        <embed 
+                                            src={blobUrl || normalizedFileUrl} 
+                                            type="application/pdf" 
+                                            className="w-full h-full"
+                                        />
+                                        <div className="flex flex-col items-center justify-center p-8 text-center gap-4 h-full bg-muted/5">
+                                            <AlertTriangle className="h-12 w-12 text-yellow-500 animate-pulse" />
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-bold text-foreground max-w-xs">
+                                                    Não foi possível carregar a prévia nativa no seu navegador.
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Alguns filtros de rede empresarial podem bloquear a visualização direta.
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={handleDownload}
+                                                className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-xs font-black shadow-lg hover:shadow-primary/20 transition-all active:scale-95"
+                                            >
+                                                BAIXAR PARA VISUALIZAR
+                                            </button>
+                                        </div>
+                                    </object>
+                                    <div className="absolute top-2 right-2 px-3 py-1 bg-black/40 backdrop-blur-sm rounded text-[9px] text-white font-bold opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none uppercase tracking-widest">
+                                        Modo Visualizador Nativo
                                     </div>
                                 </div>
                             )}
