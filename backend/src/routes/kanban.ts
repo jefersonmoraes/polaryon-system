@@ -1,9 +1,29 @@
-import express, { Request, Response } from 'express';
+import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { pushEventToGoogle, deleteEventFromGoogle } from '../services/GoogleCalendarService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// PROXY ROUTE to bypass external security blocks (CORS, X-Frame-Options)
+router.get('/file-proxy', async (req: Request, res: Response) => {
+    try {
+        const { url } = req.query;
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({ error: 'URL is required' });
+        }
+        const response = await axios.get(url, {
+            responseType: 'stream',
+            timeout: 15000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline');
+        response.data.pipe(res);
+    } catch (e: any) {
+        res.status(500).json({ error: 'Failed to fetch file' });
+    }
+});
 
 const DEFAULT_LABELS = [
     { id: 'l1', name: 'Urgente', color: '#ef4444' },

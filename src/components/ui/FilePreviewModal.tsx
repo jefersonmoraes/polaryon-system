@@ -43,6 +43,15 @@ export const FilePreviewModal = ({
     const [zoom, setZoom] = useState(1);
     const [hasError, setHasError] = useState(false);
 
+    // Get Proxy URL if external
+    const getSafeUrl = (url: string) => {
+        if (!url) return '';
+        if (url.startsWith('http') && !url.includes('localhost') && !url.includes('polaryon.com.br')) {
+            return `/api/kanban/file-proxy?url=${encodeURIComponent(url)}`;
+        }
+        return url;
+    };
+
     // Normalização inicial para URLs Base64 puras
     const normalizedFileUrl = React.useMemo(() => {
         if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')) {
@@ -69,7 +78,6 @@ export const FilePreviewModal = ({
         setHasError(false);
         setXmlData(null);
         setTextContent(null);
-        setZoom(1);
 
         // Detect file type
         let type = initialFileType || '';
@@ -90,27 +98,19 @@ export const FilePreviewModal = ({
                     const blob = await response.blob();
                     const url = URL.createObjectURL(blob);
                     setBlobUrl(url);
+                    setIsLoading(false);
                 } else if (normalizedFileUrl.startsWith('http')) {
-                    // Para URLs externas, primeiro tentamos baixar pra um Blob local (ignora CSP/X-Frame-Options do destino)
-                    try {
-                        const response = await fetch(normalizedFileUrl);
-                        if (response.ok) {
-                            const blob = await response.blob();
-                            const url = URL.createObjectURL(blob);
-                            setBlobUrl(url);
-                        } else {
-                            setBlobUrl(normalizedFileUrl);
-                        }
-                    } catch (e) {
-                        setBlobUrl(normalizedFileUrl);
-                    }
+                    // Pre-fetch via Proxy to avoid CORS errors in memory
+                    const proxyUrl = getSafeUrl(normalizedFileUrl);
+                    setBlobUrl(proxyUrl);
+                    setIsLoading(false);
                 } else {
                     setBlobUrl(normalizedFileUrl);
+                    setIsLoading(false);
                 }
 
                 if (type === 'xml') await fetchXml();
                 else if (type === 'text') await fetchText();
-                else setIsLoading(false);
             } catch (e) {
                 console.error("Setup preview error:", e);
                 setHasError(true);
@@ -119,27 +119,27 @@ export const FilePreviewModal = ({
         };
 
         setupPreview();
-    }, [isOpen]); // Dependências mínimas para evitar re-renders infinitos
+    }, [isOpen]);
 
     const fetchXml = async () => {
         try {
-            const response = await fetch(normalizedFileUrl);
-            const text = await response.text();
-            // ... lógica de XML permanece igual, mas simplificada para estabilidade
+            const res = await fetch(getSafeUrl(normalizedFileUrl));
+            const text = await res.text();
+            // Basic parsing logic...
             setIsLoading(false);
         } catch (e) { setHasError(true); setIsLoading(false); }
     };
 
     const fetchText = async () => {
         try {
-            const response = await fetch(normalizedFileUrl);
-            setTextContent(await response.text());
+            const res = await fetch(getSafeUrl(normalizedFileUrl));
+            setTextContent(await res.text());
         } catch (e) { setHasError(true); }
         finally { setIsLoading(false); }
     };
 
     const triggerAction = (actionType: 'download' | 'open') => {
-        const url = blobUrl || normalizedFileUrl;
+        const url = blobUrl || getSafeUrl(normalizedFileUrl);
         const link = document.createElement('a');
         link.href = url;
         if (actionType === 'download') {
@@ -162,11 +162,11 @@ export const FilePreviewModal = ({
                             {fileType === 'pdf' ? <FileText className="h-5 w-5" /> : <FileType className="h-5 w-5" />}
                         </div>
                         <div className="flex flex-col">
-                            <DialogTitle className="text-sm font-bold truncate max-w-[300px]">
+                            <DialogTitle className="text-sm font-black truncate max-w-[300px]">
                                 {fileName}
                             </DialogTitle>
-                            <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest">
-                                {fileType || 'Visualização'}
+                            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">
+                                {fileType || 'Doc'} • Seguro Polaryon
                             </span>
                         </div>
                     </div>
@@ -196,16 +196,27 @@ export const FilePreviewModal = ({
                     {isLoading ? (
                         <div className="flex flex-col items-center gap-3">
                             <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Preparando Documento...</p>
+                            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Acessando documento via Proxy...</p>
+                        </div>
+                    ) : hasError ? (
+                        <div className="flex flex-col items-center gap-4 p-8 text-center bg-card border border-border rounded-2xl shadow-xl">
+                            <AlertTriangle className="h-12 w-12 text-yellow-500" />
+                            <h3 className="font-black text-lg uppercase tracking-tighter">Erro de Acesso</h3>
+                            <p className="text-xs text-muted-foreground max-w-xs">O servidor de origem não permitiu o acesso direto. Tente abrir o documento original abaixo.</p>
+                            <button 
+                                onClick={() => triggerAction('open')}
+                                className="text-xs font-black text-primary underline underline-offset-4"
+                            >
+                                ABRIR LINK EXTERNO
+                            </button>
                         </div>
                     ) : (
                         <>
                             {fileType === 'pdf' && (
                                 <iframe 
-                                    src={blobUrl || normalizedFileUrl} 
+                                    src={blobUrl} 
                                     className="w-full h-full border-none bg-white"
                                     title={fileName}
-                                    style={{ visibility: isLoading ? 'hidden' : 'visible' }}
                                     onLoad={() => setIsLoading(false)}
                                 />
                             )}
@@ -219,18 +230,9 @@ export const FilePreviewModal = ({
                                     />
                                 </div>
                             )}
-                            {/* Fallback amigável caso iframe falhe ou tipo não suportado */}
-                            {(!fileType || hasError) && (
-                                <div className="flex flex-col items-center gap-4 p-8 text-center bg-card border border-border rounded-2xl shadow-xl">
-                                    <AlertTriangle className="h-12 w-12 text-yellow-500" />
-                                    <h3 className="font-black text-lg">Visualização Indisponível</h3>
-                                    <p className="text-xs text-muted-foreground max-w-xs">Este arquivo não permite visualização direta devido a restrições de segurança ou formato.</p>
-                                    <button 
-                                        onClick={() => triggerAction('open')}
-                                        className="text-xs font-black text-primary underline underline-offset-4"
-                                    >
-                                        ABRIR DOCUMENTO ORIGINAL
-                                    </button>
+                            {(fileType === 'xml' || fileType === 'text') && (
+                                <div className="w-full h-full p-6 font-mono text-[11px] bg-card overflow-auto whitespace-pre-wrap">
+                                    {textContent || "Visualização bruta carregada."}
                                 </div>
                             )}
                         </>
