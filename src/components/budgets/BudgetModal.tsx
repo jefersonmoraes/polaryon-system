@@ -128,6 +128,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
     const [isNotesExpanded, setIsNotesExpanded] = useState(false); // Estado para expandir/recolher observações
     const [isDragging, setIsDragging] = useState(false);
+    const dragCounter = useRef(0);
 
     const supRef = useRef<HTMLDivElement>(null);
     const transRef = useRef<HTMLDivElement>(null);
@@ -175,22 +176,30 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         e.target.value = '';
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
+    const handleDragEnter = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        dragCounter.current++;
         if (canEdit) setIsDragging(true);
     };
 
     const handleDragLeave = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragging(false);
+        dragCounter.current--;
+        if (dragCounter.current === 0) setIsDragging(false);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragging(false);
+        dragCounter.current = 0;
 
         if (!canEdit) return;
 
@@ -1486,12 +1495,13 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             "space-y-3 mt-4 pt-4 border-t border-border/40 transition-all duration-200 relative",
                             isDragging && "bg-primary/5 rounded-lg p-2 border-2 border-dashed border-primary/50"
                         )}
+                        onDragEnter={handleDragEnter}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
                         {isDragging && (
-                            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg border-2 border-dashed border-primary animate-pulse">
+                            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg border-2 border-dashed border-primary animate-pulse pointer-events-none">
                                 <div className="bg-primary text-white p-3 rounded-full shadow-lg mb-2">
                                     <Plus className="h-6 w-6" />
                                 </div>
