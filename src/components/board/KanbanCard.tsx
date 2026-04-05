@@ -97,16 +97,38 @@ const KanbanCardComponent = ({ card, listColor, onClick }: Props) => {
 
       {/* Dates & Nearest Milestone */}
       <div className="flex flex-col gap-1.5 mt-2">
-        {nearestMilestone && (
-          <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${fixDateToBRT(nearestMilestone.dueDate!)! < new Date() ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'}`}>
-            <Calendar className="h-3 w-3" />
-            <span className="truncate max-w-[120px]">{nearestMilestone.title}</span>
-            <span className="ml-auto flex-shrink-0 opacity-90">
-              {fixDateToBRT(nearestMilestone.dueDate!)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-              {nearestMilestone.hour && ` às ${nearestMilestone.hour}`}
-            </span>
-          </div>
-        )}
+        {nearestMilestone && (() => {
+          const msDate = fixDateToBRT(nearestMilestone.dueDate!);
+          const now = new Date();
+          const isOverdue = msDate && msDate < now;
+          
+          // Calculate diff in days
+          const diffTime = msDate ? msDate.getTime() - now.getTime() : Infinity;
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const isRisk = isOverdue || diffDays <= 2;
+
+          let bgColor = 'bg-primary';
+          if (isOverdue) bgColor = 'bg-red-500';
+          else if (diffDays <= 2) bgColor = 'bg-yellow-500';
+
+          return (
+            <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-bold shadow-sm text-white ${bgColor} transition-colors duration-500 relative overflow-hidden group/ms`}>
+              <Calendar className="h-3 w-3" />
+              <span className="truncate max-w-[120px]">{nearestMilestone.title}</span>
+              
+              {isRisk && (
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                   <span className="text-[14px] font-black animate-pulse-alert text-white drop-shadow-[0_0_3px_rgba(0,0,0,0.5)]">!</span>
+                </div>
+              )}
+
+              <span className={`ml-auto flex-shrink-0 opacity-90 ${isRisk ? 'mr-4' : ''}`}>
+                {msDate?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                {nearestMilestone.hour && ` às ${nearestMilestone.hour}`}
+              </span>
+            </div>
+          );
+        })()}
 
         {!nearestMilestone && card.dueDate && (
           <div className={`flex items-center w-max gap-1 text-[10px] px-2 py-1 rounded font-bold shadow-sm ${card.completed ? 'bg-label-green text-white' : isOverdue ? 'bg-red-500 text-white' : 'bg-secondary text-foreground'}`}>

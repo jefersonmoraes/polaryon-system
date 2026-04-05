@@ -189,3 +189,12 @@
   width: 6px;
   height: 8px;
 }
+
+@keyframes pulse-alert {
+  0%, 100% { opacity: 1; transform: scale(1.1); }
+  50% { opacity: 0.3; transform: scale(1); }
+}
+
+.animate-pulse-alert {
+  animation: pulse-alert 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

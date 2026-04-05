@@ -54,6 +54,8 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
         if (pA !== pB) return pA - pB;
         return a.position - b.position;
       }
+      
+      // Default: Position (which is managed chronologically by the store)
       return a.position - b.position;
     });
 

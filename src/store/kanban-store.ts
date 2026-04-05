@@ -81,6 +81,7 @@ interface KanbanState {
   deleteCard: (id: string) => void;
   moveCard: (cardId: string, toListId: string, newPosition: number) => void;
   reorderCards: (listId: string, cardIds: string[]) => void;
+  reorderCardsByMilestones: (listId: string) => void;
   cleanupTrash: () => void;
   cleanOldTrash: () => void;
   // checklist
@@ -1063,7 +1064,9 @@ export const useKanbanStore = create<KanbanState>()(
           };
         });
         socketService.emit('system_action', { store: 'KANBAN', type: 'ADD_CARD', payload: createdCard });
-        api.post('/kanban/cards', createdCard).catch(console.error);
+        api.post('/kanban/cards', createdCard).then(() => {
+            get().reorderCardsByMilestones(listId);
+        }).catch(console.error);
       },
       updateCard: async (id, data) => {
         set(s => {
@@ -1128,6 +1131,12 @@ export const useKanbanStore = create<KanbanState>()(
             budgets: updatedBudgets
           };
         });
+
+        // AUTO-REORDER BY MILESTONES if date/milestones changed
+        const card = get().cards.find(c => c.id === id);
+        if (card && (data.dueDate !== undefined || data.milestones !== undefined)) {
+            get().reorderCardsByMilestones(card.listId);
+        }
 
         // AUTO-SYNC GOOGLE CALENDAR EM BACKGROUND
         const currentUser = useAuthStore.getState().currentUser;
@@ -1275,6 +1284,39 @@ export const useKanbanStore = create<KanbanState>()(
         }));
         socketService.emit('system_action', { store: 'KANBAN', type: 'REORDER_CARDS', payload: { listId, cardIds } });
         api.post('/kanban/cards/reorder', { listId, cardIds }).catch(console.error);
+      },
+      reorderCardsByMilestones: (listId) => {
+        const { cards } = get();
+        const listCards = cards.filter(c => c.listId === listId && !c.archived && !c.trashed);
+        
+        const getNearestDate = (card: any) => {
+            const ms = card.milestones
+              ?.filter((m: any) => !m.completed && m.dueDate)
+              .sort((a: any, b: any) => {
+                  const dateA = new Date(a.dueDate!).getTime();
+                  const dateB = new Date(b.dueDate!).getTime();
+                  return dateA - dateB;
+              })[0];
+            if (ms) return new Date(ms.dueDate!).getTime();
+            if (card.dueDate) return new Date(card.dueDate).getTime();
+            return Infinity;
+        };
+
+        const sorted = [...listCards].sort((a, b) => {
+            const dateA = getNearestDate(a);
+            const dateB = getNearestDate(b);
+            if (dateA !== dateB) return dateA - dateB;
+            return a.position - b.position;
+        });
+
+        const cardIds = sorted.map(c => c.id);
+        
+        // Only run reorder if sort changed to prevent infinite loops
+        const currentIds = listCards.sort((a,b) => a.position - b.position).map(c => c.id);
+        if (JSON.stringify(cardIds) !== JSON.stringify(currentIds)) {
+            console.log(`kanbanStore - Reordering list ${listId} (Milestone Proximity)`);
+            get().reorderCards(listId, cardIds);
+        }
       },
       cleanupTrash: () => set(s => {
         const threshold = new Date();
