@@ -251,11 +251,19 @@ const Dashboard = () => {
     }
 
     // 5. Google Calendar & Custom Events
-    googleEvents.filter(g => fixDate(g.date) >= today && fixDate(g.date) <= futureLimit).forEach(g => {
+    googleEvents.filter(g => fixDate(g.date) <= futureLimit).forEach(g => {
       if (g.title && !g.title.startsWith('[Polaryon]')) {
         const gDate = fixDate(g.date);
         if (gDate.getTime() > 0) {
-          events.push({ id: g.id, title: g.title, date: gDate, type: 'google', color: 'text-purple-500', icon: CalendarIcon });
+          const prog = getProgression(gDate);
+          events.push({ 
+            id: g.id, 
+            title: `${prog.text}${g.title}`, 
+            date: gDate, 
+            type: 'google', 
+            color: prog.text === '' ? 'text-purple-500' : prog.color, 
+            icon: prog.text === '' ? CalendarIcon : prog.icon 
+          });
         }
       }
     });
