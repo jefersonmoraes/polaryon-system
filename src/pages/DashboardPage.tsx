@@ -421,53 +421,51 @@ const Dashboard = () => {
             )}
 
 
-            <div className="grid lg:grid-cols-3 gap-6 mb-8">
-              {/* Chart */}
-              <div className="lg:col-span-2 bg-card rounded-lg border border-border p-4">
-                <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  Produtividade Semanal
-                </h2>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weekData}>
-                      <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Bar dataKey="criadas" fill="hsl(205, 95%, 33%)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="concluídas" fill="hsl(145, 63%, 42%)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Global Upcoming tasks */}
+            <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-[400px] overflow-hidden mb-8">
+              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 shrink-0">
+                <CalendarDays className="h-4 w-4 text-accent" />
+                Próximas Datas Importantes
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2 content-start">
+                {allUpcomingEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-8 text-center flex flex-col items-center gap-2 md:col-span-2 xl:col-span-3">
+                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
+                    Nenhum evento global previsto para os próximos 15 dias!
+                  </p>
+                ) : (
+                  allUpcomingEvents.map(event => {
+                    const Wrapper = event.url ? Link : 'div';
+                    return (
+                      <Wrapper key={`${event.type}-${event.id}`} to={event.url as any} className={`flex items-center gap-2 p-3 rounded text-xs bg-secondary/50 border border-border/50 hover:bg-secondary transition-colors shadow-sm ${event.url ? 'cursor-pointer' : ''}`}>
+                        <event.icon className={`h-4 w-4 shrink-0 ${event.color}`} />
+                        <div className="flex-1 truncate font-medium text-[13px]" title={event.title}>{event.title}</div>
+                        <span className={`shrink-0 font-semibold text-muted-foreground`}>
+                          {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                        </span>
+                      </Wrapper>
+                    );
+                  })
+                )}
               </div>
+            </div>
 
-              {/* Global Upcoming tasks */}
-              <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-[400px] overflow-hidden">
-                <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 shrink-0">
-                  <CalendarDays className="h-4 w-4 text-accent" />
-                  Próximas Datas Importantes
-                </h2>
-                <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2">
-                  {allUpcomingEvents.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-8 text-center flex flex-col items-center gap-2">
-                      <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
-                      Nenhum evento global previsto para os próximos 15 dias!
-                    </p>
-                  ) : (
-                    allUpcomingEvents.map(event => {
-                      const Wrapper = event.url ? Link : 'div';
-                      return (
-                        <Wrapper key={`${event.type}-${event.id}`} to={event.url as any} className={`flex items-center gap-2 p-2 rounded text-xs bg-secondary/50 border border-border/50 hover:bg-secondary transition-colors ${event.url ? 'cursor-pointer' : ''}`}>
-                          <event.icon className={`h-3.5 w-3.5 shrink-0 ${event.color}`} />
-                          <div className="flex-1 truncate font-medium" title={event.title}>{event.title}</div>
-                          <span className={`shrink-0 font-semibold text-muted-foreground`}>
-                            {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                          </span>
-                        </Wrapper>
-                      );
-                    })
-                  )}
-                </div>
+            {/* Chart */}
+            <div className="bg-card rounded-lg border border-border p-4 mb-8">
+              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Produtividade Semanal
+              </h2>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weekData}>
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="criadas" fill="hsl(205, 95%, 33%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="concluídas" fill="hsl(145, 63%, 42%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
