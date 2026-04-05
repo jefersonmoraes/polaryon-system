@@ -35,27 +35,23 @@ const DONUT_COLORS = ['#0ea5e9', '#8b5cf6', '#f43f5e'];
 
 export default function OportunidadesDashboard() {
     const [loading, setLoading] = useState(true);
-    const [metrics, setMetrics] = useState(pncpMetricsSnapshot);
+    const [metrics, setMetrics] = useState<any>(null);
 
     useEffect(() => {
         let isMounted = true;
         
-        const loadMetrics = () => {
+        const loadMetrics = async () => {
             if (!isMounted) return;
-            setLoading(true);
-            
-            // Simula uma busca na API com pequenas variações para dar a sensação de Real-Time Refresh
-            setTimeout(() => {
-                if (isMounted) {
-                    const variance = Math.floor(Math.random() * 50) * (Math.random() > 0.5 ? 1 : -1);
-                    setMetrics(prev => ({
-                        ...prev,
-                        totalLicitacoesAtivas: prev.totalLicitacoesAtivas + variance,
-                        orcamentoEstimadoAberto: prev.orcamentoEstimadoAberto + (variance * 10000)
-                    }));
-                    setLoading(false);
+            try {
+                const res = await import('@/lib/api').then(m => m.default.get('/transparency/national-thermometer'));
+                if (isMounted && res.data?.success) {
+                    setMetrics(res.data);
                 }
-            }, 600);
+            } catch (err) {
+                console.error('Failed to load national metrics', err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
         };
 
         // Initial load
@@ -106,75 +102,75 @@ export default function OportunidadesDashboard() {
                         <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-all"></div>
                         <div className="flex items-center gap-2 mb-3 text-muted-foreground">
                             <Target className="h-4 w-4 text-blue-500" />
-                            <h3 className="text-sm font-medium">Oportunidades Ativas Hoje</h3>
+                            <h3 className="text-sm font-medium">Oportunidades Ativas</h3>
                         </div>
                         <div className="text-3xl font-bold flex items-end gap-2 text-blue-500">
-                            {metrics.totalLicitacoesAtivas.toLocaleString('pt-BR')}
-                            <span className="text-sm font-semibold text-emerald-500 flex items-center mb-1">
-                                <TrendingUp className="h-3 w-3 mr-0.5" /> +15%
-                            </span>
+                            {(metrics.totalActive || 0).toLocaleString('pt-BR')}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">Editais recebendo propostas</p>
+                        <p className="text-xs text-muted-foreground mt-2">Editais recebendo propostas no PNCP</p>
+                    </div>
+
+                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group">
+                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-orange-500/10 rounded-full blur-xl group-hover:bg-orange-500/20 transition-all"></div>
+                        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
+                            <Filter className="h-4 w-4 text-orange-500" />
+                            <h3 className="text-sm font-medium">Publicadas Hoje</h3>
+                        </div>
+                        <div className="text-3xl font-bold text-orange-500 flex items-center gap-2">
+                            {metrics.todayCount || 0}
+                            {metrics.todayCount > (metrics.weeklyAvg || 0) && (
+                                <span className="text-[10px] bg-orange-500/20 text-orange-600 px-1.5 py-0.5 rounded-full font-bold animate-pulse">ALTA</span>
+                            )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Novos editais inseridos nas últimas 24h</p>
+                    </div>
+
+                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group">
+                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all"></div>
+                        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
+                            <Calendar className="h-4 w-4 text-amber-500" />
+                            <h3 className="text-sm font-medium">Média Diária (Semana)</h3>
+                        </div>
+                        <div className="text-3xl font-bold text-foreground">
+                            {metrics.weeklyAvg || 0} <span className="text-sm text-muted-foreground">ed/dia</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Volume médio nos últimos 7 dias</p>
                     </div>
 
                     <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group">
                         <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all"></div>
                         <div className="flex items-center gap-2 mb-3 text-muted-foreground">
                             <TrendingUp className="h-4 w-4 text-emerald-500" />
-                            <h3 className="text-sm font-medium">Orçamento Global Disponível</h3>
+                            <h3 className="text-sm font-medium">Orçamento Estimado</h3>
                         </div>
                         <div className="text-3xl font-bold text-foreground">
                             R$ 45 <span className="text-xl">Bi</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">Volume financeiro estimado no mercado</p>
-                    </div>
-
-                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group">
-                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all"></div>
-                        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-                            <Clock className="h-4 w-4 text-amber-500" />
-                            <h3 className="text-sm font-medium">Tempo Médio de Disputa</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-foreground">
-                            {metrics.mediaDiasDisputa} <span className="text-xl text-muted-foreground">dias</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">Da publicação à homologação</p>
-                    </div>
-
-                    <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group">
-                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all"></div>
-                        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-                            <BookOpen className="h-4 w-4 text-indigo-500" />
-                            <h3 className="text-sm font-medium">Taxa de Atualização</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-indigo-500">
-                            Alta
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">Média de 1.200 editais inseridos por dia</p>
+                        <p className="text-xs text-muted-foreground mt-2">Volume financeiro global aproximado</p>
                     </div>
                 </div>
 
                 {/* Charts Area */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                    {/* Bar Chart - Abertura por Modalidade */}
+                    {/* Bar Chart - Abertura por Nicho */}
                     <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
                         <h3 className="text-sm font-bold flex items-center gap-2 mb-6 text-foreground">
                             <BarChart3 className="h-4 w-4 text-primary" />
-                            Volume por Modalidade de Contratação
+                            Volume por Nicho de Mercado (Ativos)
                         </h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={metrics.principaisModalidades} layout="vertical" margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
+                                <BarChart data={metrics.nicheDistribution} layout="vertical" margin={{ top: 0, right: 30, left: 60, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
-                                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={false} tickLine={false} />
-                                    <YAxis dataKey="name" type="category" tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                    <YAxis dataKey="name" type="category" tick={{ fill: 'hsl(var(--foreground))', fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
                                     <RechartsTooltip
                                         contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                                         itemStyle={{ color: 'hsl(var(--foreground))' }}
                                         cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
                                     />
-                                    <Bar dataKey="value" name="%" radius={[0, 4, 4, 0]}>
-                                        {metrics.principaisModalidades.map((entry, index) => (
+                                    <Bar dataKey="value" name="Editais" radius={[0, 4, 4, 0]}>
+                                        {metrics.nicheDistribution?.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                         ))}
                                     </Bar>

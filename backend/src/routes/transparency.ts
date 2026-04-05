@@ -449,6 +449,76 @@ router.get('/analytics/global-brands', async (req: Request, res: Response) => {
     }
 });
 
+// Cache for National Thermometer (30 min)
+let thermometerCache: any = null;
+let lastThermometerFetch = 0;
+const CACHE_TTL = 30 * 60 * 1000;
+
+/**
+ * GET /api/transparency/national-thermometer
+ * Agregação de inteligência nacional (PNCP)
+ */
+router.get('/national-thermometer', async (req: Request, res: Response) => {
+    try {
+        const now = Date.now();
+        if (thermometerCache && (now - lastThermometerFetch < CACHE_TTL)) {
+            return res.json(thermometerCache);
+        }
+
+        const todayRaw = new Date();
+        const todayStr = todayRaw.toISOString().split('T')[0].replace(/-/g, '');
+        
+        const last7DaysRaw = new Date(todayRaw.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const last7DaysStr = last7DaysRaw.toISOString().split('T')[0].replace(/-/g, '');
+
+        // 1. Hoje e Total
+        const [todayRes, totalActiveRes] = await Promise.all([
+            axios.get(`${PNCP_SEARCH_URL}?pagina=1&tam_pagina=1&data_publicacao_inicial=${todayStr}&tipos_documento=edital`, { timeout: 8000 }),
+            axios.get(`${PNCP_SEARCH_URL}?pagina=1&tam_pagina=1&status=recebendo_proposta&tipos_documento=edital`, { timeout: 8000 })
+        ]);
+
+        // 2. Média Semanal
+        const last7Res = await axios.get(`${PNCP_SEARCH_URL}?pagina=1&tam_pagina=1&data_publicacao_inicial=${last7DaysStr}&tipos_documento=edital`, { timeout: 8000 });
+        const weeklyTotal = last7Res.data.total || 0;
+        const weeklyAvg = Math.round(weeklyTotal / 7);
+
+        // 3. Nichos de Mercado (Queries Setoriais) - Perform in Parallel
+        const niches = [
+            { id: 'ti', name: 'Tecnologia / TI', keywords: 'informatica|computador|software|TI' },
+            { id: 'saude', name: 'Saúde / Médicos', keywords: 'saude|medico|hospitalar|equipamento medico' },
+            { id: 'obras', name: 'Obras / Eng', keywords: 'obras|construção|reforma|engenharia' },
+            { id: 'alimentos', name: 'Alimentos', keywords: 'alimentos|comida|merenda|pereciveis' },
+            { id: 'servicos', name: 'Serviços Gerais', keywords: 'limpeza|segurança|vigilancia|zeladoria' }
+        ];
+
+        const nicheResults = await Promise.all(niches.map(async (n) => {
+            try {
+                const r = await axios.get(`${PNCP_SEARCH_URL}?pagina=1&tam_pagina=1&q=${encodeURIComponent(n.keywords)}&tipos_documento=edital&status=recebendo_proposta`, { timeout: 5000 });
+                return { name: n.name, value: r.data.total || 0 };
+            } catch {
+                return { name: n.name, value: 0 };
+            }
+        }));
+
+        const result = {
+            success: true,
+            todayCount: todayRes.data.total || 0,
+            totalActive: totalActiveRes.data.total || 121000,
+            weeklyAvg,
+            nicheDistribution: nicheResults,
+            lastUpdate: new Date().toISOString()
+        };
+
+        thermometerCache = result;
+        lastThermometerFetch = now;
+        res.json(result);
+
+    } catch (error: any) {
+        console.error('National Thermometer Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 /**
  * GET /api/transparency/analytics/global-brands-stream
  * EventSource Endpoint: Varre o portal até achar 30 marcas OU bater 5 páginas e envia updates parciais de progresso.
