@@ -368,6 +368,11 @@ export const useKanbanStore = create<KanbanState>()(
               budgets: finalBudgets,
               notifications: res.data.notifications || [],
             });
+
+            // Trigger automatic reorder for all lists based on new data
+            (res.data.lists || []).forEach((l: any) => {
+                get().reorderCardsByMilestones(l.id);
+            });
           }
         } catch (error) {
           console.error("Failed to load Kanban data from DB:", error);
@@ -1293,12 +1298,14 @@ export const useKanbanStore = create<KanbanState>()(
             const ms = card.milestones
               ?.filter((m: any) => !m.completed && m.dueDate)
               .sort((a: any, b: any) => {
-                  const dateA = new Date(a.dueDate!).getTime();
-                  const dateB = new Date(b.dueDate!).getTime();
-                  return dateA - dateB;
+                  // Precise comparison including hour
+                  const timeA = new Date(`${a.dueDate}T${a.hour || '00:00'}`).getTime();
+                  const timeB = new Date(`${b.dueDate}T${b.hour || '00:00'}`).getTime();
+                  return timeA - timeB;
               })[0];
-            if (ms) return new Date(ms.dueDate!).getTime();
-            if (card.dueDate) return new Date(card.dueDate).getTime();
+
+            if (ms) return new Date(`${ms.dueDate}T${ms.hour || '00:00'}`).getTime();
+            if (card.dueDate) return new Date(`${card.dueDate}T${card.hour || '00:00'}`).getTime();
             return Infinity;
         };
 
