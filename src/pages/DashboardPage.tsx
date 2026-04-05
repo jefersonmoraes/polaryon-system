@@ -196,9 +196,9 @@ const Dashboard = () => {
       return { text: '', timeRemaining, color: 'text-primary', icon: CalendarDays };
     };
 
-    const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string }[] = [];
+    const tempEvents: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string; cardId?: string; significance: number }[] = [];
 
-    // 1. Kanban Cards & Milestones
+    // 1. Kanban & Milestones
     if (canKanban) {
       cards.filter(c => !c.archived && !c.trashed && !c.completed).forEach(c => {
         const boardId = activeLists.find(l => l.id === c.listId)?.boardId;
@@ -209,7 +209,7 @@ const Dashboard = () => {
           const cDate = fixDate(c.dueDate);
           if (cDate.getTime() > 0 && cDate <= futureLimit) {
             const prog = getProgression(cDate);
-            events.push({ 
+            tempEvents.push({ 
               id: c.id, 
               title: `Entrega: ${c.title}`, 
               timeRemaining: prog.timeRemaining,
@@ -217,7 +217,9 @@ const Dashboard = () => {
               type: 'tarefa', 
               color: prog.color, 
               icon: prog.icon, 
-              url: `/board/${boardId}?cardId=${c.id}` 
+              url: `/board/${boardId}?cardId=${c.id}`,
+              cardId: c.id,
+              significance: 10 // Padrão
             });
           }
         }
@@ -227,50 +229,52 @@ const Dashboard = () => {
           const mDate = fixDate(m.dueDate);
           if (mDate.getTime() > 0 && mDate <= futureLimit) {
             const prog = getProgression(mDate);
-            events.push({ 
+            const isLances = m.title.toUpperCase().includes('LANCE');
+            tempEvents.push({ 
               id: `${c.id}-m-${m.id}`, 
               title: `[Etapa] ${m.title} - ${c.title}`, 
               timeRemaining: prog.timeRemaining,
               date: mDate, 
               type: 'milestone', 
               color: prog.color, 
-              icon: Zap, 
-              url: `/board/${boardId}?cardId=${c.id}` 
+              icon: isLances ? AlertCircle : Zap, 
+              url: `/board/${boardId}?cardId=${c.id}`,
+              cardId: c.id,
+              significance: isLances ? 1 : 5 // LANCES é prioridade 1 (máxima)
             });
           }
         });
       });
     }
 
-    // 2. Budgets block removed (per user request to only sync/show expiration dates)
-
-    // 3. Documents
+    // 2. Documents
     if (canDocs) {
       documents.filter(d => d.expirationDate && !d.trashed).forEach(d => {
         const dDate = fixDate(d.expirationDate);
         if (dDate.getTime() > 0 && dDate <= futureLimit) {
           const prog = getProgression(dDate);
-          events.push({ 
+          tempEvents.push({ 
             id: d.id, 
             title: `Documento: ${d.title}`, 
             timeRemaining: prog.timeRemaining,
             date: dDate, 
             type: 'documento', 
             color: prog.color, 
-            icon: prog.text.includes('VENCIDA') ? AlertCircle : prog.icon, 
-            url: '/documentacao' 
+            icon: prog.text.includes('VENCIDA') ? AlertCircle : FileText, 
+            url: '/documentacao',
+            significance: 2
           });
         }
       });
     }
 
-    // 4. Accounting (Tax Obligations)
+    // 3. Accounting (Tax Obligations)
     if (canAccounting) {
       taxObligations.filter(t => !t.trashedAt && t.status === 'pending').forEach(t => {
         const tDate = fixDate(t.dueDate);
         if (tDate.getTime() > 0 && tDate <= futureLimit) {
           const prog = getProgression(tDate);
-          events.push({ 
+          tempEvents.push({ 
             id: t.id, 
             title: `Imposto: ${t.name}`, 
             timeRemaining: prog.timeRemaining,
@@ -278,26 +282,34 @@ const Dashboard = () => {
             type: 'contabil', 
             color: prog.color, 
             icon: prog.icon, 
-            url: '/contabil' 
+            url: '/contabil',
+            significance: 3
           });
         }
       });
     }
 
-    // 5. Google Calendar & Custom Events
+    // 4. Google Calendar & Custom Events
+    const polaryonTitles = new Set(cards.map(c => c.title.toLowerCase()));
+
     googleEvents.filter(g => fixDate(g.date) <= futureLimit).forEach(g => {
       if (g.title && !g.title.startsWith('[Polaryon]')) {
         const gDate = fixDate(g.date);
+        
+        // De-duplication: If Google event matches a known Polaryon Card Title, skip it
+        const lowerTitle = g.title.toLowerCase();
+        if (polaryonTitles.has(lowerTitle)) return;
+        if (Array.from(polaryonTitles).some(pt => lowerTitle.includes(pt) || pt.includes(lowerTitle))) return;
+
         if (gDate.getTime() > 0) {
           const prog = getProgression(gDate);
-          // Try to extract extra info if the title is generic
           let displayTitle = g.title;
           if (displayTitle.includes('DATA E HORA') && g.description) {
               const cleanedDesc = g.description.replace(/<[^>]*>?/gm, '').split('\n')[0].trim();
               if (cleanedDesc) displayTitle = `${cleanedDesc} (${displayTitle})`;
           }
 
-          events.push({ 
+          tempEvents.push({ 
             id: g.id, 
             title: displayTitle, 
             timeRemaining: prog.timeRemaining,
@@ -305,13 +317,29 @@ const Dashboard = () => {
             type: 'google', 
             color: prog.text === '' ? 'text-purple-500' : prog.color, 
             icon: prog.text === '' ? CalendarIcon : prog.icon,
-            url: undefined // Desativado link externo para manter o usuário no sistema
+            url: undefined,
+            significance: 20 // Google é o último caso se nada bater
           });
         }
       }
     });
 
-    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
+    // --- DE-DUPLICATION ENGINE ---
+    // Group by Card + Day (YYYY-MM-DD)
+    const finalMap = new Map<string, any>();
+
+    tempEvents.forEach(evt => {
+        const dateKey = evt.date.toISOString().split('T')[0];
+        // If it's a card-related event (task or milestone), group by cardId + date
+        const key = evt.cardId ? `card-${evt.cardId}-${dateKey}` : `other-${evt.id}-${dateKey}`;
+        
+        const existing = finalMap.get(key);
+        if (!existing || evt.significance < existing.significance) {
+            finalMap.set(key, evt);
+        }
+    });
+
+    return Array.from(finalMap.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [upcomingCards, budgets, documents, taxObligations, canKanban, canBudgets, canDocs, canAccounting, googleEvents]);
 
   return (
