@@ -702,28 +702,37 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 return params;
             };
 
-            // Execução em Paralelo: Consulta nos ecossistemas PNCP e Compras.gov.br
+            // Execução em Paralelo: Consulta nos ecossistemas PNCP central
             const requests = [];
             
-            if (fonteFilter === 'Todas' || fonteFilter === 'PNCP') {
-                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
-            }
-            if (fonteFilter === 'Todas' || fonteFilter === 'Compras.gov.br') {
-                requests.push(api.get('/comprasgov/licitacoes', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-            }
+            requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
+            requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
 
             const responses = await Promise.all(requests);
             
             let data1 = responses[0]?.data || { items: [], total: 0 };
-            let data2 = responses[1] && fonteFilter !== 'Compras.gov.br' ? responses[1].data : { items: [] };
-            let dataCompras = fonteFilter === 'Compras.gov.br' ? responses[0]?.data : responses[2]?.data;
+            let data2 = responses[1]?.data || { items: [] };
 
-            let items = [
+            let allItems = [
                 ...(data1?.items || []), 
-                ...(data2?.items || []),
-                ...(dataCompras?.items || [])
+                ...(data2?.items || [])
             ];
+
+            // Tagger inteligente de Fontes de Dados (Compras.gov.br vs PNCP Nativo)
+            allItems = allItems.map(item => {
+                const isComprasGov = item.esfera_nome === 'Federal' || (item.item_url && item.item_url.includes('compras.gov.br')) || (item.orgao_nome && item.orgao_nome.includes('UASG'));
+                return {
+                    ...item,
+                    fonte_dados: isComprasGov ? 'Compras.gov.br' : 'PNCP'
+                };
+            });
+
+            // Filtro local da Fonte de Dados
+            if (fonteFilter !== 'Todas') {
+                allItems = allItems.filter(item => item.fonte_dados === fonteFilter);
+            }
+            
+            let items = allItems;
 
             // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
             // Os detalhes agora são carregados apenas no Modal ou se já estiverem no cache.
