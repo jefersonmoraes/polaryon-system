@@ -2,7 +2,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
-import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon } from 'lucide-react';
+import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -198,26 +198,47 @@ const Dashboard = () => {
 
     const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string }[] = [];
 
-    // 1. Kanban Cards
+    // 1. Kanban Cards & Milestones
     if (canKanban) {
-      upcomingCards.forEach(c => {
+      cards.filter(c => !c.archived && !c.trashed && !c.completed).forEach(c => {
+        const boardId = activeLists.find(l => l.id === c.listId)?.boardId;
+        if (!boardId) return;
+
+        // Card Due Date
         if (c.dueDate) {
-          const list = activeLists.find(l => l.id === c.listId);
           const cDate = fixDate(c.dueDate);
-          const prog = getProgression(cDate);
           if (cDate.getTime() > 0 && cDate <= futureLimit) {
+            const prog = getProgression(cDate);
             events.push({ 
               id: c.id, 
-              title: `Tarefa: ${c.title}`, 
+              title: `Entrega: ${c.title}`, 
               timeRemaining: prog.timeRemaining,
               date: cDate, 
               type: 'tarefa', 
               color: prog.color, 
               icon: prog.icon, 
-              url: list?.boardId ? `/board/${list.boardId}` : '' 
+              url: `/board/${boardId}?cardId=${c.id}` 
             });
           }
         }
+
+        // Card Milestones (Etapas)
+        (c.milestones || []).filter(m => !m.completed && m.dueDate).forEach(m => {
+          const mDate = fixDate(m.dueDate);
+          if (mDate.getTime() > 0 && mDate <= futureLimit) {
+            const prog = getProgression(mDate);
+            events.push({ 
+              id: `${c.id}-m-${m.id}`, 
+              title: `[Etapa] ${m.title} - ${c.title}`, 
+              timeRemaining: prog.timeRemaining,
+              date: mDate, 
+              type: 'milestone', 
+              color: prog.color, 
+              icon: Zap, 
+              url: `/board/${boardId}?cardId=${c.id}` 
+            });
+          }
+        });
       });
     }
 
@@ -284,7 +305,7 @@ const Dashboard = () => {
             type: 'google', 
             color: prog.text === '' ? 'text-purple-500' : prog.color, 
             icon: prog.text === '' ? CalendarIcon : prog.icon,
-            url: g.url // Google agenda items are now clickable too
+            url: undefined // Desativado link externo para manter o usuário no sistema
           });
         }
       }
