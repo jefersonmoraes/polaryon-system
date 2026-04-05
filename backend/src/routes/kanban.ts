@@ -704,9 +704,14 @@ router.get('/budgets/:budgetId/attachment-content/:attachmentId', async (req: Re
         const items = budget.items as any[] || [];
         for (const item of items) {
            const att = (item.attachments || []).find((a: any) => a.id === (req.params.attachmentId as string));
-           if (att) return res.json({ url: att.url });
+           if (att) {
+               if (!att.url || att.url.trim() === "") {
+                   return res.status(404).json({ error: 'Attachment exists but has no content (URL is empty)' });
+               }
+               return res.json({ url: att.url });
+           }
         }
-        res.status(404).json({ error: 'Attachment not found in budget' });
+        res.status(404).json({ error: 'Attachment not found in budget items' });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
@@ -724,9 +729,36 @@ router.post('/budgets', async (req: Request, res: Response) => {
 router.put('/budgets/:id', async (req: Request, res: Response) => {
     try {
         const { id, createdAt, ...data } = req.body;
-        const budget = await prisma.budget.update({ where: { id: req.params.id as string }, data });
+        const budgetId = req.params.id as string;
+
+        // --- DATA INTEGRITY PROTECTION [V6] ---
+        // If items are being updated, preserve existing attachment URLs if incoming are empty
+        if (data.items && Array.isArray(data.items)) {
+            const existingBudget = await prisma.budget.findUnique({ where: { id: budgetId } });
+            if (existingBudget && existingBudget.items) {
+                const oldItems = existingBudget.items as any[];
+                data.items = data.items.map((newItem: any) => {
+                    const oldItem = oldItems.find((oi: any) => oi.id === newItem.id);
+                    if (oldItem && oldItem.attachments && newItem.attachments) {
+                        newItem.attachments = newItem.attachments.map((newAtt: any) => {
+                            const oldAtt = oldItem.attachments.find((oa: any) => oa.id === newAtt.id);
+                            // If new URL is empty but old one wasn't, preserve the old content
+                            if ((!newAtt.url || newAtt.url === "") && (oldAtt && oldAtt.url && oldAtt.url !== "")) {
+                                return { ...newAtt, url: oldAtt.url };
+                            }
+                            return newAtt;
+                        });
+                    }
+                    return newItem;
+                });
+            }
+        }
+        // --- END PROTECTION ---
+
+        const budget = await prisma.budget.update({ where: { id: budgetId }, data });
         res.json(budget);
     } catch (e: any) {
+        console.error("Budget Update Error:", e);
         res.status(500).json({ error: e.message });
     }
 });

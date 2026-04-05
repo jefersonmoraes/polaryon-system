@@ -1673,7 +1673,10 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
 
             if (!currentUrl) {
                 console.error("[V5] Could not load content for attachment:", att.id);
-                toast.error('Não foi possível carregar o conteúdo do arquivo.');
+                toast.error('Anexo corrompido ou sem conteúdo no servidor. Por favor, remova e reenvie o arquivo.', {
+                    duration: 5000,
+                    description: 'A URL do arquivo está vazia no banco de dados.'
+                });
                 return;
             }
 
