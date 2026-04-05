@@ -540,7 +540,7 @@ const InteligenciaPreditiva: React.FC = () => {
                     <p className="text-xs font-black text-primary uppercase tracking-widest">Insight de Mercado Polaryon</p>
                     <p className="text-[11px] text-muted-foreground">
                         Utilize os filtros de valor para focar em **Grandes Obras e Aquisições Estruturantes**. 
-                        Repasses com valores global alto (> R$ 500k) indicam licitações complexas que exigem planejamento de estoque antecipado.
+                        Repasses com valores global alto (&gt; R$ 500k) indicam licitações complexas que exigem planejamento de estoque antecipado.
                     </p>
                 </div>
             </div>
