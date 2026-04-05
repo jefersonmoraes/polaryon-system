@@ -176,17 +176,27 @@ const Dashboard = () => {
 
     const getProgression = (dDate: Date) => {
       const d = new Date(dDate);
-      d.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 3600 * 24));
+      const diffMs = d.getTime() - new Date().getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 3600 * 24));
+      const diffHours = Math.ceil(diffMs / (1000 * 3600));
       
-      if (diffDays < 0) return { text: `[VENCIDA] `, color: 'text-red-500 font-black bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]', icon: AlertCircle };
-      if (diffDays === 0) return { text: `[HOJE ⚠️] `, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse_1.5s_ease-in-out_infinite]', icon: AlertTriangle };
-      if (diffDays <= 2) return { text: `[Faltam ${diffDays}d] `, color: 'text-yellow-600 font-bold bg-yellow-500/15 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]', icon: Clock };
-      if (diffDays <= 5) return { text: `[Em ${diffDays}d] `, color: 'text-blue-500 font-medium', icon: CalendarIcon };
-      return { text: '', color: 'text-primary', icon: CalendarDays };
+      let timeRemaining = "";
+      if (diffMs < 0) {
+        const absDays = Math.abs(diffDays);
+        timeRemaining = absDays === 0 ? "Atrasado (horas)" : `Atrasado ${absDays}d`;
+      } else {
+        if (diffDays === 0) timeRemaining = `${diffHours}h restantes`;
+        else timeRemaining = `Faltam ${diffDays}d`;
+      }
+
+      if (diffMs < 0) return { text: `[VENCIDA] `, timeRemaining, color: 'text-red-500 font-extrabold bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]', icon: AlertCircle };
+      if (diffDays === 0) return { text: `[HOJE ⚠️] `, timeRemaining, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse:1.5s_ease-in-out_infinite]', icon: AlertTriangle };
+      if (diffDays <= 2) return { text: `[Faltam ${diffDays}d] `, timeRemaining, color: 'text-yellow-600 font-bold bg-yellow-500/15 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]', icon: Clock };
+      if (diffDays <= 5) return { text: `[Em ${diffDays}d] `, timeRemaining, color: 'text-blue-500 font-medium', icon: CalendarIcon };
+      return { text: '', timeRemaining, color: 'text-primary', icon: CalendarDays };
     };
 
-    const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string }[] = [];
+    const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string }[] = [];
 
     // 1. Kanban Cards
     if (canKanban) {
@@ -198,7 +208,8 @@ const Dashboard = () => {
           if (cDate.getTime() > 0 && cDate <= futureLimit) {
             events.push({ 
               id: c.id, 
-              title: `${prog.text}Tarefa: ${c.title}`, 
+              title: `Tarefa: ${c.title}`, 
+              timeRemaining: prog.timeRemaining,
               date: cDate, 
               type: 'tarefa', 
               color: prog.color, 
@@ -220,7 +231,8 @@ const Dashboard = () => {
           const prog = getProgression(dDate);
           events.push({ 
             id: d.id, 
-            title: `${prog.text}Doc: ${d.title}`, 
+            title: `Documento: ${d.title}`, 
+            timeRemaining: prog.timeRemaining,
             date: dDate, 
             type: 'documento', 
             color: prog.color, 
@@ -239,7 +251,8 @@ const Dashboard = () => {
           const prog = getProgression(tDate);
           events.push({ 
             id: t.id, 
-            title: `${prog.text}Guia/Imposto: ${t.name}`, 
+            title: `Imposto: ${t.name}`, 
+            timeRemaining: prog.timeRemaining,
             date: tDate, 
             type: 'contabil', 
             color: prog.color, 
@@ -256,13 +269,22 @@ const Dashboard = () => {
         const gDate = fixDate(g.date);
         if (gDate.getTime() > 0) {
           const prog = getProgression(gDate);
+          // Try to extract extra info if the title is generic
+          let displayTitle = g.title;
+          if (displayTitle.includes('DATA E HORA') && g.description) {
+              const cleanedDesc = g.description.replace(/<[^>]*>?/gm, '').split('\n')[0].trim();
+              if (cleanedDesc) displayTitle = `${cleanedDesc} (${displayTitle})`;
+          }
+
           events.push({ 
             id: g.id, 
-            title: `${prog.text}${g.title}`, 
+            title: displayTitle, 
+            timeRemaining: prog.timeRemaining,
             date: gDate, 
             type: 'google', 
             color: prog.text === '' ? 'text-purple-500' : prog.color, 
-            icon: prog.text === '' ? CalendarIcon : prog.icon 
+            icon: prog.text === '' ? CalendarIcon : prog.icon,
+            url: g.url // Google agenda items are now clickable too
           });
         }
       }
@@ -435,14 +457,24 @@ const Dashboard = () => {
                   </p>
                 ) : (
                   allUpcomingEvents.map(event => {
-                    const Wrapper = event.url ? Link : 'div';
+                    const isExternal = event.url && event.url.startsWith('http');
+                    const Wrapper = event.url ? (isExternal ? 'a' : Link) : 'div';
+                    const wrapperProps = event.url ? (isExternal ? { href: event.url, target: '_blank', rel: 'noopener noreferrer' } : { to: event.url }) : {};
+
                     return (
-                      <Wrapper key={`${event.type}-${event.id}`} to={event.url as any} className={`flex items-center gap-2 p-3 rounded text-xs bg-secondary/50 border border-border/50 hover:bg-secondary transition-colors shadow-sm ${event.url ? 'cursor-pointer' : ''}`}>
-                        <event.icon className={`h-4 w-4 shrink-0 ${event.color}`} />
-                        <div className="flex-1 truncate font-medium text-[13px]" title={event.title}>{event.title}</div>
-                        <span className={`shrink-0 font-semibold text-muted-foreground`}>
-                          {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                        </span>
+                      <Wrapper key={`${event.type}-${event.id}`} {...wrapperProps} className={`flex flex-col gap-1 p-2.5 rounded bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-primary/30 transition-all shadow-sm ${event.url ? 'cursor-pointer' : ''}`}>
+                        <div className="flex items-center gap-2">
+                           <event.icon className={`h-3.5 w-3.5 shrink-0 ${event.color}`} />
+                           <div className="flex-1 truncate font-semibold text-[10.5px] leading-tight text-foreground/90" title={event.title}>{event.title}</div>
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5 px-0.5">
+                           <span className={`text-[9.5px] font-bold uppercase tracking-wider ${event.color.split(' ')[0]}`}>
+                             {event.timeRemaining}
+                           </span>
+                           <span className="text-[9.5px] font-medium text-muted-foreground bg-background/40 px-1 rounded">
+                             {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                           </span>
+                        </div>
                       </Wrapper>
                     );
                   })

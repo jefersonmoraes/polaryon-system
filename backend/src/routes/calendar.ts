@@ -94,6 +94,8 @@ router.post('/sync', async (req: Request, res: Response) => {
         const mappedEvents = gEvents.map((item: any) => ({
             id: item.id,
             title: item.summary,
+            description: item.description || '',
+            location: item.location || '',
             date: item.start?.date || item.start?.dateTime,
             url: item.htmlLink,
             type: 'google_agenda'
