@@ -85,11 +85,14 @@ const InteligenciaPreditiva: React.FC = () => {
         fetchConvenios();
     }, [fetchConvenios]);
 
-    const filteredItems = items.filter(item => 
-        (item.objeto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.convenente || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.numero || '').includes(searchTerm)
-    );
+    const filteredItems = (items || []).filter(item => {
+        if (!item) return false;
+        const search = searchTerm.toLowerCase();
+        const objeto = String(item.objeto || '').toLowerCase();
+        const convenente = String(item.convenente || '').toLowerCase();
+        const numero = String(item.numero || '').toLowerCase();
+        return objeto.includes(search) || convenente.includes(search) || numero.includes(search);
+    });
 
     return (
         <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 min-h-screen bg-background/50">
@@ -128,7 +131,7 @@ const InteligenciaPreditiva: React.FC = () => {
                         Volume Mapeado no Mês
                     </div>
                     <div className="text-2xl font-bold text-primary">
-                        {formatCurrency(items.reduce((acc, i) => acc + i.valor, 0))}
+                        {formatCurrency((items || []).reduce((acc, i) => acc + (i?.valor || 0), 0))}
                     </div>
                 </motion.div>
 
@@ -143,7 +146,7 @@ const InteligenciaPreditiva: React.FC = () => {
                         Órgãos em Captação
                     </div>
                     <div className="text-2xl font-bold">
-                        {new Set(items.map(i => i.convenente)).size} Municipios/Entidades
+                        {new Set((items || []).map(i => i?.convenente || 'Indefinido')).size} Municipios/Entidades
                     </div>
                 </motion.div>
 
@@ -158,7 +161,7 @@ const InteligenciaPreditiva: React.FC = () => {
                         Leads de Alta Probabilidade
                     </div>
                     <div className="text-2xl font-bold text-emerald-500">
-                        {items.length} Oportunidades Próximas
+                        {(items || []).length} Oportunidades Próximas
                     </div>
                 </motion.div>
             </div>
