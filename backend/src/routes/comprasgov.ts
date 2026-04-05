@@ -25,7 +25,8 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
                 pagina: pagina,
                 tamanho_pagina: 50,
                 esferas: ['F'],
-                status: ['recebendo_proposta']
+                status: ['recebendo_proposta'],
+                tipos_documento: ['edital', 'aviso_contratacao_direta']
             },
             headers: { 
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
