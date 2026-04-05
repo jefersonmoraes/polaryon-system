@@ -35,7 +35,7 @@ const DONUT_COLORS = ['#0ea5e9', '#8b5cf6', '#f43f5e'];
 
 export default function OportunidadesDashboard() {
     const [loading, setLoading] = useState(true);
-    const [metrics, setMetrics] = useState<any>(null);
+    const [metrics, setMetrics] = useState<any>(pncpMetricsSnapshot);
 
     useEffect(() => {
         let isMounted = true;
@@ -70,14 +70,7 @@ export default function OportunidadesDashboard() {
         };
     }, []);
 
-    if (loading || !metrics) {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                <p className="text-muted-foreground font-medium animate-pulse">Sincronizando Inteligência Nacional (PNCP)...</p>
-            </div>
-        );
-    }
+    // Removido bloqueio total de tela para permitir renderização com dados base enquanto carrega
 
     return (
         <div className="flex-1 overflow-y-auto bg-background text-foreground p-6 min-h-full">
@@ -105,7 +98,7 @@ export default function OportunidadesDashboard() {
                             <h3 className="text-sm font-medium">Oportunidades Ativas</h3>
                         </div>
                         <div className="text-3xl font-bold flex items-end gap-2 text-blue-500">
-                            {(metrics.totalActive || 0).toLocaleString('pt-BR')}
+                            {(metrics?.totalActive || metrics?.totalLicitacoesAtivas || 0).toLocaleString('pt-BR')}
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">Editais recebendo propostas no PNCP</p>
                     </div>
@@ -117,8 +110,8 @@ export default function OportunidadesDashboard() {
                             <h3 className="text-sm font-medium">Publicadas Hoje</h3>
                         </div>
                         <div className="text-3xl font-bold text-orange-500 flex items-center gap-2">
-                            {metrics.todayCount || 0}
-                            {metrics.todayCount > (metrics.weeklyAvg || 0) && (
+                            {metrics?.todayCount || 0}
+                            {(metrics?.todayCount > (metrics?.weeklyAvg || 0)) && (
                                 <span className="text-[10px] bg-orange-500/20 text-orange-600 px-1.5 py-0.5 rounded-full font-bold animate-pulse">ALTA</span>
                             )}
                         </div>
@@ -132,7 +125,7 @@ export default function OportunidadesDashboard() {
                             <h3 className="text-sm font-medium">Média Diária (Semana)</h3>
                         </div>
                         <div className="text-3xl font-bold text-foreground">
-                            {metrics.weeklyAvg || 0} <span className="text-sm text-muted-foreground">ed/dia</span>
+                            {metrics?.weeklyAvg || 0} <span className="text-sm text-muted-foreground">ed/dia</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">Volume médio nos últimos 7 dias</p>
                     </div>
@@ -187,7 +180,7 @@ export default function OportunidadesDashboard() {
                         </h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={metrics.evolucaoMensal} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <LineChart data={metrics?.evolucaoMensal || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                                     <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={false} tickLine={false} />
                                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -212,7 +205,7 @@ export default function OportunidadesDashboard() {
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
-                                        data={metrics.esferasAbertura}
+                                        data={metrics?.esferasAbertura || []}
                                         cx="50%"
                                         cy="50%"
                                         innerRadius={70}
@@ -223,7 +216,7 @@ export default function OportunidadesDashboard() {
                                         label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                         labelLine={false}
                                     >
-                                        {metrics.esferasAbertura.map((entry, index) => (
+                                        {(metrics?.esferasAbertura || []).map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
                                         ))}
                                     </Pie>
