@@ -18,9 +18,32 @@ router.get('/licitacoes', async (req: Request, res: Response) => {
         // Paginação do PNCP é por página de 50 (ex: offset 0 = pag 1)
         const pagina = Math.floor(Number(offset) / 50) + 1;
         
-        let url = `${PNCP_SEARCH_URL}?pagina=${pagina}&tamanho_pagina=50&esferas=F&status=recebendo_proposta`;
+        let url = `${PNCP_SEARCH_URL}`;
 
-        const response = await axios.get(url, { timeout: 10000 });
+        const response = await axios.get(url, { 
+            params: {
+                pagina: pagina,
+                tamanho_pagina: 50,
+                esferas: ['F'],
+                status: ['recebendo_proposta']
+            },
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 15000,
+            paramsSerializer: (params) => {
+                const searchParams = new URLSearchParams();
+                for (const key in params) {
+                    if (Array.isArray(params[key])) {
+                        params[key].forEach((val: any) => searchParams.append(key, val));
+                    } else if (params[key] !== undefined && params[key] !== null) {
+                        searchParams.append(key, params[key]);
+                    }
+                }
+                return searchParams.toString();
+            }
+        });
         
         // Mapear para o padrão PncpItem garantindo a etiqueta da fonte
         const items = (response.data?.items || []).map((l: any) => ({
