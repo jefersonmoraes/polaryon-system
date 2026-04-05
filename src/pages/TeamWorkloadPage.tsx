@@ -33,7 +33,9 @@ export default function TeamWorkloadPage() {
         setIsLoadingActivity(true);
         import('@/lib/api').then(m => m.default.get(`/activity/stats?period=${period}`))
             .then(res => {
-                if (res.data.success) setActivityStats(res.data.stats);
+                if (res.data?.success && res.data?.stats) {
+                    setActivityStats(res.data.stats);
+                }
             })
             .catch(console.error)
             .finally(() => setIsLoadingActivity(false));

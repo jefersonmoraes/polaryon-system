@@ -91,7 +91,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!currentUser) return;
     api.get(`/activity/stats?period=week`).then(res => {
-        if (res.data.success && res.data.stats[currentUser.id]) {
+        if (res.data?.success && res.data?.stats?.[currentUser.id]) {
             setWeeklyActivity(res.data.stats[currentUser.id]);
         }
     }).catch(console.error);
@@ -530,11 +530,9 @@ const Dashboard = () => {
                 ) : (
                   allUpcomingEvents.map(event => {
                     const isExternal = event.url && event.url.startsWith('http');
-                    const Wrapper = event.url ? (isExternal ? 'a' : Link) : 'div';
-                    const wrapperProps = event.url ? (isExternal ? { href: event.url, target: '_blank', rel: 'noopener noreferrer' } : { to: event.url }) : {};
-
-                    return (
-                      <Wrapper key={`${event.type}-${event.id}`} {...wrapperProps} className={`flex flex-col gap-1 p-2.5 rounded bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-primary/30 transition-all shadow-sm ${event.url ? 'cursor-pointer' : ''}`}>
+                    
+                    const eventContent = (
+                      <>
                         <div className="flex items-center gap-2">
                            <event.icon className={`h-3.5 w-3.5 shrink-0 ${event.color}`} />
                            <div className="flex-1 truncate font-semibold text-[10.5px] leading-tight text-foreground/90" title={event.title}>{event.title}</div>
@@ -547,7 +545,31 @@ const Dashboard = () => {
                              {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                            </span>
                         </div>
-                      </Wrapper>
+                      </>
+                    );
+
+                    const commonClasses = `flex flex-col gap-1 p-2.5 rounded bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-primary/30 transition-all shadow-sm ${event.url ? 'cursor-pointer' : ''}`;
+
+                    if (!event.url) {
+                        return (
+                            <div key={`${event.type}-${event.id}`} className={commonClasses}>
+                                {eventContent}
+                            </div>
+                        );
+                    }
+
+                    if (isExternal) {
+                        return (
+                            <a key={`${event.type}-${event.id}`} href={event.url} target="_blank" rel="noopener noreferrer" className={commonClasses}>
+                                {eventContent}
+                            </a>
+                        );
+                    }
+
+                    return (
+                        <Link key={`${event.type}-${event.id}`} to={event.url} className={commonClasses}>
+                            {eventContent}
+                        </Link>
                     );
                   })
                 )}
