@@ -582,7 +582,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             });
         }
 
-        // Create Milestones (New: DATA E HORA DOS LANCES)
+        // Create Milestones (New: LANCES)
         const endDateTime = itemDetail?.dataFimRecebimentoProposta || 
                           itemDetail?.dataEncerramentoProposta || 
                           selectedItem.data_encerramento_proposta ||
@@ -594,7 +594,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             if (!isNaN(d.getTime())) {
                 cardMilestones.push({
                     id: crypto.randomUUID(),
-                    title: "DATA E HORA DOS LANCES",
+                    title: "LANCES",
                     dueDate: d.toISOString().split('T')[0],
                     hour: d.toTimeString().split(' ')[0].substring(0, 5),
                     completed: false
