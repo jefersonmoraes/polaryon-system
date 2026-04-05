@@ -24,6 +24,7 @@ import connectionRoutes from './routes/connections';
 import transparencyRoutes from './routes/transparency';
 import activityRoutes from './routes/activity';
 import maintenanceRoutes from './routes/maintenance';
+import comprasgovRoutes from './routes/comprasgov';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 
@@ -102,6 +103,7 @@ app.use('/api/connections', connectionRoutes);
 app.use('/api/transparency', transparencyRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/comprasgov', comprasgovRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {

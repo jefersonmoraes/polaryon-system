@@ -324,6 +324,7 @@ export default function OportunidadesSearch() {
     const [dataFinalFilter, setDataFinalFilter] = useState('');
     const [valorMinFilter, setValorMinFilter] = useState('');
     const [valorMaxFilter, setValorMaxFilter] = useState('');
+    const [fonteFilter, setFonteFilter] = useState('Todas'); // Novo filtro de Fonte (Unified Hub)
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -342,6 +343,7 @@ export default function OportunidadesSearch() {
         setDataFinalFilter('');
         setValorMinFilter('');
         setValorMaxFilter('');
+        setFonteFilter('Todas');
         setPage(1);
     }, []);
 
@@ -700,17 +702,28 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 return params;
             };
 
-            const [res1, res2] = await Promise.all([
-                api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })),
-                api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } }))
-            ]);
+            // Execução em Paralelo: Consulta nos ecossistemas PNCP e Compras.gov.br
+            const requests = [];
+            
+            if (fonteFilter === 'Todas' || fonteFilter === 'PNCP') {
+                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
+                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            }
+            if (fonteFilter === 'Todas' || fonteFilter === 'Compras.gov.br') {
+                requests.push(api.get('/comprasgov/licitacoes', { params: { offset: (currentPage - 1) * 50 } }).catch(() => ({ data: { items: [] } })));
+            }
 
-            let data1 = res1.data || { items: [], total: 0 };
-            let data2 = res2.data || { items: [] };
+            const responses = await Promise.all(requests);
+            
+            let data1 = responses[0]?.data || { items: [], total: 0 };
+            let data2 = responses[1] && fonteFilter !== 'Compras.gov.br' ? responses[1].data : { items: [] };
+            let dataCompras = fonteFilter === 'Compras.gov.br' ? responses[0]?.data : responses[2]?.data;
 
-            // Data already extracted from api.get calls above
-
-            let items = [...(data1?.items || []), ...(data2?.items || [])];
+            let items = [
+                ...(data1?.items || []), 
+                ...(data2?.items || []),
+                ...(dataCompras?.items || [])
+            ];
 
             // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
             // Os detalhes agora são carregados apenas no Modal ou se já estiverem no cache.
@@ -878,6 +891,14 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 animate={{ height: 'auto', opacity: 1 }}
                                 className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pt-2 pb-1 border-t border-border/50 mt-1"
                             >
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Fonte de Dados</label>
+                                    <select value={fonteFilter} onChange={(e) => setFonteFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                        <option value="Todas">Todas (PNCP + Compras.gov.br)</option>
+                                        <option value="PNCP">PNCP Oficial</option>
+                                        <option value="Compras.gov.br">Compras.gov.br (Legado/SIASG)</option>
+                                    </select>
+                                </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Instrumento</label>
                                     <select value={instrumentoFilter} onChange={(e) => setInstrumentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
@@ -1072,9 +1093,18 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3.5 align-top">
-                                                <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
-                                                    {item.modalidade_licitacao_nome}
-                                                </span>
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
+                                                        {item.modalidade_licitacao_nome}
+                                                    </span>
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${
+                                                        (item as any).fonte_dados === 'Compras.gov.br'
+                                                            ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                                                            : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                                    }`}>
+                                                        {(item as any).fonte_dados || 'PNCP'}
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3.5 align-top">
                                                 <div className="flex items-center gap-1 text-xs">
