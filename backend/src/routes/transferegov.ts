@@ -19,7 +19,16 @@ const api = axios.create({
  */
 router.get('/convenios', async (req: Request, res: Response) => {
     try {
-        const { pagina = 1, dataInicial, dataFinal, uf, codigoOrgao } = req.query;
+        const { 
+            pagina = 1, 
+            dataInicial, 
+            dataFinal, 
+            uf, 
+            codigoOrgao,
+            valorMin,
+            valorMax,
+            tipoInstrumento 
+        } = req.query;
 
         // Regra da API: Requer dataInicial e dataFinal se não houver outros filtros fortes.
         // Se o usuário não mandou, pegamos o mês atual por padrão.
@@ -44,6 +53,9 @@ router.get('/convenios', async (req: Request, res: Response) => {
 
         if (uf) params.uf = uf;
         if (codigoOrgao) params.codigoOrgao = codigoOrgao;
+        if (valorMin) params.valorTotalDe = valorMin;
+        if (valorMax) params.valorTotalAte = valorMax;
+        if (tipoInstrumento) params.tipoInstrumento = tipoInstrumento;
 
         const response = await api.get('/convenios', { params });
         
@@ -53,15 +65,22 @@ router.get('/convenios', async (req: Request, res: Response) => {
             numero: c.numero || 'S/N',
             objeto: c.objeto || 'Objeto não detalhado pelo convênio',
             valor: c.valor || 0,
+            valorLiberado: c.valorLiberado || 0,
+            valorContrapartida: c.valorContrapartida || 0,
             dataInicio: c.dataInicioVigencia || '',
             dataFim: c.dataFimVigencia || '',
+            processo: c.numeroProcesso || '-',
             concedente: c.orgaoSuperiorConcedente?.nome || 'Órgão Federal',
+            orgaoVinculado: c.unidadeGestora?.orgaoVinculado?.nome || c.orgaoSuperiorConcedente?.nome,
             convenente: c.convenente?.nome || 'Entidade Convenente',
             cnpjConvenente: c.convenente?.cnpjFormatado || '',
             uf: c.convenente?.uf?.sigla || '--',
             municipio: c.convenente?.municipio?.nome || 'Município',
             situacao: c.situacao || 'Em Análise',
-            statusPredicao: 'ALTA_PROBABILIDADE' // Meta-tag do Polaryon
+            tipoInstrumento: c.tipoInstrumento?.descricao || 'Transferência',
+            funcao: c.subfuncao?.funcao?.descricaoFuncao || 'N/A',
+            subfuncao: c.subfuncao?.descricaoSubfuncap || 'N/A',
+            statusPredicao: 'ALTA_PROBABILIDADE' 
         }));
 
         res.json({
@@ -77,6 +96,19 @@ router.get('/convenios', async (req: Request, res: Response) => {
             error: 'Falha ao conectar com o barramento de convênios federal.',
             details: error.message 
         });
+    }
+});
+
+/**
+ * GET /api/transferegov/tipo-instrumento
+ * Auxiliar para popular o filtro de tipos.
+ */
+router.get('/tipo-instrumento', async (req: Request, res: Response) => {
+    try {
+        const response = await api.get('/convenios/tipo-instrumento');
+        res.json(response.data);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
     }
 });
 
