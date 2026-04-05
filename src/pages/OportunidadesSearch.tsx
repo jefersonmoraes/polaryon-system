@@ -788,7 +788,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter
+        valorMinFilter, valorMaxFilter, fonteFilter
     ]);
 
     // Auto-fetch inteligente com debounce para recarregar quando o usuário digitar ou alterar filtros
@@ -804,7 +804,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter
+        valorMinFilter, valorMaxFilter, fonteFilter
     ]);
 
     const handleSearch = useCallback((e: React.FormEvent) => {
