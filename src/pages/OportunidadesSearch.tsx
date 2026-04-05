@@ -718,20 +718,6 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 ...(data2?.items || [])
             ];
 
-            // Tagger inteligente de Fontes de Dados (Compras.gov.br vs PNCP Nativo)
-            allItems = allItems.map(item => {
-                const isComprasGov = item.esfera_nome === 'Federal' || (item.item_url && item.item_url.includes('compras.gov.br')) || (item.orgao_nome && item.orgao_nome.includes('UASG'));
-                return {
-                    ...item,
-                    fonte_dados: isComprasGov ? 'Compras.gov.br' : 'PNCP'
-                };
-            });
-
-            // Filtro local da Fonte de Dados
-            if (fonteFilter !== 'Todas') {
-                allItems = allItems.filter(item => item.fonte_dados === fonteFilter);
-            }
-            
             let items = allItems;
 
             // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
@@ -797,7 +783,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter, fonteFilter
+        valorMinFilter, valorMaxFilter
     ]);
 
     // Auto-fetch inteligente com debounce para recarregar quando o usuário digitar ou alterar filtros
@@ -813,7 +799,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter, fonteFilter
+        valorMinFilter, valorMaxFilter
     ]);
 
     const handleSearch = useCallback((e: React.FormEvent) => {
@@ -900,14 +886,6 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 animate={{ height: 'auto', opacity: 1 }}
                                 className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pt-2 pb-1 border-t border-border/50 mt-1"
                             >
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Fonte de Dados</label>
-                                    <select value={fonteFilter} onChange={(e) => setFonteFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="Todas">Todas (PNCP + Compras.gov.br)</option>
-                                        <option value="PNCP">PNCP Oficial</option>
-                                        <option value="Compras.gov.br">Compras.gov.br (Legado/SIASG)</option>
-                                    </select>
-                                </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Instrumento</label>
                                     <select value={instrumentoFilter} onChange={(e) => setInstrumentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
