@@ -22,6 +22,7 @@ import auditRoutes from './routes/audit';
 import sidebarLinksRoutes from './routes/sidebar-links';
 import connectionRoutes from './routes/connections';
 import transparencyRoutes from './routes/transparency';
+import activityRoutes from './routes/activity';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 
@@ -98,6 +99,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/sidebar-links', sidebarLinksRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/transparency', transparencyRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {

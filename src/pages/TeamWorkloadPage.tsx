@@ -25,6 +25,19 @@ export default function TeamWorkloadPage() {
     const entries = useAccountingStore(state => state.entries);
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
     const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
+    const [activityStats, setActivityStats] = useState<Record<string, number>>({});
+    const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+    
+    // Fetch Activity Stats
+    useMemo(() => {
+        setIsLoadingActivity(true);
+        import('@/lib/api').then(m => m.default.get(`/activity/stats?period=${period}`))
+            .then(res => {
+                if (res.data.success) setActivityStats(res.data.stats);
+            })
+            .catch(console.error)
+            .finally(() => setIsLoadingActivity(false));
+    }, [period]);
 
     // Filter only active cards
     const activeCards = cards.filter(c => !c.archived && !c.trashed);
@@ -202,7 +215,20 @@ export default function TeamWorkloadPage() {
                                         <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full border-2 border-primary object-cover" />
                                         <div className="overflow-hidden">
                                             <h3 className="font-bold text-foreground truncate">{member.name}</h3>
-                                            <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[10px] text-muted-foreground truncate">{member.email}</p>
+                                                {activityStats[member.id] !== undefined && (
+                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        {(() => {
+                                                            const s = activityStats[member.id] || 0;
+                                                            const h = Math.floor(s / 3600);
+                                                            const m = Math.floor((s % 3600) / 60);
+                                                            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                                                        })()}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 

@@ -1,6 +1,8 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
+import { PrismaClient } from '@prisma/client';
 
+const prisma = new PrismaClient();
 let io: Server;
 
 export const initSocket = (server: HttpServer) => {
@@ -112,6 +114,40 @@ export const initSocket = (server: HttpServer) => {
                 socket.broadcast.emit('system_sync', data);
             } catch (error) {
                 console.error(`❌ Error in system_action:`, error);
+            }
+        });
+
+        // HEARTBEAT de tempo logado (a cada 1 min de atividade confirmada)
+        socket.on('user_heartbeat', async (data: { userId: string }) => {
+            try {
+                if (!data || !data.userId) return;
+                
+                // Get Brazil date (YYYY-MM-DD)
+                const now = new Date();
+                const brDateString = now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }).split(',')[0];
+                const [m, d, y] = brDateString.split('/');
+                const brDate = new Date(parseInt(y), parseInt(m)-1, parseInt(d), 0, 0, 0, 0);
+
+                await prisma.userActivity.upsert({
+                    where: {
+                        userId_date: {
+                            userId: data.userId,
+                            date: brDate
+                        }
+                    },
+                    update: {
+                        duration: { increment: 60 },
+                        updatedAt: new Date()
+                    },
+                    create: {
+                        userId: data.userId,
+                        date: brDate,
+                        duration: 60
+                    }
+                });
+            } catch (error: any) {
+                // Silently fail to avoid crashing socket loop
+                console.error("❌ Heartbeat Sync Error:", error.message);
             }
         });
 

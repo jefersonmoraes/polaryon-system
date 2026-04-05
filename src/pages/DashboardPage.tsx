@@ -2,6 +2,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
+import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
@@ -20,6 +21,9 @@ const Dashboard = () => {
   const canAccounting = hasScreenAccess('ACCOUNTING');
 
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [stats, setStats] = useState<any[]>([]);
+  const [weeklyActivity, setWeeklyActivity] = useState<number>(0);
+  const { isDark } = useUserPrefsStore();
 
   useEffect(() => {
     const loadGoogleEvents = async () => {
@@ -43,6 +47,7 @@ const Dashboard = () => {
   const companies = useKanbanStore(state => state.companies);
   const budgets = useKanbanStore(state => state.budgets);
   const mainCompanies = useKanbanStore(state => state.mainCompanies);
+  const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
 
   const documents = useDocumentStore(state => state.documents);
 
@@ -77,6 +82,20 @@ const Dashboard = () => {
     });
     return result;
   }, [activeCards, activeLists, filterBoard, filterLabel, filterStatus]);
+
+  useEffect(() => {
+    fetchKanbanData();
+  }, [fetchKanbanData]);
+
+  // Fetch Weekly Activity Stats
+  useEffect(() => {
+    if (!currentUser) return;
+    api.get(`/activity/stats?period=week`).then(res => {
+        if (res.data.success && res.data.stats[currentUser.id]) {
+            setWeeklyActivity(res.data.stats[currentUser.id]);
+        }
+    }).catch(console.error);
+  }, [currentUser]);
 
   const totalCards = filteredCards.length;
   const completedCards = filteredCards.filter(c => c.completed).length;
@@ -117,12 +136,16 @@ const Dashboard = () => {
     return map;
   }, [filteredCards, activeLists]);
 
-  const stats = [
-    { label: 'Minhas Tarefas', value: totalCards, icon: BarChart3, color: 'text-primary' },
-    { label: 'Concluídas', value: completedCards, icon: CheckCircle2, color: 'text-label-green' },
-    { label: 'Atrasadas', value: overdueCards, icon: AlertTriangle, color: 'text-label-red' },
-    { label: 'Tempo Médio', value: `${avgTimeMinutes}min`, icon: Clock, color: 'text-accent' },
-  ];
+    const h = Math.floor(weeklyActivity / 3600);
+    const m = Math.floor((weeklyActivity % 3600) / 60);
+    const timeLabel = h > 0 ? `${h}h ${m}min` : `${m}min`;
+
+    const statsConfig = [
+        { label: 'Minhas Tarefas', value: totalCards, icon: BarChart3, color: 'text-primary' },
+        { label: 'Concluídas', value: completedCards, icon: CheckCircle2, color: 'text-label-green' },
+        { label: 'Atrasadas', value: overdueCards, icon: AlertTriangle, color: 'text-label-red' },
+        { label: 'Atividade (Semana)', value: timeLabel, icon: Clock, color: 'text-accent' },
+    ];
 
   // Helper para cravar o fuso horário oficial de Brasília nas comparações
   const getHojeBRT = () => {
@@ -446,7 +469,7 @@ const Dashboard = () => {
               Métricas de Tarefas
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {stats.map((s, i) => (
+              {statsConfig.map((s, i) => (
                 <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
                   className="bg-card rounded-lg p-4 border border-border">
                   <div className="flex items-center gap-3">

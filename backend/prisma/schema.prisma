@@ -538,3 +538,13 @@ model ConnectionLink {
   trashedAt   DateTime?
   order       Int      @default(0)
 }
+model UserActivity {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime @default(now())
+  duration  Int      @default(0)    // Seconds spent active
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+}
