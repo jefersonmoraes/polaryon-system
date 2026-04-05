@@ -27,6 +27,7 @@ import { useCertificateStore } from '@/store/certificate-store';
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AuditLogPage = lazy(() => import("./pages/AuditLogPage"));
 const OportunidadesSearch = lazy(() => import("./pages/OportunidadesSearch"));
+const InteligenciaPreditiva = lazy(() => import("./pages/InteligenciaPreditiva"));
 const OportunidadesDashboard = lazy(() => import("./pages/OportunidadesDashboard"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const FolderPage = lazy(() => import("./pages/FolderPage"));
@@ -388,6 +389,7 @@ const AppContent = () => {
       <Route path="/board/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesDashboard /></ProtectedRoute>} />
       <Route path="/oportunidades/busca" element={<ProtectedRoute><OportunidadesSearch /></ProtectedRoute>} />
+      <Route path="/oportunidades/preditivo" element={<ProtectedRoute><InteligenciaPreditiva /></ProtectedRoute>} />
       <Route path="/transparencia" element={<ProtectedRoute><TransparencySearchPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />
       <Route path="/team" element={<ProtectedRoute><TeamWorkloadPage /></ProtectedRoute>} />
