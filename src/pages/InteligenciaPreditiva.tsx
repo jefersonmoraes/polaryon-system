@@ -86,9 +86,9 @@ const InteligenciaPreditiva: React.FC = () => {
     }, [fetchConvenios]);
 
     const filteredItems = items.filter(item => 
-        item.objeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.convenente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.numero.includes(searchTerm)
+        (item.objeto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.convenente || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.numero || '').includes(searchTerm)
     );
 
     return (
