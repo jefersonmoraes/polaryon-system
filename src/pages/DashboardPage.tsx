@@ -129,6 +129,21 @@ const Dashboard = () => {
   const pendingBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando').length;
   const expiringDocs = documents.filter(d => !d.trashed && d.status === 'expiring').length;
   const expiredDocs = documents.filter(d => !d.trashed && d.status === 'expired').length;
+  
+  const docsIn2Days = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const limit = new Date(today);
+    limit.setDate(today.getDate() + 2);
+    limit.setHours(23, 59, 59, 999);
+    
+    return documents.filter(d => {
+      if (d.trashed || !d.expirationDate) return false;
+      const dDate = fixDateToBRT(d.expirationDate);
+      return dDate && dDate >= today && dDate <= limit;
+    }).length;
+  }, [documents]);
+
   const overdueTaxes = taxObligations.filter(t => {
     if (t.trashedAt || t.status !== 'pending' || !t.dueDate) return false;
     const tDate = fixDateToBRT(t.dueDate);
@@ -158,6 +173,7 @@ const Dashboard = () => {
           const list = activeLists.find(l => l.id === c.listId);
           const cDate = fixDate(c.dueDate);
           const isOverdue = cDate < today;
+          const isNear2Days = !isOverdue && cDate <= new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
           // Only add if date is valid (not 1970)
           if (cDate.getTime() > 0) {
             events.push({ 
@@ -165,7 +181,9 @@ const Dashboard = () => {
               title: isOverdue ? `[ATRASADA] ${c.title}` : `Tarefa: ${c.title}`, 
               date: cDate, 
               type: 'tarefa', 
-              color: isOverdue ? 'text-red-500 font-bold bg-red-500/10 px-1 rounded animate-pulse' : 'text-primary', 
+              color: isOverdue ? 'text-red-500 font-bold bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]' 
+                   : isNear2Days ? 'text-red-400 bg-red-400/10 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]' 
+                   : 'text-primary', 
               icon: isOverdue ? AlertCircle : Clock, 
               url: list?.boardId ? `/board/${list.boardId}` : '' 
             });
@@ -181,13 +199,16 @@ const Dashboard = () => {
       documents.filter(d => d.expirationDate && !d.trashed && fixDate(d.expirationDate) <= futureLimit).forEach(d => {
         const dDate = fixDate(d.expirationDate);
         const isOverdue = dDate < today;
+        const isNear2Days = !isOverdue && dDate <= new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
         if (dDate.getTime() > 0) {
           events.push({ 
             id: d.id, 
-            title: isOverdue ? `[VENCIDO] Doc: ${d.title}` : `Doc Expirando: ${d.title}`, 
+            title: isOverdue ? `[VENCIDO ❓] Doc: ${d.title}` : `Doc Expirando: ${d.title}`, 
             date: dDate, 
             type: 'documento', 
-            color: isOverdue ? 'text-red-500 font-bold bg-red-500/10 px-1 rounded animate-pulse' : 'text-yellow-500', 
+            color: isOverdue ? 'text-red-500 font-black bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]' 
+                 : isNear2Days ? 'text-red-500 bg-red-500/10 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]' 
+                 : 'text-yellow-500', 
             icon: isOverdue ? AlertCircle : FileText, 
             url: '/documentacao' 
           });
@@ -284,14 +305,28 @@ const Dashboard = () => {
 
           {/* Documents Alert */}
           {canDocs && (
-            <div className={`rounded-lg p-4 border flex flex-col gap-2 ${expiredDocs > 0 ? 'bg-destructive/10 border-destructive/20' : expiringDocs > 0 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-card border-border'}`}>
-              <div className={`flex items-center gap-2 font-semibold text-sm ${expiredDocs > 0 ? 'text-destructive' : expiringDocs > 0 ? 'text-yellow-600' : 'text-muted-foreground'}`}>
-                <FileText className="h-4 w-4" /> Documentação
+            <div className={`rounded-lg p-4 border flex flex-col gap-2 overflow-hidden relative ${
+                 expiredDocs > 0 ? 'bg-red-500/20 border-red-500 animate-[pulse_1s_ease-in-out_infinite]' 
+               : docsIn2Days > 0 ? 'bg-red-500/10 border-red-500/50 animate-[pulse_2s_ease-in-out_infinite]' 
+               : expiringDocs > 0 ? 'bg-yellow-500/10 border-yellow-500/20' 
+               : 'bg-card border-border'
+            }`}>
+              <div className={`flex items-center gap-2 font-semibold text-sm ${
+                  expiredDocs > 0 ? 'text-red-500 font-black drop-shadow-md' 
+                : docsIn2Days > 0 ? 'text-red-500 font-bold'
+                : expiringDocs > 0 ? 'text-yellow-600' 
+                : 'text-muted-foreground'
+              }`}>
+                {expiredDocs > 0 ? <AlertCircle className="h-4 w-4 drop-shadow-md" /> : <FileText className="h-4 w-4" />} 
+                Documentação {expiredDocs > 0 && <span className="text-sm font-black animate-bounce ml-1">❓</span>}
               </div>
-              <p className="text-sm font-bold">
-                {expiredDocs > 0 ? `${expiredDocs} expirados` : expiringDocs > 0 ? `${expiringDocs} expirando em breve` : 'Tudo em dia'}
+              <p className={`text-sm font-bold ${expiredDocs > 0 ? 'text-red-500 drop-shadow-sm' : ''}`}>
+                {expiredDocs > 0 ? `ALERTA GRAVE: ${expiredDocs} VENCIDOS!` 
+               : docsIn2Days > 0 ? `ATENÇÃO: ${docsIn2Days} vencendo em ≤ 2 dias!`
+               : expiringDocs > 0 ? `${expiringDocs} expirando em breve` 
+               : 'Tudo em dia'}
               </p>
-              <Link to="/documentacao" className="text-[10px] text-muted-foreground hover:underline mt-auto">Acessar acervo</Link>
+              <Link to="/documentacao" className={`text-[10px] hover:underline mt-auto font-medium ${expiredDocs > 0 ? 'text-red-400 font-bold' : 'text-muted-foreground'}`}>Acessar acervo</Link>
             </div>
           )}
 
@@ -384,12 +419,12 @@ const Dashboard = () => {
               </div>
 
               {/* Global Upcoming tasks */}
-              <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-full min-h-[400px]">
+              <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-[400px] overflow-hidden">
                 <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 shrink-0">
                   <CalendarDays className="h-4 w-4 text-accent" />
                   Próximas Datas Importantes
                 </h2>
-                <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2">
                   {allUpcomingEvents.length === 0 ? (
                     <p className="text-xs text-muted-foreground py-8 text-center flex flex-col items-center gap-2">
                       <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
