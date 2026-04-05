@@ -7,6 +7,7 @@ import CardDetailPanel from '@/components/board/CardDetailPanel';
 import { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/types/kanban';
 import { fixDateToBRT } from '@/lib/utils';
+import api from '@/lib/api';
 
 export default function TeamWorkloadPage() {
     const allMembers = useKanbanStore(state => state.members);
@@ -31,7 +32,7 @@ export default function TeamWorkloadPage() {
     // Fetch Activity Stats
     useEffect(() => {
         setIsLoadingActivity(true);
-        import('@/lib/api').then(m => m.default.get(`/activity/stats?period=${period}`))
+        api.get(`/activity/stats?period=${period}`)
             .then(res => {
                 if (res.data?.success && res.data?.stats) {
                     setActivityStats(res.data.stats);

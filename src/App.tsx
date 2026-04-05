@@ -19,6 +19,9 @@ import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { socketService } from '@/lib/socket';
 import LoginPage from "./pages/LoginPage";
+import { useAccountingStore } from '@/store/accounting-store';
+import { useEssentialDocumentStore } from '@/store/essential-document-store';
+import { useCertificateStore } from '@/store/certificate-store';
 
 // Lazy Loading V5.1 Turbo
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
@@ -49,10 +52,6 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CashflowForecastDash = lazy(() => import("./components/accounting/CashflowForecastDash"));
 
 const queryClient = new QueryClient();
-
-import { useAccountingStore } from '@/store/accounting-store';
-import { useEssentialDocumentStore } from '@/store/essential-document-store';
-import { useCertificateStore } from '@/store/certificate-store';
 
 const AppContent = () => {
   const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany, fetchKanbanData } = useKanbanStore();

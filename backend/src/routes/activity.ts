@@ -29,7 +29,7 @@ router.get('/stats', async (req, res) => {
             where: {
                 date: { gte: startDate }
             }
-        });
+        }).catch(() => []); // Fail-safe for missing table
 
         // Group by userId
         const stats: Record<string, number> = {};
