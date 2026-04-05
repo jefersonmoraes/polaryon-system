@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient({
     datasources: {
         db: {
-            url: "postgresql://polaryon:Jaguar2018jolela%23@204.168.151.231:5432/polaryon_db?schema=public"
+            url: "postgresql://polaryon:Jaguar2018jolela%23@localhost:5432/polaryon_db?schema=public"
         }
     }
 });
