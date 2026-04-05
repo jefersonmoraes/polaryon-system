@@ -70,11 +70,11 @@ export default function OportunidadesDashboard() {
         };
     }, []);
 
-    if (loading) {
+    if (loading || !metrics) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
                 <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                <p className="text-muted-foreground font-medium animate-pulse">Atualizando métricas nacionais do PNCP...</p>
+                <p className="text-muted-foreground font-medium animate-pulse">Sincronizando Inteligência Nacional (PNCP)...</p>
             </div>
         );
     }
@@ -160,7 +160,7 @@ export default function OportunidadesDashboard() {
                         </h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={metrics.nicheDistribution} layout="vertical" margin={{ top: 0, right: 30, left: 60, bottom: 0 }}>
+                                <BarChart data={metrics?.nicheDistribution || []} layout="vertical" margin={{ top: 0, right: 30, left: 60, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
                                     <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} axisLine={false} tickLine={false} />
                                     <YAxis dataKey="name" type="category" tick={{ fill: 'hsl(var(--foreground))', fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
@@ -170,7 +170,7 @@ export default function OportunidadesDashboard() {
                                         cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
                                     />
                                     <Bar dataKey="value" name="Editais" radius={[0, 4, 4, 0]}>
-                                        {metrics.nicheDistribution?.map((entry: any, index: number) => (
+                                        {(metrics?.nicheDistribution || []).map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                         ))}
                                     </Bar>
