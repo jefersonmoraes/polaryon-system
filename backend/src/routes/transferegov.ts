@@ -50,17 +50,17 @@ router.get('/convenios', async (req: Request, res: Response) => {
         // Mapear para um formato amigável para o Dashboard Preditivo
         const mapped = (response.data || []).map((c: any) => ({
             id: c.id,
-            numero: c.numero,
-            objeto: c.objeto,
-            valor: c.valor,
-            dataInicio: c.dataInicioVigencia,
-            dataFim: c.dataFimVigencia,
-            concedente: c.orgaoSuperiorConcedente?.nome,
-            convenente: c.convenente?.nome,
-            cnpjConvenente: c.convenente?.cnpjFormatado,
-            uf: c.convenente?.uf?.sigla,
-            municipio: c.convenente?.municipio?.nome,
-            situacao: c.situacao,
+            numero: c.numero || 'S/N',
+            objeto: c.objeto || 'Objeto não detalhado pelo convênio',
+            valor: c.valor || 0,
+            dataInicio: c.dataInicioVigencia || '',
+            dataFim: c.dataFimVigencia || '',
+            concedente: c.orgaoSuperiorConcedente?.nome || 'Órgão Federal',
+            convenente: c.convenente?.nome || 'Entidade Convenente',
+            cnpjConvenente: c.convenente?.cnpjFormatado || '',
+            uf: c.convenente?.uf?.sigla || '--',
+            municipio: c.convenente?.municipio?.nome || 'Município',
+            situacao: c.situacao || 'Em Análise',
             statusPredicao: 'ALTA_PROBABILIDADE' // Meta-tag do Polaryon
         }));
 
