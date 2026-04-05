@@ -219,13 +219,23 @@ export const FilePreviewModal = ({
                     ) : (
                         <>
                             {fileType === 'pdf' && (
-                                <div className="w-full h-full relative">
-                                    <iframe 
-                                        src={blobUrl || undefined} 
-                                        className="w-full h-full border-none bg-white scale-100"
-                                        title={fileName}
+                                <div className="w-full flex-1 relative bg-white">
+                                    <object 
+                                        data={blobUrl || undefined} 
+                                        type="application/pdf"
+                                        className="absolute inset-0 w-full h-full"
                                         onLoad={() => setIsLoading(false)}
-                                    />
+                                    >
+                                        <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground bg-muted/5">
+                                            <p className="mb-6 font-bold text-lg">Seu navegador bloqueou a pré-visualização embutida deste PDF.</p>
+                                            <button 
+                                                onClick={() => triggerAction('open')} 
+                                                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-black uppercase text-xs hover:scale-105 transition-all shadow-xl"
+                                            >
+                                                Forçar Abertura em Nova Aba
+                                            </button>
+                                        </div>
+                                    </object>
                                 </div>
                             )}
 
