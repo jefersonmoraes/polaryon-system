@@ -14,20 +14,26 @@ const PNCP_SEARCH_URL = 'https://pncp.gov.br/api/search/';
  */
 router.get('/licitacoes', async (req: Request, res: Response) => {
     try {
-        const { offset = 0, uasg, data_publicacao } = req.query;
+
+        const { offset = 0 } = req.query;
         // Paginação do PNCP é por página de 50 (ex: offset 0 = pag 1)
-        const pagina = Math.floor(Number(offset) / 50) + 1;
+        const pagina = req.query.pagina ? Number(req.query.pagina) : Math.floor(Number(offset) / 50) + 1;
         
+        const params: any = {
+            ...req.query,
+            pagina: pagina,
+            tamanho_pagina: 50,
+            esferas: ['F'],
+            // Fallback params in case frontend doesn't send them
+            status: req.query.status || ['recebendo_proposta', 'propostas_encerradas', 'encerradas'],
+            tipos_documento: req.query.tipos_documento || ['edital', 'aviso_contratacao_direta']
+        };
+        delete params.offset;
+
         let url = `${PNCP_SEARCH_URL}`;
 
         const response = await axios.get(url, { 
-            params: {
-                pagina: pagina,
-                tamanho_pagina: 50,
-                esferas: ['F'],
-                status: ['recebendo_proposta'],
-                tipos_documento: ['edital', 'aviso_contratacao_direta']
-            },
+            params: params,
             headers: { 
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*'

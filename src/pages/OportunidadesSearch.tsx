@@ -710,7 +710,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                 requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
             }
             if (fonteFilter === 'Todas' || fonteFilter === 'Compras.gov.br') {
-                requests.push(api.get('/comprasgov/licitacoes', { params: { offset: (currentPage - 1) * 50 } }).catch(() => ({ data: { items: [] } })));
+                requests.push(api.get('/comprasgov/licitacoes', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
             }
 
             const responses = await Promise.all(requests);
