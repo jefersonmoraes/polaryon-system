@@ -124,6 +124,18 @@ const Dashboard = () => {
     { label: 'Tempo Médio', value: `${avgTimeMinutes}min`, icon: Clock, color: 'text-accent' },
   ];
 
+  // Helper para cravar o fuso horário oficial de Brasília nas comparações
+  const getHojeBRT = () => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    // Formatter outputs "MM/DD/YYYY"
+    const parts = formatter.format(new Date()).split('/');
+    // Return a local Date object matching the exact BRT calendar day midnight
+    return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), 0, 0, 0, 0);
+  };
+
   // System-wide alerts calculations
   const defaultCompany = mainCompanies.find(c => c.isDefault);
   const pendingBudgets = budgets.filter(b => !b.trashed && b.status === 'Aguardando').length;
@@ -131,8 +143,7 @@ const Dashboard = () => {
   const expiredDocs = documents.filter(d => !d.trashed && d.status === 'expired').length;
   
   const docsIn2Days = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getHojeBRT();
     const limit = new Date(today);
     limit.setDate(today.getDate() + 2);
     limit.setHours(23, 59, 59, 999);
@@ -147,21 +158,32 @@ const Dashboard = () => {
   const overdueTaxes = taxObligations.filter(t => {
     if (t.trashedAt || t.status !== 'pending' || !t.dueDate) return false;
     const tDate = fixDateToBRT(t.dueDate);
-    return tDate && tDate < new Date();
+    return tDate && tDate < getHojeBRT();
   }).length;
 
   // Aggregate all upcoming events (next 15 days)
   const allUpcomingEvents = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const futureLimit = new Date();
-    futureLimit.setDate(today.getDate() + 10);
+    const today = getHojeBRT();
+    
+    const futureLimit = new Date(today);
+    futureLimit.setDate(today.getDate() + 15);
     futureLimit.setHours(23, 59, 59, 999);
 
     const fixDate = (d: any) => {
       const date = fixDateToBRT(d);
       return date || new Date(0);
+    };
+
+    const getProgression = (dDate: Date) => {
+      const d = new Date(dDate);
+      d.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 3600 * 24));
+      
+      if (diffDays < 0) return { text: `[VENCIDA] `, color: 'text-red-500 font-black bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]', icon: AlertCircle };
+      if (diffDays === 0) return { text: `[HOJE ⚠️] `, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse_1.5s_ease-in-out_infinite]', icon: AlertTriangle };
+      if (diffDays <= 2) return { text: `[Faltam ${diffDays}d] `, color: 'text-yellow-600 font-bold bg-yellow-500/15 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]', icon: Clock };
+      if (diffDays <= 5) return { text: `[Em ${diffDays}d] `, color: 'text-blue-500 font-medium', icon: CalendarIcon };
+      return { text: '', color: 'text-primary', icon: CalendarDays };
     };
 
     const events: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string }[] = [];
@@ -172,19 +194,15 @@ const Dashboard = () => {
         if (c.dueDate) {
           const list = activeLists.find(l => l.id === c.listId);
           const cDate = fixDate(c.dueDate);
-          const isOverdue = cDate < today;
-          const isNear2Days = !isOverdue && cDate <= new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
-          // Only add if date is valid (not 1970)
-          if (cDate.getTime() > 0) {
+          const prog = getProgression(cDate);
+          if (cDate.getTime() > 0 && cDate <= futureLimit) {
             events.push({ 
               id: c.id, 
-              title: isOverdue ? `[ATRASADA] ${c.title}` : `Tarefa: ${c.title}`, 
+              title: `${prog.text}Tarefa: ${c.title}`, 
               date: cDate, 
               type: 'tarefa', 
-              color: isOverdue ? 'text-red-500 font-bold bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]' 
-                   : isNear2Days ? 'text-red-400 bg-red-400/10 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]' 
-                   : 'text-primary', 
-              icon: isOverdue ? AlertCircle : Clock, 
+              color: prog.color, 
+              icon: prog.icon, 
               url: list?.boardId ? `/board/${list.boardId}` : '' 
             });
           }
@@ -196,20 +214,17 @@ const Dashboard = () => {
 
     // 3. Documents
     if (canDocs) {
-      documents.filter(d => d.expirationDate && !d.trashed && fixDate(d.expirationDate) <= futureLimit).forEach(d => {
+      documents.filter(d => d.expirationDate && !d.trashed).forEach(d => {
         const dDate = fixDate(d.expirationDate);
-        const isOverdue = dDate < today;
-        const isNear2Days = !isOverdue && dDate <= new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
-        if (dDate.getTime() > 0) {
+        if (dDate.getTime() > 0 && dDate <= futureLimit) {
+          const prog = getProgression(dDate);
           events.push({ 
             id: d.id, 
-            title: isOverdue ? `[VENCIDO ❓] Doc: ${d.title}` : `Doc Expirando: ${d.title}`, 
+            title: `${prog.text}Doc: ${d.title}`, 
             date: dDate, 
             type: 'documento', 
-            color: isOverdue ? 'text-red-500 font-black bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]' 
-                 : isNear2Days ? 'text-red-500 bg-red-500/10 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]' 
-                 : 'text-yellow-500', 
-            icon: isOverdue ? AlertCircle : FileText, 
+            color: prog.color, 
+            icon: prog.text.includes('VENCIDA') ? AlertCircle : prog.icon, 
             url: '/documentacao' 
           });
         }
@@ -218,17 +233,17 @@ const Dashboard = () => {
 
     // 4. Accounting (Tax Obligations)
     if (canAccounting) {
-      taxObligations.filter(t => !t.trashedAt && t.status === 'pending' && fixDate(t.dueDate) <= futureLimit).forEach(t => {
+      taxObligations.filter(t => !t.trashedAt && t.status === 'pending').forEach(t => {
         const tDate = fixDate(t.dueDate);
-        const isOverdue = tDate < today;
-        if (tDate.getTime() > 0) {
+        if (tDate.getTime() > 0 && tDate <= futureLimit) {
+          const prog = getProgression(tDate);
           events.push({ 
             id: t.id, 
-            title: isOverdue ? `[VENCIDA] Guia: ${t.name}` : `Imposto a Pagar: ${t.name}`, 
+            title: `${prog.text}Guia/Imposto: ${t.name}`, 
             date: tDate, 
             type: 'contabil', 
-            color: isOverdue ? 'text-red-500 font-bold bg-red-500/10 px-1 rounded animate-pulse' : 'text-red-500', 
-            icon: isOverdue ? AlertCircle : PiggyBank, 
+            color: prog.color, 
+            icon: prog.icon, 
             url: '/contabil' 
           });
         }
