@@ -1424,8 +1424,11 @@ export const useKanbanStore = create<KanbanState>()(
                 }));
                 return url; // Returning the URL for immediate use
             } else {
+                console.log(`[V5] Loading budget attachment content for Parent: ${parentId}, Att: ${attachmentId}`);
                 const res = await api.get(`/kanban/budgets/${parentId}/attachment-content/${attachmentId}`);
                 const url = res.data.url;
+                console.log(`[V5] Received URL for budget attachment:`, url ? "URL Present" : "URL NULL/EMPTY");
+                
                 set(state => ({
                     budgets: state.budgets.map(b => b.id === parentId ? {
                         ...b,

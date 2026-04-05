@@ -1638,19 +1638,25 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
     });
 
     const handleViewAttachment = async (att: Attachment) => {
+        console.log(`[V5] handleViewAttachment triggered for:`, att.name);
         try {
             let currentUrl = att.url;
             const parentId = activeBudgetId;
             const type = 'budget';
 
+            console.log(`[V5] Checking existence of currentUrl: ${currentUrl ? "YES" : "NO"}`);
+
             // Se a URL estiver vazia, significa que precisamos carregar o conteúdo (Lazy Load)
             if (!currentUrl && parentId) {
                 const toastId = toast.loading('Baixando arquivo...');
+                console.log(`[V5] Calling loadAttachmentContent for ${att.id}...`);
                 const loadedUrl = await loadAttachmentContent(att.id, parentId, type);
+                console.log(`[V5] loadAttachmentContent returned:`, loadedUrl ? "URL Present" : "NULL");
                 
                 if (loadedUrl) {
                     currentUrl = loadedUrl;
                 } else {
+                    console.log(`[V5] Falling back to store search...`);
                     // Após carregar, buscamos novamente no store (fallback)
                     const updatedState = useKanbanStore.getState();
                     const budget = updatedState.budgets.find(b => b.id === parentId);
@@ -1660,16 +1666,19 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                         if (found) foundUrl = found.url;
                     });
                     currentUrl = foundUrl;
+                    console.log(`[V5] Store fallback foundUrl:`, currentUrl ? "YES" : "NO");
                 }
                 toast.dismiss(toastId);
             }
 
             if (!currentUrl) {
+                console.error("[V5] Could not load content for attachment:", att.id);
                 toast.error('Não foi possível carregar o conteúdo do arquivo.');
                 return;
             }
 
             // Integrado com o FilePreviewModal no lugar do window.open
+            console.log(`[V5] Setting previewData for modal...`);
             setPreviewData({
                 isOpen: true,
                 url: currentUrl,
@@ -1677,7 +1686,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                 type: att.type
             });
         } catch (error) {
-            console.error("Error viewing attachment:", error);
+            console.error("[V5] Error viewing attachment:", error);
             toast.error("Erro ao abrir visualização.");
         }
     };
