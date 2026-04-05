@@ -83,6 +83,14 @@ export const FilePreviewModal = ({
 
         // Detect file type
         let type = initialFileType || '';
+        
+        // --- Normalization [V6.3] ---
+        // Se o banco trouxe o mimetype puro, traduz para os flags de estado usados na renderização
+        if (type.includes('pdf')) type = 'pdf';
+        else if (type.includes('image/')) type = 'image';
+        else if (type.includes('xml')) type = 'xml';
+        else if (type.includes('text/') || type.includes('csv')) type = 'text';
+
         if (!type) {
             const lowerUrl = normalizedFileUrl?.toLowerCase() || '';
             const lowerName = fileName.toLowerCase();
