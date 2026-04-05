@@ -4,7 +4,7 @@ import { useAccountingStore } from '@/store/accounting-store';
 import { useDocumentStore } from '@/store/document-store';
 import { Users, CheckCircle2, Clock, AlertCircle, FileText, PiggyBank, Calculator, Target } from 'lucide-react';
 import CardDetailPanel from '@/components/board/CardDetailPanel';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/types/kanban';
 import { fixDateToBRT } from '@/lib/utils';
 
@@ -29,7 +29,7 @@ export default function TeamWorkloadPage() {
     const [isLoadingActivity, setIsLoadingActivity] = useState(false);
     
     // Fetch Activity Stats
-    useMemo(() => {
+    useEffect(() => {
         setIsLoadingActivity(true);
         import('@/lib/api').then(m => m.default.get(`/activity/stats?period=${period}`))
             .then(res => {

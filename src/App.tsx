@@ -221,22 +221,6 @@ const AppContent = () => {
 
     const handleReconnect = () => identifyUser();
 
-    // Global Activity Heartbeat
-    useEffect(() => {
-      if (!isAuthenticated || !authUser) return;
-
-      const sendHeartbeat = () => {
-        if (document.visibilityState === 'visible') {
-          socketService.emit('user_heartbeat', { userId: authUser.id });
-        }
-      };
-
-      sendHeartbeat(); // First pulse
-      const interval = setInterval(sendHeartbeat, 60000); // 1 min pulse
-
-      return () => clearInterval(interval);
-    }, [isAuthenticated, authUser]);
-
     socketService.on('online_users', handleOnlineUsers);
     socketService.on('connection_change', handleConnectionChange);
     socketService.on('user_presence_connect', handlePresenceConnect);
@@ -254,6 +238,20 @@ const AppContent = () => {
     };
   }, [isAuthenticated, authUser, setOnlineUsers, setSocketConnected]);
 
+  // Global Activity Heartbeat - INDEPENDENT HOOK (V7.0.3 Fix)
+  useEffect(() => {
+    if (!isAuthenticated || !authUser) return;
+
+    const sendHeartbeat = () => {
+      if (document.visibilityState === 'visible') {
+        socketService.emit('user_heartbeat', { userId: authUser.id });
+      }
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, authUser]);
 
   // Background CNPJ Monitor - Checks status every 7 days
   useEffect(() => {
