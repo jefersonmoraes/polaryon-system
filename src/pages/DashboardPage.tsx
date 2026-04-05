@@ -189,7 +189,7 @@ const Dashboard = () => {
         else timeRemaining = `Faltam ${diffDays}d`;
       }
 
-      if (diffMs < 0) return { text: `[VENCIDA] `, timeRemaining, color: 'text-red-500 font-extrabold bg-red-500/20 px-1 rounded animate-[pulse_1s_ease-in-out_infinite]', icon: AlertCircle };
+      if (diffMs < 0) return { text: `[VENCIDA] `, timeRemaining, color: 'text-red-500 font-extrabold bg-red-500/20 px-1 rounded animate-[pulse_0.5s_ease-in-out_infinite]', icon: AlertCircle };
       if (diffDays === 0) return { text: `[HOJE ⚠️] `, timeRemaining, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse:1.5s_ease-in-out_infinite]', icon: AlertTriangle };
       if (diffDays <= 2) return { text: `[Faltam ${diffDays}d] `, timeRemaining, color: 'text-yellow-600 font-bold bg-yellow-500/15 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]', icon: Clock };
       if (diffDays <= 5) return { text: `[Em ${diffDays}d] `, timeRemaining, color: 'text-blue-500 font-medium', icon: CalendarIcon };
@@ -351,7 +351,7 @@ const Dashboard = () => {
           {/* Documents Alert */}
           {canDocs && (
             <div className={`rounded-lg p-4 border flex flex-col gap-2 overflow-hidden relative ${
-                 expiredDocs > 0 ? 'bg-red-500/20 border-red-500 animate-[pulse_1s_ease-in-out_infinite]' 
+                 expiredDocs > 0 ? 'bg-red-500/20 border-red-500 animate-[pulse_0.5s_ease-in-out_infinite]' 
                : docsIn2Days > 0 ? 'bg-red-500/10 border-red-500/50 animate-[pulse_2s_ease-in-out_infinite]' 
                : expiringDocs > 0 ? 'bg-yellow-500/10 border-yellow-500/20' 
                : 'bg-card border-border'
@@ -363,10 +363,10 @@ const Dashboard = () => {
                 : 'text-muted-foreground'
               }`}>
                 {expiredDocs > 0 ? <AlertCircle className="h-4 w-4 drop-shadow-md" /> : <FileText className="h-4 w-4" />} 
-                Documentação {expiredDocs > 0 && <span className="text-sm font-black animate-bounce ml-1">❓</span>}
+                Documentação {expiredDocs > 0 && <span className="text-sm font-black animate-bounce ml-1">!</span>}
               </div>
               <p className={`text-sm font-bold ${expiredDocs > 0 ? 'text-red-500 drop-shadow-sm' : ''}`}>
-                {expiredDocs > 0 ? `ALERTA GRAVE: ${expiredDocs} VENCIDOS!` 
+                {expiredDocs > 0 ? `URGENTE: ${expiredDocs} VENCIDOS!` 
                : docsIn2Days > 0 ? `ATENÇÃO: ${docsIn2Days} vencendo em ≤ 2 dias!`
                : expiringDocs > 0 ? `${expiringDocs} expirando em breve` 
                : 'Tudo em dia'}
