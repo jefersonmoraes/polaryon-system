@@ -553,6 +553,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             completed: false,
             archived: false,
             trashed: false,
+            customLink: getOfficialLink(selectedItem),
         };
 
         // Inject Attachments (Selected Files only)
