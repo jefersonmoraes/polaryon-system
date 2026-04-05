@@ -218,35 +218,33 @@ export default function TeamWorkloadPage() {
                                         <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full border-2 border-primary object-cover" />
                                         <div className="overflow-hidden">
                                             <h3 className="font-bold text-foreground truncate">{member.name}</h3>
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-[10px] text-muted-foreground truncate">{member.email}</p>
-                                                {activityStats[member.id] !== undefined && (
-                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                                                        <Clock className="w-2.5 h-2.5" />
-                                                        {(() => {
-                                                            const s = activityStats[member.id] || 0;
-                                                            const h = Math.floor(s / 3600);
-                                                            const m = Math.floor((s % 3600) / 60);
-                                                            return h > 0 ? `${h}h ${m}m` : `${m}m`;
-                                                        })()}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <p className="text-[10px] text-muted-foreground truncate">{member.email}</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-3 gap-2 mb-3">
-                                        <div className="bg-background rounded p-2 text-center border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Total</p>
-                                            <p className="font-bold text-sm">{stats.total}</p>
+                                    <div className="grid grid-cols-4 gap-2 mb-4">
+                                        <div className="bg-secondary/40 p-2 rounded text-center border border-border/50">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Total</p>
+                                            <p className="text-lg font-bold">{stats.total}</p>
                                         </div>
-                                        <div className="bg-background rounded p-2 text-center border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Atrasos</p>
-                                            <p className="font-bold text-sm text-destructive">{stats.overdue}</p>
+                                        <div className="bg-secondary/40 p-2 rounded text-center border border-border/50">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Atrasos</p>
+                                            <p className="text-lg font-bold text-label-red">{stats.overdue}</p>
                                         </div>
-                                        <div className="bg-background rounded p-2 text-center border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Prontos</p>
-                                            <p className="font-bold text-sm text-label-green">{stats.completed}</p>
+                                        <div className="bg-secondary/40 p-2 rounded text-center border border-border/50">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Prontos</p>
+                                            <p className="text-lg font-bold text-label-green">{stats.completed}</p>
+                                        </div>
+                                        <div className="bg-primary/10 p-2 rounded text-center border border-primary/20">
+                                            <p className="text-[9px] text-primary uppercase font-bold">Atividade</p>
+                                            <p className="text-lg font-bold text-primary">
+                                                {(() => {
+                                                    const s = activityStats[member.id] || 0;
+                                                    const h = Math.floor(s / 3600);
+                                                    const m = Math.floor((s % 3600) / 60);
+                                                    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                                                })()}
+                                            </p>
                                         </div>
                                     </div>
 
