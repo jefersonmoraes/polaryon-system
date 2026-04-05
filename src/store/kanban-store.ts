@@ -105,7 +105,7 @@ interface KanbanState {
   startTimer: (cardId: string) => void;
   stopTimer: (cardId: string) => void;
   resetTimer: (cardId: string) => void;
-  loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<void>;
+  loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<string | null>;
   fetchKanbanData: () => Promise<void>;
   fetchCardDetails: (cardId: string) => Promise<void>;
   fetchBudgetDetails: (budgetId: string) => Promise<void>;
@@ -1422,6 +1422,7 @@ export const useKanbanStore = create<KanbanState>()(
                         attachments: (c.attachments || []).map(a => a.id === attachmentId ? { ...a, url } : a)
                     } : c)
                 }));
+                return url; // Returning the URL for immediate use
             } else {
                 const res = await api.get(`/kanban/budgets/${parentId}/attachment-content/${attachmentId}`);
                 const url = res.data.url;
@@ -1434,9 +1435,11 @@ export const useKanbanStore = create<KanbanState>()(
                         }))
                     } : b)
                 }));
+                return url; // Returning the URL for immediate use
             }
         } catch (err) {
             console.error("Failed to lazy load attachment:", err);
+            return null;
         }
       }
     }),

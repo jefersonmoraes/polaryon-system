@@ -157,7 +157,7 @@ export const FilePreviewModal = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-6xl w-[95vw] h-[90vh] flex flex-col p-0 border-border bg-background shadow-2xl overflow-hidden">
+            <DialogContent className="max-w-6xl w-[95vw] h-[90vh] flex flex-col p-0 border-border bg-background shadow-2xl overflow-hidden z-[150]">
                 <DialogHeader className="p-4 border-b border-border bg-muted/20 flex flex-row items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-primary/10 rounded-lg text-primary">

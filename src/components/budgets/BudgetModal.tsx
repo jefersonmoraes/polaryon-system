@@ -1646,17 +1646,21 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
             // Se a URL estiver vazia, significa que precisamos carregar o conteúdo (Lazy Load)
             if (!currentUrl && parentId) {
                 const toastId = toast.loading('Baixando arquivo...');
-                await loadAttachmentContent(att.id, parentId, type);
+                const loadedUrl = await loadAttachmentContent(att.id, parentId, type);
                 
-                // Após carregar, buscamos novamente no store
-                const updatedState = useKanbanStore.getState();
-                const budget = updatedState.budgets.find(b => b.id === parentId);
-                let foundUrl = '';
-                budget?.items?.forEach(item => {
-                    const found = item.attachments?.find(a => a.id === att.id);
-                    if (found) foundUrl = found.url;
-                });
-                currentUrl = foundUrl;
+                if (loadedUrl) {
+                    currentUrl = loadedUrl;
+                } else {
+                    // Após carregar, buscamos novamente no store (fallback)
+                    const updatedState = useKanbanStore.getState();
+                    const budget = updatedState.budgets.find(b => b.id === parentId);
+                    let foundUrl = '';
+                    budget?.items?.forEach(item => {
+                        const found = item.attachments?.find(a => a.id === att.id);
+                        if (found) foundUrl = found.url;
+                    });
+                    currentUrl = foundUrl;
+                }
                 toast.dismiss(toastId);
             }
 

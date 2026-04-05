@@ -230,6 +230,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               const d = currentCard.description || '';
               setLocalDescription(d);
               lastSavedDescription.current = d;
+              setTitle(currentCard.title || '');
+              setSummary(currentCard.summary || '');
+              setCustomLink(currentCard.customLink || '');
+              
               if (editorRef.current) {
                   editorRef.current.innerHTML = d;
               }
