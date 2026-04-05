@@ -133,6 +133,7 @@ export default function TransparencySearchPage() {
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [previewEmpenhoData, setPreviewEmpenhoData] = useState<any>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const streamAbortControllerRef = React.useRef<AbortController | null>(null);
 
     // Estado para Visualização Universal de Arquivos PNCP
     const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
@@ -224,6 +225,12 @@ export default function TransparencySearchPage() {
     }, [items]);
 
     const fetchGlobalBrands = async (term: string) => {
+        if (streamAbortControllerRef.current) {
+            streamAbortControllerRef.current.abort();
+        }
+        streamAbortControllerRef.current = new AbortController();
+        const signal = streamAbortControllerRef.current.signal;
+
         setLoadingGlobalBrands(true);
         setStreamMessage('Iniciando análise profunda...');
         setStreamFound(0);
@@ -249,7 +256,8 @@ export default function TransparencySearchPage() {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'text/event-stream'
-                }
+                },
+                signal
             });
 
             if (!response.ok) {
@@ -298,7 +306,8 @@ export default function TransparencySearchPage() {
                     }
                 }
             }
-        } catch (err) {
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
             console.error("Erro marcas globais stream", err);
             setGlobalBrands([]); 
         } finally {

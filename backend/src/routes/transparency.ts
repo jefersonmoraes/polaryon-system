@@ -467,8 +467,9 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
 
         // SSE Configuração Estrita Anti-Buffering
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform'); // no-transform BYPASSES THE COMPRESSION MODULE!
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Bypass Nginx buffering
         res.setHeader('X-Accel-Buffering', 'no'); // Bypass Nginx buffering
         res.flushHeaders(); // Envia os headers imediatamente
 
@@ -486,6 +487,9 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
 
         const sendEvent = (eventName: string, data: any) => {
             res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+            if (typeof (res as any).flush === 'function') {
+                (res as any).flush();
+            }
         };
 
         sendEvent('progress', { message: 'Iniciando varredura profunda no PNP...', found: 0, checked: 0 });
@@ -587,6 +591,7 @@ router.get('/analytics/global-brands-stream', async (req: Request, res: Response
     } catch (error: any) {
         console.error("Erro Fluxo SSE Marcas:", error);
         res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+        if (typeof (res as any).flush === 'function') (res as any).flush();
         res.end();
     }
 });
