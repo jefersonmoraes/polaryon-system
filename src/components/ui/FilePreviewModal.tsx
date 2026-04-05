@@ -219,11 +219,11 @@ export const FilePreviewModal = ({
                     ) : (
                         <>
                             {fileType === 'pdf' && (
-                                <div className="w-full flex-1 relative bg-white">
+                                <div className="absolute inset-0 bg-white flex flex-col">
                                     <object 
                                         data={blobUrl || undefined} 
                                         type="application/pdf"
-                                        className="absolute inset-0 w-full h-full"
+                                        className="w-full flex-1"
                                         onLoad={() => setIsLoading(false)}
                                     >
                                         <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground bg-muted/5">
