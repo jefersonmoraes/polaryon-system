@@ -127,6 +127,7 @@ interface KanbanState {
   setIsDragging: (isDragging: boolean) => void;
   pendingSocketActions: any[];
   processPendingSocketActions: () => void;
+  lastSyncTime: number;
 }
 
 export const useKanbanStore = create<KanbanState>()(
@@ -149,6 +150,7 @@ export const useKanbanStore = create<KanbanState>()(
       recentMilestoneTitles: [],
       isDragging: false,
       pendingSocketActions: [],
+      lastSyncTime: 0,
 
       setGoogleEvents: (googleEvents) => {
         set({ googleEvents });
@@ -281,6 +283,15 @@ export const useKanbanStore = create<KanbanState>()(
       setMembers: (members) => set({ members }),
 
       fetchKanbanData: async () => {
+        const nowTime = Date.now();
+        const lastSync = get().lastSyncTime || 0;
+        
+        // Anti-Throttling Cooldown: 30s
+        if (nowTime - lastSync < 30000) {
+          console.log('kanbanStore - Sync skipped (cooldown active)');
+          return;
+        }
+
         try {
           const res = await api.get('/kanban/sync');
           console.log('kanbanStore - Sync Response:', res.data);
@@ -347,6 +358,7 @@ export const useKanbanStore = create<KanbanState>()(
               routes: res.data.routes || [],
               budgets: finalBudgets,
               notifications: res.data.notifications || [],
+              lastSyncTime: Date.now(),
             });
 
             // DASHBOARD INSTANT LOAD V3: Populate other stores from sync data

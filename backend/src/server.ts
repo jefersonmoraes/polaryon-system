@@ -46,7 +46,7 @@ app.use(helmet({
 // Rate Limiting (Anti-DDoS / Brute Force)
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 2000, // Limit each IP to 2000 requests per 15 min
+    max: 5000, // Limit each IP to 5000 requests per 15 min
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: 'ERROR', message: 'Muitas requisições originadas deste IP. Tente novamente mais tarde.' }

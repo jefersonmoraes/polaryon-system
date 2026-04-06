@@ -102,7 +102,7 @@ const AppContent = () => {
     useAccountingStore.getState().syncLocalDataToServer().catch(console.error);
 
     fetchKanbanData();
-  }, [isAuthenticated, cleanupTrash, cleanKanbanTrash, cleanDocsTrash, cleanAccountingTrash, cleanEssentialDocsTrash, cleanCertificateTrash, fetchKanbanData]);
+  }, [isAuthenticated, fetchKanbanData]);
 
   // Real-time Presence and Connection Monitor
   useEffect(() => {
@@ -330,7 +330,7 @@ const AppContent = () => {
   }, []);
 
   useEffect(() => {
-    const NOTIF_INTERVAL = 10000;
+    const NOTIF_INTERVAL = 30000; // Aumentado de 10s para 30s para evitar 429
     const interval = setInterval(() => {
       if (useKanbanStore.getState().members.length > 0) {
         useKanbanStore.getState().fetchNotifications();
