@@ -3,13 +3,14 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
 import { PORT } from './config';
+import { prisma } from './lib/prisma';
+
 
 const app = express();
-const prisma = new PrismaClient();
+
 
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';

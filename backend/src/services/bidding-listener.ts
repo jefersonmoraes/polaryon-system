@@ -1,8 +1,6 @@
 import axios from 'axios';
 import { getSocketServer } from '../socket';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 import { BiddingStrategyEngine, ItemStrategyConfig } from './bidding-strategy-engine';
 

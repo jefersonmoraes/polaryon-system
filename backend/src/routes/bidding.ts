@@ -1,14 +1,12 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import multer from 'multer';
 import { encryptBufferToString } from '../utils/crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth-middleware';
 import { Request, Response } from 'express';
-// node-forge is needed for parsing pfx. We will just install it.
-// import forge from 'node-forge';
 
 const router = Router();
-const prisma = new PrismaClient();
+
 
 // Configure multer for handling file uploads in memory
 const upload = multer({ 

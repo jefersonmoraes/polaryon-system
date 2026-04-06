@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 
 export interface BiddingItem {
     itemId: string;
@@ -41,10 +40,14 @@ export class BiddingStrategyEngine {
             nextBid = currentItem.valorAtual * (1 - decrementValue / 100);
         }
 
+        // Round to 2 decimal places to avoid floating point precision issues
+        nextBid = Math.round(nextBid * 100) / 100;
+
         // Garante que o próximo lance não fure o mínimo
         if (nextBid < minPrice) {
             nextBid = minPrice;
         }
+
 
         // --- Lógica por Modo ---
         switch (mode) {
