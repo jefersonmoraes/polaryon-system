@@ -111,6 +111,10 @@ interface KanbanState {
   fetchCardDetails: (cardId: string) => Promise<void>;
   fetchBudgetDetails: (budgetId: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
+  fetchCompanies: () => Promise<void>;
+  fetchRoutes: () => Promise<void>;
+  fetchBudgets: () => Promise<void>;
+  fetchMainCompanyProfiles: () => Promise<void>;
 
   // Members Sync
   setMembers: (members: WorkspaceMember[]) => void;
@@ -403,14 +407,66 @@ export const useKanbanStore = create<KanbanState>()(
         try {
           const res = await api.get('/kanban/notifications');
           if (res.data) {
-            set(s => {
-              // Only override notifications, keeping other state intact.
-              // Merge to prevent UI flicker
-              return { notifications: res.data };
-            });
+            set({ notifications: res.data });
           }
         } catch (error) {
           console.error("Failed to fetch notifications:", error);
+        }
+      },
+
+      fetchCompanies: async () => {
+        try {
+          const res = await api.get('/kanban/companies');
+          if (res.data) {
+            set({ companies: res.data });
+          }
+        } catch (error) {
+          console.error("Failed to fetch companies:", error);
+        }
+      },
+
+      fetchRoutes: async () => {
+        try {
+          const res = await api.get('/kanban/routes');
+          if (res.data) {
+            set({ routes: res.data });
+          }
+        } catch (error) {
+          console.error("Failed to fetch routes:", error);
+        }
+      },
+
+      fetchBudgets: async () => {
+        try {
+          const res = await api.get('/kanban/budgets');
+          if (res.data) {
+            const serverBudgets = res.data;
+            const localBudgets = get().budgets;
+
+            const finalBudgets = serverBudgets.map((sb: any) => {
+              const local = localBudgets.find(lb => lb.id === sb.id);
+              const safeDefaults = { items: [] };
+              if (local && !local.isSkeleton && sb.isSkeleton) {
+                  return { ...safeDefaults, ...sb, ...local, isSkeleton: false };
+              }
+              return { ...safeDefaults, ...sb };
+            });
+
+            set({ budgets: finalBudgets });
+          }
+        } catch (error) {
+          console.error("Failed to fetch budgets:", error);
+        }
+      },
+
+      fetchMainCompanyProfiles: async () => {
+        try {
+          const res = await api.get('/kanban/main-companies');
+          if (res.data) {
+            set({ mainCompanies: res.data });
+          }
+        } catch (error) {
+          console.error("Failed to fetch main companies:", error);
         }
       },
 

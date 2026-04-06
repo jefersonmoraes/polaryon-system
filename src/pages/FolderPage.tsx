@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Plus, Trash2, Pencil, Palette, Archive, Star } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BOARD_COLORS } from '@/types/kanban';
 import { motion } from 'framer-motion';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
@@ -10,7 +10,11 @@ import { useNavigate } from 'react-router-dom';
 const FolderPage = () => {
   const { folderId } = useParams<{ folderId: string }>();
   const navigate = useNavigate();
-  const { folders, boards, lists, cards, addBoard, updateBoard, updateFolder } = useKanbanStore();
+  const { folders, boards, lists, cards, addBoard, updateBoard, updateFolder, fetchKanbanData } = useKanbanStore();
+  
+  useEffect(() => {
+    fetchKanbanData();
+  }, [fetchKanbanData]);
   const folder = folders.find(f => f.id === folderId);
   const folderBoards = boards
     .filter(b => b.folderId === folderId && !b.trashed)

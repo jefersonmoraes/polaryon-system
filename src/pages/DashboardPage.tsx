@@ -48,6 +48,7 @@ const Dashboard = () => {
   const budgets = useKanbanStore(state => state.budgets);
   const mainCompanies = useKanbanStore(state => state.mainCompanies);
   const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
+  const fetchMainCompanyProfiles = useKanbanStore(state => state.fetchMainCompanyProfiles);
 
   const documents = useDocumentStore(state => state.documents);
   const fetchDocuments = useDocumentStore(state => state.fetchDocuments);
@@ -87,9 +88,10 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchKanbanData();
+    fetchMainCompanyProfiles();
     if (canDocs) fetchDocuments();
     if (canAccounting) fetchAccountingData();
-  }, [fetchKanbanData, fetchDocuments, fetchAccountingData, canDocs, canAccounting]);
+  }, [fetchKanbanData, fetchMainCompanyProfiles, fetchDocuments, fetchAccountingData, canDocs, canAccounting]);
 
   // Fetch Weekly Activity Stats
   useEffect(() => {

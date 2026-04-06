@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
@@ -31,7 +31,13 @@ const typeStyles: Record<BudgetType, string> = {
 };
 
 const BudgetsPage = () => {
-    const { budgets, companies, cards, lists, boards, folders, deleteBudget, updateBudget } = useKanbanStore();
+    const { budgets, companies, cards, lists, boards, folders, deleteBudget, updateBudget, fetchBudgets, fetchCompanies } = useKanbanStore();
+
+    // Auto-fetch data on mount
+    useEffect(() => {
+        fetchBudgets();
+        fetchCompanies();
+    }, [fetchBudgets, fetchCompanies]);
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState<BudgetType | 'Todos'>('Todos');
     const [statusFilter, setStatusFilter] = useState<BudgetStatus | 'Todos'>('Todos');

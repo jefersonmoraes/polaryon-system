@@ -13,7 +13,7 @@ interface CompanyListPageProps {
 }
 
 const CompanyListPage = ({ type }: CompanyListPageProps) => {
-    const { companies, budgets = [], removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute } = useKanbanStore();
+    const { companies, budgets = [], fetchCompanies, fetchRoutes, removeCompany, updateCompany, routes = [], addRoute, updateRoute, deleteRoute, restoreRoute, permanentlyDeleteRoute } = useKanbanStore();
     const [searchParams, setSearchParams] = useSearchParams();
     const urlId = searchParams.get('id');
     const tabOption = searchParams.get('tab');
@@ -21,6 +21,12 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+
+    // Auto-fetch data on mount
+    useEffect(() => {
+        fetchCompanies();
+        fetchRoutes();
+    }, [fetchCompanies, fetchRoutes]);
 
     // Initial URL Selection
     useEffect(() => {

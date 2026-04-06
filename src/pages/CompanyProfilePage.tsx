@@ -23,7 +23,11 @@ const initialFormData = {
 };
 
 export default function CompanyProfilePage() {
-    const { mainCompanies, addMainCompany, updateMainCompany, deleteMainCompany, setDefaultMainCompany } = useKanbanStore();
+    const { mainCompanies, addMainCompany, updateMainCompany, deleteMainCompany, setDefaultMainCompany, fetchMainCompanyProfiles } = useKanbanStore();
+    
+    useEffect(() => {
+        fetchMainCompanyProfiles();
+    }, [fetchMainCompanyProfiles]);
     const isDark = useUserPrefsStore(state => state.isDark);
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();

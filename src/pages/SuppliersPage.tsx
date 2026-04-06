@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Building2, Truck, Briefcase, MapPin, Phone, Mail, Loader2, Check, ExternalLink, Star, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
@@ -39,8 +39,13 @@ const SuppliersPage = () => {
     const [expandedSuppliers, setExpandedSuppliers] = useState(false);
     const [expandedTransporters, setExpandedTransporters] = useState(false);
 
-    const { addCompany, companies, budgets = [] } = useKanbanStore();
+    const { addCompany, companies, budgets = [], fetchCompanies, fetchBudgets } = useKanbanStore();
     const { currentUser } = useAuthStore();
+
+    useEffect(() => {
+        fetchCompanies();
+        fetchBudgets();
+    }, [fetchCompanies, fetchBudgets]);
 
     // Calculate dynamic ratings from budgets
     const companyRatings = useMemo(() => {

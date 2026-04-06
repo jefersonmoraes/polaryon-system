@@ -11,10 +11,19 @@ import { socketService } from '@/lib/socket';
 import { fixDateToBRT } from '@/lib/utils';
 
 export default function GlobalCalendarPage() {
-    const { cards, boards, lists, labels, budgets, googleEvents, setGoogleEvents: originalSetGoogleEvents } = useKanbanStore();
+    const { 
+        cards, boards, lists, labels, budgets, googleEvents, 
+        setGoogleEvents: originalSetGoogleEvents,
+        fetchKanbanData, fetchBudgets
+    } = useKanbanStore();
     const { documents } = useDocumentStore();
     const { taxObligations } = useAccountingStore();
     const { currentUser } = useAuthStore();
+
+    useEffect(() => {
+        fetchKanbanData();
+        fetchBudgets();
+    }, [fetchKanbanData, fetchBudgets]);
 
     const setGoogleEvents = (events: any[]) => {
         originalSetGoogleEvents(events);

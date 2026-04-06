@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore, SystemUser, UserRole } from '@/store/auth-store';
+import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import {
     Users, ShieldAlert, KeyRound, Mail, Trash2,
@@ -23,6 +24,7 @@ const AVAILABLE_SCREENS = [
 
 export default function AdminDashboardPage() {
     const { currentUser, addUser, updateUser, removeUser, onlineUsers } = useAuthStore();
+    const { fetchMainCompanyProfiles } = useKanbanStore();
     const [systemsUsersDb, setSystemsUsersDb] = useState<SystemUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [errorOccurred, setErrorOccurred] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export default function AdminDashboardPage() {
 
     useEffect(() => {
         loadUsers();
+        fetchMainCompanyProfiles();
     }, []);
 
     const handleAddUser = async () => {

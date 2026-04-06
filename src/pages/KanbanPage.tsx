@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Plus, LayoutGrid, Search, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,8 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 const KanbanPage = () => {
     const { currentUser } = useAuthStore();
-    const { folders, boards, addFolder } = useKanbanStore();
+    const { folders, boards, addFolder, fetchKanbanData } = useKanbanStore();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        fetchKanbanData();
+    }, [fetchKanbanData]);
+
     const [addingFolder, setAddingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderColor, setNewFolderColor] = useState('#3b82f6'); // Default primary blue

@@ -10,18 +10,19 @@ import { fixDateToBRT } from '@/lib/utils';
 import api from '@/lib/api';
 
 export default function TeamWorkloadPage() {
-    const allMembers = useKanbanStore(state => state.members);
-    // DEBUG: Remove filter to verify visibility
+    const { 
+        members: allMembers, cards, boards, lists, labels, budgets,
+        fetchKanbanData, fetchBudgets, fetchCompanies 
+    } = useKanbanStore();
+
     const members = allMembers || [];
-    console.log('DEBUG - TeamWorkloadPage members:', members);
     
-    // Add additional safety for systemStats
-    const systemMembers = members; 
-    const cards = useKanbanStore(state => state.cards);
-    const boards = useKanbanStore(state => state.boards);
-    const lists = useKanbanStore(state => state.lists);
-    const labels = useKanbanStore(state => state.labels);
-    const budgets = useKanbanStore(state => state.budgets);
+    useEffect(() => {
+        fetchKanbanData();
+        fetchBudgets();
+        fetchCompanies();
+    }, [fetchKanbanData, fetchBudgets, fetchCompanies]);
+
     const documents = useDocumentStore(state => state.documents);
     const entries = useAccountingStore(state => state.entries);
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
