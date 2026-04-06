@@ -1,10 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config';
+import { JWT_SECRET, NODE_ENV } from '../config';
 
 export interface AuthRequest extends Request {
     user?: any;
 }
+
+const DEV_BYPASS_TOKEN = "dev_bypass_token_active_90days";
+const DEV_USER_PAYLOAD = {
+    id: "admin-1-dev",
+    email: "admin@polaryon.com",
+    role: "ADMIN",
+    name: "Dev Mode Administrator"
+};
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
@@ -13,6 +21,14 @@ export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction
     }
 
     const token = authHeader.split(' ')[1];
+
+    // --- DEVELOPMENT BYPASS HOOK ---
+    if (NODE_ENV !== 'production' && token === DEV_BYPASS_TOKEN) {
+        console.log("🛠️ DEV BYPASS GRANTED: requireAdmin bypass in effect.");
+        req.user = DEV_USER_PAYLOAD;
+        return next();
+    }
+
     try {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
         req.user = decoded;
@@ -37,6 +53,14 @@ export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction)
     }
 
     const token = authHeader.split(' ')[1];
+
+    // --- DEVELOPMENT BYPASS HOOK ---
+    if (NODE_ENV !== 'production' && token === DEV_BYPASS_TOKEN) {
+        console.log("🛠️ DEV BYPASS GRANTED: requireAuth bypass in effect.");
+        req.user = DEV_USER_PAYLOAD;
+        return next();
+    }
+
     try {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
         req.user = decoded;
