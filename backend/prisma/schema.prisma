@@ -552,3 +552,38 @@ model UserActivity {
 
   @@unique([userId, date])
 }
+
+// ==========================================
+// BIDDING ENGINE MODELS (PBE)
+// ==========================================
+
+model BiddingCredential {
+  id                  String   @id @default(uuid())
+  companyId           String   // Refers to MainCompanyProfile
+  alias               String   // User friendly name for this credential
+  cnpj                String   // Extracted from cert for quick query
+  certificateData     String   @db.Text // Encrypted PFX base64
+  certificatePassword String   // Encrypted password
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  sessions            BiddingSession[]
+}
+
+model BiddingSession {
+  id              String   @id @default(uuid())
+  credentialId    String
+  credential      BiddingCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  portal          String   @default("compras_gov") // compras_gov, licitacoes_e, etc.
+  uasg            String
+  numeroPregao    String
+  anoPregao       String
+  sessionStatus   String   @default("pending") // pending, active, paused, finished
+  itemsConfig     Json?    // Detailed config per item (floor price, decrement, mode)
+  logs            Json?    // Summary logs of this session
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([portal, uasg, numeroPregao, anoPregao])
+}

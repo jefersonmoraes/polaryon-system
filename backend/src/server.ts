@@ -25,6 +25,7 @@ import transparencyRoutes from './routes/transparency';
 import activityRoutes from './routes/activity';
 import maintenanceRoutes from './routes/maintenance';
 import transferegovRoutes from './routes/transferegov';
+import biddingRoutes from './routes/bidding';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 
@@ -104,6 +105,7 @@ app.use('/api/transparency', transparencyRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/transferegov', transferegovRoutes);
+app.use('/api/bidding', biddingRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {
