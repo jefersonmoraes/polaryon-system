@@ -117,6 +117,28 @@ export const initSocket = (server: HttpServer) => {
             }
         });
 
+        // ---------------------------------
+        // PBE (Polaryon Bidding Engine) Channels
+        // ---------------------------------
+        socket.on('join_bidding_room', (sessionId: string) => {
+            try {
+                socket.join(`bidding_room_${sessionId}`);
+                console.log(`🔌 Client ${socket.id} joined bidding room: ${sessionId}`);
+            } catch (e) {
+                console.error('Error joining bidding room', e);
+            }
+        });
+
+        socket.on('leave_bidding_room', (sessionId: string) => {
+            try {
+                socket.leave(`bidding_room_${sessionId}`);
+                console.log(`🔌 Client ${socket.id} left bidding room: ${sessionId}`);
+            } catch (e) {
+                console.error('Error leaving bidding room', e);
+            }
+        });
+
+
         // HEARTBEAT de tempo logado (a cada 1 min de atividade confirmada)
         socket.on('user_heartbeat', async (data: { userId: string }) => {
             try {
@@ -201,3 +223,6 @@ export const getIO = () => {
     }
     return io;
 };
+
+// Alias map for bidding listener
+export const getSocketServer = getIO;

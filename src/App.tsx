@@ -47,6 +47,7 @@ const KanbanPage = lazy(() => import("./pages/KanbanPage"));
 const ConnectionPage = lazy(() => import("./pages/ConnectionPage"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const TransparencySearchPage = lazy(() => import("./pages/TransparencySearchPage"));
+const BiddingDashboardPage = lazy(() => import("./pages/BiddingDashboardPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Heavy component split-out
@@ -390,6 +391,7 @@ const AppContent = () => {
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesDashboard /></ProtectedRoute>} />
       <Route path="/oportunidades/busca" element={<ProtectedRoute><OportunidadesSearch /></ProtectedRoute>} />
       <Route path="/oportunidades/preditivo" element={<ProtectedRoute><InteligenciaPreditiva /></ProtectedRoute>} />
+      <Route path="/robo-lances" element={<ProtectedRoute><BiddingDashboardPage /></ProtectedRoute>} />
       <Route path="/transparencia" element={<ProtectedRoute><TransparencySearchPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />
       <Route path="/team" element={<ProtectedRoute><TeamWorkloadPage /></ProtectedRoute>} />

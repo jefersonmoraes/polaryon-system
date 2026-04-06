@@ -317,6 +317,11 @@ const AppSidebar = () => {
                 <Link to="/transparencia" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/transparencia' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Portal da Transparência">
                   <Activity className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Portal da Transparência</span>}
                 </Link>
+
+                <Link to="/robo-lances" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-all duration-300 ${location.pathname === '/robo-lances' ? 'bg-emerald-600 text-white font-medium shadow-md' : 'text-sidebar-foreground hover:bg-emerald-50 hover:text-emerald-600'}`} title="Robô de Lances PBE">
+                  <Zap className={`h-4 w-4 shrink-0 ${location.pathname === '/robo-lances' ? 'fill-current' : 'text-emerald-500'}`} /> 
+                  {!isCollapsed && <span className="flex items-center gap-2 font-bold tracking-tight">Robô de Lances <span className="text-[9px] bg-emerald-500/20 text-emerald-600 px-1 rounded border border-emerald-500/20">V3</span></span>}
+                </Link>
               </div>
             </div>
           ) : isKanbanModule && activeKanbanFolder ? (

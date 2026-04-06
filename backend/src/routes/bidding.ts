@@ -79,4 +79,58 @@ router.get('/credentials', requireAuth, async (req: AuthRequest | any, res: Resp
     }
 });
 
+import { BiddingListener } from '../services/bidding-listener';
+
+// Create a new Bidding Session (Prep for monitoring)
+router.post('/sessions', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { credentialId, portal, uasg, numeroPregao, anoPregao } = req.body;
+        
+        if (!credentialId || !uasg || !numeroPregao || !anoPregao) {
+            return res.status(400).json({ error: 'Missing required session fields' });
+        }
+
+        const session = await prisma.biddingSession.create({
+            data: {
+                credentialId,
+                portal: portal || 'compras_gov',
+                uasg,
+                numeroPregao,
+                anoPregao,
+                sessionStatus: 'pending'
+            }
+        });
+
+        res.json({ success: true, session });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Start the Radar for a session
+router.post('/sessions/:id/start', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id } = req.params;
+        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        await BiddingListener.startMonitoring(session.id, session.uasg, session.numeroPregao);
+        
+        res.json({ success: true, message: 'Radar started successfully.' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Stop the Radar for a session
+router.post('/sessions/:id/stop', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id } = req.params;
+        await BiddingListener.stopMonitoring(id);
+        res.json({ success: true, message: 'Radar stopped successfully.' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
