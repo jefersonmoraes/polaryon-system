@@ -53,7 +53,7 @@ export default function LoginPage() {
 
     // Auth State
     const [isLoading, setIsLoading] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const from = location.state?.from || '/tarefas';
 
     useEffect(() => {

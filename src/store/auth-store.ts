@@ -70,19 +70,13 @@ const DEFAULT_ADMIN: SystemUser = {
 
 const authStorage: StateStorage = {
     getItem: (name) => {
-        return sessionStorage.getItem(name) || localStorage.getItem(name);
+        return localStorage.getItem(name);
     },
     setItem: (name, value) => {
-        if (localStorage.getItem('rememberMe') === 'true') {
-            localStorage.setItem(name, value);
-            sessionStorage.removeItem(name);
-        } else {
-            sessionStorage.setItem(name, value);
-            localStorage.removeItem(name);
-        }
+        // Enforce persistence for 90 days. We ignore sessionStorage completely to avoid tab suspension drops.
+        localStorage.setItem(name, value);
     },
     removeItem: (name) => {
-        sessionStorage.removeItem(name);
         localStorage.removeItem(name);
     }
 };
@@ -131,11 +125,8 @@ export const useAuthStore = create<AuthState>()(
                     newSystemUsers.push(finalUserData);
                 }
 
-                if (rememberMe) {
-                    localStorage.setItem('rememberMe', 'true');
-                } else {
-                    localStorage.removeItem('rememberMe');
-                }
+                // Session is now persistent by default in this v2 store
+                localStorage.setItem('rememberMe', 'true');
 
                 set({
                     currentUser: finalUserData,
@@ -183,11 +174,8 @@ export const useAuthStore = create<AuthState>()(
 
                 // standard active user login check
                 if (user && user.status === 'active') {
-                    if (rememberMe) {
-                        localStorage.setItem('rememberMe', 'true');
-                    } else {
-                        localStorage.removeItem('rememberMe');
-                    }
+                    // Always persistent session
+                    localStorage.setItem('rememberMe', 'true');
                     set({ currentUser: user, isAuthenticated: true });
 
                     useAuditStore.getState().addLog({
@@ -206,7 +194,7 @@ export const useAuthStore = create<AuthState>()(
 
             logout: () => {
                 localStorage.removeItem('rememberMe');
-                set({ currentUser: null, isAuthenticated: false });
+                set({ currentUser: null, isAuthenticated: false, jwtToken: null });
             },
 
             updateProfile: (updates) => {

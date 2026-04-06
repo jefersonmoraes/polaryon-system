@@ -15,7 +15,7 @@ api.interceptors.request.use(
     (config) => {
         // Retrieve token from whatever auth store mechanism you are using
         // It could be sessionStorage or zustand. We'll read from sessionStorage to be safe.
-        const authDataStr = sessionStorage.getItem('polaryon-auth-v2') || localStorage.getItem('polaryon-auth-v2');
+        const authDataStr = localStorage.getItem('polaryon-auth-v2');
         if (authDataStr) {
             try {
                 const state = JSON.parse(authDataStr).state;
