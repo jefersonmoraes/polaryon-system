@@ -106,7 +106,8 @@ model Card {
   timeEntries TimeEntry[]
   attachments Attachment[]
   milestones  Milestone[]
-  automationUndoAction Json?
+  @@index([archived, trashed])
+  @@index([listId])
 }
 
 model CardLabel {
@@ -280,6 +281,9 @@ model Budget {
   trashedAt  DateTime?
   archived   Boolean  @default(false)
   createdAt  DateTime @default(now())
+
+  @@index([archived, trashed])
+  @@index([cardId])
 }
 
 model Notification {

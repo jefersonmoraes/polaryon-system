@@ -824,11 +824,12 @@ router.get('/attachments/:id/content', async (req: Request, res: Response) => {
 router.get('/sync', async (req: Request, res: Response) => {
     try {
         // Core Kanban and System Config only
-        const [folders, boards, lists, cards, budgets, notifications, usersDb, labels] = await Promise.all([
+        const [folders, boards, lists, cards, budgets, notifications, usersDb, mainCompanies, labels] = await Promise.all([
             prisma.folder.findMany(),
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
+                where: { archived: false, trashed: false },
                 select: {
                     id: true, title: true, listId: true, position: true,
                     dueDate: true, startDate: true, completed: true, archived: true,
@@ -836,6 +837,7 @@ router.get('/sync', async (req: Request, res: Response) => {
                 }
             }),
             prisma.budget.findMany({
+                where: { archived: false, trashed: false },
                 select: { id: true, title: true, status: true, totalValue: true, trashed: true, archived: true }
             }),
             prisma.notification.findMany({ take: 30, orderBy: { createdAt: 'desc' } }),
@@ -843,6 +845,7 @@ router.get('/sync', async (req: Request, res: Response) => {
                 where: { role: { notIn: ['disabled', 'pending'] } },
                 select: { id: true, name: true, email: true, picture: true }
             }),
+            prisma.mainCompanyProfile.findMany(),
             prisma.label.findMany(),
         ]);
 
@@ -868,7 +871,7 @@ router.get('/sync', async (req: Request, res: Response) => {
 
         res.json({ 
             folders, boards, lists, cards: skeletalCards, budgets: skeletalBudgets, 
-            notifications, members, labels
+            notifications, members, mainCompanies, labels
         });
     } catch (e: any) {
         console.error("SYNK_ERROR:", e);
