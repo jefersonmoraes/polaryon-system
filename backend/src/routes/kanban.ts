@@ -824,7 +824,7 @@ router.get('/attachments/:id/content', async (req: Request, res: Response) => {
 router.get('/sync', async (req: Request, res: Response) => {
     try {
         // Core Kanban and System Config only
-        const [folders, boards, lists, cards, budgets, notifications, usersDb, mainCompanies, labels] = await Promise.all([
+        const [folders, boards, lists, cards, budgets, notifications, usersDb, mainCompanies, labels, documents, taxes] = await Promise.all([
             prisma.folder.findMany(),
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
@@ -836,6 +836,9 @@ router.get('/sync', async (req: Request, res: Response) => {
                     trashed: true, pncpId: true, assignee: true, createdAt: true,
                     customLink: true,
                     labels: { select: { labelId: true } },
+                    milestones: {
+                        select: { id: true, title: true, dueDate: true, hour: true, completed: true }
+                    },
                     _count: {
                         select: {
                             comments: true,
@@ -859,6 +862,14 @@ router.get('/sync', async (req: Request, res: Response) => {
             }),
             prisma.mainCompanyProfile.findMany(),
             prisma.label.findMany(),
+            prisma.companyDocument.findMany({
+                where: { trashed: false },
+                select: { id: true, title: true, expirationDate: true, status: true, type: true }
+            }),
+            prisma.taxObligation.findMany({
+                where: { trashed: false },
+                select: { id: true, name: true, dueDate: true, status: true, amount: true }
+            }),
         ]);
 
         const members = usersDb
@@ -878,7 +889,7 @@ router.get('/sync', async (req: Request, res: Response) => {
             comments: Array(c._count.comments).fill({ isSkeleton: true }),
             attachments: Array(c._count.attachments).fill({ isSkeleton: true }),
             checklist: Array(c._count.checklist).fill({ isSkeleton: true }),
-            milestones: Array(c._count.milestones).fill({ isSkeleton: true }),
+            milestones: c.milestones || [], // Use real milestones from DB
             items: Array(c._count.items).fill({ isSkeleton: true }),
             descriptionEntries: Array(c._count.descriptionEntries).fill({ isSkeleton: true })
         }));
@@ -890,7 +901,8 @@ router.get('/sync', async (req: Request, res: Response) => {
 
         res.json({ 
             folders, boards, lists, cards: skeletalCards, budgets: skeletalBudgets, 
-            notifications, members, mainCompanies, labels
+            notifications, members, mainCompanies, labels,
+            documents, taxes // New fields for instant dashboard
         });
     } catch (e: any) {
         console.error("SYNK_ERROR:", e);

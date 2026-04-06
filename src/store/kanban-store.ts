@@ -348,6 +348,18 @@ export const useKanbanStore = create<KanbanState>()(
               notifications: res.data.notifications || [],
             });
 
+            // DASHBOARD INSTANT LOAD V3: Populate other stores from sync data
+            if (res.data.documents) {
+              useDocumentStore.getState().setDocuments(res.data.documents);
+            }
+            if (res.data.taxes) {
+              // Only update tax obligations to avoid wiping out entries/bank accounts from cache
+              useAccountingStore.setState(s => ({
+                ...s,
+                taxObligations: res.data.taxes
+              }));
+            }
+
             // Trigger automatic reorder for all lists based on new data
             (res.data.lists || []).forEach((l: any) => {
                 get().reorderCardsByMilestones(l.id);
