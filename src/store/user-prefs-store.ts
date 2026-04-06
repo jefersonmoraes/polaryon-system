@@ -39,8 +39,12 @@ interface UserPrefsState extends UserPrefsData {
 const saveToLocal = (userId: string, data: Partial<UserPrefsData>) => {
     if (!userId) return;
     const key = `polaryon-prefs-${userId}`;
-    const existing = JSON.parse(localStorage.getItem(key) || '{}');
-    localStorage.setItem(key, JSON.stringify({ ...existing, ...data }));
+    try {
+        const existing = JSON.parse(localStorage.getItem(key) || '{}');
+        localStorage.setItem(key, JSON.stringify({ ...existing, ...data }));
+    } catch (e) {
+        console.warn(`[UserPrefs] Failed to save preferences for user ${userId} to localStorage:`, e);
+    }
 };
 
 export const useUserPrefsStore = create<UserPrefsState>()((set, get) => ({

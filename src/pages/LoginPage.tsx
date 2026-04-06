@@ -7,6 +7,7 @@ import { Lock, RefreshCcw, Mail, ArrowLeft } from 'lucide-react';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import api from '@/lib/api';
 import logo from '@/assets/logo-polaryon.svg';
+import { clearCorruptedStorage } from '@/lib/storage-utils';
 
 // Change this to your actual Google Client ID from Google Cloud Console
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'sua-chave-do-google-aqui.apps.googleusercontent.com';
@@ -299,9 +300,21 @@ export default function LoginPage() {
                 <div className="mt-10 flex items-start gap-4 px-10">
                     <Mail size={16} className="text-blue-600 shrink-0 mt-1" />
                     <p className="text-[10px] font-medium text-white/20 uppercase leading-relaxed tracking-widest">
-                        Acesso exclusivo para colaboradores autorizados. <br />
                         Entre em contato com o administrador para habilitar seu e-mail corporativo.
                     </p>
+                </div>
+
+                <div className="mt-12 text-center pb-10">
+                    <button 
+                        onClick={() => {
+                            if (window.confirm("Isso irá limpar o cache local do seu navegador para resolver problemas de carregamento (como no Edge). Seus dados no servidor estão seguros. Deseja continuar?")) {
+                                clearCorruptedStorage();
+                            }
+                        }}
+                        className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/10 hover:text-blue-500/50 transition-all"
+                    >
+                        Problemas de Acesso? Reparar Armazenamento local
+                    </button>
                 </div>
             </div>
         </div>

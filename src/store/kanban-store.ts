@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import idbStorage from '@/lib/idb-storage';
 import { Folder, Board, KanbanList, Card, Label, DEFAULT_LABELS, ChecklistItem, Comment, Attachment, WorkspaceMember, Notification, Company, Route, Budget, MainCompanyProfile } from '@/types/kanban';
 import { useAuditStore } from './audit-store';
 import { useAuthStore } from './auth-store';
@@ -1580,8 +1581,10 @@ export const useKanbanStore = create<KanbanState>()(
        * V4 strictly persists ONLY hierarchy and metadata.
        * Large collections (cards, budgets, companies) are loaded via API.
        */
+      storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({
-        googleEvents: state.googleEvents,
+        // V5 OPTIMIZATION: Removed googleEvents from persistence.
+        // They are synced via Sockets/API and only bloat LocalStorage (Quota errors in Edge).
         folders: state.folders,
         boards: state.boards,
         lists: state.lists,

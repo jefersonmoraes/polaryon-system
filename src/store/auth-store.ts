@@ -74,7 +74,11 @@ const authStorage: StateStorage = {
     },
     setItem: (name, value) => {
         // Enforce persistence for 90 days. We ignore sessionStorage completely to avoid tab suspension drops.
-        localStorage.setItem(name, value);
+        try {
+            localStorage.setItem(name, value);
+        } catch (e) {
+            console.warn("AuthStore - Failed to set localStorage (Quota probably exceeded):", e);
+        }
     },
     removeItem: (name) => {
         localStorage.removeItem(name);
