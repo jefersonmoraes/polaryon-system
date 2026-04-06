@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCertificateStore, CapacityCertificate } from '@/store/certificate-store';
 import { Plus, Search, FileBadge, Trash2, Edit, ExternalLink, Download } from 'lucide-react';
 import { format } from 'date-fns';
@@ -10,8 +10,14 @@ import api from '@/lib/api';
 const CapacityCertificatesPage = () => {
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.permissions?.canEdit ?? false;
-    const { certificates, trashCertificate } = useCertificateStore();
-    const { cards } = useKanbanStore();
+    const { certificates, trashCertificate, fetchCertificates } = useCertificateStore();
+    const { cards, fetchKanbanData } = useKanbanStore();
+
+    useEffect(() => {
+        fetchCertificates();
+        // Also fetch kanban to ensure linked cards titles are available
+        fetchKanbanData();
+    }, [fetchCertificates, fetchKanbanData]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState<string>('Todos');
     const [isFormOpen, setIsFormOpen] = useState(false);

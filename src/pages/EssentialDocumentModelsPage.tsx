@@ -7,14 +7,15 @@ import { useAuthStore } from '@/store/auth-store';
 const EssentialDocumentModelsPage = () => {
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.permissions?.canEdit ?? false;
-    const { models, trashModel, initializeDefaultModels } = useEssentialDocumentStore();
+    const { models, trashModel, initializeDefaultModels, fetchModels } = useEssentialDocumentStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingModel, setEditingModel] = useState<EssentialDocumentModel | null>(null);
 
     useEffect(() => {
+        fetchModels();
         initializeDefaultModels();
-    }, [initializeDefaultModels]);
+    }, [fetchModels, initializeDefaultModels]);
 
     const filteredModels = models.filter(model => {
         if (model.trashed) return false;

@@ -280,32 +280,7 @@ export const useKanbanStore = create<KanbanState>()(
           const res = await api.get('/kanban/sync');
           console.log('kanbanStore - Sync Response:', res.data);
           if (res.data) {
-            // Feed documentation stores
-            if (res.data.companyDocs) {
-                console.log('kanbanStore - Syncing Company Docs:', res.data.companyDocs.length);
-                useDocumentStore.getState().setDocuments(res.data.companyDocs);
-            }
-            if (res.data.essentialDocs) {
-                console.log('kanbanStore - Syncing Essential Docs:', res.data.essentialDocs.length);
-                useEssentialDocumentStore.getState().setModels(res.data.essentialDocs);
-            }
-            if (res.data.certificates) {
-                console.log('kanbanStore - Syncing Certificates:', res.data.certificates.length);
-                // Import do store de certificados feito de forma dinâmica para evitar dependência circular
-                const { useCertificateStore } = await import('./certificate-store');
-                useCertificateStore.getState().setCertificates(res.data.certificates);
-            }
-            if (res.data.accounting) {
-                console.log('kanbanStore - Syncing Accounting data');
-                useAccountingStore.getState().setAllData(res.data.accounting);
-            }
-            if (res.data.auditLogs) {
-                console.log('kanbanStore - Syncing Audit Logs:', res.data.auditLogs.length);
-                useAuditStore.getState().setLogs(res.data.auditLogs);
-            }
-
-            // SMART MERGE: Prevent newly added local cards from disappearing during sync
-            // A card is kept if it's already in the server response OR if it's "very recent" (last 2 mins)
+            // SMART MERGE: Keep optimistic cards
             const serverCards = res.data.cards || [];
             const localCards = get().cards;
             const now = new Date().getTime();

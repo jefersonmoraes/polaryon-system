@@ -820,98 +820,30 @@ router.get('/attachments/:id/content', async (req: Request, res: Response) => {
     }
 });
 
-// SYNC ALL (Pull state to client)
+// SYNC CORE (Pull minimal state to client board)
 router.get('/sync', async (req: Request, res: Response) => {
     try {
-        // Guarantee default labels exist in postgres to prevent FK errors when cards link them
-        await prisma.label.createMany({
-            data: DEFAULT_LABELS,
-            skipDuplicates: true
-        }).catch(e => console.error("Label seed skipped", e));
-
-        const [folders, boards, lists, cards, companies, mainCompanies, routes, budgets, notifications, usersDb, labels, companyDocs, essentialDocs, certificates, accountingCategories, bankAccounts, accountingEntries, recurringExpenses, invoices, bankTransactions, taxObligations, accountingSettings, accountantExports, auditLogs] = await Promise.all([
+        // Core Kanban and System Config only
+        const [folders, boards, lists, cards, budgets, notifications, usersDb, labels] = await Promise.all([
             prisma.folder.findMany(),
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                include: { 
-                    labels: true, 
-                    checklist: true, 
-                    milestones: true, 
-                    comments: true, 
-                    timeEntries: true, 
-                    items: true,
-                    attachments: true,
-                    descriptionEntries: true
+                select: {
+                    id: true, title: true, listId: true, position: true, color: true,
+                    dueDate: true, startDate: true, completed: true, archived: true,
+                    trashed: true, pncpId: true, labels: { select: { labelId: true } }
                 }
             }),
-            prisma.company.findMany(),
-            prisma.mainCompanyProfile.findMany({ orderBy: { id: 'asc' } }),
-            prisma.route.findMany(),
-            prisma.budget.findMany(),
-            prisma.notification.findMany({ take: 50, orderBy: { createdAt: 'desc' } }),
+            prisma.budget.findMany({
+                select: { id: true, title: true, status: true, total: true, trashed: true, archived: true }
+            }),
+            prisma.notification.findMany({ take: 30, orderBy: { createdAt: 'desc' } }),
             prisma.user.findMany({
-                where: {
-                    role: {
-                        notIn: ['disabled', 'pending']
-                    }
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    picture: true
-                }
+                where: { role: { notIn: ['disabled', 'pending'] } },
+                select: { id: true, name: true, email: true, picture: true }
             }),
             prisma.label.findMany(),
-            prisma.companyDocument.findMany({
-                select: {
-                    id: true,
-                    title: true,
-                    type: true,
-                    issueDate: true,
-                    expirationDate: true,
-                    status: true,
-                    companyId: true,
-                    fileName: true,
-                    fileSize: true,
-                    fileData: true,
-                    attachments: true,
-                    description: true,
-                    link: true,
-                    trashed: true,
-                    updatedAt: true
-                }
-            }),
-            prisma.essentialDocument.findMany({
-                select: {
-                    id: true,
-                    title: true,
-                    description: true,
-                    updatedAt: true
-                    // attachments: false 
-                }
-            }),
-            prisma.certificate.findMany({
-                select: {
-                    id: true,
-                    type: true,
-                    issuingAgency: true,
-                    executionDate: true,
-                    description: true,
-                    updatedAt: true
-                }
-            }),
-            prisma.accountingCategory.findMany(),
-            prisma.bankAccount.findMany(),
-            prisma.accountingEntry.findMany({ take: 500, orderBy: { date: 'desc' } }), // Added limit for performance
-            prisma.recurringExpense.findMany(),
-            prisma.invoice.findMany({ take: 100, orderBy: { issueDate: 'desc' } }), // Added limit
-            prisma.bankTransaction.findMany({ take: 200, orderBy: { date: 'desc' } }), // Added limit
-            prisma.taxObligation.findMany(),
-            prisma.accountingSettings.findMany(),
-            prisma.accountantExport.findMany({ take: 20, orderBy: { createdAt: 'desc' } }),
-            prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 50 }) // Reduced from 200 to 50 for V5
         ]);
 
         const members = usersDb
@@ -923,44 +855,23 @@ router.get('/sync', async (req: Request, res: Response) => {
                 avatar: u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email.split('@')[0])}&background=random`
             }));
 
-        const formattedCards = cards.map((c: any) => ({
+        const skeletalCards = cards.map((c: any) => ({
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId),
-            attachments: c.attachments || [],
-            items: (c.items || []).map((i: any) => ({
-                ...i,
-                attachments: i.attachments || []
-            })),
-            isSkeleton: false 
+            isSkeleton: true 
         }));
 
-        const fullBudgets = budgets.map((b: any) => ({
+        const skeletalBudgets = budgets.map((b: any) => ({
             ...b,
-            items: (b.items || []).map((i: any) => ({
-                ...i,
-                attachments: i.attachments || []
-            })),
-            isSkeleton: false
+            isSkeleton: true
         }));
 
         res.json({ 
-            folders, boards, lists, cards: formattedCards, companies, 
-            mainCompanies, routes, budgets: fullBudgets, notifications, members, 
-            labels, companyDocs, essentialDocs, certificates,
-            accounting: {
-                categories: accountingCategories,
-                bankAccounts,
-                entries: accountingEntries,
-                recurringExpenses,
-                invoices,
-                bankTransactions,
-                taxObligations,
-                settings: accountingSettings.reduce((acc: any, curr: any) => ({ ...acc, [curr.companyId]: curr }), {}),
-                exports: accountantExports
-            },
-            auditLogs
+            folders, boards, lists, cards: skeletalCards, budgets: skeletalBudgets, 
+            notifications, members, labels
         });
     } catch (e: any) {
+        console.error("SYNK_ERROR:", e);
         res.status(500).json({ error: e.message });
     }
 });

@@ -31,6 +31,7 @@ interface EssentialDocumentStore {
     permanentlyDeleteModel: (id: string) => Promise<void>;
     initializeDefaultModels: () => void;
     cleanOldTrash: () => void;
+    fetchModels: () => Promise<void>;
     processSystemAction: (action: any) => void;
 }
 
@@ -154,6 +155,17 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
 
                 const toDelete = state.models.filter(m => m.trashedAt && new Date(m.trashedAt) < thirtyDaysAgo);
                 toDelete.forEach(m => get().permanentlyDeleteModel(m.id));
+            },
+
+            fetchModels: async () => {
+                try {
+                    const response = await api.get('/documents/essential');
+                    if (response.data) {
+                        get().setModels(response.data);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch essential document models:', error);
+                }
             },
 
             processSystemAction: (action: any) => {

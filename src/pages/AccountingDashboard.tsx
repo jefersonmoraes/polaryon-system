@@ -16,8 +16,13 @@ import { ProLaboreDash } from '@/components/accounting/ProLaboreDash';
 
 type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'specific_year' | 'all';
 const AccountingDashboard = () => {
-    const { entries, invoices, categories } = useAccountingStore();
-    const { mainCompanies } = useKanbanStore();
+    const { entries, invoices, categories, fetchAccountingData } = useAccountingStore();
+    const { mainCompanies, fetchKanbanData } = useKanbanStore();
+
+    useEffect(() => {
+        fetchAccountingData();
+        fetchKanbanData();
+    }, [fetchAccountingData, fetchKanbanData]);
     const activeCompany = mainCompanies.find((c) => c.isDefault) || mainCompanies[0];
     const location = useLocation();
     const navigate = useNavigate();

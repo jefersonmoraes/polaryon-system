@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuditStore } from '@/store/audit-store';
 import { useAuthStore } from '@/store/auth-store';
 import { format } from 'date-fns';
@@ -23,8 +23,12 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 const AuditLogPage = () => {
-    const { logs } = useAuditStore();
+    const { logs, fetchLogs } = useAuditStore();
     const { currentUser } = useAuthStore();
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     // States for filters
     const [searchTerm, setSearchTerm] = useState('');

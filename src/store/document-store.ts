@@ -49,6 +49,7 @@ interface DocumentStore {
     permanentlyDeleteDocument: (id: string) => Promise<void>;
     validateDocumentStatuses: () => void;
     cleanOldTrash: () => void;
+    fetchDocuments: () => Promise<void>;
     syncLocalDataToServer: () => Promise<void>;
     processSystemAction: (action: any) => void;
 }
@@ -223,6 +224,17 @@ export const useDocumentStore = create<DocumentStore>()(
                 const toDelete = state.documents.filter(doc => doc.trashedAt && new Date(doc.trashedAt) < thirtyDaysAgo);
                 
                 toDelete.forEach(doc => get().permanentlyDeleteDocument(doc.id));
+            },
+
+            fetchDocuments: async () => {
+                try {
+                    const response = await api.get('/documents/company');
+                    if (response.data) {
+                        get().setDocuments(response.data);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch documents:', error);
+                }
             },
 
             syncLocalDataToServer: async () => {

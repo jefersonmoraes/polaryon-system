@@ -33,6 +33,7 @@ export interface AccountingState {
 
     // Actions
     setAllData: (data: any) => void;
+    fetchAccountingData: () => Promise<void>;
     syncLocalDataToServer: () => Promise<void>;
     
     addEntry: (entry: Omit<AccountingEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
@@ -114,6 +115,15 @@ export const useAccountingStore = create<AccountingState>()(
                     settings: data.settings || {},
                     recurringExpenses: data.recurringExpenses || []
                 });
+            },
+
+            fetchAccountingData: async () => {
+                try {
+                    const res = await api.get('/accounting/sync');
+                    get().setAllData(res.data);
+                } catch (error) {
+                    console.error('Failed to fetch accounting data:', error);
+                }
             },
 
             syncLocalDataToServer: async () => {

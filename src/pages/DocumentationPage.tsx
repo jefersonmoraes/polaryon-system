@@ -20,24 +20,14 @@ const DocumentationPage = () => {
     const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingDoc, setEditingDoc] = useState<CompanyDocument | null>(null);
+    const { fetchDocuments } = useDocumentStore();
     const { fetchKanbanData } = useKanbanStore();
 
     useEffect(() => {
-        // Force refresh on mount and if documents are empty
-        console.log('DocumentationPage - Component Mounted, fetching data...');
-        fetchKanbanData();
-    }, [fetchKanbanData]);
-
-    // Extra safeguard: if documents is still empty after 2 seconds, try one more time
-    useEffect(() => {
-        if (documents.length === 0) {
-            const timer = setTimeout(() => {
-                console.log('DocumentationPage - Documents still empty, retrying sync...');
-                fetchKanbanData();
-            }, 2000);
-            return () => clearTimeout(timer);
-        }
-    }, [documents.length, fetchKanbanData]);
+        // Force refresh on mount
+        console.log('DocumentationPage - Component Mounted, fetching store-specific data...');
+        fetchDocuments();
+    }, [fetchDocuments]);
 
     console.log('DocumentationPage - Current Documents:', documents);
 

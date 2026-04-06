@@ -50,9 +50,11 @@ const Dashboard = () => {
   const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
 
   const documents = useDocumentStore(state => state.documents);
+  const fetchDocuments = useDocumentStore(state => state.fetchDocuments);
 
   const entries = useAccountingStore(state => state.entries);
   const taxObligations = useAccountingStore(state => state.taxObligations);
+  const fetchAccountingData = useAccountingStore(state => state.fetchAccountingData);
 
   // Filters
   const [filterBoard, setFilterBoard] = useState<string>('all');
@@ -85,7 +87,9 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchKanbanData();
-  }, [fetchKanbanData]);
+    if (canDocs) fetchDocuments();
+    if (canAccounting) fetchAccountingData();
+  }, [fetchKanbanData, fetchDocuments, fetchAccountingData, canDocs, canAccounting]);
 
   // Fetch Weekly Activity Stats
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { ArrowUpRight, ArrowDownRight, Edit, Trash2, ArrowLeft, Search, Filter, Calendar, Paperclip, Plus, ChevronDown, CalendarClock } from 'lucide-react';
@@ -9,11 +9,14 @@ import { useAuthStore } from '@/store/auth-store';
 import { AccountingTrashViewer } from '@/components/accounting/AccountingTrashViewer';
 
 const AccountingEntries = () => {
-    const entries = useAccountingStore(state => state.entries);
-    const categories = useAccountingStore(state => state.categories);
-    const deleteEntry = useAccountingStore(state => state.deleteEntry);
+    const { entries, categories, deleteEntry, fetchAccountingData } = useAccountingStore();
+    const { mainCompanies, fetchKanbanData } = useKanbanStore();
 
-    const mainCompanies = useKanbanStore(state => state.mainCompanies);
+    useEffect(() => {
+        fetchAccountingData();
+        fetchKanbanData();
+    }, [fetchAccountingData, fetchKanbanData]);
+
     const activeCompany = useMemo(() => mainCompanies.find((c) => c.isDefault) || mainCompanies[0], [mainCompanies]);
 
     const currentUser = useAuthStore(state => state.currentUser);

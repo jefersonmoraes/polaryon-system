@@ -36,6 +36,7 @@ interface CertificateStore {
     restoreCertificate: (id: string) => Promise<void>;
     permanentlyDeleteCertificate: (id: string) => Promise<void>;
     cleanOldTrash: () => void;
+    fetchCertificates: () => Promise<void>;
     syncLocalDataToServer: () => Promise<void>;
     processSystemAction: (action: any) => void;
 }
@@ -124,6 +125,17 @@ export const useCertificateStore = create<CertificateStore>()(
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
                 const toDelete = get().certificates.filter(c => c.trashedAt && new Date(c.trashedAt) < thirtyDaysAgo);
                 toDelete.forEach(c => get().permanentlyDeleteCertificate(c.id));
+            },
+
+            fetchCertificates: async () => {
+                try {
+                    const response = await api.get('/certificates');
+                    if (response.data) {
+                        get().setCertificates(response.data);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch certificates:', error);
+                }
             },
 
             syncLocalDataToServer: async () => {
