@@ -123,57 +123,75 @@ export default function BiddingDashboardPage() {
     }, [socketService, sessionId, isListening]);
 
     return (
-        <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 bg-clip-text text-transparent">
                         Polaryon Bidding Engine
                     </h1>
-                    <p className="text-muted-foreground mt-2">
-                        O Cérebro: Estratégias de Lances Automáticos (Etapa 3)
+                    <p className="text-slate-400 mt-2 font-medium">
+                        O Cérebro: Estratégias de Lances Automáticos <span className="text-emerald-500/80">(V3.0 Beta)</span>
                     </p>
                 </div>
                 {isListening && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 animate-pulse self-start md:self-center">
-                        <Activity className="w-4 h-4" />
-                        <span className="text-sm font-semibold uppercase tracking-wider">Radar Ativo</span>
+                    <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                        <span className="text-sm font-bold uppercase tracking-widest">Radar Ativo</span>
                     </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Controls Card */}
-                <Card className="md:col-span-1 shadow-lg border-t-4 border-t-emerald-500 bg-white/50 backdrop-blur-sm">
+                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Target className="w-5 h-5 text-emerald-500"/> Configuração do Pregão
+                        <CardTitle className="flex items-center gap-2 text-slate-100">
+                            <Target className="w-5 h-5 text-emerald-500"/> Configuração
                         </CardTitle>
-                        <CardDescription>Monitore a sala de lances em tempo real.</CardDescription>
+                        <CardDescription className="text-slate-400">Defina os parâmetros do pregão.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-5">
                         <div className="space-y-2">
-                            <Label>UASG / Código do Órgão</Label>
-                            <Input value={uasg} onChange={e => setUasg(e.target.value)} placeholder="Ex: 160045" disabled={isListening} className="bg-white" />
+                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">UASG / Código do Órgão</Label>
+                            <Input 
+                                value={uasg} 
+                                onChange={e => setUasg(e.target.value)} 
+                                placeholder="Ex: 160045" 
+                                disabled={isListening} 
+                                className="bg-slate-950/50 border-white/10 text-slate-100 h-11 focus:ring-emerald-500/50" 
+                            />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Nº Pregão</Label>
-                                <Input value={numeroPregao} onChange={e => setNumeroPregao(e.target.value)} placeholder="Ex: 12" disabled={isListening} className="bg-white" />
+                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Nº Pregão</Label>
+                                <Input 
+                                    value={numeroPregao} 
+                                    onChange={e => setNumeroPregao(e.target.value)} 
+                                    placeholder="Ex: 12" 
+                                    disabled={isListening} 
+                                    className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
+                                />
                             </div>
                             <div className="space-y-2">
-                                <Label>Ano</Label>
-                                <Input value={anoPregao} onChange={e => setAnoPregao(e.target.value)} disabled={isListening} className="bg-white" />
+                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Ano</Label>
+                                <Input 
+                                    value={anoPregao} 
+                                    onChange={e => setAnoPregao(e.target.value)} 
+                                    disabled={isListening} 
+                                    className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
+                                />
                             </div>
                         </div>
                         
-                        <div className="pt-4 flex flex-col gap-2">
+                        <div className="pt-4">
                             {!isListening ? (
-                                <Button onClick={startRadar} className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 shadow-lg transition-all active:scale-95">
-                                    <Play className="w-4 h-4 mr-2"/> Ligar Radar
+                                <Button onClick={startRadar} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+                                    <Play className="w-4 h-4 mr-2 fill-current"/> Ligar Radar
                                 </Button>
                             ) : (
-                                <Button onClick={stopRadar} variant="destructive" className="w-full shadow-red-100 shadow-lg transition-all active:scale-95">
-                                    <Square className="w-4 h-4 mr-2"/> Desligar Radar
+                                <Button onClick={stopRadar} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+                                    <Square className="w-4 h-4 mr-2 fill-current"/> Desligar Radar
                                 </Button>
                             )}
                         </div>
@@ -181,59 +199,67 @@ export default function BiddingDashboardPage() {
                 </Card>
 
                 {/* Dashboard Monitor */}
-                <Card className="md:col-span-2 shadow-xl border-none bg-slate-50/50">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 border-b">
+                <Card className="lg:col-span-2 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-white/5">
                         <div>
-                            <CardTitle className="text-xl">Sala de Disputa</CardTitle>
-                            <CardDescription>Todos os itens e lances monitorados.</CardDescription>
+                            <CardTitle className="text-xl text-slate-100">Sala de Disputa</CardTitle>
+                            <CardDescription className="text-slate-400">Monitoramento da sala de lances.</CardDescription>
                         </div>
                         <div className="text-right">
-                             <div className="text-xs font-mono text-muted-foreground">Último Sync: {lastUpdate || '--:--:--'}</div>
+                             <div className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-widest">Último Sync: {lastUpdate || '--:--:--'}</div>
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-6 relative min-h-[300px]">
                         {!isListening ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border-2 border-dashed rounded-2xl bg-white/40">
-                                <Zap className="w-16 h-16 mb-4 text-slate-200" />
-                                <p className="font-medium">Motor desligado. Configure o pregão para iniciar o Radar.</p>
+                            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                                <div className="p-6 rounded-full bg-slate-800/30 mb-6 ring-1 ring-white/5">
+                                    <Zap className="w-12 h-12 text-slate-600" />
+                                </div>
+                                <p className="font-semibold text-slate-400">Motor em Standby</p>
+                                <p className="text-sm text-slate-500 mt-1 text-center max-w-[200px]">Configure o pregão para iniciar o monitoramento.</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {items.map(item => {
                                     const strategy = itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.10, decrementType: 'fixed' };
                                     
-                                    let statusBg = "bg-white";
-                                    let dotColor = "bg-slate-400";
+                                    let statusBg = "bg-slate-800/40 ring-1 ring-white/5";
+                                    let dotColor = "bg-slate-600";
+                                    let priceColor = "text-slate-100";
                                     
                                     if (item.ganhador === 'Você') {
-                                        statusBg = "bg-emerald-50/80 border-emerald-100";
-                                        dotColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
+                                        statusBg = "bg-emerald-500/5 ring-1 ring-emerald-500/30";
+                                        dotColor = "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]";
+                                        priceColor = "text-emerald-400";
                                     } else {
-                                        statusBg = "bg-amber-50/80 border-amber-100";
-                                        dotColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]";
+                                        statusBg = "bg-amber-500/5 ring-1 ring-amber-500/30";
+                                        dotColor = "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.8)]";
+                                        priceColor = "text-amber-400";
                                     }
 
                                     return (
-                                        <div key={item.itemId} className={`p-4 border rounded-2xl flex items-center justify-between transition-all hover:shadow-md ${statusBg}`}>
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-3 h-3 rounded-full animate-pulse ${dotColor}`}></div>
+                                        <div key={item.itemId} className={`p-5 rounded-2xl flex items-center justify-between transition-all hover:translate-x-1 ${statusBg}`}>
+                                            <div className="flex items-center gap-5">
+                                                <div className={`w-3.5 h-3.5 rounded-full ${dotColor}`}></div>
                                                 <div>
-                                                    <h4 className="font-bold text-slate-800">ITEM {item.itemId}</h4>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                                                    <h4 className="font-black text-slate-200 tracking-tight">ITEM {item.itemId}</h4>
+                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                        <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 border border-white/5">
                                                             {strategy.mode}
                                                         </span>
-                                                        <p className="text-xs text-muted-foreground">Min: R$ {strategy.minPrice.toFixed(2)}</p>
+                                                        <p className="text-[10px] font-bold text-slate-500">RES: R$ {strategy.minPrice.toFixed(2)}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                             
-                                            <div className="flex items-center gap-8">
+                                            <div className="flex items-center gap-10">
                                                 <div className="text-right">
-                                                    <div className="text-lg font-black text-slate-900">R$ {item.valorAtual.toFixed(2)}</div>
-                                                    <p className={`text-[10px] font-bold uppercase ${item.ganhador === 'Você' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                        {item.ganhador}
-                                                    </p>
+                                                    <div className={`text-2xl font-black tabular-nums tracking-tighter ${priceColor}`}>R$ {item.valorAtual.toFixed(2)}</div>
+                                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                                                        <p className={`text-[10px] font-black uppercase tracking-tighter ${item.ganhador === 'Você' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                            {item.ganhador}
+                                                        </p>
+                                                    </div>
                                                 </div>
 
                                                 <StrategyModal 
@@ -260,73 +286,81 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-200 transition-colors">
-                    <Settings2 className="w-5 h-5 text-slate-500" />
+                <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/10 transition-colors h-11 w-11 border border-white/5">
+                    <Settings2 className="w-5 h-5 text-slate-400" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] bg-slate-900 border-white/10 text-slate-100">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Shield className="w-5 h-5 text-emerald-500" /> Configurar Item {item.itemId}
+                    <DialogTitle className="flex items-center gap-3 text-2xl font-black">
+                        <div className="p-2 bg-emerald-500/20 rounded-lg">
+                            <Shield className="w-6 h-6 text-emerald-500" />
+                        </div>
+                        ITEM {item.itemId}
                     </DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-6 py-4">
-                    <div className="space-y-2">
-                        <Label>Modo de Disputa</Label>
+                <div className="grid gap-6 py-6">
+                    <div className="space-y-3">
+                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Modo de Disputa</Label>
                         <Select value={strategy.mode} onValueChange={(v: any) => setStrategy({...strategy, mode: v})}>
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-slate-950 border-white/10 h-12">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
                                 <SelectItem value="follower">Seguidor (Reação Imediata)</SelectItem>
                                 <SelectItem value="sniper">Sniper (Segundo Final)</SelectItem>
                                 <SelectItem value="cover">Cobertura (Sempre Topo)</SelectItem>
                             </SelectContent>
                         </Select>
-                        <p className="text-[10px] text-muted-foreground italic">
-                            {strategy.mode === 'follower' && "Reage instantaneamente a cada lance baixado por concorrentes."}
-                            {strategy.mode === 'sniper' && "Aguardará o encerramento iminente para dar o lance único."}
-                            {strategy.mode === 'cover' && "Garantirá que seu lance seja o melhor até o preço mínimo."}
-                        </p>
+                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                                {strategy.mode === 'follower' && "⚡ Reage instantaneamente a cada lance baixado por concorrentes."}
+                                {strategy.mode === 'sniper' && "🎯 Aguardará o encerramento iminente para dar o lance único."}
+                                {strategy.mode === 'cover' && "🛡️ Garantirá que seu lance seja o melhor até o preço mínimo."}
+                            </p>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Preço Mínimo (Reserva)</Label>
-                            <Input 
-                                type="number" 
-                                value={strategy.minPrice} 
-                                onChange={e => setStrategy({...strategy, minPrice: parseFloat(e.target.value)})}
-                                className="font-mono font-bold"
-                            />
+                        <div className="space-y-3">
+                            <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Preço Reserva</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-3 text-slate-600 text-xs">R$</span>
+                                <Input 
+                                    type="number" 
+                                    value={strategy.minPrice} 
+                                    onChange={e => setStrategy({...strategy, minPrice: parseFloat(e.target.value)})}
+                                    className="bg-slate-950 border-white/10 h-11 pl-8 font-black text-emerald-400"
+                                />
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Decremento</Label>
+                        <div className="space-y-3">
+                            <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Decremento</Label>
                             <Input 
                                 type="number" 
                                 value={strategy.decrementValue} 
                                 onChange={e => setStrategy({...strategy, decrementValue: parseFloat(e.target.value)})}
-                                className="font-mono"
+                                className="bg-slate-950 border-white/10 h-11 font-mono text-slate-100"
                             />
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Tipo de Decremento</Label>
+                    <div className="space-y-3">
+                        <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Tipo</Label>
                         <Select value={strategy.decrementType} onValueChange={(v: any) => setStrategy({...strategy, decrementType: v})}>
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-slate-950 border-white/10 h-11">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
                                 <SelectItem value="fixed">Valor Fixo (R$)</SelectItem>
                                 <SelectItem value="percent">Percentual (%)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button onClick={() => onSave(strategy)} className="bg-emerald-600 hover:bg-emerald-700 w-full">
-                        Salvar Estratégia
+                <DialogFooter className="pt-2">
+                    <Button onClick={() => onSave(strategy)} className="bg-emerald-600 hover:bg-emerald-500 w-full h-12 text-white font-black rounded-xl shadow-lg shadow-emerald-900/40 transition-all active:scale-95">
+                        SALVAR ESTRATÉGIA
                     </Button>
                 </DialogFooter>
             </DialogContent>
