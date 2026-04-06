@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Play, Square, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { useSocketStore } from '../store/socket-store';
-import ProtectedRoute from '../components/layout/ProtectedRoute';
+import { socketService } from '@/lib/socket';
+import { ProtectedRoute } from '../components/layout/ProtectedRoute';
 import { useAuthStore } from '../store/auth-store';
 import api from '@/lib/api';
 
@@ -17,8 +17,7 @@ interface BiddingItem {
 }
 
 export default function BiddingDashboardPage() {
-    const { user } = useAuthStore();
-    const socket = useSocketStore(state => state.socket);
+    const { currentUser: authUser } = useAuthStore();
     
     const [uasg, setUasg] = useState('');
     const [numeroPregao, setNumeroPregao] = useState('');
@@ -50,8 +49,8 @@ export default function BiddingDashboardPage() {
                 setSessionId(newSessionId);
                 
                 // 2. Join Socket Room (We call the store's socket directly)
-                if (socket) {
-                    socket.emit('join_bidding_room', newSessionId);
+                if (socketService) {
+                    socketService.emit('join_bidding_room', newSessionId);
                 }
 
                 // 3. Start Backend Poller
@@ -69,8 +68,8 @@ export default function BiddingDashboardPage() {
         try {
             await api.post(`/bidding/sessions/${sessionId}/stop`);
             
-            if (socket) {
-                socket.emit('leave_bidding_room', sessionId);
+            if (socketService) {
+                socketService.emit('leave_bidding_room', sessionId);
             }
             
             setIsListening(false);
@@ -80,23 +79,23 @@ export default function BiddingDashboardPage() {
     };
 
     useEffect(() => {
-        if (!socket) return;
+        if (!socketService) return;
 
         const handleUpdate = (data: any) => {
             setItems(data.items);
             setLastUpdate(new Date().toLocaleTimeString());
         };
 
-        socket.on('biddingUpdate', handleUpdate);
+        socketService.on('biddingUpdate', handleUpdate);
 
         return () => {
-            socket.off('biddingUpdate', handleUpdate);
+            socketService.off('biddingUpdate', handleUpdate);
             // Cleanup on unmount
             if (sessionId && isListening) {
                 stopRadar();
             }
         };
-    }, [socket, sessionId, isListening]);
+    }, [socketService, sessionId, isListening]);
 
     return (
         <ProtectedRoute>
