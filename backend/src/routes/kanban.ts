@@ -833,12 +833,24 @@ router.get('/sync', async (req: Request, res: Response) => {
                 select: {
                     id: true, title: true, listId: true, position: true,
                     dueDate: true, startDate: true, completed: true, archived: true,
-                    trashed: true, pncpId: true, labels: { select: { labelId: true } }
+                    trashed: true, pncpId: true, assignee: true, createdAt: true,
+                    customLink: true,
+                    labels: { select: { labelId: true } },
+                    _count: {
+                        select: {
+                            comments: true,
+                            attachments: true,
+                            checklist: true,
+                            milestones: true,
+                            items: true,
+                            descriptionEntries: true
+                        }
+                    }
                 }
             }),
             prisma.budget.findMany({
                 where: { archived: false, trashed: false },
-                select: { id: true, title: true, status: true, totalValue: true, trashed: true, archived: true }
+                select: { id: true, title: true, status: true, totalValue: true, trashed: true, archived: true, cardId: true, createdAt: true }
             }),
             prisma.notification.findMany({ take: 30, orderBy: { createdAt: 'desc' } }),
             prisma.user.findMany({
@@ -861,7 +873,14 @@ router.get('/sync', async (req: Request, res: Response) => {
         const skeletalCards = cards.map((c: any) => ({
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId),
-            isSkeleton: true 
+            isSkeleton: true,
+            // Pass counts to show indicators on the board cards
+            comments: Array(c._count.comments).fill({ isSkeleton: true }),
+            attachments: Array(c._count.attachments).fill({ isSkeleton: true }),
+            checklist: Array(c._count.checklist).fill({ isSkeleton: true }),
+            milestones: Array(c._count.milestones).fill({ isSkeleton: true }),
+            items: Array(c._count.items).fill({ isSkeleton: true }),
+            descriptionEntries: Array(c._count.descriptionEntries).fill({ isSkeleton: true })
         }));
 
         const skeletalBudgets = budgets.map((b: any) => ({
