@@ -37,7 +37,7 @@ interface AuthState {
     jwtToken: string | null;
 
     // Actions
-    login: (email: string, rememberMe?: boolean) => boolean;
+    login: (email: string, rememberMe?: boolean, token?: string) => boolean;
     loginWithGoogle: (userData: SystemUser, token: string, rememberMe?: boolean) => void;
     logout: () => void;
     updateProfile: (updates: Partial<SystemUser>) => void;
@@ -136,7 +136,7 @@ export const useAuthStore = create<AuthState>()(
                 });
             },
 
-            login: (email: string, rememberMe = false) => {
+            login: (email: string, rememberMe = false, token?: string) => {
                 const { systemUsers, addUser, updateUser } = get();
                 const normalizedEmail = email.toLowerCase().trim();
 
@@ -176,14 +176,22 @@ export const useAuthStore = create<AuthState>()(
                 if (user && user.status === 'active') {
                     // Always persistent session
                     localStorage.setItem('rememberMe', 'true');
-                    set({ currentUser: user, isAuthenticated: true });
+                    
+                    // SECURITY FIX: In Bypass mode, set a persistent dummy token so APIs don't fail with 401
+                    const dummyToken = token || "dev_bypass_token_active_90days";
+                    
+                    set({ 
+                        currentUser: user, 
+                        isAuthenticated: true,
+                        jwtToken: dummyToken 
+                    });
 
                     useAuditStore.getState().addLog({
                         userId: user.id,
                         userName: user.name,
                         action: 'LOGIN',
                         entity: 'USUÁRIO',
-                        details: `Usuário acessou o sistema`
+                        details: `Usuário acessou o sistema (Bypass/Dev Mode)`
                     });
 
                     return true;

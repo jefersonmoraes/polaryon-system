@@ -279,7 +279,7 @@ export default function LoginPage() {
                             </div>
                         </GoogleOAuthProvider>
 
-                        {window.location.hostname === 'localhost' && (
+                        {["localhost", "127.0.0.1"].includes(window.location.hostname) && (
                             <button
                                 onClick={() => {
                                     const defaultAdmin = useAuthStore.getState().systemUsers[0];
