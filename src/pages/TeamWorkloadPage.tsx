@@ -26,7 +26,7 @@ export default function TeamWorkloadPage() {
     const documents = useDocumentStore(state => state.documents);
     const entries = useAccountingStore(state => state.entries);
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-    const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
+    const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'all'>('all');
     const [activityStats, setActivityStats] = useState<Record<string, number>>({});
     const [isLoadingActivity, setIsLoadingActivity] = useState(false);
     
@@ -154,15 +154,21 @@ export default function TeamWorkloadPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center bg-secondary rounded-lg p-1">
-                    <button onClick={() => setPeriod('week')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${period === 'week' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                        Esta Semana
+                <div className="flex items-center bg-secondary rounded-lg p-1 overflow-x-auto">
+                    <button onClick={() => setPeriod('day')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${period === 'day' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        Hoje
                     </button>
-                    <button onClick={() => setPeriod('month')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${period === 'month' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                        Este Mês
+                    <button onClick={() => setPeriod('week')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${period === 'week' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        Semana
                     </button>
-                    <button onClick={() => setPeriod('year')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${period === 'year' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                        Este Ano
+                    <button onClick={() => setPeriod('month')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${period === 'month' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        Mês
+                    </button>
+                    <button onClick={() => setPeriod('year')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${period === 'year' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        Ano
+                    </button>
+                    <button onClick={() => setPeriod('all')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${period === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                        Todo o Tempo
                     </button>
                 </div>
             </div>

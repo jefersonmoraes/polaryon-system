@@ -96,7 +96,7 @@ const Dashboard = () => {
   // Fetch Weekly Activity Stats
   useEffect(() => {
     if (!currentUser) return;
-    api.get(`/activity/stats?period=week`).then(res => {
+    api.get(`/activity/stats?period=day`).then(res => {
         if (res.data?.success && res.data?.stats) {
             const userStat = res.data.stats[currentUser.id];
             setWeeklyActivity(userStat !== undefined ? userStat : 0);
