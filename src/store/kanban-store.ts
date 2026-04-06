@@ -109,6 +109,7 @@ interface KanbanState {
   loadAttachmentContent: (attachmentId: string, parentId: string, type: 'card' | 'budget') => Promise<string | null>;
   fetchKanbanData: () => Promise<void>;
   fetchCardDetails: (cardId: string) => Promise<void>;
+  fetchBoardCards: (boardId: string) => Promise<void>;
   fetchBudgetDetails: (budgetId: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
   fetchCompanies: () => Promise<void>;
@@ -393,6 +394,28 @@ export const useKanbanStore = create<KanbanState>()(
             }));
         } catch (error) {
             console.error("Failed to fetch card details:", error);
+        }
+      },
+
+      fetchBoardCards: async (boardId: string) => {
+        try {
+          const res = await api.get(`/kanban/boards/${boardId}/cards`);
+          const fullCards = res.data;
+          
+          set(s => {
+            const newCards = [...s.cards];
+            fullCards.forEach((fc: any) => {
+              const idx = newCards.findIndex(c => c.id === fc.id);
+              if (idx !== -1) {
+                newCards[idx] = { ...fc, isSkeleton: false };
+              } else {
+                newCards.push({ ...fc, isSkeleton: false });
+              }
+            });
+            return { cards: newCards };
+          });
+        } catch (e) {
+          console.error(`Failed to hydrate board ${boardId}:`, e);
         }
       },
 

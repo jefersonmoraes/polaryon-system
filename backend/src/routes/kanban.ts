@@ -136,6 +136,43 @@ router.delete('/boards/:id', async (req: Request, res: Response) => {
     }
 });
 
+// BOARD HYDRATION: Fetch all cards of a board with full details
+router.get('/boards/:id/cards', async (req: Request, res: Response) => {
+    try {
+        const boardId = req.params.id as string;
+        const lists = await prisma.kanbanList.findMany({ 
+            where: { boardId },
+            select: { id: true }
+        });
+        const listIds = lists.map(l => l.id);
+        
+        const cards = await prisma.card.findMany({
+            where: { listId: { in: listIds }, archived: false, trashed: false },
+            include: { 
+                labels: true, 
+                checklist: true, 
+                items: true, 
+                comments: { take: 5, orderBy: { createdAt: 'desc' } }, 
+                attachments: true, 
+                milestones: true, 
+                timeEntries: true,
+                descriptionEntries: true
+            }
+        });
+
+        // Flatten labels
+        const formattedCards = cards.map(card => ({
+            ...card,
+            labels: (card as any).labels?.map((l: any) => l.labelId) || []
+        }));
+
+        res.json(formattedCards);
+    } catch (e: any) {
+        console.error("Board Hydration Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // LISTS
 router.get('/lists', async (req: Request, res: Response) => {
     try {

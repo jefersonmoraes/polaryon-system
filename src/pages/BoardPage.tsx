@@ -33,10 +33,14 @@ const BoardPage = () => {
   const deleteCard = useKanbanStore(state => state.deleteCard);
   const updateBoard = useKanbanStore(state => state.updateBoard);
   const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
+  const fetchBoardCards = useKanbanStore(state => state.fetchBoardCards);
 
   useEffect(() => {
     fetchKanbanData();
-  }, [fetchKanbanData, boardId]);
+    if (boardId) {
+      fetchBoardCards(boardId);
+    }
+  }, [fetchKanbanData, fetchBoardCards, boardId]);
 
   const undoAction = useKanbanStore(state => state.undoAction);
   const setUndoAction = useKanbanStore(state => state.setUndoAction);
