@@ -4,9 +4,11 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+import { BiddingStrategyEngine, ItemStrategyConfig } from './bidding-strategy-engine';
+
 // In Etapa 4 we will use mutual TLS with the A1 certificate here
 const apiClient = axios.create({
-    baseURL: 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api', // Mobile API endpoint usually provides faster JSON responses
+    baseURL: 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api', 
     timeout: 5000,
     headers: {
         'Accept': 'application/json, text/plain, */*',
@@ -33,36 +35,53 @@ export class BiddingListener {
 
         console.log(`[PBE] Iniciando Radar (Listener) para UASG: ${uasg} / Pregão: ${numeroPregao}`);
         
-        // Simulação do loop de Polling (Em prod, será 1s a 3s dependendo do rate limit do Serpro)
+        // Simulação do loop de Polling
         const io = getSocketServer();
         
         const intervalId = setInterval(async () => {
             try {
-                // TODO: Adicionar cabeçalho de Autenticação real (Token JWT ou Cookie) proveniente da Etapa 4
-                // const response = await apiClient.get(`/pregao/${uasg}${numeroPregao}/itens`);
-                
-                // --- MOCK TEMPORÁRIO PARA VALIDAÇÃO DA ETAPA 2 (SEMÁFORO) ---
-                // Para demonstrar o semáforo antes de plugar o login real da etapa 4
-                const mockLances = [
-                    { itemId: '1', valorAtual: (Math.random() * 10) + 90, ganhador: (Math.random() > 0.5 ? 'Você' : 'Concorrente X'), status: 'Aberto' },
-                    { itemId: '2', valorAtual: (Math.random() * 5) + 40, ganhador: 'Você', status: 'Aberto' }
+                // 1. Fetch current session to get strategy configs
+                const session = await prisma.biddingSession.findUnique({ where: { id: sessionId } });
+                const itemsConfig = (session?.itemsConfig as any) || {};
+
+                // --- MOCK TEMPORÁRIO PARA VALIDAÇÃO (SEMÁFORO E ESTRATÉGIA) ---
+                const mockItems = [
+                    { itemId: '1', valorAtual: 95.50, ganhador: (Math.random() > 0.7 ? 'Você' : 'Concorrente X'), status: 'Aberto' },
+                    { itemId: '2', valorAtual: 42.00, ganhador: 'Você', status: 'Aberto' }
                 ];
+
+                // 2. Evaluate Strategies for each item
+                mockItems.forEach(item => {
+                    const config: ItemStrategyConfig = itemsConfig[item.itemId] || {
+                        mode: 'follower',
+                        minPrice: 80.00,
+                        decrementValue: 0.10,
+                        decrementType: 'fixed'
+                    };
+
+                    const decision = BiddingStrategyEngine.evaluate(item, config);
+                    
+                    if (decision.action === 'bid') {
+                        console.log(`[PBE] RECOMENDAÇÃO: Item ${item.itemId} -> Lance de R$ ${decision.value} (${decision.reason})`);
+                        // Etapa 4: Enviar lance real aqui
+                    }
+                });
                 
-                // Emite os dados frescos para o front-end na 'sala' do pregão
+                // Emite os dados frescos para o front-end
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
                         timestamp: new Date().toISOString(),
                         uasg,
                         numeroPregao,
-                        items: mockLances
+                        items: mockItems
                     });
                 }
                 
             } catch (error: any) {
                 console.error(`[PBE] Erro no polling da sessão ${sessionId}: ${error.message}`);
-                // Adicionar lógica de backoff / retry aqui para não ser banido
             }
-        }, 3000); // Poll a cada 3 segundos na simulação
+        }, 3000); 
+
 
         this.activeJobs.set(sessionId, { sessionId, intervalId });
 

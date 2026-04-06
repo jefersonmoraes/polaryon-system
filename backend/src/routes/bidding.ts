@@ -133,4 +133,27 @@ router.post('/sessions/:id/stop', requireAuth, async (req: AuthRequest | any, re
     }
 });
 
+// Update strategy for a specific item in a session
+router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id, itemId } = req.params;
+        const config = req.body;
+
+        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        const currentConfig = (session.itemsConfig as any) || {};
+        currentConfig[itemId] = { ...currentConfig[itemId], ...config };
+
+        await prisma.biddingSession.update({
+            where: { id },
+            data: { itemsConfig: currentConfig }
+        });
+
+        res.json({ success: true, message: 'Item strategy updated.' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
