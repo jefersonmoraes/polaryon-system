@@ -392,6 +392,9 @@ const AppSidebar = () => {
                     <Users className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Equipe e Fluxo</span>}
                   </Link>
                 )}
+                <Link to="/lixeira" className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${location.pathname === '/lixeira' ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium text-destructive' : 'text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive'}`} title="Lixeira Global">
+                  <Trash2 className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Lixeira Global</span>}
+                </Link>
               </div>
             </>
           )

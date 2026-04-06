@@ -28,8 +28,9 @@ router.post('/', async (req: Request, res: Response) => {
         });
         res.json(log);
     } catch (error) {
-        console.error('Erro ao salvar audit log:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+        console.error('Erro ao salvar audit log (Falha não-bloqueante):', error);
+        // We return 201 even on failure to prevent frontend crashes due to audit failures
+        res.status(201).json({ success: false, message: 'Log skipped' });
     }
 });
 

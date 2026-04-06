@@ -147,7 +147,7 @@ router.get('/boards/:id/cards', async (req: Request, res: Response) => {
         const listIds = lists.map(l => l.id);
         
         const cards = await prisma.card.findMany({
-            where: { listId: { in: listIds }, archived: false, trashed: false },
+            where: { listId: { in: listIds } },
             include: { 
                 labels: true, 
                 checklist: true, 
@@ -857,16 +857,17 @@ router.get('/attachments/:id/content', async (req: Request, res: Response) => {
     }
 });
 
-// SYNC CORE (Pull minimal state to client board)
+// SYNC CORE (Pull minimal state to client board) [V7.1.0 - Resilient Trash Support]
 router.get('/sync', async (req: Request, res: Response) => {
     try {
-        // Core Kanban and System Config only
-        const [folders, boards, lists, cards, budgets, notifications, usersDb, mainCompanies, labels, documents, taxes] = await Promise.all([
+        // Use Promise.allSettled to prevent one missing table from crashing the whole Kanban sync
+        const results = await Promise.allSettled([
             prisma.folder.findMany(),
             prisma.board.findMany(),
             prisma.kanbanList.findMany(),
             prisma.card.findMany({
-                where: { archived: false, trashed: false },
+                // Include recently active cards and a subset of trashed/archived for the trash bin
+                // For performance, we could skip very old items, but for now we pull all to support the Lixeira view
                 select: {
                     id: true, title: true, listId: true, position: true,
                     dueDate: true, startDate: true, completed: true, archived: true,
@@ -889,7 +890,6 @@ router.get('/sync', async (req: Request, res: Response) => {
                 }
             }),
             prisma.budget.findMany({
-                where: { archived: false, trashed: false },
                 select: { id: true, title: true, status: true, totalValue: true, trashed: true, archived: true, cardId: true, createdAt: true }
             }),
             prisma.notification.findMany({ take: 30, orderBy: { createdAt: 'desc' } }),
@@ -900,14 +900,31 @@ router.get('/sync', async (req: Request, res: Response) => {
             prisma.mainCompanyProfile.findMany(),
             prisma.label.findMany(),
             prisma.companyDocument.findMany({
-                where: { trashed: false },
-                select: { id: true, title: true, expirationDate: true, status: true, type: true }
+                select: { id: true, title: true, expirationDate: true, status: true, type: true, trashed: true }
             }),
             prisma.taxObligation.findMany({
-                where: { trashed: false },
-                select: { id: true, name: true, dueDate: true, status: true, amount: true }
+                select: { id: true, name: true, dueDate: true, status: true, amount: true, trashed: true }
             }),
         ]);
+
+        // Helper to extract value or empty array on failure
+        const getValue = (result: any) => result.status === 'fulfilled' ? result.value : [];
+        if (results.some(r => r.status === 'rejected')) {
+            const rejected = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+            rejected.forEach(r => console.error("[SYNC_PARTIAL_FAILURE]:", r.reason));
+        }
+
+        const folders = getValue(results[0]);
+        const boards = getValue(results[1]);
+        const lists = getValue(results[2]);
+        const cardsRaw = getValue(results[3]);
+        const budgetsRaw = getValue(results[4]);
+        const notifications = getValue(results[5]);
+        const usersDb = getValue(results[6]);
+        const mainCompanies = getValue(results[7]);
+        const labels = getValue(results[8]);
+        const documents = getValue(results[9]);
+        const taxes = getValue(results[10]);
 
         const members = usersDb
             .filter((u: any) => u.email !== 'jjcorporation2018@gmail.com')
@@ -918,20 +935,19 @@ router.get('/sync', async (req: Request, res: Response) => {
                 avatar: u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email.split('@')[0])}&background=random`
             }));
 
-        const skeletalCards = cards.map((c: any) => ({
+        const skeletalCards = cardsRaw.map((c: any) => ({
             ...c,
             labels: (c.labels || []).map((l: any) => l.labelId),
             isSkeleton: true,
-            // Pass counts to show indicators on the board cards
             comments: Array(c._count.comments).fill({ isSkeleton: true }),
             attachments: Array(c._count.attachments).fill({ isSkeleton: true }),
             checklist: Array(c._count.checklist).fill({ isSkeleton: true }),
-            milestones: c.milestones || [], // Use real milestones from DB
+            milestones: c.milestones || [],
             items: Array(c._count.items).fill({ isSkeleton: true }),
             descriptionEntries: Array(c._count.descriptionEntries).fill({ isSkeleton: true })
         }));
 
-        const skeletalBudgets = budgets.map((b: any) => ({
+        const skeletalBudgets = budgetsRaw.map((b: any) => ({
             ...b,
             isSkeleton: true
         }));
@@ -939,10 +955,10 @@ router.get('/sync', async (req: Request, res: Response) => {
         res.json({ 
             folders, boards, lists, cards: skeletalCards, budgets: skeletalBudgets, 
             notifications, members, mainCompanies, labels,
-            documents, taxes // New fields for instant dashboard
+            documents, taxes
         });
     } catch (e: any) {
-        console.error("SYNK_ERROR:", e);
+        console.error("SYNK_FATAL_ERROR:", e);
         res.status(500).json({ error: e.message });
     }
 });
