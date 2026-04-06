@@ -1328,13 +1328,27 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {/* Desktop Header */}
-                                <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2">
-                                    <div className="col-span-1 border-r border-border/50 text-center">#</div>
-                                    <div className="col-span-4">Descrição</div>
-                                    <div className="col-span-2 text-right">Qtd</div>
-                                    <div className="col-span-2 text-right">V. Unit</div>
-                                    <div className="col-span-3 text-right pr-6">Total</div>
+                                {/* Desktop Header: Redimensionado para acomodar Revenda */}
+                                <div className="hidden sm:grid grid-cols-12 gap-2 text-[9px] font-black text-muted-foreground uppercase tracking-widest px-2 mb-1 border-b border-border/20 pb-1">
+                                    <div className="col-span-1 border-r border-border/30 text-center">#</div>
+                                    <div className="col-span-3">Descrição</div>
+                                    <div className="col-span-1 text-right">Qtd</div>
+                                    <div className="col-span-1.5 text-right flex flex-col items-end leading-none">
+                                        <span className="text-[7px] text-muted-foreground/60">CUSTO</span>
+                                        <span className="mt-0.5">V. Unit</span>
+                                    </div>
+                                    <div className="col-span-1.5 text-right flex flex-col items-end leading-none border-r border-border/30 pr-2">
+                                        <span className="text-[7px] text-muted-foreground/60">CUSTO</span>
+                                        <span className="mt-0.5">Total</span>
+                                    </div>
+                                    <div className="col-span-2 text-right flex flex-col items-end leading-none text-primary">
+                                        <span className="text-[7px] text-primary/50">VENDA</span>
+                                        <span className="mt-0.5">V. Revenda Un.</span>
+                                    </div>
+                                    <div className="col-span-2 text-right flex flex-col items-end leading-none text-primary pr-6">
+                                        <span className="text-[7px] text-primary/50">VENDA</span>
+                                        <span className="mt-0.5">V. Revenda Tot.</span>
+                                    </div>
                                 </div>
 
                                 {item.items.map((sub: any, subIdx: number) => (
@@ -1352,68 +1366,95 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                             )}
                                         </div>
 
-                                        <div className="hidden sm:block col-span-1 text-[10px] text-muted-foreground text-center font-medium border-r border-border/50">
-                                            {subIdx + 1}
-                                        </div>
+                                        {/* Logic for Resale price calculation */}
+                                        {(() => {
+                                            const totalCost = item.totalPrice || 0;
+                                            const totalSell = item.finalSellingPrice || totalCost;
+                                            const resaleFactor = totalCost > 0 ? (totalSell / totalCost) : 1;
+                                            const vUnitResale = sub.unitPrice * resaleFactor;
+                                            const vTotalResale = sub.totalPrice * resaleFactor;
 
-                                        <div className="w-full sm:col-span-4 relative">
-                                            <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Descrição</label>
-                                            <input
-                                                value={sub.description}
-                                                disabled={!canEdit}
-                                                onChange={e => updateSubItem(sub.id, 'description', e.target.value)}
-                                                placeholder="Nome do produto ou serviço..."
-                                                className="w-full bg-background sm:bg-transparent border border-border sm:border-none text-xs px-2 sm:px-1 py-1.5 sm:py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none disabled:opacity-75 disabled:cursor-not-allowed"
-                                            />
-                                        </div>
+                                            return (
+                                                <>
+                                                    <div className="hidden sm:block col-span-1 text-[10px] text-muted-foreground text-center font-medium border-r border-border/50">
+                                                        {subIdx + 1}
+                                                    </div>
 
-                                        <div className="grid grid-cols-2 sm:contents gap-3 w-full">
-                                            <div className="sm:col-span-2">
-                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Qtd</label>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    disabled={!canEdit}
-                                                    value={sub.quantity || ''}
-                                                    onChange={e => updateSubItem(sub.id, 'quantity', Number(e.target.value))}
-                                                    className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                                                />
-                                            </div>
-                                            <div className="sm:col-span-2 relative">
-                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">V. Unit</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">R$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        disabled={!canEdit}
-                                                        value={sub.unitPrice || ''}
-                                                        onChange={e => updateSubItem(sub.id, 'unitPrice', Number(e.target.value))}
-                                                        className="w-full bg-background border border-border/50 rounded text-xs pl-6 pr-2 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                                    <div className="w-full sm:col-span-3 relative">
+                                                        <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Descrição</label>
+                                                        <input
+                                                            value={sub.description}
+                                                            disabled={!canEdit}
+                                                            onChange={e => updateSubItem(sub.id, 'description', e.target.value)}
+                                                            placeholder="Nome do produto ou serviço..."
+                                                            className="w-full bg-background sm:bg-transparent border border-border sm:border-none text-[11px] px-2 sm:px-1 py-1.5 sm:py-1 focus:ring-1 focus:ring-primary/20 rounded outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                                                        />
+                                                    </div>
 
-                                        <div className="w-full sm:col-span-3 text-right text-xs font-mono font-bold text-primary flex justify-between items-center sm:pl-1 border-t sm:border-none border-border/50 pt-2 sm:pt-0">
-                                            <div className="flex flex-col sm:contents items-end w-full">
-                                                <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-0.5 block">Total Item</label>
-                                                <span className="truncate flex items-center gap-1 justify-end w-full">
-                                                    <DollarSign className="h-3 w-3 inline text-muted-foreground mr-1" />
-                                                    {formatCurrency(sub.totalPrice || 0)}
-                                                </span>
-                                            </div>
-                                            {canEdit && (
-                                                <button
-                                                    onClick={() => removeSubItem(sub.id)}
-                                                    className="hidden sm:block p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
-                                                    title="Remover Item"
-                                                >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
+                                                    <div className="grid grid-cols-2 sm:contents gap-3 w-full">
+                                                        <div className="sm:col-span-1">
+                                                            <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Qtd</label>
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                disabled={!canEdit}
+                                                                value={sub.quantity || ''}
+                                                                onChange={e => updateSubItem(sub.id, 'quantity', Number(e.target.value))}
+                                                                className="w-full bg-background border border-border/50 rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            />
+                                                        </div>
+                                                        <div className="sm:col-span-1.5 relative">
+                                                            <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">V. Unit Cost</label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">R$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    disabled={!canEdit}
+                                                                    value={sub.unitPrice || ''}
+                                                                    onChange={e => updateSubItem(sub.id, 'unitPrice', Number(e.target.value))}
+                                                                    className="w-full bg-background border border-border/50 rounded text-[11px] pl-5 pr-1 py-1.5 focus:ring-1 focus:ring-primary/20 outline-none text-right font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="hidden sm:block sm:col-span-1.5 text-right text-[11px] font-mono text-muted-foreground/80 border-r border-border/30 pr-2">
+                                                        {formatCurrency(sub.totalPrice || 0)}
+                                                    </div>
+
+                                                    {/* NEW: V. Revenda Unitário */}
+                                                    <div className="w-full sm:col-span-2 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center px-3 sm:px-1 py-2 sm:py-0 bg-primary/5 sm:bg-transparent rounded-lg sm:rounded-none border-primary/10 border sm:border-none">
+                                                        <label className="sm:hidden text-[9px] font-black text-primary uppercase">Revenda Unidade</label>
+                                                        <div className="text-sm sm:text-xs font-mono font-black text-primary flex items-center gap-1">
+                                                            <span className="text-[10px] hidden sm:inline">R$</span>
+                                                            {formatCurrency(vUnitResale).replace('R$ ', '')}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* NEW: Total Revenda */}
+                                                    <div className="w-full sm:col-span-2 text-right text-xs font-mono font-bold text-primary flex justify-between items-center sm:pl-1 border-t sm:border-none border-border/50 pt-2 sm:pt-0">
+                                                        <div className="flex flex-col sm:contents items-end w-full">
+                                                            <label className="sm:hidden text-[9px] font-black text-primary uppercase mb-0.5 block">Revenda Total</label>
+                                                            <span className="truncate flex items-center gap-1 justify-end w-full text-base sm:text-xs font-black">
+                                                                <DollarSign className="h-3 w-3 inline text-primary/50 mr-1" />
+                                                                {formatCurrency(vTotalResale)}
+                                                            </span>
+                                                        </div>
+                                                        {canEdit && (
+                                                            <button
+                                                                onClick={() => removeSubItem(sub.id)}
+                                                                className="hidden sm:block p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors opacity-0 group-hover/sub:opacity-100 ml-2"
+                                                                title="Remover Item"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 ))}
                             </div>
