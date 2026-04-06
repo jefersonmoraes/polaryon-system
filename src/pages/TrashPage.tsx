@@ -1,5 +1,5 @@
 import { useKanbanStore } from '@/store/kanban-store';
-import { Trash2, Undo2, Clock, Board, Folder, List, CreditCard, Search, X } from 'lucide-react';
+import { Trash2, Undo2, Clock, LayoutGrid, Folder, List, CreditCard, Search, X, Building2 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth-store';
@@ -29,7 +29,7 @@ const TrashPage = () => {
             lists.filter(l => l.trashed).forEach(l => items.push({ ...l, type: 'list', icon: <List className="h-4 w-4" /> }));
         }
         if (filter === 'all' || filter === 'boards') {
-            boards.filter(b => b.trashed).forEach(b => items.push({ ...b, type: 'board', icon: <Board className="h-4 w-4" /> }));
+            boards.filter(b => b.trashed).forEach(b => items.push({ ...b, type: 'board', icon: <LayoutGrid className="h-4 w-4" /> }));
         }
         if (filter === 'all' || filter === 'folders') {
             folders.filter(f => f.trashed).forEach(f => items.push({ ...f, type: 'folder', icon: <Folder className="h-4 w-4" /> }));
@@ -38,7 +38,7 @@ const TrashPage = () => {
             budgets.filter(b => b.trashed).forEach(b => items.push({ ...b, type: 'budget', icon: <CreditCard className="h-4 w-4 text-emerald-500" /> }));
         }
         if (filter === 'all' || filter === 'companies') {
-            companies.filter(c => c.trashed).forEach(c => items.push({ ...c, type: 'company', icon: <Board className="h-4 w-4 text-blue-500" /> }));
+            companies.filter(c => c.trashed).forEach(c => items.push({ ...c, type: 'company', icon: <Building2 className="h-4 w-4 text-blue-500" /> }));
         }
 
         return items
@@ -104,10 +104,10 @@ const TrashPage = () => {
                         { id: 'all', label: 'Tudo', icon: <Trash2 className="h-3.5 w-3.5" /> },
                         { id: 'cards', label: 'Cartões', icon: <CreditCard className="h-3.5 w-3.5" /> },
                         { id: 'lists', label: 'Listas', icon: <List className="h-3.5 w-3.5" /> },
-                        { id: 'boards', label: 'Quadros', icon: <Board className="h-3.5 w-3.5" /> },
+                        { id: 'boards', label: 'Quadros', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
                         { id: 'folders', label: 'Pastas', icon: <Folder className="h-3.5 w-3.5" /> },
                         { id: 'budgets', label: 'Orçamentos', icon: <CreditCard className="h-3.5 w-3.5" /> },
-                        { id: 'companies', label: 'Empresas', icon: <Board className="h-3.5 w-3.5" /> },
+                        { id: 'companies', label: 'Empresas', icon: <Building2 className="h-3.5 w-3.5" /> },
                     ].map(btn => (
                         <button
                             key={btn.id}
