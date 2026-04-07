@@ -365,12 +365,32 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'polaryon-auth-v2',
-            version: 3, // Bumping version to force cleanup of old structures and stabilize 90-day persistence ⚒️🚀⚙️
+            version: 3, 
             storage: createJSONStorage(() => authStorage),
+            // PARDON: We must NOT persist the hydration flag to avoid race conditions and ghost logouts on refresh ⚒️🚀⚙️
+            partialize: (state) => {
+                const { _hasHydrated, ...rest } = state;
+                return rest;
+            },
+            migrate: (persistedState: any, version: number) => {
+                if (version < 3) {
+                    // Force upgrade from old versions keeping current user if possible
+                    console.log(`[AUTH_MIGRATE] Upgrading store from v${version} to v3`);
+                    return {
+                        ...persistedState,
+                        _hasHydrated: false // Reset flag to force ProtectedRoute wait
+                    };
+                }
+                return persistedState;
+            },
             onRehydrateStorage: () => (state) => {
                 if (state) {
                     state._hasHydrated = true;
                     console.log("AuthStore rehydrated. Session stability check complete.");
+                } else {
+                    // Even if state is missing (first load), we must set hydrated to true 
+                    // to allow ProtectedRoute to show the login screen instead of a spinner forever.
+                    useAuthStore.setState({ _hasHydrated: true });
                 }
             }
         }

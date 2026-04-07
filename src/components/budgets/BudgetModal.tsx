@@ -3011,9 +3011,9 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                         if (card) {
                                                             const list = lists.find(l => l.id === card.listId);
                                                             if (list) {
-                                                                // Close modal and navigate
-                                                                onClose();
+                                                                // Navigate first, then close to ensure the URL update is registered before modal unmounts
                                                                 navigate(`/board/${list.boardId}?cardId=${card.id}`);
+                                                                onClose();
                                                             }
                                                         }
                                                     }}

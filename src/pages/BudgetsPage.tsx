@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
+
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
     Trash2, Edit, Building2, Calendar, FileText, FolderOpen,
@@ -45,6 +47,20 @@ const BudgetsPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
     const { currentUser } = useAuthStore();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlBudgetId = searchParams.get('budgetId');
+
+    // Auto-open budget if budgetId is in URL ⚒️🚀⚙️
+    useEffect(() => {
+        if (urlBudgetId && budgets.length > 0) {
+            const budget = budgets.find(b => b.id === urlBudgetId);
+            if (budget) {
+                setSelectedBudget(budget);
+                setIsModalOpen(true);
+            }
+        }
+    }, [urlBudgetId, budgets]);
+
     const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
 
     const filteredBudgets = useMemo(() => {
@@ -432,7 +448,15 @@ const BudgetsPage = () => {
                 isModalOpen && (
                     <BudgetModal
                         budget={selectedBudget}
-                        onClose={() => setIsModalOpen(false)}
+                        onClose={() => {
+                            setIsModalOpen(false);
+                            // Cleanup URL when closing ⚒️🚀⚙️
+                            if (searchParams.has('budgetId')) {
+                                const newParams = new URLSearchParams(searchParams);
+                                newParams.delete('budgetId');
+                                setSearchParams(newParams, { replace: true });
+                            }
+                        }}
                     />
                 )
             }

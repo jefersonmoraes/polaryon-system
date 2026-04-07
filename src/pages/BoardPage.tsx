@@ -70,16 +70,18 @@ const BoardPage = () => {
 
   const prefs = boardId ? (boardPreferences[boardId] || { viewMode: 'kanban', sortBy: 'default' }) : { viewMode: 'kanban', sortBy: 'default' };
 
-  // Handle cardId from URL
+  // Handle cardId from URL ⚒️🚀⚙️
   useEffect(() => {
-    if (urlCardId) {
+    if (urlCardId && selectedCardId !== urlCardId) {
       setSelectedCardId(urlCardId);
-      // Clean up URL after opening
+      
+      // Clean up URL softly without triggering additional full re-renders if possible
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('cardId');
       setSearchParams(newParams, { replace: true });
     }
-  }, [urlCardId, searchParams, setSearchParams]);
+  }, [urlCardId, selectedCardId, searchParams, setSearchParams]);
+
 
   // Auto-dismiss undo after 5 seconds
   useEffect(() => {

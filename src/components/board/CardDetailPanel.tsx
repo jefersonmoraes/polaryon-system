@@ -248,6 +248,32 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [localDescription, setLocalDescription] = useState(card?.description || '');
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  if (!card) {
+      return (
+          <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-end"
+          >
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+              <div className="relative w-full max-w-4xl h-full bg-background shadow-2xl flex items-center justify-center border-l border-border">
+                  <div className="flex flex-col items-center gap-4 text-center p-8">
+                       <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-lg" />
+                       <div>
+                           <h3 className="text-lg font-bold">Carregando cartão...</h3>
+                           <p className="text-sm text-muted-foreground mt-1">Sincronizando dados com o servidor</p>
+                       </div>
+                       <button onClick={onClose} className="mt-4 px-4 py-2 text-xs font-bold bg-secondary hover:bg-secondary/80 rounded-lg transition-colors">
+                           FECHAR E VOLTAR
+                       </button>
+                  </div>
+              </div>
+          </motion.div>
+      );
+  }
+
+
+
   const lastSaveTime = useRef<number>(0);
   const lastSavedDescription = useRef<string>(card?.description || '');
   const editorRef = useRef<HTMLDivElement>(null);
@@ -1166,8 +1192,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     key={budget.id}
                     onClick={() => {
                       if (!canEdit) return;
-                      setSelectedBudgetToEdit(budget);
-                      setIsBudgetModalOpen(true);
+                      // REDIRECT to full budget page to ensure complete context and all features are available ⚒️🚀⚙️
+                      navigate(`/budgets?budgetId=${budget.id}`);
                     }}
                     className={`bg-secondary/50 rounded-lg p-3 border border-border group transition-colors flex flex-col gap-2 ${canEdit ? 'hover:border-primary/50 cursor-pointer' : ''}`}
                   >
