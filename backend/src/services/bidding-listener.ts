@@ -48,6 +48,8 @@ export class BiddingListener {
                 const fullNumero = `${paddedNum}${session?.anoPregao || '2026'}`;
                 const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa-publico/backend/api/sala-disputa/uasg/${uasg}/dispensa/${fullNumero}/itens`;
                 
+                console.log(`[PBE] Sincronizando: ${publicApiUrl}`);
+
                 let realItems: any[] = [];
                 try {
                     const response = await axios.get(publicApiUrl, { timeout: 4000 });
