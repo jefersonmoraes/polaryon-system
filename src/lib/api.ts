@@ -10,22 +10,19 @@ const api = axios.create({
     }
 });
 
+import { useAuthStore } from '@/store/auth-store';
+
 // Request Interceptor: Attach JWT Token
 api.interceptors.request.use(
     (config) => {
-        // Retrieve token from whatever auth store mechanism you are using
-        // It could be sessionStorage or zustand. We'll read from sessionStorage to be safe.
-        const authDataStr = localStorage.getItem('polaryon-auth-v2');
-        if (authDataStr) {
-            try {
-                const state = JSON.parse(authDataStr).state;
-                if (state && state.jwtToken) {
-                    config.headers.Authorization = `Bearer ${state.jwtToken}`;
-                }
-            } catch (e) {
-                console.error("Error parsing polaryon-auth-v2", e);
-            }
+        // Retrieve token directly from the Zustand store (memory) ⚒️🚀⚙️
+        // This is much more reliable and avoids race conditions with localStorage
+        const token = useAuthStore.getState().jwtToken;
+        
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
+        
         return config;
     },
     (error) => {

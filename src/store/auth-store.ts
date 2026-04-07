@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { useAuditStore } from './audit-store';
-import api from '@/lib/api';
+// Removed global api import to break circular dependency ⚒️🚀⚙️
 import { socketService } from '@/lib/socket';
 
 export type UserRole = 'ADMIN' | 'USER' | 'CONTADOR';
@@ -235,10 +235,13 @@ export const useAuthStore = create<AuthState>()(
                     });
 
                     // Fire and forget API call to persist the profile changes to the backend
-                    api.put(`/users/${state.currentUser.id}/profile`, {
-                        name: safeUpdates.name,
-                        picture: safeUpdates.photoURL
-                    }).catch(err => console.error("Failed to update profile to backend:", err));
+                    // Use dynamic import to avoid top-level circular dependency ⚒️🚀⚙️
+                    import('@/lib/api').then(({ default: api }) => {
+                        api.put(`/users/${state.currentUser?.id}/profile`, {
+                            name: safeUpdates.name,
+                            picture: safeUpdates.photoURL
+                        }).catch(err => console.error("Failed to update profile to backend:", err));
+                    });
 
                     return {
                         currentUser: updatedUser,
