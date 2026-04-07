@@ -82,15 +82,20 @@ import { BiddingListener } from '../services/bidding-listener';
 // Create a new Bidding Session (Prep for monitoring)
 router.post('/sessions', requireAuth, async (req: AuthRequest | any, res: Response) => {
     try {
-        const { credentialId, portal, uasg, numeroPregao, anoPregao } = req.body;
+        let { credentialId, portal, uasg, numeroPregao, anoPregao } = req.body;
         
-        if (!credentialId || !uasg || !numeroPregao || !anoPregao) {
+        // Handle frontend dummy ID for public monitoring/radar ⚒️🚀⚙️
+        if (credentialId === 'simulated-credential-id') {
+            credentialId = null;
+        }
+
+        if (!uasg || !numeroPregao || !anoPregao) {
             return res.status(400).json({ error: 'Missing required session fields' });
         }
 
         const session = await prisma.biddingSession.create({
             data: {
-                credentialId,
+                credentialId: credentialId || null,
                 portal: portal || 'compras_gov',
                 uasg,
                 numeroPregao,

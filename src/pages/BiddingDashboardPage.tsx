@@ -53,16 +53,22 @@ export default function BiddingDashboardPage() {
     const dummyCredentialId = 'simulated-credential-id';
 
     const startRadar = async () => {
-        if (!uasg || !numeroPregao) return;
+        if (!uasg || !numeroPregao) {
+            import('sonner').then(({ toast }) => toast.error("Preencha UASG e Nº do Pregão."));
+            return;
+        }
         
         try {
+            // Attempt to create session. 
+            // In Etapa 4, we would fetch real credentialId from a list.
             const res = await api.post('/bidding/sessions', {
-                credentialId: dummyCredentialId,
+                credentialId: dummyCredentialId, // Backend will convert this to null if it's the dummy ⚒️🚀⚙️
                 portal: 'compras_gov',
                 uasg,
                 numeroPregao,
                 anoPregao
             });
+            
             const data = res.data;
             
             if (data.success) {
@@ -75,9 +81,12 @@ export default function BiddingDashboardPage() {
 
                 await api.post(`/bidding/sessions/${newSessionId}/start`);
                 setIsListening(true);
+                import('sonner').then(({ toast }) => toast.success("Radar Polaryon ativado com sucesso! ⚡"));
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to start radar:", error);
+            const msg = error.response?.data?.error || "Erro ao conectar com o servidor de lances.";
+            import('sonner').then(({ toast }) => toast.error(msg));
         }
     };
 

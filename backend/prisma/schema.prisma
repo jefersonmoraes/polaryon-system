@@ -45,9 +45,9 @@ model Board {
   backgroundColor String
   backgroundImage String?
   createdAt       DateTime  @default(now())
-  archived        Boolean   @default(false)
-  trashed         Boolean   @default(false)
-  trashedAt       DateTime?
+  archived    Boolean   @default(false)
+  trashed     Boolean   @default(false)
+  trashedAt   DateTime?
   isFavorite      Boolean   @default(false)
   lists           KanbanList[]
 }
@@ -542,6 +542,7 @@ model ConnectionLink {
   trashedAt   DateTime?
   order       Int      @default(0)
 }
+
 model UserActivity {
   id        String   @id @default(uuid())
   userId    String
@@ -573,8 +574,8 @@ model BiddingCredential {
 
 model BiddingSession {
   id              String   @id @default(uuid())
-  credentialId    String
-  credential      BiddingCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  credentialId    String?
+  credential      BiddingCredential? @relation(fields: [credentialId], references: [id], onDelete: Cascade)
   portal          String   @default("compras_gov") // compras_gov, licitacoes_e, etc.
   uasg            String
   numeroPregao    String
