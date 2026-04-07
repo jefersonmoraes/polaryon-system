@@ -10,11 +10,15 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-    const { isAuthenticated, currentUser } = useAuthStore();
+    const { isAuthenticated, currentUser, _hasHydrated } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
 
     useEffect(() => {
+        // ONLY navigate or decide auth state once hydration is confirmed from LocalStorage.
+        // This prevents the 'flicker' logout where Zustand is momentarily empty on load.
+        if (!_hasHydrated) return;
+
         if (!isAuthenticated) {
             navigate('/login', { replace: true, state: { from: location.pathname } });
             return;
@@ -60,7 +64,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         if (requiredScreen && !hasScreenAccess(requiredScreen)) {
             navigate('/tarefas', { replace: true });
         }
-    }, [isAuthenticated, currentUser, navigate, location]);
+    }, [isAuthenticated, currentUser, navigate, location, _hasHydrated]);
+    
+    if (!_hasHydrated) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-lg text-primary"></div>
+                    <p className="text-sm font-medium text-muted-foreground animate-pulse">Confirmando sessão...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!isAuthenticated) {
         return null;

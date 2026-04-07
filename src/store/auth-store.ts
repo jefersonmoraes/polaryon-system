@@ -35,6 +35,7 @@ interface AuthState {
     systemUsers: SystemUser[];
     isAuthenticated: boolean;
     jwtToken: string | null;
+    _hasHydrated: boolean; // Trava de espera para evitar logout falso no carregamento ⚒️🚀⚙️
 
     // Actions
     login: (email: string, rememberMe?: boolean, token?: string) => boolean;
@@ -92,6 +93,7 @@ export const useAuthStore = create<AuthState>()(
             systemUsers: [DEFAULT_ADMIN], // Start with the default admin
             isAuthenticated: false,
             jwtToken: null,
+            _hasHydrated: false, // Inicialmente falso até o navegador ler o LocalStorage
             onlineUsers: [],
             isSocketConnected: true,
 
@@ -363,7 +365,14 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'polaryon-auth-v2',
-            storage: createJSONStorage(() => authStorage)
+            version: 3, // Bumping version to force cleanup of old structures and stabilize 90-day persistence ⚒️🚀⚙️
+            storage: createJSONStorage(() => authStorage),
+            onRehydrateStorage: () => (state) => {
+                if (state) {
+                    state._hasHydrated = true;
+                    console.log("AuthStore rehydrated. Session stability check complete.");
+                }
+            }
         }
     )
 );

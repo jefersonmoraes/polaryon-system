@@ -39,24 +39,28 @@ api.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             // Token expired or invalid
-            console.error('Session expired or unauthorized');
+            console.error('Session expired or unauthorized (401)');
             
-            // INSTRUCTIONAL FEEDBACK: Tell the user exactly what to do
-            import('sonner').then(({ toast }) => {
-                toast.error('Sua sessão expirou por segurança.', {
-                    description: 'Clique em "Sair" e entre novamente para continuar seu trabalho sem interrupções.',
-                    duration: 10000,
-                    id: 'session-expired-error',
-                    action: {
-                        label: 'Refazer Login',
-                        onClick: () => {
-                            sessionStorage.removeItem('polaryon-auth-v2');
-                            localStorage.removeItem('polaryon-auth-v2');
-                            window.location.href = '/login?expired=true';
+            // SECURITY: Only wipe and redirect if we are not already on the login page
+            // and if this isn't a false positive from a background check.
+            if (!window.location.pathname.startsWith('/login')) {
+                import('sonner').then(({ toast }) => {
+                    toast.error('Sua sessão expirou por segurança.', {
+                        description: 'Clique para entrar novamente e continuar seu trabalho.',
+                        duration: 15000,
+                        id: 'session-expired-error',
+                        action: {
+                            label: 'Entrar',
+                            onClick: () => {
+                                // Clean up old v2 data to avoid quota issues
+                                localStorage.removeItem('polaryon-auth-v2');
+                                sessionStorage.removeItem('polaryon-auth-v2');
+                                window.location.href = '/login?expired=true';
+                            }
                         }
-                    }
+                    });
                 });
-            });
+            }
         }
         
         // Data Loss Protection: Alert user if a write operation failed
