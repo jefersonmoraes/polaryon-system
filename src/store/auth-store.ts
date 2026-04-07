@@ -408,21 +408,36 @@ export const useAuthStore = create<AuthState>()(
                     useAuthStore.setState({ _hasHydrated: true });
                 }
 
-                // CROSS-TAB SYNC: Stop "Ghost Sessions" ⚒️🚀⚙️
-                // If another tab logs out (clears localStorage), this tab must logout too
-                const syncLogout = (event: StorageEvent) => {
-                    if (event.key === 'polaryon-auth-v2' && !event.newValue) {
-                        console.warn('Authentication storage cleared in another tab. Logging out locally... ⚒️🚀⚙️');
-                        useAuthStore.setState({ 
-                            currentUser: null, 
-                            isAuthenticated: false, 
-                            jwtToken: null 
-                        });
+                // CRITICAL SECURITY SYNC: Anti "Account Swap" ⚒️🚀⚙️
+                // Monitor for ANY changes to the auth storage from other tabs
+                const syncAuth = (event: StorageEvent) => {
+                    if (event.key === 'polaryon-auth-v2') {
+                        // If storage is cleared (logout) or changed (account switch) ⚒️🚀⚙️
+                        if (!event.newValue) {
+                            console.warn('Authentication storage cleared in another tab. Logging out locally... ⚒️🚀⚙️');
+                            useAuthStore.setState({ currentUser: null, isAuthenticated: false, jwtToken: null });
+                        } else {
+                            try {
+                                const newState = JSON.parse(event.newValue).state;
+                                const currentState = useAuthStore.getState();
+                                
+                                // If the token in storage doesn't match our memory, it's a conflict!
+                                if (newState.jwtToken !== currentState.jwtToken) {
+                                    console.warn('Session mismatch detected (Account Swap). Forcing reload to protect data... ⚒️🚀⚙️');
+                                    // Soft logout local state first
+                                    useAuthStore.setState({ currentUser: null, isAuthenticated: false, jwtToken: null });
+                                    // Hard reload is the ONLY way to kill all background processes with User A memory ⚒️🚀⚙️
+                                    window.location.reload();
+                                }
+                            } catch (e) {
+                                console.error("Error syncing auth cross-tab:", e);
+                            }
+                        }
                     }
                 };
 
-                window.addEventListener('storage', syncLogout);
-                return () => window.removeEventListener('storage', syncLogout);
+                window.addEventListener('storage', syncAuth);
+                return () => window.removeEventListener('storage', syncAuth);
             }
         }
     )
