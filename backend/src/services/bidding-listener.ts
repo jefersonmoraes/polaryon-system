@@ -42,36 +42,54 @@ export class BiddingListener {
                 const session = await prisma.biddingSession.findUnique({ where: { id: sessionId } });
                 const itemsConfig = (session?.itemsConfig as any) || {};
 
-                // --- MOCK TEMPORÁRIO PARA VALIDAÇÃO (SEMÁFORO E ESTRATÉGIA) ---
-                const mockItems = [
-                    { itemId: '1', valorAtual: 95.50, ganhador: (Math.random() > 0.7 ? 'Você' : 'Concorrente X'), status: 'Aberto' },
-                    { itemId: '2', valorAtual: 42.00, ganhador: 'Você', status: 'Aberto' }
-                ];
+                // 2. BUSCA DADOS REAIS NO SERPRO (MODO PÚBLICO / TRANSPARÊNCIA)
+                // Nota: Usamos /dispensa/ pois o pregão 87/2026 é uma Dispensa Eletrônica
+                const fullNumero = `${numeroPregao}${session?.anoPregao || '2026'}`;
+                const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa-publico/backend/api/sala-disputa/uasg/${uasg}/dispensa/${fullNumero}/itens`;
+                
+                let realItems: any[] = [];
+                try {
+                    const response = await axios.get(publicApiUrl, { timeout: 4000 });
+                    if (response.data && Array.isArray(response.data)) {
+                        realItems = response.data.map((item: any) => ({
+                            itemId: String(item.sequencial),
+                            valorAtual: item.melhorLance || item.valorEstimado || 0,
+                            ganhador: item.situacao === 'Aberto' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
+                            status: item.situacao || 'Aberto',
+                            descricao: item.descricao
+                        }));
+                    }
+                } catch (apiErr: any) {
+                    console.error(`[PBE] Falha ao buscar dados oficiais (Transparência): ${apiErr.message}`);
+                    // Fallback para não quebrar a tela se a API do governo oscilar
+                    return; 
+                }
 
-                // 2. Evaluate Strategies for each item
-                mockItems.forEach(item => {
+                if (realItems.length === 0) return;
+
+                // 3. Evaluate Strategies for each real item
+                realItems.forEach(item => {
                     const config: ItemStrategyConfig = itemsConfig[item.itemId] || {
                         mode: 'follower',
-                        minPrice: 80.00,
-                        decrementValue: 0.10,
+                        minPrice: 0.10,
+                        decrementValue: 0.01,
                         decrementType: 'fixed'
                     };
 
                     const decision = BiddingStrategyEngine.evaluate(item, config);
                     
                     if (decision.action === 'bid') {
-                        console.log(`[PBE] RECOMENDAÇÃO: Item ${item.itemId} -> Lance de R$ ${decision.value} (${decision.reason})`);
-                        // Etapa 4: Enviar lance real aqui
+                        console.log(`[PBE] RECOMENDAÇÃO REAL: Item ${item.itemId} -> Lance de R$ ${decision.value} (${decision.reason})`);
                     }
                 });
                 
-                // Emite os dados frescos para o front-end
+                // Emite os dados REAIS para o front-end
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
                         timestamp: new Date().toISOString(),
                         uasg,
                         numeroPregao,
-                        items: mockItems
+                        items: realItems
                     });
                 }
                 
