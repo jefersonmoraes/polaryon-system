@@ -43,28 +43,41 @@ export class BiddingListener {
                 const itemsConfig = (session?.itemsConfig as any) || {};
 
                 // 2. BUSCA DADOS REAIS NO SERPRO (MODO PÚBLICO / TRANSPARÊNCIA)
-                // Nota: O número da compra no Serpro deve ter 9 dígitos (5 do número + 4 do ano)
+                // NOVO PADRÃO SERPRO (17 Dígitos): UASG(6) + Modalidade(2) + Sequencial(5) + Ano(4)
+                // Exemplo: 153978 + 06 (Dispensa) + 00006 + 2026 = 15397806000062026
+                const modalidade = '06'; // Dispensa Eletrônica
                 const paddedNum = String(numeroPregao).padStart(5, '0');
-                const fullNumero = `${paddedNum}${session?.anoPregao || '2026'}`;
-                const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa-publico/backend/api/sala-disputa/uasg/${uasg}/dispensa/${fullNumero}/itens`;
+                const ano = session?.anoPregao || '2026';
+                const idCompra = `${uasg}${modalidade}${paddedNum}${ano}`;
                 
-                console.log(`[PBE] Sincronizando: ${publicApiUrl}`);
+                const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
+                
+                console.log(`[PBE] Sincronizando (Novo Formato): ${publicApiUrl}`);
 
                 let realItems: any[] = [];
                 try {
-                    const response = await axios.get(publicApiUrl, { timeout: 4000 });
-                    if (response.data && Array.isArray(response.data)) {
+                    const response = await axios.get(publicApiUrl, { 
+                        timeout: 5000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                            'Accept': 'application/json, text/plain, */*'
+                        }
+                    });
+                    
+                    if (response.status === 204) {
+                         console.warn(`[PBE] Bloqueio hCaptcha Detectado (Status 204) na API de Transparência para ${idCompra}`);
+                         // A API retorna 204 quando a requisição não inclui o token captcha=? gerado pela interface
+                    } else if (response.data && Array.isArray(response.data)) {
                         realItems = response.data.map((item: any) => ({
-                            itemId: String(item.sequencial),
+                            itemId: String(item.numeroItem || item.sequencial),
                             valorAtual: item.melhorLance || item.valorEstimado || 0,
-                            ganhador: item.situacao === 'Aberto' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
-                            status: item.situacao || 'Aberto',
+                            ganhador: item.fase === 'DISPUTA' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
+                            status: item.situacao || item.fase || 'Aberto',
                             descricao: item.descricao
                         }));
                     }
                 } catch (apiErr: any) {
                     console.error(`[PBE] Falha ao buscar dados oficiais (Transparência): ${apiErr.message}`);
-                    // Fallback para não quebrar a tela se a API do governo oscilar
                     return; 
                 }
 
