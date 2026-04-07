@@ -93,8 +93,20 @@ router.post('/sessions', requireAuth, async (req: AuthRequest | any, res: Respon
             return res.status(400).json({ error: 'Missing required session fields' });
         }
 
-        const session = await prisma.biddingSession.create({
-            data: {
+        const session = await prisma.biddingSession.upsert({
+            where: {
+                portal_uasg_numeroPregao_anoPregao: {
+                    portal: portal || 'compras_gov',
+                    uasg,
+                    numeroPregao,
+                    anoPregao
+                }
+            },
+            update: {
+                credentialId: credentialId || null,
+                sessionStatus: 'active' // Ensure it's active if reactivated
+            },
+            create: {
                 credentialId: credentialId || null,
                 portal: portal || 'compras_gov',
                 uasg,
