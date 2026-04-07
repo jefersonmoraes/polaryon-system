@@ -207,8 +207,20 @@ export const useAuthStore = create<AuthState>()(
             },
 
             logout: () => {
+                // Definitive cleanup to prevent "ghost sessions" across tabs ⚒️🚀⚙️
                 localStorage.removeItem('rememberMe');
-                set({ currentUser: null, isAuthenticated: false, jwtToken: null });
+                localStorage.removeItem('polaryon-auth-v2');
+                sessionStorage.removeItem('polaryon-auth-v2');
+                
+                set({ 
+                    currentUser: null, 
+                    isAuthenticated: false, 
+                    jwtToken: null,
+                    _hasHydrated: true // Mantém hidratado mas deslogado
+                });
+                
+                // Força logout em outras abas via broadcast se necessário
+                window.dispatchEvent(new Event('storage'));
             },
 
             updateProfile: (updates) => {
@@ -395,6 +407,22 @@ export const useAuthStore = create<AuthState>()(
                     // to allow ProtectedRoute to show the login screen instead of a spinner forever.
                     useAuthStore.setState({ _hasHydrated: true });
                 }
+
+                // CROSS-TAB SYNC: Stop "Ghost Sessions" ⚒️🚀⚙️
+                // If another tab logs out (clears localStorage), this tab must logout too
+                const syncLogout = (event: StorageEvent) => {
+                    if (event.key === 'polaryon-auth-v2' && !event.newValue) {
+                        console.warn('Authentication storage cleared in another tab. Logging out locally... ⚒️🚀⚙️');
+                        useAuthStore.setState({ 
+                            currentUser: null, 
+                            isAuthenticated: false, 
+                            jwtToken: null 
+                        });
+                    }
+                };
+
+                window.addEventListener('storage', syncLogout);
+                return () => window.removeEventListener('storage', syncLogout);
             }
         }
     )

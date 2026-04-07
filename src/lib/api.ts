@@ -39,8 +39,12 @@ api.interceptors.response.use(
             console.error('Session expired or unauthorized (401)');
             
             // SECURITY: Only wipe and redirect if we are not already on the login page
-            // and if this isn't a false positive from a background check.
-            if (!window.location.pathname.startsWith('/login')) {
+            // and if this isn't a false positive from a background check (like Google Calendar).
+            const isCoreRoute = !error.config?.url?.includes('/calendar/events') && 
+                               !error.config?.url?.includes('/calendar/sync');
+
+            if (!window.location.pathname.startsWith('/login') && isCoreRoute) {
+                console.warn('CRITICAL: Session expired on core route. Wiping session and redirecting to login. ⚒️🚀⚙️');
                 import('sonner').then(({ toast }) => {
                     toast.error('Sua sessão expirou por segurança.', {
                         description: 'Clique para entrar novamente e continuar seu trabalho.',
@@ -49,7 +53,7 @@ api.interceptors.response.use(
                         action: {
                             label: 'Entrar',
                             onClick: () => {
-                                // Clean up old v2 data to avoid quota issues
+                                // Definitive cleanup to prevent "ghost sessions" across tabs ⚒️🚀⚙️
                                 localStorage.removeItem('polaryon-auth-v2');
                                 sessionStorage.removeItem('polaryon-auth-v2');
                                 window.location.href = '/login?expired=true';
@@ -57,6 +61,8 @@ api.interceptors.response.use(
                         }
                     });
                 });
+            } else if (!isCoreRoute) {
+                console.log('Soft 401 on non-core route ignored for global logout. ⚒️🚀⚙️');
             }
         }
         
