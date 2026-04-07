@@ -125,9 +125,6 @@ export default function BiddingDashboardPage() {
 
         return () => {
             socketService.off('biddingUpdate', handleUpdate);
-            if (sessionId && isListening) {
-                stopRadar();
-            }
         };
     }, [socketService, sessionId, isListening]);
 
