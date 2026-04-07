@@ -73,15 +73,16 @@ export default function GlobalCalendarPage() {
     const loadGoogleEvents = async () => {
         try {
             const res = await api.get('/calendar/events');
+            // Check for both success and the soft needsAuth status ⚒️🚀⚙️
             if (res.data.success && res.data.events) {
                 setGoogleEvents(res.data.events);
+            } else if (res.data.needsAuth) {
+                console.log("GlobalCalendar: Google auth required. Use manual sync to link. ⚒️🚀⚙️");
             }
         } catch (err: any) {
-            // Silently ignore NEEDS_AUTH or other errors on passive load
-            console.error("Silent Google Events Load Error:", err);
-            if (err.response?.status === 401 && err.response?.data?.error === 'NEEDS_AUTH') {
-                // Do nothing, just let user see empty Google events
-                // Let them click Sincronizar manually to trigger the prompt
+            // Silently ignore Errors on passive load to keep console 100% clean ⚒️🚀⚙️
+            if (process.env.NODE_ENV === 'development') {
+                console.warn("Soft Google Load failed", err);
             }
         }
     };

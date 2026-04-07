@@ -39,7 +39,8 @@ router.get('/events', async (req: Request, res: Response) => {
         res.status(200).json({ success: true, events: mappedEvents });
     } catch (err: any) {
         if (err.message === 'NEEDS_AUTH' || err?.message?.includes('No refresh token')) {
-            return res.status(401).json({ error: 'NEEDS_AUTH', authUrl: getAuthUrl() });
+            // Return 200 instead of 401 to avoid "red" console errors for optional modules ⚒️🚀⚙️
+            return res.status(200).json({ success: false, needsAuth: true, authUrl: getAuthUrl() });
         }
         console.error("Fetch Events Error:", err);
         res.status(500).json({ error: 'Falha na busca', details: err.message });
@@ -104,7 +105,8 @@ router.post('/sync', async (req: Request, res: Response) => {
         res.status(200).json({ success: true, events: mappedEvents });
     } catch (err: any) {
         if (err.message === 'NEEDS_AUTH' || err?.message?.includes('No refresh token')) {
-            return res.status(401).json({ error: 'NEEDS_AUTH', authUrl: getAuthUrl() });
+            // Return 200 instead of 401 to avoid "red" console errors for optional modules ⚒️🚀⚙️
+            return res.status(200).json({ success: false, needsAuth: true, authUrl: getAuthUrl() });
         }
         console.error("Sync Error:", err);
         res.status(500).json({ error: 'Falha na sincronização', details: err.message });

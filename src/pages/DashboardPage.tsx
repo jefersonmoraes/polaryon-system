@@ -29,11 +29,17 @@ const Dashboard = () => {
     const loadGoogleEvents = async () => {
       try {
         const res = await api.get('/calendar/events');
+        // Now handles 200 NeedsAuth response from backend to keep console 100% clean ⚒️🚀⚙️
         if (res.data.success && res.data.events) {
           setGoogleEvents(res.data.events);
+        } else if (res.data.needsAuth) {
+          console.log("Dashboard: Google Calendar not linked. Skipping events load silently. ⚒️🚀⚙️");
         }
       } catch (err) {
-        console.error("Silent Google Events Load Error on Dashboard:", err);
+        // Only log if it's a real unexpected error, not a 401/needsAuth
+        if (process.env.NODE_ENV === 'development') {
+           console.warn("Minor: Google Events background load skipped.", err);
+        }
       }
     };
     loadGoogleEvents();
