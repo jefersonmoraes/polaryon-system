@@ -43,8 +43,9 @@ export class BiddingListener {
                 const itemsConfig = (session?.itemsConfig as any) || {};
 
                 // 2. BUSCA DADOS REAIS NO SERPRO (MODO PÚBLICO / TRANSPARÊNCIA)
-                // Nota: Usamos /dispensa/ pois o pregão 87/2026 é uma Dispensa Eletrônica
-                const fullNumero = `${numeroPregao}${session?.anoPregao || '2026'}`;
+                // Nota: O número da compra no Serpro deve ter 9 dígitos (5 do número + 4 do ano)
+                const paddedNum = String(numeroPregao).padStart(5, '0');
+                const fullNumero = `${paddedNum}${session?.anoPregao || '2026'}`;
                 const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa-publico/backend/api/sala-disputa/uasg/${uasg}/dispensa/${fullNumero}/itens`;
                 
                 let realItems: any[] = [];
