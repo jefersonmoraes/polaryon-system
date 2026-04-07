@@ -399,12 +399,18 @@ export const useKanbanStore = create<KanbanState>()(
             
             if (get().savingCards.has(id)) return;
 
-            set(s => ({
-              cards: s.cards.map(c => c.id === id ? { 
-                  ...card, 
-                  isSkeleton: false 
-              } : c)
-            }));
+            set(s => {
+                const existingIdx = s.cards.findIndex(c => c.id === id);
+                if (existingIdx >= 0) {
+                    return {
+                        cards: s.cards.map((c, i) => i === existingIdx ? { ...card, isSkeleton: false } : c)
+                    };
+                } else {
+                    return {
+                        cards: [card, ...s.cards]
+                    };
+                }
+            });
         } catch (error) {
             console.error("Failed to fetch card details:", error);
         }

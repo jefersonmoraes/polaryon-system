@@ -249,6 +249,44 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [isDirty, setIsDirty] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    let timeout: number;
+    if (!card) {
+      timeout = window.setTimeout(() => setLoadError(true), 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [card]);
+
+  if (loadError && !card) {
+      return (
+          <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-end"
+          >
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+              <div className="relative w-full max-w-4xl h-full bg-card shadow-2xl flex items-center justify-center border-l border-border">
+                  <div className="flex flex-col items-center gap-6 text-center p-12">
+                       <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center">
+                          <X className="h-10 w-10 text-destructive" />
+                       </div>
+                       <div className="space-y-2">
+                           <h3 className="text-xl font-bold text-foreground">Cartão não encontrado</h3>
+                           <p className="text-sm text-muted-foreground whitespace-pre-wrap max-w-sm">
+                               Este cartão pode ter sido removido por outro administrador ou o link de acesso expirou.
+                           </p>
+                       </div>
+                       <div className="flex gap-4">
+                          <button onClick={onClose} className="px-6 py-2.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-all shadow-md active:scale-95">
+                              VOLTAR AO PAINEL
+                          </button>
+                       </div>
+                  </div>
+              </div>
+          </motion.div>
+      );
+  }
+
   if (!card) {
       return (
           <motion.div
@@ -256,16 +294,13 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               className="fixed inset-0 z-50 flex items-center justify-end"
           >
               <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-              <div className="relative w-full max-w-4xl h-full bg-background shadow-2xl flex items-center justify-center border-l border-border">
+              <div className="relative w-full max-w-4xl h-full bg-background/95 backdrop-blur-sm shadow-2xl flex items-center justify-center border-l border-border">
                   <div className="flex flex-col items-center gap-4 text-center p-8">
-                       <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-lg" />
-                       <div>
-                           <h3 className="text-lg font-bold">Carregando cartão...</h3>
-                           <p className="text-sm text-muted-foreground mt-1">Sincronizando dados com o servidor</p>
+                       <div className="h-14 w-14 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-xl" />
+                       <div className="space-y-1">
+                           <h3 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60">Localizando Cartão...</h3>
+                           <p className="text-xs text-muted-foreground animate-pulse font-medium">Sincronizando com os servidores v8.5.0</p>
                        </div>
-                       <button onClick={onClose} className="mt-4 px-4 py-2 text-xs font-bold bg-secondary hover:bg-secondary/80 rounded-lg transition-colors">
-                           FECHAR E VOLTAR
-                       </button>
                   </div>
               </div>
           </motion.div>
