@@ -663,7 +663,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
             const buildParams = (p: number) => {
                 const params: any = {
-                    tamanho_pagina: 50,
+                    tam_pagina: 50,
                     pagina: p
                 };
 
