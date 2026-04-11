@@ -398,7 +398,6 @@ export const useAuthStore = create<AuthState>()(
                 }
                 return persistedState;
             },
-            },
             onRehydrateStorage: () => (state) => {
                 if (state) {
                     state._hasHydrated = true;
