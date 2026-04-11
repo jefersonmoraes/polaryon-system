@@ -16,15 +16,25 @@ export const runBackup = (): Promise<void> => {
         const backupFileName = `backup-${date}.sql`;
         const backupFilePath = path.join(backupDir, backupFileName);
 
-        const databaseUrl = process.env.DATABASE_URL;
+        const databaseUrlStr = process.env.DATABASE_URL;
 
-        if (!databaseUrl) {
+        if (!databaseUrlStr) {
             console.error('[Backup Service] DATABASE_URL is not set.');
             return reject(new Error('DATABASE_URL is not set.'));
         }
 
+        // Remover os parâmetros de query string (ex: connection_limit, pool_timeout) que o pg_dump não reconhece
+        let cleanDatabaseUrl = databaseUrlStr;
+        try {
+            const parsedUrl = new URL(databaseUrlStr);
+            parsedUrl.search = ''; // Remove todos os parâmetros após o '?'
+            cleanDatabaseUrl = parsedUrl.toString();
+        } catch (err) {
+            console.warn('[Backup Service] Aviso: Falha ao fazer parser da DATABASE_URL. Realizando fallback.');
+        }
+
         // Executar pg_dump
-        const command = `pg_dump "${databaseUrl}" > "${backupFilePath}"`;
+        const command = `pg_dump "${cleanDatabaseUrl}" > "${backupFilePath}"`;
         console.log(`[Backup Service] Iniciando backup para ${backupFileName}...`);
 
         exec(command, async (error, stdout, stderr) => {
