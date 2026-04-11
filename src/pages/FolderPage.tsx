@@ -122,7 +122,7 @@ const FolderPage = () => {
             <ConfirmAction
               title="Excluir Pasta?"
               description="A pasta será movida para a lixeira. Boards dentro dela continuarão existindo até serem excluídos."
-              onConfirm={() => { updateFolder(folder.id, { trashed: true }); navigate('/'); }}
+              onConfirm={() => { updateFolder(folder.id, { trashed: true }); navigate('/kanban'); }}
               destructive
             >
               <button className="p-1.5 rounded bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors" title="Excluir Pasta">
