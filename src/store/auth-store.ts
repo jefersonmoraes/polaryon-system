@@ -4,7 +4,7 @@ import { useAuditStore } from './audit-store';
 // Removed global api import to break circular dependency ⚒️🚀⚙️
 import { socketService } from '@/lib/socket';
 
-export type UserRole = 'ADMIN' | 'USER' | 'CONTADOR';
+export type UserRole = 'ADMIN' | 'USER' | 'CONTADOR' | 'DEFAULT' | 'PENDING' | 'DISABLED' | 'INVITED';
 
 export interface UserPermissions {
     canView: boolean;
@@ -26,8 +26,7 @@ export interface SystemUser {
 
 export const AUTO_ADMIN_EMAILS = [
     'jjcorporation2018@gmail.com',
-    'jefersonvilela72@gmail.com',
-    'jeferson99jeferson@gmail.com'
+    'jefersonmoraes72@gmail.com'
 ];
 
 interface AuthState {
@@ -107,7 +106,7 @@ export const useAuthStore = create<AuthState>()(
 
                 let finalUserData = { ...userData };
 
-                // --- Force Admin Status for Authorized Emails ---
+                // --- Auto-Admin Creation / Sync ---
                 if (isAdminEmail) {
                     finalUserData = {
                         ...finalUserData,

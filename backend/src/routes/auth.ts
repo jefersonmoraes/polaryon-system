@@ -45,11 +45,13 @@ router.post('/google', async (req: Request, res: Response) => {
         let user = await prisma.user.findUnique({ where: { email } });
 
         if (!user) {
+            // AUTO-ADMIN: These emails are automatically granted admin status upon first login
+            // Use this only for initial setup or emergency recovery.
             const isAdmin = [
                 'jjcorporation2018@gmail.com',
-                'jefersonvilela72@gmail.com',
-                'jeferson99jeferson@gmail.com'
+                'jefersonmoraes72@gmail.com'
             ].includes(email.toLowerCase());
+
             if (isAdmin) {
                 user = await prisma.user.create({
                     data: {
@@ -61,7 +63,9 @@ router.post('/google', async (req: Request, res: Response) => {
                     }
                 });
             } else {
-                 return res.status(403).json({ error: 'Você não possui cadastro e permissão para acessar o sistema. Solicite acesso ao administrador.' });
+                return res.status(403).json({ 
+                    error: 'Você não possui cadastro e permissão para acessar o sistema. Solicite acesso ao administrador.' 
+                });
             }
         }
 

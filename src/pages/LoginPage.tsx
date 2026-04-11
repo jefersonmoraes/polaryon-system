@@ -141,19 +141,13 @@ export default function LoginPage() {
             const { token, user } = res.data;
             const existingSystemUser = useAuthStore.getState().systemUsers.find(u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
 
-            const isAdminEmail = [
-                'jjcorporation2018@gmail.com',
-                'jefersonvilela72@gmail.com',
-                'jeferson99jeferson@gmail.com'
-            ].includes(user.email.toLowerCase());
-
             const systemUser = {
                 id: user.id || existingSystemUser?.id || crypto.randomUUID(),
                 email: user.email,
                 name: user.name || existingSystemUser?.name,
                 photoURL: user.picture || existingSystemUser?.photoURL,
-                role: isAdminEmail ? 'ADMIN' : (user.role.toUpperCase() === 'ADMIN' ? 'ADMIN' : (user.role.toUpperCase() === 'CONTADOR' ? 'CONTADOR' : 'USER')),
-                permissions: user.permissions || (isAdminEmail || user.role.toUpperCase() === 'ADMIN'
+                role: user.role.toUpperCase(),
+                permissions: user.permissions || (user.role.toUpperCase() === 'ADMIN'
                     ? { canView: true, canEdit: true, canDownload: true, allowedScreens: ['ALL'] }
                     : (user.role.toUpperCase() === 'CONTADOR'
                         ? { canView: true, canEdit: false, canDownload: true, allowedScreens: ['ACCOUNTING', 'DOCUMENTATION'] }

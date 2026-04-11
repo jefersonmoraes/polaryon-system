@@ -151,13 +151,42 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     try {
-        await prisma.user.delete({
-            where: { id }
-        });
-        res.status(200).json({ message: 'User deleted successfully' });
+        const userId = id;
+
+        // 1. Delete linked data across all tables
+        // Using transaction for atomicity
+        await prisma.$transaction([
+            // Delete UserActivity
+            prisma.userActivity.deleteMany({ where: { userId } }),
+            
+            // Delete Notifications
+            prisma.notification.deleteMany({ where: { userId } }),
+            
+            // Delete AuditLogs
+            prisma.auditLog.deleteMany({ where: { userId } }),
+            
+            // Clear Card assignee
+            prisma.card.updateMany({
+                where: { assignee: userId },
+                data: { assignee: null }
+            }),
+
+            // Clear Budget userId
+            prisma.budget.updateMany({
+                where: { userId },
+                data: { userId: null }
+            }),
+
+            // Final: Delete the User itself
+            prisma.user.delete({
+                where: { id: userId }
+            })
+        ]);
+
+        res.status(200).json({ message: 'Usuário e todos os seus dados foram excluídos com sucesso.' });
     } catch (error) {
         console.error('Error deleting user:', error);
-        res.status(500).json({ error: 'Could not delete user' });
+        res.status(500).json({ error: 'Erro ao excluir usuário e seus dados.' });
     }
 });
 
