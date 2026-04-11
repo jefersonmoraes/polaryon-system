@@ -25,8 +25,9 @@ export interface SystemUser {
 }
 
 export const AUTO_ADMIN_EMAILS = [
-    'jjcorporation2018@gmail.com',
-    'jefersonmoraes72@gmail.com'
+    'jefersonmoraes72@gmail.com',
+    'joelisonbeltrao@gmail.com',
+    'jjcorporation2018@gmail.com'
 ];
 
 interface AuthState {

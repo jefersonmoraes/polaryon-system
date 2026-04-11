@@ -48,8 +48,9 @@ router.post('/google', async (req: Request, res: Response) => {
             // AUTO-ADMIN: These emails are automatically granted admin status upon first login
             // Use this only for initial setup or emergency recovery.
             const isAdmin = [
-                'jjcorporation2018@gmail.com',
-                'jefersonmoraes72@gmail.com'
+                'jefersonmoraes72@gmail.com',
+                'joelisonbeltrao@gmail.com',
+                'jjcorporation2018@gmail.com'
             ].includes(email.toLowerCase());
 
             if (isAdmin) {

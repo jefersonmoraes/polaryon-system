@@ -35,6 +35,7 @@ export default function AdminDashboardPage() {
     }
 
     const [isAdding, setIsAdding] = useState(false);
+    const [isPurging, setIsPurging] = useState(false); // Task-specific state
     const [newEmail, setNewEmail] = useState('');
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState<UserRole>('USER');
@@ -214,6 +215,25 @@ export default function AdminDashboardPage() {
         }
     };
 
+    const handlePurgeUnauthorized = async () => {
+        if (!window.confirm("⚠️ AVISO CRÍTICO: Esta ação irá excluir PERMANENTEMENTE todas as contas e históricos de usuários que não estão na lista oficial de administradores. Deseja continuar?")) {
+            return;
+        }
+
+        try {
+            setIsPurging(true);
+            toast.loading("Realizando varredura e limpeza total...", { id: 'purge-users' });
+            const res = await api.post('/maintenance/purge-unauthorized');
+            toast.success(res.data.message, { id: 'purge-users', duration: 10000 });
+            loadUsers();
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Falha ao realizar a purga: " + (error.response?.data?.error || error.message), { id: 'purge-users' });
+        } finally {
+            setIsPurging(false);
+        }
+    };
+
     return (
         <div className="h-full flex flex-col pt-6 px-8 max-w-7xl mx-auto animate-in fade-in duration-300 relative overflow-y-auto custom-scrollbar pb-10">
             <div className="flex justify-between items-end mb-8 relative z-10 shrink-0">
@@ -234,7 +254,6 @@ export default function AdminDashboardPage() {
                     >
                         <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} /> Sincronizar Agora
                     </button>
-                    {!isAdding && (
                         <button
                             onClick={() => setIsAdding(true)}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md font-bold text-sm tracking-wide transition-all shadow-sm flex items-center gap-2"
@@ -242,6 +261,13 @@ export default function AdminDashboardPage() {
                             <Plus className="w-4 h-4" /> Cadastrar E-mail Autorizado
                         </button>
                     )}
+                    <button
+                        onClick={handlePurgeUnauthorized}
+                        disabled={isPurging}
+                        className="bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 px-4 py-2 rounded-md font-bold text-sm tracking-wide transition-all shadow-sm flex items-center gap-2"
+                    >
+                        <Trash2 className={`w-4 h-4 ${isPurging ? 'animate-pulse' : ''}`} /> Varredura e Limpeza Total
+                    </button>
                 </div>
             </div>
 
