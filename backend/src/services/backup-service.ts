@@ -97,7 +97,6 @@ export const initBackupCron = () => {
             console.error('[Backup Service] Erro capturado na rotina de cron:', error);
         }
     }, {
-        scheduled: true,
         timezone: "America/Sao_Paulo"
     });
     console.log('[Backup Service] Cron Job agendado para 03:00 (America/Sao_Paulo).');
