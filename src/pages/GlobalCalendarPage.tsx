@@ -119,16 +119,23 @@ export default function GlobalCalendarPage() {
             if (res.data.success && res.data.events) {
                 setGoogleEvents(res.data.events);
                 toast.success("Conexão e sincronização concluída com sucesso!", { id: 'gcal' });
+            } else if (res.data.needsAuth) {
+                toast.dismiss('gcal');
+                const authUrl = res.data.authUrl;
+                toast.info("Aguarde, redirecionando para autorizar no Google de forma Segura...", { duration: 8000 });
+                setTimeout(() => window.location.assign(authUrl), 1500);
+            } else {
+                toast.error("Servidor recusou a sincronização. Verifique os logs.", { id: 'gcal' });
             }
         } catch (err: any) {
+            console.error("Calendar Sync Error:", err);
             if (err.response?.status === 401 && err.response?.data?.error === 'NEEDS_AUTH') {
                 toast.dismiss('gcal');
                 const authUrl = err.response.data.authUrl;
-                toast.info("Aguarde, redirecionando para autorizar no Google de forma Segura...", { duration: 8000 });
-                // Enforce redirect through same domains if needed or absolute url
+                toast.info("Redirecionando para renovar autorização...", { duration: 8000 });
                 setTimeout(() => window.location.assign(authUrl), 1500);
             } else {
-                toast.error("Falha ao se conectar com a API do Google Calendar.", { id: 'gcal' });
+                toast.error("Falha de conexão com a API do Google Calendar.", { id: 'gcal' });
             }
         }
     };

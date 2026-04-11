@@ -55,6 +55,12 @@ router.post('/sync', async (req: Request, res: Response) => {
         if (eventsToPush && Array.isArray(eventsToPush)) {
             console.log(`🚀 Starting sync of ${eventsToPush.length} events to Google...`);
             for (const ev of eventsToPush) {
+                // Defensive check: Skip events without valid dates ⚒️🚀⚙️
+                if (!ev.date || typeof ev.date !== 'string') {
+                    console.warn(`⚠️ Skipping event "${ev.title}" due to missing/invalid date:`, ev.date);
+                    continue;
+                }
+
                 const pureDate = ev.date.split('T')[0];
                 
                 let start, end;
