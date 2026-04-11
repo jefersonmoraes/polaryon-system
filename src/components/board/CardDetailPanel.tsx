@@ -1725,8 +1725,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   card.comments.slice().reverse().map(comment => (
                     <div key={comment.id} className="bg-background border border-border rounded-lg p-3 shadow-sm">
                       <div className="flex items-center gap-2 mb-1.5 border-b border-border pb-1.5">
-                        <div className="h-5 w-5 rounded-full bg-accent flex items-center justify-center text-[9px] font-bold text-accent-foreground">{comment.author[0]}</div>
-                        <span className="text-[11px] font-medium text-foreground">{comment.author}</span>
+                        <div className="h-5 w-5 rounded-full bg-accent flex items-center justify-center text-[9px] font-bold text-accent-foreground">{comment.author?.[0]?.toUpperCase() || 'U'}</div>
+                        <span className="text-[11px] font-medium text-foreground">{comment.author || 'Usuário Desconhecido'}</span>
                         <span className="text-[9px] text-muted-foreground ml-auto">
                           {new Date(comment.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </span>
