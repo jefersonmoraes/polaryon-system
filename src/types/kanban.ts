@@ -257,7 +257,7 @@ export interface KanbanList {
   icon?: string;
   // Automations: list of actions to perform when a card is dropped
   automations?: Array<{
-    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone';
+    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar';
     targetBoardId?: string;
     targetMilestoneTitle?: string;
   }>;

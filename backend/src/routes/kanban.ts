@@ -343,13 +343,30 @@ router.post('/cards', async (req: Request, res: Response) => {
         }
 
         // Auto-sync to Google Calendar - No await to respond faster
-        if (card.dueDate && !card.completed && !card.archived && !card.trashed) {
-            pushEventToGoogle({
-                summary: `[Polaryon] ${(card as any).title}`,
-                description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático criado através do seu quadro Kanban.',
-                start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
-                end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
-            }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card create:", err.message));
+        const list = await prisma.kanbanList.findUnique({ where: { id: listId } });
+        const hasGoogleSync = ((list?.automations as any[]) || []).some((a: any) => a.type === 'sync-google-calendar');
+
+        if (hasGoogleSync && !card.archived && !card.trashed) {
+            if (card.dueDate && !card.completed) {
+                pushEventToGoogle({
+                    summary: `[Polaryon] ${(card as any).title}`,
+                    description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático criado através do seu quadro Kanban.',
+                    start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
+                    end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
+                }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card create:", err.message));
+            }
+            if (milestones && milestones.length > 0) {
+                 milestones.forEach((m: any) => {
+                     if (m.dueDate && !m.completed) {
+                          pushEventToGoogle({
+                               summary: `[Etapa] ${m.title}`,
+                               description: `*[Gerado pelo Polaryon]*\nEtapa do cartão: ${(card as any).title}`,
+                               start: { date: new Date(m.dueDate).toISOString().split('T')[0] },
+                               end: { date: new Date(m.dueDate).toISOString().split('T')[0] }
+                          }, `${card.id}_milestone_${m.id}`).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Milestone create:", err.message));
+                     }
+                 });
+            }
         }
 
         res.json(card);
@@ -386,7 +403,7 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         // Fetch current card state before update
         const currentCard = await prisma.card.findUnique({
             where: { id: cardId },
-            select: { description: true, title: true }
+            include: { milestones: true }
         });
 
         if (currentCard && updateData.description !== undefined) {
@@ -534,15 +551,62 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         });
 
         // Auto-sync or cleanup Google Calendar - No await to respond faster
-        if (card.completed || card.archived || card.trashed) {
+        const targetListId = card.listId;
+        const list = await prisma.kanbanList.findUnique({ where: { id: targetListId } });
+        const hasGoogleSync = ((list?.automations as any[]) || []).some((a: any) => a.type === 'sync-google-calendar');
+
+        if (card.trashed || card.archived) {
             deleteEventFromGoogle(card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card delete:", err.message));
-        } else if (card.dueDate) {
-            pushEventToGoogle({
-                summary: `[Polaryon] ${(card as any).title}`,
-                description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático atualizado do seu quadro Kanban.',
-                start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
-                end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
-            }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card update:", err.message));
+            if (milestones && milestones.length > 0) {
+                 milestones.forEach((m: any) => deleteEventFromGoogle(`${card.id}_milestone_${m.id}`).catch(() => {}));
+            } else if (currentCard?.milestones && Array.isArray(currentCard.milestones)) {
+                 currentCard.milestones.forEach((m: any) => deleteEventFromGoogle(`${card.id}_milestone_${m.id}`).catch(() => {}));
+            }
+        } else {
+            if (card.completed && card.dueDate) {
+                pushEventToGoogle({
+                    summary: `[✓] ${(card as any).title}`,
+                    description: '*[Concluído no Polaryon]*\n\nEste evento foi marcado como finalizado no seu quadro Kanban.',
+                    start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
+                    end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
+                }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card completed update:", err.message));
+            } else if (hasGoogleSync && card.dueDate) {
+                pushEventToGoogle({
+                    summary: `[Polaryon] ${(card as any).title}`,
+                    description: '*[Gerado automaticamente pelo Polaryon]*\n\nEste é um evento automático atualizado do seu quadro Kanban.',
+                    start: { date: new Date(card.dueDate).toISOString().split('T')[0] },
+                    end: { date: new Date(card.dueDate).toISOString().split('T')[0] }
+                }, card.id).catch(err => console.log("[CALENDAR_SYNC_SILENT_FAIL] - Card update:", err.message));
+            }
+
+            const msToSync = milestones !== undefined ? milestones : (currentCard as any)?.milestones || [];
+            if (milestones !== undefined && (currentCard as any)?.milestones) {
+                 const newMsIds = milestones.map((m: any) => m.id);
+                 const deletedMs = (currentCard as any).milestones.filter((oldMs: any) => !newMsIds.includes(oldMs.id));
+                 deletedMs.forEach((oldMs: any) => {
+                      deleteEventFromGoogle(`${card.id}_milestone_${oldMs.id}`).catch(() => {});
+                 });
+            }
+
+            msToSync.forEach((m: any) => {
+                if (m.completed || card.completed) {
+                    if (m.dueDate) {
+                         pushEventToGoogle({
+                             summary: `[✓] ${m.title}`,
+                             description: `*[Gerado pelo Polaryon]*\nEtapa Concluída!\nCartão: ${(card as any).title}`,
+                             start: { date: new Date(m.dueDate).toISOString().split('T')[0] },
+                             end: { date: new Date(m.dueDate).toISOString().split('T')[0] }
+                         }, `${card.id}_milestone_${m.id}`).catch(() => {});
+                    }
+                } else if (hasGoogleSync && m.dueDate) {
+                    pushEventToGoogle({
+                        summary: `[Etapa] ${m.title}`,
+                        description: `*[Gerado pelo Polaryon]*\nEtapa do cartão: ${(card as any).title}`,
+                        start: { date: new Date(m.dueDate).toISOString().split('T')[0] },
+                        end: { date: new Date(m.dueDate).toISOString().split('T')[0] }
+                    }, `${card.id}_milestone_${m.id}`).catch(() => {});
+                }
+            });
         }
 
 

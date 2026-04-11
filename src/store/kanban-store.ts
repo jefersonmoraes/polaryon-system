@@ -1228,41 +1228,6 @@ export const useKanbanStore = create<KanbanState>()(
             get().reorderCardsByMilestones(card.listId);
         }
 
-        // AUTO-SYNC GOOGLE CALENDAR EM BACKGROUND
-        const currentUser = useAuthStore.getState().currentUser;
-        if (currentUser && (currentUser.role === 'ADMIN' || currentUser.permissions?.canEdit)) {
-          // If the update involves fields relevant to the calendar, trigger sync silently
-          if (data.dueDate !== undefined || data.milestones !== undefined || data.trashed !== undefined || data.archived !== undefined || data.completed !== undefined || data.title) {
-            setTimeout(() => {
-              const currentCards = get().cards;
-              const eventsToPush: any[] = [];
-
-              currentCards.filter(c => !c.archived && !c.trashed && !c.completed).forEach(c => {
-                  // Task itself
-                  if (c.dueDate) {
-                      eventsToPush.push({
-                          id: c.id,
-                          title: `[Polaryon] ${c.title}`,
-                          date: c.dueDate
-                      });
-                  }
-                  
-                  // Milestones
-                  if (c.milestones) {
-                      c.milestones.filter(m => !m.completed && m.dueDate).forEach(m => {
-                          eventsToPush.push({
-                              id: m.id,
-                              title: `[Etapa] ${m.title} - ${c.title}`,
-                              date: m.dueDate,
-                              time: m.hour
-                          });
-                      });
-                  }
-              });
-
-              api.post('/calendar/sync', { eventsToPush }).catch(() => {});
-            }, 1000); // Slight delay to ensure state is committed
-          }
         }
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
