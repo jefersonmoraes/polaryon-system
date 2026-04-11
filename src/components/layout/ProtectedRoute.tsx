@@ -14,6 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
+    useEffect(() => {
         if (!_hasHydrated) return;
 
         console.log('[DEBUG] ProtectedRoute State:', { isAuthenticated, role: currentUser?.role, status: currentUser?.status, path: location.pathname });
