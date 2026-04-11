@@ -398,45 +398,14 @@ export const useAuthStore = create<AuthState>()(
                 }
                 return persistedState;
             },
+            },
             onRehydrateStorage: () => (state) => {
                 if (state) {
                     state._hasHydrated = true;
                     console.log("AuthStore rehydrated. Session stability check complete.");
                 } else {
-                    // Even if state is missing (first load), we must set hydrated to true 
-                    // to allow ProtectedRoute to show the login screen instead of a spinner forever.
                     useAuthStore.setState({ _hasHydrated: true });
                 }
-
-                // CRITICAL SECURITY SYNC: Anti "Account Swap" ⚒️🚀⚙️
-                // Monitor for ANY changes to the auth storage from other tabs
-                const syncAuth = (event: StorageEvent) => {
-                    if (event.key === 'polaryon-auth-v2') {
-                        if (!event.newValue) {
-                            console.warn('⚠️ [AUTH] Session cleared in another tab.');
-                            useAuthStore.setState({ currentUser: null, isAuthenticated: false, jwtToken: null });
-                        } else {
-                            try {
-                                const newState = JSON.parse(event.newValue).state;
-                                const currentState = useAuthStore.getState();
-                                
-                                if (newState.jwtToken !== currentState.jwtToken) {
-                                    console.log('🔄 [AUTH] Session updated from another tab. Syncing state...');
-                                    useAuthStore.setState({ 
-                                        currentUser: newState.currentUser, 
-                                        isAuthenticated: newState.isAuthenticated, 
-                                        jwtToken: newState.jwtToken 
-                                    });
-                                }
-                            } catch (e) {
-                                console.error("[AUTH] Sync error:", e);
-                            }
-                        }
-                    }
-                };
-
-                window.addEventListener('storage', syncAuth);
-                return () => window.removeEventListener('storage', syncAuth);
             }
         }
     )

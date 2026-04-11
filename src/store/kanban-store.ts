@@ -155,12 +155,7 @@ export const useKanbanStore = create<KanbanState>()(
 
       setGoogleEvents: (googleEvents) => {
         set({ googleEvents });
-        // Broadcast sync to others automatically via proxy
-        api.post('/kanban/socketproxy', { 
-            store: 'GOOGLE_CALENDAR', 
-            type: 'SYNC_COMPLETE', 
-            payload: googleEvents 
-        }).catch(() => {});
+        // Removed proxy broadcast to prevent heavy payloads and sync loops ⚒️🚀⚙️
       },
 
       setIsDragging: (isDragging) => {
