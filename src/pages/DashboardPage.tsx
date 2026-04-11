@@ -3,7 +3,7 @@ import { useAccountingStore } from '@/store/accounting-store';
 import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
-import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap, Users, RefreshCcw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
