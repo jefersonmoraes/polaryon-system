@@ -88,11 +88,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       if (saved) {
         let parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Garante que novas seções adicionadas ao sistema apareçam mesmo com cache antigo
           const newSections = DEFAULT_SECTIONS.filter(s => !parsed.includes(s));
-          if (newSections.length > 0) {
-            parsed = [...parsed, ...newSections];
-          }
+          if (newSections.length > 0) parsed = [...parsed, ...newSections];
           return parsed;
         }
       }
@@ -100,14 +97,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     } catch { return DEFAULT_SECTIONS; }
   });
 
-  useEffect(() => {
-    localStorage.setItem('polaryon_card_section_order', JSON.stringify(sectionOrder));
-  }, [sectionOrder]);
   const [title, setTitle] = useState(card?.title || '');
   const [summary, setSummary] = useState(card?.summary || '');
   const [customLink, setCustomLink] = useState(card?.customLink || '');
-  const handleSaveCustomLink = () => { if (canEdit) updateCard(cardId, { customLink: customLink.trim() || undefined }); };
   const [description, setDescription] = useState(card?.description || '');
+  const [localDescription, setLocalDescription] = useState(card?.description || '');
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [newCheckItem, setNewCheckItem] = useState('');
   const [newComment, setNewComment] = useState('');
   const [showLabels, setShowLabels] = useState(false);
@@ -120,54 +117,145 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const [newItemName, setNewItemName] = useState('');
   const [newItemValue, setNewItemValue] = useState<string>('');
   const [newItemQuantity, setNewItemQuantity] = useState<string>('1');
-
-  // Budget editing state
   const [selectedBudgetToEdit, setSelectedBudgetToEdit] = useState<Budget | undefined>();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-
-  // Label editor
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelName, setLabelName] = useState('');
   const [labelColor, setLabelColor] = useState('#3b82f6');
   const [labelHex, setLabelHex] = useState('#3b82f6');
   const [labelIcon, setLabelIcon] = useState<string | undefined>();
   const [editLabelId, setEditLabelId] = useState<string | null>(null);
-  
-  // Drag and Drop & Upload State
   const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
-
-  // Preview State
-  const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
-    isOpen: false,
-    url: '',
-    name: '',
-  });
-
+  const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({ isOpen: false, url: '', name: '' });
   const [showDescriptionPane, setShowDescriptionPane] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [loadError, setLoadError] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [timerDisplay, setTimerDisplay] = useState('00:00:00');
+
+  const dragCounter = useRef(0);
+  const lastSaveTime = useRef<number>(0);
+  const lastSavedDescription = useRef<string>(card?.description || '');
+  const editorRef = useRef<HTMLDivElement>(null);
   const pendingSaveHTML = useRef<string | null>(null);
+  const intervalRef = useRef<number>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // EFFECTS
+  useEffect(() => {
+    localStorage.setItem('polaryon_card_section_order', JSON.stringify(sectionOrder));
+  }, [sectionOrder]);
+
+  useEffect(() => {
+    if (cardId) {
+      setIsLoadingDetails(true);
+      fetchCardDetails(cardId).finally(() => setIsLoadingDetails(false));
+    }
+  }, [cardId]);
+
+  useEffect(() => {
+    if (card) {
+      if (card.description) setShowDescriptionPane(true);
+      else if (card.comments.length > 0) setShowChat(true);
+    }
+  }, [cardId]);
+
+  useEffect(() => {
+    let timeout: number;
+    if (!card) {
+      timeout = window.setTimeout(() => setLoadError(true), 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [card]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const storeDesc = card?.description || '';
+    const now = Date.now();
+    const recentlySaved = now - lastSaveTime.current < 2000; 
+    const editorHTML = editorRef.current.innerHTML;
+    if (editorHTML !== storeDesc) {
+       if (!isDirty || (editorHTML === '' && storeDesc !== '')) {
+         const store = useKanbanStore.getState();
+         if (!store.savingCards.has(cardId) && !recentlySaved) {
+            editorRef.current.innerHTML = DOMPurify.sanitize(storeDesc);
+            setLocalDescription(storeDesc);
+            lastSavedDescription.current = storeDesc;
+         }
+       }
+    }
+  }, [cardId, card?.description, isDirty, showDescriptionPane]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = setTimeout(async () => {
+        if (localDescription !== lastSavedDescription.current) {
+            await performSave(localDescription);
+        }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [localDescription, cardId, isDirty]);
+
+  const activeEntry = card?.timeEntries.find(e => !e.endedAt);
+  useEffect(() => {
+    if (activeEntry) {
+      const update = () => {
+        const elapsed = Math.floor((Date.now() - new Date(activeEntry.startedAt).getTime()) / 1000);
+        const h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+        const m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+        const s = (elapsed % 60).toString().padStart(2, '0');
+        setTimerDisplay(`${h}:${m}:${s}`);
+      };
+      update();
+      intervalRef.current = window.setInterval(update, 1000);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [activeEntry]);
+
+  // EARLY RETURNS (Allowed after all hooks)
+  if (loadError && !card) {
+      return (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-end">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+              <div className="relative w-full max-w-4xl h-full bg-card shadow-2xl flex items-center justify-center border-l border-border">
+                  <div className="flex flex-col items-center gap-6 text-center p-12">
+                       <X className="h-10 w-10 text-destructive" />
+                       <h3 className="text-xl font-bold">Cartão não encontrado</h3>
+                       <button onClick={onClose} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg">VOLTAR AO PAINEL</button>
+                  </div>
+              </div>
+          </motion.div>
+      );
+  }
+
+  if (!card) {
+      return (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-end">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+              <div className="relative w-full max-w-4xl h-full bg-background/95 backdrop-blur-sm shadow-2xl flex items-center justify-center border-l border-border">
+                   <div className="h-14 w-14 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+          </motion.div>
+      );
+  }
+  const handleSaveCustomLink = () => { if (canEdit) updateCard(cardId, { customLink: customLink.trim() || undefined }); };
 
   const performSave = async (html: string) => {
     if (html === lastSavedDescription.current) return;
-    
     setSaveStatus('saving');
-    console.log(`[EDITOR_SAVE] Iniciando gravação... (${html.length} chars)`);
-    
     try {
         await updateCard(cardId, { description: html });
         lastSaveTime.current = Date.now();
         lastSavedDescription.current = html;
         setSaveStatus('saved');
-        console.log(`[EDITOR_SAVE] Gravado com sucesso.`);
-        
-        // Limpar o status de "Salvo" após 3 segundos
         setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 3000);
     } catch (err) {
         setSaveStatus('error');
-        console.error(`[EDITOR_SAVE] Erro catastrófico:`, err);
     }
   };
 
@@ -199,118 +287,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     setIsDirty(false);
     onClose();
   };
-
-  useEffect(() => {
-    if (card) {
-      if (card.description) {
-        toggleDescriptionPane(true);
-      } else if (card.comments.length > 0) {
-        toggleChat(true);
-      }
-    }
-  }, [cardId, card?.description]);
-
-  const lastSaveTime = useRef<number>(0);
-  const lastSavedDescription = useRef<string>(card?.description || '');
-  const editorRef = useRef<HTMLDivElement>(null);
-
-  // Sync relative to card change or external updates
-  useEffect(() => {
-    if (!editorRef.current) return;
-    
-    // O valor que vem do Banco/Store
-    const storeDesc = card?.description || '';
-    
-    // BLOQUEIO DE REGRESSÃO:
-    const now = Date.now();
-    // Reduzido para 2s para ser mais responsivo à reabertura rápida
-    const recentlySaved = now - lastSaveTime.current < 2000; 
-
-    // THE FIX: Se o editor estiver diferente do que está no store (vazio ou antigo)
-    const editorHTML = editorRef.current.innerHTML;
-    if (editorHTML !== storeDesc) {
-       // Se NÃO estamos digitando OU se acabamos de trocar de card (editorHTML vazio e store tem algo)
-       if (!isDirty || (editorHTML === '' && storeDesc !== '')) {
-         const store = useKanbanStore.getState();
-         if (!store.savingCards.has(cardId) && !recentlySaved) {
-            console.log(`[EDITOR_SYNC] Forçando preenchimento: "${storeDesc.substring(0, 20)}..."`);
-            editorRef.current.innerHTML = DOMPurify.sanitize(storeDesc);
-            setLocalDescription(storeDesc);
-            lastSavedDescription.current = storeDesc;
-         }
-       }
-    }
-  }, [cardId, card?.description, isDirty, showDescriptionPane]);
-
-  // Background Persistence (1.5s debounce para reduzir flutuao)
-  useEffect(() => {
-    if (!isDirty) return;
-    
-    const timer = setTimeout(async () => {
-        if (localDescription !== lastSavedDescription.current) {
-            await performSave(localDescription);
-        }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [localDescription, cardId, isDirty]);
-
-  const [loadError, setLoadError] = useState(false);
-  useEffect(() => {
-    let timeout: number;
-    if (!card) {
-      timeout = window.setTimeout(() => setLoadError(true), 5000);
-    }
-    return () => clearTimeout(timeout);
-  }, [card]);
-
-  if (loadError && !card) {
-      return (
-          <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-end"
-          >
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-              <div className="relative w-full max-w-4xl h-full bg-card shadow-2xl flex items-center justify-center border-l border-border">
-                  <div className="flex flex-col items-center gap-6 text-center p-12">
-                       <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center">
-                          <X className="h-10 w-10 text-destructive" />
-                       </div>
-                       <div className="space-y-2">
-                           <h3 className="text-xl font-bold text-foreground">Cartão não encontrado</h3>
-                           <p className="text-sm text-muted-foreground whitespace-pre-wrap max-w-sm">
-                               Este cartão pode ter sido removido por outro administrador ou o link de acesso expirou.
-                           </p>
-                       </div>
-                       <div className="flex gap-4">
-                          <button onClick={onClose} className="px-6 py-2.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-all shadow-md active:scale-95">
-                              VOLTAR AO PAINEL
-                          </button>
-                       </div>
-                  </div>
-              </div>
-          </motion.div>
-      );
-  }
-
-  if (!card) {
-      return (
-          <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-end"
-          >
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-              <div className="relative w-full max-w-4xl h-full bg-background/95 backdrop-blur-sm shadow-2xl flex items-center justify-center border-l border-border">
-                  <div className="flex flex-col items-center gap-4 text-center p-8">
-                       <div className="h-14 w-14 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-xl" />
-                       <div className="space-y-1">
-                           <h3 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60">Localizando Cartão...</h3>
-                           <p className="text-xs text-muted-foreground animate-pulse font-medium">Sincronizando com os servidores v8.5.0</p>
-                       </div>
-                  </div>
-              </div>
-          </motion.div>
-      );
-  }
 
 
 
@@ -400,55 +376,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
 
 
-  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
-  const [isDescExpanded, setIsDescExpanded] = useState(false);
-  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState('');
-
-  // Constants
-  const ICONS = [
-    '📋', '📝', '✅', '☑️', '✔️', '❌', '🚫', '⚠️', '❗', '❓',
-    '🔄', '🔁', '🚀', '🛸', '⭐', '🌟', '✨', '🔥', '💥', '💡',
-    '🎯', '📌', '📍', '🏷️', '🔖', '🛠️', '🔧', '🔨', '⚙️', '📊',
-    '📈', '📉', '📅', '📆', '⏳', '⌛', '⏰', '⏱️', '📦', '📫',
-    '📥', '📤', '✉️', '📱', '💻', '🖥️', '🔍', '🔎', '🗑️', '📁',
-    '📂', '🗂️', '📄', '📑', '🔐', '🔓', '🔑', '🔗', '📎', '💼',
-    '🏆', '🥇', '🎉', '🎈', '🎁', '🏃', '🚶', '🛑', '🚧'
-  ];
-
-  // Rich text toolbar uses editorRef instead
-
-  // Timer display
-  const [timerDisplay, setTimerDisplay] = useState('00:00:00');
-  const activeEntry = card?.timeEntries.find(e => !e.endedAt);
-  const intervalRef = useRef<number>();
-
-  // File input ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (activeEntry) {
-      const update = () => {
-        const elapsed = Math.floor((Date.now() - new Date(activeEntry.startedAt).getTime()) / 1000);
-        const h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
-        const m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
-        const s = (elapsed % 60).toString().padStart(2, '0');
-        setTimerDisplay(`${h}:${m}:${s}`);
-      };
-      update();
-      intervalRef.current = window.setInterval(update, 1000);
-    }
-    return () => clearInterval(intervalRef.current);
-  }, [activeEntry]);
-
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-
-  useEffect(() => {
-    if (cardId) {
-      setIsLoadingDetails(true);
-      fetchCardDetails(cardId).finally(() => setIsLoadingDetails(false));
-    }
-  }, [cardId, fetchCardDetails]);
 
   if (!card) return null;
 
