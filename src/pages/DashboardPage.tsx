@@ -365,7 +365,16 @@ const Dashboard = () => {
     const polaryonTitles = new Set(cards.map(c => c.title.toLowerCase()));
 
     googleEvents.filter(g => fixDate(g.date) <= futureLimit).forEach(g => {
-      if (g.title && !g.title.startsWith('[Polaryon]')) {
+      const isSystemEvent = g.title && (
+        g.title.startsWith('[Polaryon]') || 
+        g.title.startsWith('[✓]') || 
+        g.title.startsWith('[Etapa]') || 
+        g.title.startsWith('[AVISO]') || 
+        g.title.startsWith('[Doc]') ||
+        g.title.startsWith('[Imposto]')
+      );
+
+      if (g.title && !isSystemEvent) {
         const gDate = fixDate(g.date);
         
         // De-duplication: If Google event matches a known Polaryon Card Title, skip it
