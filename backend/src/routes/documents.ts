@@ -5,9 +5,47 @@ import { pushEventToGoogle, deleteEventFromGoogle } from '../services/GoogleCale
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// ==========================================
-// COMPANY DOCUMENTS
-// ==========================================
+// Helper to sync doc events to Google Calendar
+async function syncDocToGoogle(doc: any) {
+    try {
+        if (doc.trashed) {
+            await deleteEventFromGoogle(doc.id);
+            await deleteEventFromGoogle(`${doc.id}_warning`);
+            return;
+        }
+
+        if (doc.expirationDate) {
+            const expDate = new Date(doc.expirationDate);
+            const isoDate = expDate.toISOString().split('T')[0];
+
+            // 1. PUSH MAIN EXPIRATION EVENT
+            await pushEventToGoogle({
+                summary: `[Doc] ${doc.title}`,
+                description: `*[Gerado pelo Polaryon]*\n\nEste documento tem vencimento programado.\nTipo: ${doc.type}\nStatus: ${doc.status}`,
+                start: { date: isoDate },
+                end: { date: isoDate }
+            }, doc.id);
+
+            // 2. PUSH WARNING EVENT (10 days before)
+            const warningDate = new Date(expDate);
+            warningDate.setDate(warningDate.getDate() - 10);
+            const isoWarning = warningDate.toISOString().split('T')[0];
+
+            await pushEventToGoogle({
+                summary: `[AVISO] ${doc.title}`,
+                description: `*[Alerta Polaryon]*\n\nEste documento vence em 10 dias!\nTipo: ${doc.type}\nData Final: ${isoDate}`,
+                start: { date: isoWarning },
+                end: { date: isoWarning }
+            }, `${doc.id}_warning`);
+        } else {
+            // If no expiration date, ensure no events exist
+            await deleteEventFromGoogle(doc.id);
+            await deleteEventFromGoogle(`${doc.id}_warning`);
+        }
+    } catch (err) {
+        console.error(`[CALENDAR_SYNC_FAIL] Document ${doc.id}:`, err);
+    }
+}
 
 router.get('/company', async (req: Request, res: Response) => {
     try {
@@ -49,15 +87,8 @@ router.post('/company', async (req: Request, res: Response) => {
 
         const doc = await prisma.companyDocument.create({ data });
 
-        // Auto-sync to Google Calendar
-        if (doc.expirationDate && !doc.trashed) {
-            pushEventToGoogle({
-                summary: `[Doc] ${doc.title}`,
-                description: `*[Gerado pelo Polaryon]*\n\nEste documento tem vencimento programado.\nTipo: ${doc.type}`,
-                start: { date: new Date(doc.expirationDate).toISOString().split('T')[0] },
-                end: { date: new Date(doc.expirationDate).toISOString().split('T')[0] }
-            }, doc.id).catch(err => console.error("Document background sync failed:", err));
-        }
+        // Auto-sync to Google Calendar (Exp + Warning)
+        syncDocToGoogle(doc); 
 
         res.json(doc);
     } catch (e: any) {
@@ -93,17 +124,8 @@ router.put('/company/:id', async (req: Request, res: Response) => {
             data
         });
 
-        // Sync updates or deletions
-        if (doc.trashed) {
-            deleteEventFromGoogle(doc.id).catch(err => console.error("Document background sync delete failed:", err));
-        } else if (doc.expirationDate) {
-            pushEventToGoogle({
-                summary: `[Doc] ${doc.title}`,
-                description: `*[Gerado pelo Polaryon]*\n\nEste documento tem vencimento programado.\nTipo: ${doc.type}`,
-                start: { date: new Date(doc.expirationDate).toISOString().split('T')[0] },
-                end: { date: new Date(doc.expirationDate).toISOString().split('T')[0] }
-            }, doc.id).catch(err => console.error("Document background sync update failed:", err));
-        }
+        // Sync updates or deletions (Exp + Warning)
+        syncDocToGoogle(doc);
 
         res.json(doc);
     } catch (e: any) {
@@ -113,12 +135,14 @@ router.put('/company/:id', async (req: Request, res: Response) => {
 
 router.delete('/company/:id', async (req: Request, res: Response) => {
     try {
+        const id = req.params.id as string;
         await prisma.companyDocument.delete({
-            where: { id: req.params.id as string }
+            where: { id }
         });
 
         // Cleanup Google Calendar
-        deleteEventFromGoogle(req.params.id as string).catch(err => console.error("Document background sync cleanup failed:", err));
+        deleteEventFromGoogle(id).catch(() => {});
+        deleteEventFromGoogle(`${id}_warning`).catch(() => {});
 
         res.json({ success: true });
     } catch (e: any) {
