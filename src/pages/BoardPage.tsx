@@ -90,7 +90,7 @@ const BoardPage = () => {
     return () => clearTimeout(t);
   }, [undoAction, clearUndoAction]);
 
-  if (!board) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Board não encontrado</div>;
+  const setIsDragging = useKanbanStore(state => state.setIsDragging);
 
   const handleAddList = () => {
     if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
@@ -107,7 +107,7 @@ const BoardPage = () => {
     executeUndo();
   };
 
-  const setIsDragging = useKanbanStore(state => state.setIsDragging);
+  if (!board) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Board não encontrado</div>;
 
   const handleDragEnd = (result: DropResult) => {
     setIsDragging(false);
