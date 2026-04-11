@@ -343,7 +343,7 @@ router.post('/cards', async (req: Request, res: Response) => {
         }
 
         // Auto-sync to Google Calendar - No await to respond faster
-        const list = await prisma.kanbanList.findUnique({ where: { id: listId } });
+        const list = await prisma.kanbanList.findUnique({ where: { id: card.listId } });
         const hasGoogleSync = ((list?.automations as any[]) || []).some((a: any) => a.type === 'sync-google-calendar');
 
         if (hasGoogleSync && !card.archived && !card.trashed) {
