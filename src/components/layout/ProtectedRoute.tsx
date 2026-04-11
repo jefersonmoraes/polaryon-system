@@ -14,17 +14,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    useEffect(() => {
-        // ONLY navigate or decide auth state once hydration is confirmed from LocalStorage.
-        // This prevents the 'flicker' logout where Zustand is momentarily empty on load.
         if (!_hasHydrated) return;
 
+        console.log('[DEBUG] ProtectedRoute State:', { isAuthenticated, role: currentUser?.role, status: currentUser?.status, path: location.pathname });
+
         if (!isAuthenticated) {
+            console.warn('[DEBUG] No authentication found. Redirecting to /login');
             navigate('/login', { replace: true, state: { from: location.pathname } });
             return;
         }
 
         if (currentUser?.status === 'disabled' || currentUser?.status === 'invited') {
+            console.warn('[DEBUG] Account status restricted:', currentUser?.status);
             useAuthStore.getState().logout();
             navigate('/login', { replace: true });
             return;

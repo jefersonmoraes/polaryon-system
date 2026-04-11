@@ -411,25 +411,24 @@ export const useAuthStore = create<AuthState>()(
                 // Monitor for ANY changes to the auth storage from other tabs
                 const syncAuth = (event: StorageEvent) => {
                     if (event.key === 'polaryon-auth-v2') {
-                        // If storage is cleared (logout) or changed (account switch) ⚒️🚀⚙️
                         if (!event.newValue) {
-                            console.warn('Authentication storage cleared in another tab. Logging out locally... ⚒️🚀⚙️');
+                            console.warn('⚠️ [AUTH] Session cleared in another tab.');
                             useAuthStore.setState({ currentUser: null, isAuthenticated: false, jwtToken: null });
                         } else {
                             try {
                                 const newState = JSON.parse(event.newValue).state;
                                 const currentState = useAuthStore.getState();
                                 
-                                // If the token in storage doesn't match our memory, it's a conflict!
                                 if (newState.jwtToken !== currentState.jwtToken) {
-                                    console.warn('Session mismatch detected (Account Swap). Forcing reload to protect data... ⚒️🚀⚙️');
-                                    // Soft logout local state first
-                                    useAuthStore.setState({ currentUser: null, isAuthenticated: false, jwtToken: null });
-                                    // Hard reload is the ONLY way to kill all background processes with User A memory ⚒️🚀⚙️
-                                    window.location.reload();
+                                    console.log('🔄 [AUTH] Session updated from another tab. Syncing state...');
+                                    useAuthStore.setState({ 
+                                        currentUser: newState.currentUser, 
+                                        isAuthenticated: newState.isAuthenticated, 
+                                        jwtToken: newState.jwtToken 
+                                    });
                                 }
                             } catch (e) {
-                                console.error("Error syncing auth cross-tab:", e);
+                                console.error("[AUTH] Sync error:", e);
                             }
                         }
                     }
