@@ -1,13 +1,11 @@
 import express, { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-
+import axios from 'axios';
+import { prisma } from '../lib/prisma';
 import { GOOGLE_CLIENT_ID, JWT_SECRET } from '../config';
 
 const router = express.Router();
-const prisma = new PrismaClient();
-
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 router.post('/google', async (req: Request, res: Response) => {
@@ -21,14 +19,11 @@ router.post('/google', async (req: Request, res: Response) => {
         let payload: any;
 
         if (accessToken) {
-            // Force fetch HD Profile from Google UserInfo API using Access Token
-            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            // Force fetch Profile from Google UserInfo API using Access Token
+            const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
-            if (!response.ok) {
-                 return res.status(401).json({ error: 'Invalid Google Access Token' });
-            }
-            payload = await response.json();
+            payload = response.data;
         } else {
             // 1. Verify the Google Token (Legacy fallback)
             const ticket = await client.verifyIdToken({
@@ -51,7 +46,9 @@ router.post('/google', async (req: Request, res: Response) => {
 
         if (!user) {
             const isAdmin = [
-                'jjcorporation2018@gmail.com'
+                'jjcorporation2018@gmail.com',
+                'jefersonvilela72@gmail.com',
+                'jeferson99jeferson@gmail.com'
             ].includes(email.toLowerCase());
             if (isAdmin) {
                 user = await prisma.user.create({
