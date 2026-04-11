@@ -27,13 +27,56 @@ const AccountingEntries = () => {
     const [modalType, setModalType] = useState<'revenue' | 'expense'>('revenue');
     const [entryToEdit, setEntryToEdit] = useState<string | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'specific_year' | 'all';
+    
+    const [filterMode, setFilterMode] = useState<FilterMode>('current_month');
+    const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [startMonth, setStartMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [endMonth, setEndMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [filterCategory, setFilterCategory] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [filterType, setFilterType] = useState('all');
     const [showFilters, setShowFilters] = useState(false);
     const [showMobileActions, setShowMobileActions] = useState(false);
+
+    const isDateInFilter = (dateStr: string) => {
+        if (!dateStr) return false;
+        const [yearStr, monthStr] = dateStr.split('T')[0].split('-');
+        const dYear = parseInt(yearStr, 10);
+        const dMonth = parseInt(monthStr, 10) - 1;
+
+        const now = new Date();
+        if (filterMode === 'current_month') {
+            return dMonth === now.getMonth() && dYear === now.getFullYear();
+        }
+        if (filterMode === 'specific_month') {
+            const [year, month] = selectedMonth.split('-');
+            return dYear === parseInt(year) && dMonth === parseInt(month) - 1;
+        }
+        if (filterMode === 'custom_period') {
+            if (!startMonth || !endMonth) return true;
+            const [sYear, sMonth] = startMonth.split('-');
+            const [eYear, eMonth] = endMonth.split('-');
+            const startStr = `${sYear}-${sMonth}`;
+            const endStr = `${eYear}-${eMonth}`;
+            const targetStr = `${yearStr}-${monthStr}`;
+            return targetStr >= startStr && targetStr <= endStr;
+        }
+        if (filterMode === 'specific_year') {
+            return dYear === selectedYear;
+        }
+        return true;
+    };
 
     const filteredEntries = useMemo(() => {
         const companyEntries = entries.filter(e => (!activeCompany || e.companyId === activeCompany.id) && !e.trashedAt);
@@ -45,12 +88,12 @@ const AccountingEntries = () => {
                 const matchesType = filterType === 'all' || e.type === filterType;
                 const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
                 const matchesCategory = filterCategory === 'all' || e.categoryId === filterCategory;
-                const matchesDate = (!startDate || e.date >= startDate) && (!endDate || e.date <= endDate + 'T23:59:59.999Z');
+                const matchesDate = isDateInFilter(e.date);
 
                 return matchesSearch && matchesType && matchesStatus && matchesCategory && matchesDate;
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [entries, activeCompany?.id, categories, searchQuery, filterType, filterStatus, filterCategory, startDate, endDate]);
+    }, [entries, activeCompany?.id, categories, searchQuery, filterType, filterStatus, filterCategory, filterMode, selectedMonth, startMonth, endMonth, selectedYear]);
 
     const { totalRevenue, totalPendingRevenue, totalExpense, totalPendingExpense } = useMemo(() => {
         return {
@@ -177,15 +220,62 @@ const AccountingEntries = () => {
 
                     {/* Filtros Avançados */}
                     {showFilters && (
-                        <div className="bg-muted/10 border border-border rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                            <div>
-                                <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Data Inicial</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary" />
+                        <div className="bg-muted/10 border border-border rounded-xl p-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                                <div className="flex flex-col sm:flex-row items-center gap-2 bg-background border border-border p-2 rounded-lg flex-1">
+                                    <Filter className="h-4 w-4 text-muted-foreground mr-1" />
+                                    <select
+                                        value={filterMode}
+                                        onChange={(e) => setFilterMode(e.target.value as FilterMode)}
+                                        className="bg-background text-foreground text-sm border-none rounded-md focus:ring-1 focus:ring-primary cursor-pointer font-medium px-2 py-1 w-full sm:w-auto"
+                                    >
+                                        <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
+                                        <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
+                                        <option className="bg-background text-foreground" value="custom_period">Vários Meses</option>
+                                        <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
+                                        <option className="bg-background text-foreground" value="all">Todo o Período</option>
+                                    </select>
+
+                                    {filterMode === 'specific_month' && (
+                                        <input
+                                            type="month"
+                                            value={selectedMonth}
+                                            onChange={(e) => setSelectedMonth(e.target.value)}
+                                            className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-auto mt-2 sm:mt-0"
+                                        />
+                                    )}
+
+                                    {filterMode === 'custom_period' && (
+                                        <div className="flex items-center gap-1 w-full sm:w-auto mt-2 sm:mt-0">
+                                            <input
+                                                type="month"
+                                                value={startMonth}
+                                                onChange={(e) => setStartMonth(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-32"
+                                            />
+                                            <span className="text-muted-foreground text-sm">até</span>
+                                            <input
+                                                type="month"
+                                                value={endMonth}
+                                                onChange={(e) => setEndMonth(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-32"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {filterMode === 'specific_year' && (
+                                        <input
+                                            type="number"
+                                            value={selectedYear}
+                                            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                            className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-24 mt-2 sm:mt-0"
+                                            min="2000"
+                                            max="2100"
+                                        />
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Data Final</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary" />
-                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Tipo</label>
                                 <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
@@ -210,6 +300,7 @@ const AccountingEntries = () => {
                                         <option className="bg-background text-foreground" key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
+                            </div>
                             </div>
                         </div>
                     )}

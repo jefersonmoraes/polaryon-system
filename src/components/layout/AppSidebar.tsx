@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Database } from 'lucide-react';
 
 const AppSidebar = () => {
   const { mainCompanies } = useKanbanStore();
@@ -248,6 +249,12 @@ const AppSidebar = () => {
                 <Link to="/company" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/company' && !location.search.includes('id=') ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Nova Administradora">
                   <Plus className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Nova Administradora</span>}
                 </Link>
+
+                {useAuthStore.getState().currentUser?.role === 'ADMIN' && (
+                  <Link to="/admin/backups" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors mb-2 ${location.pathname === '/admin/backups' ? 'bg-primary text-primary-foreground font-medium border border-primary text-white shadow-sm' : 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/20'}`} title="Backups de Segurança">
+                    <Database className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Backups de Segurança</span>}
+                  </Link>
+                )}
 
                 {mainCompanies.map(company => (
                   <Link

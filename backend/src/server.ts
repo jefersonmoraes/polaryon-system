@@ -27,11 +27,14 @@ import activityRoutes from './routes/activity';
 import maintenanceRoutes from './routes/maintenance';
 import transferegovRoutes from './routes/transferegov';
 import biddingRoutes from './routes/bidding';
+import backupsRoutes from './routes/backups';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
+import { initBackupCron } from './services/backup-service';
 
 // Initialize Scheduled Tasks
 initComplianceCron();
+initBackupCron();
 
 // Security and Parsing Middlewares
 app.use(compression());
@@ -107,6 +110,7 @@ app.use('/api/activity', activityRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/transferegov', transferegovRoutes);
 app.use('/api/bidding', biddingRoutes);
+app.use('/api/backups', backupsRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {
