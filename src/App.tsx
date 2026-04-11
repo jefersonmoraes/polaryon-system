@@ -71,6 +71,15 @@ const AppContent = () => {
 
   useEffect(() => {
     document.body.style.zoom = uiZoom as any;
+
+    // Handle Vite dynamic import errors (Mismatch of hashes after new builds)
+    const handlePreloadError = (event: Event) => {
+      console.log('Preload error detected, reloading page...', event);
+      window.location.reload();
+    };
+
+    window.addEventListener('vite:preloadError', handlePreloadError);
+    return () => window.removeEventListener('vite:preloadError', handlePreloadError);
   }, [uiZoom]);
 
   useEffect(() => {
