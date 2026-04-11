@@ -132,3 +132,5 @@ export const BackupsPage = () => {
         </div>
     );
 };
+
+export default BackupsPage;
