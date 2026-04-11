@@ -1150,7 +1150,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               <div className="space-y-1.5">
                 {card.attachments.map(att => (
                   <div key={att.id} className="flex items-center gap-2 bg-secondary rounded p-2 group">
-                    {att.type.startsWith('image/') ? (
+                    {att.type?.startsWith('image/') ? (
                       <img src={att.url} alt={att.name} className="w-10 h-10 rounded object-cover" />
                     ) : (
                       <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
@@ -1163,7 +1163,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     </div>
                     <div className="flex items-center gap-1">
                       <button 
-                        onClick={() => setPreviewData({ isOpen: true, url: att.url, name: att.name, type: att.type.startsWith('image/') ? 'image' : att.type === 'application/pdf' ? 'pdf' : undefined })}
+                        onClick={() => setPreviewData({ isOpen: true, url: att.url, name: att.name, type: att.type?.startsWith('image/') ? 'image' : att.type === 'application/pdf' ? 'pdf' : undefined })}
                         className="p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                         title="Visualizar"
                       >
@@ -1746,7 +1746,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       className="w-full bg-transparent text-xs outline-none border-b border-transparent focus:border-primary disabled:opacity-80 disabled:cursor-not-allowed"
                     />
                     {customLink && (
-                      <a href={customLink.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors shrink-0" title="Abrir Link Externo">
+                      <a href={customLink?.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors shrink-0" title="Abrir Link Externo">
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
