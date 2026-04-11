@@ -33,6 +33,7 @@ export default function GlobalCalendarPage() {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
     const [viewType, setViewType] = useState<'month' | 'week' | 'day'>('month');
+    const [isGoogleConnected, setIsGoogleConnected] = useState<boolean | null>(null); // null = unknown/loading ⚒️🚀⚙️
 
     // Feriados da Brasil API
     const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([]);
@@ -76,8 +77,10 @@ export default function GlobalCalendarPage() {
             // Check for both success and the soft needsAuth status ⚒️🚀⚙️
             if (res.data.success && res.data.events) {
                 setGoogleEvents(res.data.events);
+                setIsGoogleConnected(true);
             } else if (res.data.needsAuth) {
                 console.log("GlobalCalendar: Google auth required. Use manual sync to link. ⚒️🚀⚙️");
+                setIsGoogleConnected(false);
             }
         } catch (err: any) {
             // Silently ignore Errors on passive load to keep console 100% clean ⚒️🚀⚙️
@@ -118,17 +121,21 @@ export default function GlobalCalendarPage() {
 
             if (res.data.success && res.data.events) {
                 setGoogleEvents(res.data.events);
+                setIsGoogleConnected(true);
                 toast.success("Conexão e sincronização concluída com sucesso!", { id: 'gcal' });
             } else if (res.data.needsAuth) {
+                setIsGoogleConnected(false);
                 toast.dismiss('gcal');
                 const authUrl = res.data.authUrl;
                 toast.info("Aguarde, redirecionando para autorizar no Google de forma Segura...", { duration: 8000 });
                 setTimeout(() => window.location.assign(authUrl), 1500);
             } else {
+                setIsGoogleConnected(false);
                 toast.error("Servidor recusou a sincronização. Verifique os logs.", { id: 'gcal' });
             }
         } catch (err: any) {
             console.error("Calendar Sync Error:", err);
+            setIsGoogleConnected(false);
             if (err.response?.status === 401 && err.response?.data?.error === 'NEEDS_AUTH') {
                 toast.dismiss('gcal');
                 const authUrl = err.response.data.authUrl;
@@ -301,6 +308,16 @@ export default function GlobalCalendarPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mr-2 px-3 py-1.5 rounded-lg bg-secondary/30 border border-border/50">
+                            <div className={`w-2 h-2 rounded-full ${
+                                isGoogleConnected === true ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+                                isGoogleConnected === false ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 
+                                'bg-slate-400 animate-pulse'
+                            }`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground shadow-sm">
+                                Google: {isGoogleConnected === true ? 'Ativo' : isGoogleConnected === false ? 'Expirado' : 'Checando...'}
+                            </span>
+                        </div>
                         {currentUser?.email?.toLowerCase().startsWith('jjcorporation') && (
                             <button 
                                 onClick={syncWithGoogleCalendar} 
