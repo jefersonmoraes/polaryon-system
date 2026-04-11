@@ -21,6 +21,8 @@ const Dashboard = () => {
   const canAccounting = hasScreenAccess('ACCOUNTING');
 
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [isGoogleConnected, setIsGoogleConnected] = useState<boolean | null>(null); // null = loading ⚒️🚀⚙️
+  const [backupHealth, setBackupHealth] = useState<'healthy' | 'error' | 'loading'>('loading'); // ⚒️🚀⚙️
   const [stats, setStats] = useState<any[]>([]);
   const [weeklyActivity, setWeeklyActivity] = useState<number>(0);
   const { isDark } = useUserPrefsStore();
@@ -29,21 +31,43 @@ const Dashboard = () => {
     const loadGoogleEvents = async () => {
       try {
         const res = await api.get('/calendar/events');
-        // Now handles 200 NeedsAuth response from backend to keep console 100% clean ⚒️🚀⚙️
         if (res.data.success && res.data.events) {
           setGoogleEvents(res.data.events);
+          setIsGoogleConnected(true);
         } else if (res.data.needsAuth) {
+          setIsGoogleConnected(false);
           console.log("Dashboard: Google Calendar not linked. Skipping events load silently. ⚒️🚀⚙️");
         }
       } catch (err) {
-        // Only log if it's a real unexpected error, not a 401/needsAuth
+        setIsGoogleConnected(false);
         if (process.env.NODE_ENV === 'development') {
            console.warn("Minor: Google Events background load skipped.", err);
         }
       }
     };
+
+    const fetchBackupStatus = async () => {
+        if (!isAdmin) return;
+        try {
+            const res = await api.get('/backups');
+            if (Array.isArray(res.data)) {
+                // Determine health: if we have a recent (today/yesterday) backup with size > 0
+                const latest = res.data[0];
+                if (latest && latest.status === 'healthy') {
+                    setBackupHealth('healthy');
+                } else {
+                    setBackupHealth('error');
+                }
+            }
+        } catch (e) {
+            console.error("Dashboard: Failed to fetch backup health.", e);
+            setBackupHealth('error');
+        }
+    };
+
     loadGoogleEvents();
-  }, []);
+    fetchBackupStatus();
+  }, [isAdmin]);
 
   const folders = useKanbanStore(state => state.folders);
   const boards = useKanbanStore(state => state.boards);
@@ -383,6 +407,29 @@ const Dashboard = () => {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto">
         <h1 className="text-2xl font-bold mb-1">Meu Espaço</h1>
         <p className="text-muted-foreground text-sm mb-4">Bem-vindo(a), {currentUser?.name?.split(' ')[0] || 'Usuário'}. Aqui está o resumo das suas atividades.</p>
+
+        {/* System Health Status Bar ⚒️🚀⚙️ */}
+        <div className="flex items-center gap-4 mb-6 px-4 py-2 bg-secondary/20 rounded-lg border border-border/50 backdrop-blur-sm w-fit">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              isGoogleConnected === true ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+              isGoogleConnected === false ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 
+              'bg-slate-400 animate-pulse'
+            }`} title={isGoogleConnected === true ? "Sincronização Ativa" : isGoogleConnected === false ? "Conexão Expirada" : "Verificando..."} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Google Sync</span>
+          </div>
+          
+          <div className="w-px h-3 bg-border" />
+
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              backupHealth === 'healthy' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+              backupHealth === 'error' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 
+              'bg-slate-400 animate-pulse'
+            }`} title={backupHealth === 'healthy' ? "Dados Seguros (24h)" : backupHealth === 'error' ? "Falha no Backup" : "Verificando..."} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Backup Health</span>
+          </div>
+        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-6 p-3 bg-card rounded-lg border border-border">
