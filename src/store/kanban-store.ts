@@ -1228,7 +1228,7 @@ export const useKanbanStore = create<KanbanState>()(
             get().reorderCardsByMilestones(card.listId);
         }
 
-        }
+
         
         socketService.emit('system_action', { store: 'KANBAN', type: 'UPDATE_CARD', payload: { id, data } });
 
