@@ -27,9 +27,11 @@ const AccountingEntries = () => {
     const [modalType, setModalType] = useState<'revenue' | 'expense'>('revenue');
     const [entryToEdit, setEntryToEdit] = useState<string | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
-    type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'specific_year' | 'all';
+    type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'exact_period' | 'specific_year' | 'all';
     
     const [filterMode, setFilterMode] = useState<FilterMode>('current_month');
+    const [exactStartDate, setExactStartDate] = useState<string>('');
+    const [exactEndDate, setExactEndDate] = useState<string>('');
     const [selectedMonth, setSelectedMonth] = useState<string>(() => {
         const now = new Date();
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -72,6 +74,13 @@ const AccountingEntries = () => {
             const targetStr = `${yearStr}-${monthStr}`;
             return targetStr >= startStr && targetStr <= endStr;
         }
+        if (filterMode === 'exact_period') {
+            if (!exactStartDate && !exactEndDate) return true;
+            const targetStr = dateStr.split('T')[0];
+            if (exactStartDate && targetStr < exactStartDate) return false;
+            if (exactEndDate && targetStr > exactEndDate) return false;
+            return true;
+        }
         if (filterMode === 'specific_year') {
             return dYear === selectedYear;
         }
@@ -93,7 +102,7 @@ const AccountingEntries = () => {
                 return matchesSearch && matchesType && matchesStatus && matchesCategory && matchesDate;
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [entries, activeCompany?.id, categories, searchQuery, filterType, filterStatus, filterCategory, filterMode, selectedMonth, startMonth, endMonth, selectedYear]);
+    }, [entries, activeCompany?.id, categories, searchQuery, filterType, filterStatus, filterCategory, filterMode, selectedMonth, startMonth, endMonth, selectedYear, exactStartDate, exactEndDate]);
 
     const { totalRevenue, totalPendingRevenue, totalExpense, totalPendingExpense } = useMemo(() => {
         return {
@@ -232,6 +241,7 @@ const AccountingEntries = () => {
                                         <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
                                         <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
                                         <option className="bg-background text-foreground" value="custom_period">Vários Meses</option>
+                                        <option className="bg-background text-foreground" value="exact_period">Dias Específicos</option>
                                         <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
                                         <option className="bg-background text-foreground" value="all">Todo o Período</option>
                                     </select>
@@ -259,6 +269,24 @@ const AccountingEntries = () => {
                                                 value={endMonth}
                                                 onChange={(e) => setEndMonth(e.target.value)}
                                                 className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-32"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {filterMode === 'exact_period' && (
+                                        <div className="flex items-center gap-1 w-full sm:w-auto mt-2 sm:mt-0">
+                                            <input
+                                                type="date"
+                                                value={exactStartDate}
+                                                onChange={(e) => setExactStartDate(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-36"
+                                            />
+                                            <span className="text-muted-foreground text-sm">até</span>
+                                            <input
+                                                type="date"
+                                                value={exactEndDate}
+                                                onChange={(e) => setExactEndDate(e.target.value)}
+                                                className="bg-background border border-border rounded-md text-sm px-2 py-1 focus:outline-none focus:border-primary w-full sm:w-36"
                                             />
                                         </div>
                                     )}
