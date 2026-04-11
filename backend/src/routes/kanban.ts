@@ -56,7 +56,7 @@ router.get('/folders', async (req: Request, res: Response) => {
 
 router.post('/folders', async (req: Request, res: Response) => {
     try {
-        const { boards, ...data } = req.body;
+        const { boards, createdAt, updatedAt, ...data } = req.body;
         const folder = await prisma.folder.create({ data });
         res.json(folder);
     } catch (e: any) {
@@ -107,7 +107,7 @@ router.get('/boards', async (req: Request, res: Response) => {
 
 router.post('/boards', async (req: Request, res: Response) => {
     try {
-        const { lists, ...data } = req.body;
+        const { lists, createdAt, updatedAt, ...data } = req.body;
         const board = await prisma.board.create({ data });
         res.json(board);
     } catch (e: any) {
@@ -185,7 +185,7 @@ router.get('/lists', async (req: Request, res: Response) => {
 
 router.post('/lists', async (req: Request, res: Response) => {
     try {
-        const { cards, ...data } = req.body;
+        const { cards, createdAt, updatedAt, ...data } = req.body;
         const list = await prisma.kanbanList.create({ data });
         res.json(list);
     } catch (e: any) {
@@ -217,7 +217,8 @@ router.delete('/lists/:id', async (req: Request, res: Response) => {
 // LABELS
 router.post('/labels', async (req: Request, res: Response) => {
     try {
-        const label = await prisma.label.create({ data: req.body });
+        const { id, createdAt, updatedAt, ...data } = req.body;
+        const label = await prisma.label.create({ data });
         res.json(label);
     } catch (e: any) {
         // Just mock it if table doesn't exist to prevent crashes
