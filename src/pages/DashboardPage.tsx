@@ -27,24 +27,25 @@ const Dashboard = () => {
   const [weeklyActivity, setWeeklyActivity] = useState<number>(0);
   const { isDark } = useUserPrefsStore();
 
-  useEffect(() => {
-    const loadGoogleEvents = async () => {
-      try {
-        const res = await api.get('/calendar/events');
-        if (res.data.success && res.data.events) {
-          setGoogleEvents(res.data.events);
-          setIsGoogleConnected(true);
-        } else if (res.data.needsAuth) {
-          setIsGoogleConnected(false);
-          console.log("Dashboard: Google Calendar not linked. Skipping events load silently. ⚒️🚀⚙️");
-        }
-      } catch (err) {
+  const loadGoogleEvents = async () => {
+    try {
+      const res = await api.get('/calendar/events');
+      if (res.data.success && res.data.events) {
+        setGoogleEvents(res.data.events);
+        setIsGoogleConnected(true);
+      } else if (res.data.needsAuth) {
         setIsGoogleConnected(false);
-        if (process.env.NODE_ENV === 'development') {
-           console.warn("Minor: Google Events background load skipped.", err);
-        }
+        console.log("Dashboard: Google Calendar not linked. Skipping events load silently. ⚒️🚀⚙️");
       }
-    };
+    } catch (err) {
+      setIsGoogleConnected(false);
+      if (process.env.NODE_ENV === 'development') {
+         console.warn("Minor: Google Events background load skipped.", err);
+      }
+    }
+  };
+
+  useEffect(() => {
 
     const fetchBackupStatus = async () => {
         if (!isAdmin) return;
@@ -236,27 +237,37 @@ const Dashboard = () => {
 
     const getProgression = (dDate: Date) => {
       const d = new Date(dDate);
-      const diffMs = d.getTime() - new Date().getTime();
+      const agora = new Date();
+      const hoje = getHojeBRT();
+      
+      const diffMs = d.getTime() - agora.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 3600 * 24));
       const diffHours = Math.ceil(diffMs / (1000 * 3600));
       
+      const isHoje = d.getFullYear() === hoje.getFullYear() && 
+                     d.getMonth() === hoje.getMonth() && 
+                     d.getDate() === hoje.getDate();
+      
+      const isAtrasado = !isHoje && diffMs < 0;
+
       let timeRemaining = "";
-      if (diffMs < 0) {
+      if (isAtrasado) {
         const absDays = Math.abs(diffDays);
-        timeRemaining = absDays === 0 ? "Atrasado (horas)" : `Atrasado ${absDays}d`;
+        timeRemaining = absDays === 0 ? "Atrasado (recentemente)" : `Atrasado ${absDays}d`;
+      } else if (isHoje) {
+        timeRemaining = diffMs < 0 ? "Hoje (Agora)" : (diffHours <= 1 ? "Em breve" : `${diffHours}h p/ fim`);
       } else {
-        if (diffDays === 0) timeRemaining = `${diffHours}h restantes`;
-        else timeRemaining = `Faltam ${diffDays}d`;
+        timeRemaining = `Faltam ${diffDays}d`;
       }
 
-      if (diffMs < 0) return { text: `[VENCIDA] `, timeRemaining, color: 'text-red-500 font-extrabold bg-red-500/20 px-1 rounded animate-[pulse_0.5s_ease-in-out_infinite]', icon: AlertCircle };
-      if (diffDays === 0) return { text: `[HOJE ⚠️] `, timeRemaining, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse:1.5s_ease-in-out_infinite]', icon: AlertTriangle };
+      if (isAtrasado) return { text: `[VENCIDA] `, timeRemaining, color: 'text-red-500 font-extrabold bg-red-500/20 px-1 rounded animate-[pulse_0.5s_ease-in-out_infinite]', icon: AlertCircle };
+      if (isHoje) return { text: `[HOJE ⚠️] `, timeRemaining, color: 'text-orange-500 font-bold bg-orange-500/20 px-1 rounded animate-[pulse:1.5s_ease-in-out_infinite]', icon: AlertTriangle };
       if (diffDays <= 2) return { text: `[Faltam ${diffDays}d] `, timeRemaining, color: 'text-yellow-600 font-bold bg-yellow-500/15 px-1 rounded animate-[pulse_2s_ease-in-out_infinite]', icon: Clock };
       if (diffDays <= 5) return { text: `[Em ${diffDays}d] `, timeRemaining, color: 'text-blue-500 font-medium', icon: CalendarIcon };
       return { text: '', timeRemaining, color: 'text-primary', icon: CalendarDays };
     };
 
-    const tempEvents: { id: string; title: string; date: Date; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string; cardId?: string; significance: number }[] = [];
+    const tempEvents: { id: string; title: string; date: Date; hour?: string; type: string; color: string; icon: React.ElementType; url?: string; timeRemaining?: string; cardId?: string; significance: number }[] = [];
 
     // 1. Kanban & Milestones
     if (canKanban) {
@@ -295,6 +306,7 @@ const Dashboard = () => {
               title: `[Etapa] ${m.title} - ${c.title}`, 
               timeRemaining: prog.timeRemaining,
               date: mDate, 
+              hour: m.hour || undefined,
               type: 'milestone', 
               color: prog.color, 
               icon: isLances ? AlertCircle : Zap, 
@@ -369,11 +381,18 @@ const Dashboard = () => {
               if (cleanedDesc) displayTitle = `${cleanedDesc} (${displayTitle})`;
           }
 
+          let extractedHour = undefined;
+          if (g.date && g.date.includes('T')) {
+            const timePart = g.date.split('T')[1];
+            extractedHour = timePart.substring(0, 5); // HH:mm
+          }
+
           tempEvents.push({ 
             id: g.id, 
             title: displayTitle, 
             timeRemaining: prog.timeRemaining,
             date: gDate, 
+            hour: extractedHour,
             type: 'google', 
             color: prog.text === '' ? 'text-purple-500' : prog.color, 
             icon: prog.text === '' ? CalendarIcon : prog.icon,
@@ -589,10 +608,19 @@ const Dashboard = () => {
 
             {/* Global Upcoming tasks */}
             <div className="bg-card rounded-lg border border-border p-4 flex flex-col h-[400px] overflow-hidden mb-8">
-              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 shrink-0">
-                <CalendarDays className="h-4 w-4 text-accent" />
-                Próximas Datas Importantes
-              </h2>
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-accent" />
+                  Próximas Datas Importantes
+                </h2>
+                <button 
+                  onClick={() => loadGoogleEvents()} 
+                  className="p-1.5 rounded-full hover:bg-secondary text-muted-foreground transition-all hover:rotate-180 duration-500"
+                  title="Sincronizar com Google Agenda"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2 content-start">
                 {allUpcomingEvents.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-8 text-center flex flex-col items-center gap-2 md:col-span-2 xl:col-span-3">
@@ -613,9 +641,10 @@ const Dashboard = () => {
                            <span className={`text-[9.5px] font-bold uppercase tracking-wider ${event.color.split(' ')[0]}`}>
                              {event.timeRemaining}
                            </span>
-                           <span className="text-[9.5px] font-medium text-muted-foreground bg-background/40 px-1 rounded">
+                           <div className="flex items-center gap-2 text-[9.5px] font-medium text-muted-foreground bg-background/40 px-1 rounded">
                              {event.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                           </span>
+                             {event.hour && <span className="border-l border-border pl-1.5 ml-0.5 font-bold text-foreground/70">{event.hour}</span>}
+                           </div>
                         </div>
                       </>
                     );
