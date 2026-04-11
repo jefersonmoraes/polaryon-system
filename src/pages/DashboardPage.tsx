@@ -3,7 +3,7 @@ import { useAccountingStore } from '@/store/accounting-store';
 import { useDocumentStore } from '@/store/document-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
-import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap } from 'lucide-react';
+import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, Filter, Tag, Star, Building2, Truck, Briefcase, BellRing, CalendarDays, FileText, PiggyBank, Calculator, AlertCircle, Info, Calendar as CalendarIcon, Zap, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -12,7 +12,7 @@ import api from '@/lib/api';
 import { fixDateToBRT } from '@/lib/utils';
 
 const Dashboard = () => {
-  const { currentUser, hasScreenAccess } = useAuthStore();
+  const { currentUser, hasScreenAccess, onlineUsers, isSocketConnected } = useAuthStore();
   const isAdmin = currentUser?.role === 'ADMIN';
 
   const canKanban = hasScreenAccess('KANBAN');
@@ -428,6 +428,18 @@ const Dashboard = () => {
               'bg-slate-400 animate-pulse'
             }`} title={backupHealth === 'healthy' ? "Dados Seguros (24h)" : backupHealth === 'error' ? "Falha no Backup" : "Verificando..."} />
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Backup Health</span>
+          </div>
+
+          <div className="w-px h-3 bg-border" />
+
+          <div className="flex items-center gap-2 pr-1">
+             <div className={`w-2 h-2 rounded-full ${
+                isSocketConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500 animate-pulse'
+             }`} />
+             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                <Users className="w-3 h-3" />
+                {onlineUsers.length} {onlineUsers.length === 1 ? 'Usuário' : 'Usuários'} Online
+             </span>
           </div>
         </div>
 
