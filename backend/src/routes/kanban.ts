@@ -444,6 +444,25 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         // --- PARALLEL RELATED UPDATES ---
         const updatePromises: Promise<any>[] = [];
 
+        // --- CASCADING BUDGETS ---
+        // If archived or trashed status changed, update linked budgets
+        if (updateData.archived !== undefined) {
+            updatePromises.push(prisma.budget.updateMany({
+                where: { cardId },
+                data: { archived: updateData.archived }
+            }));
+        }
+
+        if (updateData.trashed !== undefined) {
+            updatePromises.push(prisma.budget.updateMany({
+                where: { cardId },
+                data: { 
+                    trashed: updateData.trashed,
+                    trashedAt: updateData.trashed ? new Date() : null
+                }
+            }));
+        }
+
         // Update Labels relationship (Array of Strings to link table)
         if (labels !== undefined) {
             updatePromises.push((async () => {
@@ -648,7 +667,12 @@ router.post('/cards/reorder', async (req: Request, res: Response) => {
 
 router.delete('/cards/:id', async (req: Request, res: Response) => {
     try {
-        await prisma.card.delete({ where: { id: req.params.id as string } });
+        const cardId = req.params.id as string;
+
+        // Manual Cascading Delete for Budgets
+        await prisma.budget.deleteMany({ where: { cardId } });
+
+        await prisma.card.delete({ where: { id: cardId } });
 
         // Auto-cleanup on hard delete
         deleteEventFromGoogle(req.params.id as string).catch(err => console.error("Background sync delete failed:", err));
