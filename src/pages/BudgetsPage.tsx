@@ -460,7 +460,7 @@ const BudgetsPage = () => {
                                 newParams.delete('budgetId');
                                 setSearchParams(newParams, { replace: true });
                             }
-                        }}
+                    />
                 )
             }
 
