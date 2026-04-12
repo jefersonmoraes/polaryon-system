@@ -459,8 +459,15 @@ export default function OportunidadesSearch() {
     const folders = useKanbanStore(state => state?.folders) || [];
     const boards = useKanbanStore(state => state?.boards) || [];
     const lists = useKanbanStore(state => state?.lists) || [];
+    const cards = useKanbanStore(state => state?.cards) || [];
     const allMembers = useKanbanStore(state => state?.members);
     const currentUser = (allMembers || [])[0] || null;
+
+    // Helper to check if item is already in Kanban
+    const isAlreadyInKanban = useCallback((item: PncpItem) => {
+        const pncpId = item.numero_controle_pncp || item.orgao_cnpj;
+        return cards.some(c => c.pncpId === pncpId || (c.customLink && item.item_url && c.customLink.includes(item.item_url)));
+    }, [cards]);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [directExportItem, setDirectExportItem] = useState<PncpItem | null>(null);
     const [exportFolderId, setExportFolderId] = useState('');
@@ -1109,14 +1116,26 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border bg-background">
-                                    {results.map((item, index) => (
-                                        <tr
-                                            key={item.id || index}
-                                            onClick={() => setSelectedItem(item)}
-                                            className="hover:bg-muted/50 cursor-pointer transition-colors group"
-                                        >
+                                    {results.map((item, index) => {
+                                        const exists = isAlreadyInKanban(item);
+                                        return (
+                                            <tr
+                                                key={item.id || index}
+                                                onClick={() => setSelectedItem(item)}
+                                                className={cn(
+                                                    "hover:bg-muted/50 cursor-pointer transition-all group border-l-2",
+                                                    exists ? "opacity-40 grayscale-[0.8] border-l-transparent" : "border-l-primary/0 hover:border-l-primary/100"
+                                                )}
+                                            >
                                             <td className="px-4 py-3.5 align-top">
-                                                <PncpBadgeStatus item={item} />
+                                                <div className="flex flex-col gap-1.5">
+                                                    <PncpBadgeStatus item={item} />
+                                                    {exists && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-black bg-primary text-primary-foreground px-1.5 py-0.5 rounded shadow-sm w-fit uppercase tracking-tighter">
+                                                            <KanbanSquare className="h-2.5 w-2.5" /> NO KANBAN
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3.5 align-top text-muted-foreground">
                                                 {formatDate(item.data_publicacao_pncp)}
@@ -1156,16 +1175,22 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                             <td className="px-4 py-3.5 align-top text-right" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button 
-                                                        title="Importar para Kanban"
+                                                        title={exists ? "Já importado" : "Importar para Kanban"}
+                                                        disabled={exists}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setDirectExportItem(item);
                                                             setIsExportDialogOpen(true);
                                                         }}
-                                                        className="h-7 px-2 rounded bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors flex items-center gap-1 opacity-0 group-hover:opacity-100"
+                                                        className={cn(
+                                                            "h-7 px-2 rounded transition-all flex items-center gap-1 shadow-sm",
+                                                            exists 
+                                                                ? "bg-muted text-muted-foreground opacity-100 ring-1 ring-border" 
+                                                                : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground opacity-0 group-hover:opacity-100"
+                                                        )}
                                                     >
-                                                        <KanbanSquare className="h-3.5 w-3.5" />
-                                                        <span className="text-[10px] font-bold uppercase tracking-wider">Importar</span>
+                                                        {exists ? <CheckSquare className="h-3.5 w-3.5" /> : <KanbanSquare className="h-3.5 w-3.5" />}
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider">{exists ? 'Importado' : 'Importar'}</span>
                                                     </button>
                                                     <div 
                                                         onClick={() => setSelectedItem(item)}
@@ -1183,12 +1208,22 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
 
                         {/* Mobile Card View */}
                         <div className="md:hidden p-4 space-y-4">
-                            {results.map((item, index) => (
-                                <div
-                                    key={item.id || index}
-                                    onClick={() => setSelectedItem(item)}
-                                    className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3 active:scale-[0.98] transition-all"
-                                >
+                                {results.map((item, index) => {
+                                    const exists = isAlreadyInKanban(item);
+                                    return (
+                                        <div
+                                            key={item.id || index}
+                                            onClick={() => setSelectedItem(item)}
+                                            className={cn(
+                                                "bg-card border border-border rounded-xl p-4 shadow-sm space-y-3 active:scale-[0.98] transition-all relative overflow-hidden",
+                                                exists ? "opacity-50 grayscale-[0.3]" : ""
+                                            )}
+                                        >
+                                            {exists && (
+                                                <div className="absolute top-0 right-0 p-1">
+                                                    <div className="bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg uppercase">Já no Kanban</div>
+                                                </div>
+                                            )}
                                     <div className="flex justify-between items-start gap-2">
                                         <PncpBadgeStatus item={item} />
                                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded">
@@ -1229,16 +1264,22 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         
                                         <div className="flex items-center gap-3">
                                             <button 
-                                                title="Importar para Kanban"
+                                                title={exists ? "Já importado" : "Importar para Kanban"}
+                                                disabled={exists}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setDirectExportItem(item);
                                                     setIsExportDialogOpen(true);
                                                 }}
-                                                className="h-8 px-3 rounded-md bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors flex items-center gap-1.5"
+                                                className={cn(
+                                                    "h-8 px-3 rounded-md transition-all flex items-center gap-1.5 shadow-sm",
+                                                    exists
+                                                        ? "bg-muted text-muted-foreground ring-1 ring-border"
+                                                        : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
+                                                )}
                                             >
-                                                <KanbanSquare className="h-4 w-4" />
-                                                <span className="text-[10px] font-bold uppercase tracking-wider">Importar</span>
+                                                {exists ? <CheckSquare className="h-4 w-4" /> : <KanbanSquare className="h-4 w-4" />}
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">{exists ? 'No Kanban' : 'Importar'}</span>
                                             </button>
                                             <ChevronRight className="h-4 w-4 text-primary" />
                                         </div>
