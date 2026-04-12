@@ -446,21 +446,61 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
 
         // --- CASCADING BUDGETS ---
         // If archived or trashed status changed, update linked budgets
-        if (updateData.archived !== undefined) {
-            updatePromises.push(prisma.budget.updateMany({
-                where: { cardId },
-                data: { archived: updateData.archived }
-            }));
-        }
+        if (updateData.archived !== undefined || updateData.trashed !== undefined) {
+            updatePromises.push((async () => {
+                // Find affected budgets first to know their IDs for broadcasting
+                const affectedBudgets = await prisma.budget.findMany({
+                    where: { cardId },
+                    select: { id: true }
+                });
 
-        if (updateData.trashed !== undefined) {
-            updatePromises.push(prisma.budget.updateMany({
-                where: { cardId },
-                data: { 
-                    trashed: updateData.trashed,
-                    trashedAt: updateData.trashed ? new Date() : null
+                if (affectedBudgets.length > 0) {
+                    const budgetIds = affectedBudgets.map(b => b.id);
+
+                    if (updateData.archived !== undefined) {
+                        await prisma.budget.updateMany({
+                            where: { id: { in: budgetIds } },
+                            data: { archived: updateData.archived }
+                        });
+                        
+                        // Broadcast update to each budget
+                        try {
+                            const { getIO } = require('../socket');
+                            const io = getIO();
+                            budgetIds.forEach(id => {
+                                io.emit('system_sync', { 
+                                    store: 'KANBAN', 
+                                    type: 'UPDATE_BUDGET', 
+                                    payload: { id, data: { archived: updateData.archived } } 
+                                });
+                            });
+                        } catch (err) { console.error("Socket broadcast failed:", err); }
+                    }
+
+                    if (updateData.trashed !== undefined) {
+                        await prisma.budget.updateMany({
+                            where: { id: { in: budgetIds } },
+                            data: { 
+                                trashed: updateData.trashed,
+                                trashedAt: updateData.trashed ? new Date() : null
+                            }
+                        });
+
+                        // Broadcast trash/restore to each budget
+                        try {
+                            const { getIO } = require('../socket');
+                            const io = getIO();
+                            budgetIds.forEach(id => {
+                                io.emit('system_sync', { 
+                                    store: 'KANBAN', 
+                                    type: updateData.trashed ? 'TRASH_BUDGET' : 'RESTORE_BUDGET', 
+                                    payload: { id } 
+                                });
+                            });
+                        } catch (err) { console.error("Socket broadcast failed:", err); }
+                    }
                 }
-            }));
+            })());
         }
 
         // Update Labels relationship (Array of Strings to link table)
@@ -669,8 +709,25 @@ router.delete('/cards/:id', async (req: Request, res: Response) => {
     try {
         const cardId = req.params.id as string;
 
+        // Find budgets to delete for broadcasting
+        const budgetsToDelete = await prisma.budget.findMany({
+            where: { cardId },
+            select: { id: true }
+        });
+
         // Manual Cascading Delete for Budgets
         await prisma.budget.deleteMany({ where: { cardId } });
+
+        // Broadcast budget deletion
+        if (budgetsToDelete.length > 0) {
+            try {
+                const { getIO } = require('../socket');
+                const io = getIO();
+                budgetsToDelete.forEach(b => {
+                    io.emit('system_sync', { store: 'KANBAN', type: 'DELETE_BUDGET', payload: { id: b.id } });
+                });
+            } catch (err) { console.error("Socket broadcast failed:", err); }
+        }
 
         await prisma.card.delete({ where: { id: cardId } });
 
