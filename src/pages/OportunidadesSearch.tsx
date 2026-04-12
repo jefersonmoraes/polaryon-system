@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock } from 'lucide-react';
+import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock, CheckSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader } from '@/components/ui/dialog';
 import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap, Paperclip } from 'lucide-react';
 import { socketService } from '@/lib/socket';
 import { FilePreviewModal } from '@/components/ui/FilePreviewModal';
-import { getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
+import { getSafeProxyUrl, normalizeFileUrl, cn } from '@/lib/utils';
 
 const getStatusStyle = (situacao: string) => {
     const lower = (situacao || '').toLowerCase();
