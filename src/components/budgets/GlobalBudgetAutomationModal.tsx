@@ -5,6 +5,9 @@ import { X, Zap, Plus, Trash2, Layout, Settings2, CheckCircle2, Clock, XCircle, 
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronDown } from 'lucide-react';
+
 interface Props {
   onClose: () => void;
 }
@@ -123,22 +126,30 @@ const GlobalBudgetAutomationModal = ({ onClose }: Props) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Se o cartão entrar na fase:</label>
-                <select
-                  value={selectedListId}
-                  onChange={(e) => setSelectedListId(e.target.value)}
-                  className="w-full bg-secondary/30 border border-border/50 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
-                >
-                  <option value="">Selecione uma fase do funil...</option>
-                  {boards.map(board => (
-                      <optgroup key={board.id} label={board.name} className="font-bold py-2">
-                          {lists.filter(l => l.boardId === board.id).map(list => (
-                              <option key={list.id} value={list.id} className="font-medium">
-                                  {list.title}
-                              </option>
-                          ))}
-                      </optgroup>
-                  ))}
-                </select>
+                
+                <Select value={selectedListId} onValueChange={setSelectedListId}>
+                  <SelectTrigger className="w-full bg-secondary/30 border-border/50 rounded-xl px-4 py-6 text-sm font-bold focus:ring-primary/20 transition-all shadow-inner h-auto">
+                    <SelectValue placeholder="Selecione uma fase do funil..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card/95 backdrop-blur-xl border-border rounded-xl shadow-2xl z-[110]">
+                    {boards.map(board => (
+                      <SelectGroup key={board.id}>
+                        <SelectLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 py-3 bg-secondary/20 px-4">
+                          {board.name}
+                        </SelectLabel>
+                        {lists.filter(l => l.boardId === board.id).map(list => (
+                          <SelectItem 
+                            key={list.id} 
+                            value={list.id}
+                            className="font-bold py-3 px-4 focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer"
+                          >
+                            {list.title}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
