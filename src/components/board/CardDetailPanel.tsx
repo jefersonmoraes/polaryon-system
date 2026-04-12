@@ -19,6 +19,16 @@ import { CompanyFavicon } from '../ui/CompanyFavicon';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { toast } from 'sonner';
 
+const ICONS = [
+  '📋', '📝', '✅', '☑️', '✔️', '❌', '🚫', '⚠️', '❗', '❓',
+  '🔄', '🔁', '🚀', '🛸', '⭐', '🌟', '✨', '🔥', '💥', '💡',
+  '🎯', '📌', '📍', '🏷️', '🔖', '🛠️', '🔧', '🔨', '⚙️', '📊',
+  '📈', '📉', '📅', '📆', '⏳', '⌛', '⏰', '⏱️', '📦', '📫',
+  '📥', '📤', '✉️', '📱', '💻', '🖥️', '🔍', '🔎', '🗑️', '📁',
+  '📂', '🗂️', '📄', '📑', '🔐', '🔓', '🔑', '🔗', '📎', '💼',
+  '🏆', '🥇', '🎉', '🎈', '🎁', '🚀', '🏃', '🚶', '🛑', '🚧'
+];
+
 const statusStyles: Record<BudgetStatus, string> = {
   Aguardando: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
   Cotado: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
@@ -392,7 +402,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     }
   };
   const handleToggleLabel = (labelId: string) => {
-    const next = card.labels.includes(labelId) ? card.labels.filter(l => l !== labelId) : [...card.labels, labelId];
+    const currentLabels = card.labels || [];
+    const next = currentLabels.includes(labelId) ? currentLabels.filter(l => l !== labelId) : [...currentLabels, labelId];
     updateCard(cardId, { labels: next });
   };
   const handleAddCheckItem = () => {
@@ -468,7 +479,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     setEditingLabel(false); setEditLabelId(null);
   };
   const handleEditLabel = (label: { id: string; name: string; color: string; icon?: string }) => {
-    setEditLabelId(label.id); setLabelName(label.name); setLabelColor(label.color); setLabelHex(label.color); setLabelIcon(label.icon); setEditingLabel(true);
+    setEditLabelId(label.id); 
+    setLabelName(label.name || ''); 
+    setLabelColor(label.color || '#3b82f6'); 
+    setLabelHex(label.color || '#3b82f6'); 
+    setLabelIcon(label.icon); 
+    setEditingLabel(true);
   };
   const handleColorHexChange = (hex: string) => {
     let val = hex;
@@ -633,10 +649,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             <button onClick={() => setShowLabels(!showLabels)} className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2 hover:text-foreground transition-colors">
               <Tag className="h-3.5 w-3.5" /> Etiquetas
             </button>
-            {card.labels.length > 0 && (
+            {card.labels?.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
-                {labels.filter(l => card.labels.includes(l.id)).map(label => (
-                  <span key={label.id} className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded text-white" style={{ backgroundColor: label.color }}>
+                {labels.filter(l => (card.labels || []).includes(l.id)).map(label => (
+                  <span key={label.id} className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded text-white" style={{ backgroundColor: label.color || '#3b82f6' }}>
                     {label.icon && <span>{label.icon}</span>}
                     {label.name}
                   </span>
@@ -650,8 +666,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     <div key={label.id} className="flex items-center gap-1">
                       <button onClick={() => canEdit && handleToggleLabel(label.id)}
                         disabled={!canEdit}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${card.labels.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
-                        style={{ backgroundColor: label.color }}>
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${card.labels?.includes(label.id) ? 'ring-2 ring-foreground' : ''}`}
+                        style={{ backgroundColor: label.color || '#3b82f6' }}>
                         {label.icon && <span>{label.icon}</span>}
                         {label.name}
                       </button>
