@@ -1299,35 +1299,77 @@ export const useKanbanStore = create<KanbanState>()(
         api.put(`/kanban/cards/${id}`, { trashed: true }).catch(console.error);
       },
       moveCard: (cardId, toListId, newPosition) => {
-        set(s => {
-          const currentUser = useAuthStore.getState().currentUser;
-          const targetCard = s.cards.find(c => c.id === cardId);
-          const targetList = s.lists.find(l => l.id === toListId);
+        const store = get();
+        const currentUser = useAuthStore.getState().currentUser;
+        const targetCard = store.cards.find(c => c.id === cardId);
+        const initialTargetList = store.lists.find(l => l.id === toListId);
 
-          if (currentUser && targetCard && targetList) {
-            // Only log if the list actually changed, otherwise it's just a visual reorder within the same list
-            if (targetCard.listId !== toListId) {
+        let finalTargetListId = toListId;
+        let finalPosition = newPosition;
+        let redirectionBoardName = '';
+
+        // -- CROSS-BOARD AUTOMATION EVALUATION --
+        if (initialTargetList && initialTargetList.automations && targetCard && targetCard.listId !== toListId) {
+          const moveAuto = initialTargetList.automations.find(a => a.type === 'move-to-board');
+          if (moveAuto && moveAuto.targetBoardId) {
+            const targetBoardLists = store.lists.filter(l => l.boardId === moveAuto.targetBoardId).sort((a, b) => a.position - b.position);
+            if (targetBoardLists.length > 0) {
+              finalTargetListId = targetBoardLists[0].id;
+              finalPosition = 0; // Top of the target list
+              const targetBoard = store.boards.find(b => b.id === moveAuto.targetBoardId);
+              redirectionBoardName = targetBoard?.name || 'outro board';
+              
+              set({
+                undoAction: {
+                  cardId,
+                  previousListId: targetCard.listId,
+                  previousPosition: targetCard.position,
+                  message: `"${targetCard.title}" movido para ${redirectionBoardName}`,
+                  type: 'moved'
+                }
+              });
+            }
+          }
+        }
+
+        const finalTargetList = store.lists.find(l => l.id === finalTargetListId);
+
+        set(s => {
+          if (currentUser && targetCard && finalTargetList) {
+            // Only log if the list actually changed
+            if (targetCard.listId !== finalTargetListId) {
               useAuditStore.getState().addLog({
                 userId: currentUser.id,
                 userName: currentUser.name,
                 action: 'MOVER',
                 entity: 'CARTÃO',
-                details: `Moveu "${targetCard.title}" para a fase/lista "${targetList.title}"`
+                details: `Moveu "${targetCard.title}" para a fase/lista "${finalTargetList.title}"`
               });
             }
           }
 
           return {
-            cards: s.cards.map(c => c.id === cardId ? { ...c, listId: toListId, position: newPosition } : c)
+            cards: s.cards.map(c => c.id === cardId ? { ...c, listId: finalTargetListId, position: finalPosition } : c)
           }
         });
-        socketService.emit('system_action', { store: 'KANBAN', type: 'MOVE_CARD', payload: { cardId, toListId, newPosition } });
-        api.put(`/kanban/cards/${cardId}`, { listId: toListId, position: newPosition }).catch(console.error);
+        
+        socketService.emit('system_action', { store: 'KANBAN', type: 'MOVE_CARD', payload: { cardId, toListId: finalTargetListId, newPosition: finalPosition } });
+
+        const updatePayload: any = { listId: finalTargetListId, position: finalPosition };
+        if (finalTargetListId !== toListId) {
+            updatePayload.automationUndoAction = {
+                previousListId: targetCard?.listId,
+                timestamp: Date.now(),
+                message: `Movido automaticamente para ${redirectionBoardName}`
+            };
+        }
+
+        api.put(`/kanban/cards/${cardId}`, updatePayload).catch(console.error);
 
         // --- BUDGET AUTOMATION LOGIC ---
         // Check for budget automations on the target list
-        if (targetList && targetList.automations) {
-          const budgetStatusAutomation = targetList.automations.find(a => a.type === 'change-budget-status');
+        if (finalTargetList && finalTargetList.automations) {
+          const budgetStatusAutomation = finalTargetList.automations.find(a => a.type === 'change-budget-status');
           if (budgetStatusAutomation && budgetStatusAutomation.targetBudgetStatus) {
             // Find budgets linked to this card
             const linkedBudgets = get().budgets.filter(b => b.cardId === cardId);
@@ -1341,7 +1383,7 @@ export const useKanbanStore = create<KanbanState>()(
         const linkedBudgets = get().budgets.filter(b => b.cardId === cardId);
         linkedBudgets.forEach(b => {
           if (b.automations) {
-            const moveRule = b.automations.find(a => a.type === 'kanban-move-status' && a.listId === toListId);
+            const moveRule = b.automations.find(a => a.type === 'kanban-move-status' && a.listId === finalTargetListId);
             if (moveRule) {
               get().updateBudget(b.id, { status: moveRule.status });
             }

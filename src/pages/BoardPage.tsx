@@ -156,10 +156,16 @@ const BoardPage = () => {
         newOrder.splice(destination.index, 0, moved);
         reorderCards(source.droppableId, newOrder);
       } else {
+        const destListInfo = lists.find(l => l.id === destination.droppableId);
+        const hasMoveToBoard = destListInfo?.automations?.find(a => a.type === 'move-to-board' && a.targetBoardId);
+
         moveCard(cardId, destination.droppableId, destination.index);
-        const newDestCards = [...destCards.map(c => c.id)];
-        newDestCards.splice(destination.index, 0, cardId);
-        reorderCards(destination.droppableId, newDestCards);
+
+        if (!hasMoveToBoard) {
+            const newDestCards = [...destCards.map(c => c.id)];
+            newDestCards.splice(destination.index, 0, cardId);
+            reorderCards(destination.droppableId, newDestCards);
+        }
       }
     }
 
@@ -205,15 +211,7 @@ const BoardPage = () => {
             }
             break;
           case 'move-to-board':
-            if (action.targetBoardId) {
-              const targetBoardLists = store.lists.filter(l => l.boardId === action.targetBoardId).sort((a, b) => a.position - b.position);
-              if (targetBoardLists.length > 0) {
-                const targetBoard = boards.find(b => b.id === action.targetBoardId);
-                updateCard(cardId, { automationUndoAction: { ...undoActionPayload, message: `Movido automaticamente para ${targetBoard?.name}` } });
-                moveCard(cardId, targetBoardLists[0].id, 0);
-                setUndoAction({ ...undoBase, message: `"${card.title}" movido para ${targetBoard?.name || 'outro board'}`, type: 'moved' });
-              }
-            }
+            // Delegation to kanban-store.ts
             break;
           case 'add-label':
             if (action.targetLabelName) {
