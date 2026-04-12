@@ -10,7 +10,9 @@ import { BOARD_COLORS } from '@/types/kanban';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { hexToRgba } from '@/lib/utils';
+import { hexToRgba, cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 
 interface Props {
   list: KanbanList;
@@ -279,115 +281,246 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
       )}
 
       {/* Automation config */}
-      {showAutomation && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setShowAutomation(false)} />
-          <div className="relative z-20 bg-popover border border-border rounded-lg shadow-lg p-3 mb-2 space-y-2">
-            <p className="text-[10px] text-muted-foreground font-semibold">Automação da Lista</p>
-            <p className="text-[10px] text-muted-foreground">Ao mover um cartão para esta lista:</p>
-            <div className="space-y-1">
-              <button onClick={() => toggleAutomationType('mark-completed')}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'mark-completed') ? 'bg-secondary ring-1 ring-primary font-medium' : ''}`}>
-                <CheckSquare className="h-3 w-3" /> Marcar como concluído
-              </button>
-              <button onClick={() => toggleAutomationType('sync-google-calendar')}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'sync-google-calendar') ? 'bg-secondary ring-1 ring-primary font-medium' : ''}`}>
-                <Calendar className="h-3 w-3" /> Sincronizar com Agenda
-              </button>
-
-              <div className="flex items-center gap-1 w-full bg-secondary/50 rounded pr-1 mt-1">
-                <button onClick={() => { if (milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }}
-                  className={`flex flex-1 items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'mark-milestone') ? 'text-primary font-medium' : ''}`}
+      {/* Automation Modal - Centralized and Premium */}
+      {showAutomation && ReactDOM.createPortal(
+        <AnimatePresence>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAutomation(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative z-10 w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <Zap className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Automação da Lista</h3>
+                    <p className="text-[10px] text-muted-foreground">Regras disparadas ao mover um cartão para esta lista</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAutomation(false)}
+                  className="p-1.5 rounded-full hover:bg-secondary transition-colors text-muted-foreground"
                 >
-                  <CheckSquare className="h-3 w-3" /> Concluir Etapa:
+                  <X className="h-4 w-4" />
                 </button>
-                <input 
-                  id={`list-auto-ms-${list.id}`}
-                  name="milestoneAutomationTitle"
-                  value={milestoneInput} onChange={e => setMilestoneInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }} placeholder="Ex: Planejamento" className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary" />
               </div>
 
-              {list.automations?.filter(a => a.type === 'mark-milestone').map(a => (
-                <div key={a.targetMilestoneTitle} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
-                  <span className="text-foreground flex items-center gap-1 font-medium"><CheckSquare className="h-2.5 w-2.5 text-primary" /> {a.targetMilestoneTitle}</span>
-                  <button onClick={() => toggleAutomationType('mark-milestone', undefined, a.targetMilestoneTitle)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
-                </div>
-              ))}
-              
-              <div className="flex items-center gap-1 w-full bg-secondary/50 rounded pr-1 mt-1">
-                <button onClick={() => { if (labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }}
-                  className={`flex flex-1 items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'add-label') ? 'text-primary font-medium' : ''}`}
-                >
-                  <Tag className="h-3 w-3" /> Add Etiqueta:
-                </button>
-                <input 
-                  id={`list-auto-label-add-${list.id}`}
-                  name="labelAddAutomationName"
-                  value={labelAddInput} 
-                  onChange={e => setLabelAddInput(e.target.value.toUpperCase())} 
-                  onKeyDown={e => { if (e.key === 'Enter' && labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }} 
-                  placeholder="EX: URGENTE" 
-                  className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary uppercase" />
-              </div>
-              {list.automations?.filter(a => a.type === 'add-label').map(a => (
-                <div key={a.targetLabelName} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
-                  <span className="text-foreground flex items-center gap-1 font-medium"><Tag className="h-2.5 w-2.5 text-primary" /> {a.targetLabelName}</span>
-                  <button onClick={() => toggleAutomationType('add-label', undefined, undefined, a.targetLabelName)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
-                </div>
-              ))}
-
-              <div className="flex items-center gap-1 w-full bg-secondary/50 rounded pr-1 mt-1">
-                <button onClick={() => { if (labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }}
-                  className={`flex flex-1 items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'remove-label') ? 'text-destructive font-medium' : ''}`}
-                >
-                  <Tag className="h-3 w-3" /> Rem Etiqueta:
-                </button>
-                <input 
-                  id={`list-auto-label-rem-${list.id}`}
-                  name="labelRemoveAutomationName"
-                  value={labelRemoveInput} 
-                  onChange={e => setLabelRemoveInput(e.target.value.toUpperCase())} 
-                  onKeyDown={e => { if (e.key === 'Enter' && labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }} 
-                  placeholder="EX: TESTE" 
-                  className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary uppercase" />
-              </div>
-              {list.automations?.filter(a => a.type === 'remove-label').map(a => (
-                <div key={a.targetLabelName} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
-                  <span className="text-foreground flex items-center gap-1 font-medium"><Tag className="h-2.5 w-2.5 text-destructive" /> {a.targetLabelName}</span>
-                  <button onClick={() => toggleAutomationType('remove-label', undefined, undefined, a.targetLabelName)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
-                </div>
-              ))}
-              <button onClick={() => toggleAutomationType('archive')}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'archive') ? 'bg-secondary ring-1 ring-primary font-medium' : ''}`}>
-                <Archive className="h-3 w-3" /> Arquivar cartão
-              </button>
-              <button onClick={() => toggleAutomationType('trash')}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors text-destructive hover:bg-destructive/10 ${list.automations?.some(a => a.type === 'trash') ? 'bg-destructive/10 ring-1 ring-destructive font-medium' : ''}`}>
-                <Trash2 className="h-3 w-3" /> Enviar para lixeira
-              </button>
-              {boards.filter(b => b.id !== list.boardId).length > 0 && (
-                <>
-                  <p className="text-[9px] text-muted-foreground mt-2 mb-1 px-1">Mover para outro board:</p>
-                  {boards.filter(b => b.id !== list.boardId).map(b => (
-                    <button key={b.id}
-                      onClick={() => { toggleAutomationType('move-to-board', b.id); }}
-                      className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'move-to-board' && a.targetBoardId === b.id) ? 'bg-secondary ring-1 ring-primary font-medium' : ''}`}>
-                      <ArrowRight className="h-3 w-3" />
-                      <span className="w-3 h-3 rounded-sm" style={{ background: b.backgroundColor }} />
-                      {b.name}
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
+                <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider px-1">Ações Automáticas</p>
+                  
+                  <div className="grid grid-cols-1 gap-2">
+                    <button onClick={() => toggleAutomationType('mark-completed')}
+                      className={cn(
+                        "flex items-center gap-3 w-full px-3 py-2.5 text-xs rounded-lg border transition-all active:scale-[0.98]",
+                        list.automations?.some(a => a.type === 'mark-completed') 
+                          ? "bg-primary/10 border-primary text-primary font-bold shadow-sm" 
+                          : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50 text-foreground/80"
+                      )}>
+                      <CheckSquare className="h-4 w-4" /> 
+                      <span className="flex-1 text-left">Marcar cartão como concluído</span>
+                      {list.automations?.some(a => a.type === 'mark-completed') && <div className="h-2 w-2 rounded-full bg-primary" />}
                     </button>
-                  ))}
-                </>
-              )}
-              {list.automations && list.automations.length > 0 && (
-                <button onClick={() => { updateList(list.id, { automations: undefined }); setShowAutomation(false); }}
-                  className="w-full text-[10px] text-muted-foreground hover:text-foreground hover:underline mt-2 pt-2 border-t border-border/50">
-                  Remover todas automações
+
+                    <button onClick={() => toggleAutomationType('sync-google-calendar')}
+                      className={cn(
+                        "flex items-center gap-3 w-full px-3 py-2.5 text-xs rounded-lg border transition-all active:scale-[0.98]",
+                        list.automations?.some(a => a.type === 'sync-google-calendar') 
+                          ? "bg-primary/10 border-primary text-primary font-bold shadow-sm" 
+                          : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50 text-foreground/80"
+                      )}>
+                      <Calendar className="h-4 w-4" /> 
+                      <span className="flex-1 text-left">Sincronizar com Google Agenda</span>
+                      {list.automations?.some(a => a.type === 'sync-google-calendar') && <div className="h-2 w-2 rounded-full bg-primary" />}
+                    </button>
+
+                    <button onClick={() => toggleAutomationType('archive')}
+                      className={cn(
+                        "flex items-center gap-3 w-full px-3 py-2.5 text-xs rounded-lg border transition-all active:scale-[0.98]",
+                        list.automations?.some(a => a.type === 'archive') 
+                          ? "bg-primary/10 border-primary text-primary font-bold shadow-sm" 
+                          : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50 text-foreground/80"
+                      )}>
+                      <Archive className="h-4 w-4" /> 
+                      <span className="flex-1 text-left">Arquivar (remover do board principal)</span>
+                      {list.automations?.some(a => a.type === 'archive') && <div className="h-2 w-2 rounded-full bg-primary" />}
+                    </button>
+
+                    <button onClick={() => toggleAutomationType('trash')}
+                      className={cn(
+                        "flex items-center gap-3 w-full px-3 py-2.5 text-xs rounded-lg border transition-all active:scale-[0.98]",
+                        list.automations?.some(a => a.type === 'trash') 
+                          ? "bg-destructive/10 border-destructive text-destructive font-bold shadow-sm" 
+                          : "bg-secondary/30 border-border/50 hover:border-border hover:bg-secondary/50 text-foreground/80"
+                      )}>
+                      <Trash2 className="h-4 w-4" /> 
+                      <span className="flex-1 text-left">Mover para lixeira</span>
+                      {list.automations?.some(a => a.type === 'trash') && <div className="h-2 w-2 rounded-full bg-destructive" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider px-1">Campos dinâmicos</p>
+                  
+                  {/* Milestones */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 focus-within:border-primary transition-colors">
+                      <div className="p-1.5 rounded bg-background text-muted-foreground">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                      </div>
+                      <input 
+                        value={milestoneInput} 
+                        onChange={e => setMilestoneInput(e.target.value)} 
+                        onKeyDown={e => { if (e.key === 'Enter' && milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }} 
+                        placeholder="Concluir etapa: ex. Planejamento" 
+                        className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60" 
+                      />
+                      <button 
+                        onClick={() => { if (milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }}
+                        className="p-1 px-2 rounded bg-primary text-primary-foreground text-[10px] font-bold hover:bg-primary/90 transition-colors"
+                      >
+                        ADD
+                      </button>
+                    </div>
+                    {list.automations?.filter(a => a.type === 'mark-milestone').map(a => (
+                      <div key={a.targetMilestoneTitle} className="flex items-center justify-between px-3 py-2 text-xs bg-primary/5 rounded-lg border border-primary/20 group">
+                        <span className="text-foreground flex items-center gap-2 font-medium">
+                          <CheckSquare className="h-3 w-3 text-primary" /> 
+                          {a.targetMilestoneTitle}
+                        </span>
+                        <button onClick={() => toggleAutomationType('mark-milestone', undefined, a.targetMilestoneTitle)} className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Label */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 focus-within:border-primary transition-colors">
+                      <div className="p-1.5 rounded bg-background text-muted-foreground">
+                        <Tag className="h-3.5 w-3.5" />
+                      </div>
+                      <input 
+                        value={labelAddInput} 
+                        onChange={e => setLabelAddInput(e.target.value.toUpperCase())} 
+                        onKeyDown={e => { if (e.key === 'Enter' && labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }} 
+                        placeholder="Adicionar etiqueta: ex. URGENTE" 
+                        className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60 uppercase" 
+                      />
+                      <button 
+                         onClick={() => { if (labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }}
+                         className="p-1 px-2 rounded bg-primary text-primary-foreground text-[10px] font-bold hover:bg-primary/90 transition-colors"
+                      >
+                        ADD
+                      </button>
+                    </div>
+                    {list.automations?.filter(a => a.type === 'add-label').map(a => (
+                      <div key={a.targetLabelName} className="flex items-center justify-between px-3 py-2 text-xs bg-green-500/5 rounded-lg border border-green-500/20 group">
+                        <span className="text-foreground flex items-center gap-2 font-medium">
+                          <Tag className="h-3 w-3 text-green-500" /> 
+                          {a.targetLabelName}
+                        </span>
+                        <button onClick={() => toggleAutomationType('add-label', undefined, undefined, a.targetLabelName)} className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Remove Label */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 focus-within:border-destructive transition-colors">
+                      <div className="p-1.5 rounded bg-background text-muted-foreground">
+                        <Tag className="h-3.5 w-3.5" />
+                      </div>
+                      <input 
+                        value={labelRemoveInput} 
+                        onChange={e => setLabelRemoveInput(e.target.value.toUpperCase())} 
+                        onKeyDown={e => { if (e.key === 'Enter' && labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }} 
+                        placeholder="Remover etiqueta: ex. REVISÃO" 
+                        className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60 uppercase" 
+                      />
+                      <button 
+                        onClick={() => { if (labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }}
+                        className="p-1 px-2 rounded bg-destructive text-destructive-foreground text-[10px] font-bold hover:bg-destructive/90 transition-colors"
+                      >
+                        REMOVER
+                      </button>
+                    </div>
+                    {list.automations?.filter(a => a.type === 'remove-label').map(a => (
+                      <div key={a.targetLabelName} className="flex items-center justify-between px-3 py-2 text-xs bg-red-500/5 rounded-lg border border-red-500/20 group">
+                        <span className="text-foreground flex items-center gap-2 font-medium">
+                          <Tag className="h-3 w-3 text-red-500" /> 
+                          {a.targetLabelName}
+                        </span>
+                        <button onClick={() => toggleAutomationType('remove-label', undefined, undefined, a.targetLabelName)} className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {boards.filter(b => b.id !== list.boardId).length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider px-1">Mover para Board</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {boards.filter(b => b.id !== list.boardId).map(b => (
+                        <button key={b.id}
+                          onClick={() => { toggleAutomationType('move-to-board', b.id); }}
+                          className={cn(
+                            "flex items-center gap-2 w-full px-3 py-2 text-xs rounded-lg border transition-all active:scale-[0.98]",
+                            list.automations?.some(a => a.type === 'move-to-board' && a.targetBoardId === b.id)
+                              ? "bg-primary/10 border-primary text-primary font-bold"
+                              : "bg-secondary/20 border-border/50 hover:border-border text-foreground/80 hover:bg-secondary/40"
+                          )}>
+                          <ArrowRight className="h-3 w-3" />
+                          <div className="w-3 h-3 rounded-sm shadow-inner" style={{ background: b.backgroundColor }} />
+                          <span className="flex-1 text-left">{b.name}</span>
+                          {list.automations?.some(a => a.type === 'move-to-board' && a.targetBoardId === b.id) && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-muted/30 border-t border-border flex items-center justify-between">
+                {list.automations && list.automations.length > 0 ? (
+                  <button onClick={() => { if(window.confirm('Deseja remover todas as configurações desta lista?')) { updateList(list.id, { automations: undefined }); setShowAutomation(false); } }}
+                    className="text-[10px] text-destructive hover:underline font-bold uppercase tracking-tight">
+                    Resetar Lista
+                  </button>
+                ) : <div />}
+                
+                <button 
+                  onClick={() => setShowAutomation(false)}
+                  className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform active:scale-95"
+                >
+                  Concluir
                 </button>
-              )}
-            </div>
+              </div>
+            </motion.div>
           </div>
-        </>
+        </AnimatePresence>,
+        document.body
       )}
 
       {/* Cards */}
