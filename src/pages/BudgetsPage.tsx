@@ -459,10 +459,10 @@ const BudgetsPage = () => {
                                 const newParams = new URLSearchParams(searchParams);
                                 newParams.delete('budgetId');
                                 setSearchParams(newParams, { replace: true });
-                            }
-                    />
-                )
-            }
+                        }
+                    }
+                />
+            )}
 
             {isAutomationModalOpen && selectedBudget && (
                 <BudgetAutomationModal
