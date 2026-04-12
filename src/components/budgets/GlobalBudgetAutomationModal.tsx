@@ -132,12 +132,12 @@ const GlobalBudgetAutomationModal = ({ onClose }: Props) => {
                     <SelectValue placeholder="Selecione uma fase do funil..." />
                   </SelectTrigger>
                   <SelectContent className="bg-card/95 backdrop-blur-xl border-border rounded-xl shadow-2xl z-[110]">
-                    {boards.map(board => (
+                    {boards.filter(b => !b.trashed && !b.archived).map(board => (
                       <SelectGroup key={board.id}>
                         <SelectLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/70 py-3 bg-secondary/20 px-4">
                           {board.name}
                         </SelectLabel>
-                        {lists.filter(l => l.boardId === board.id).map(list => (
+                        {lists.filter(l => l.boardId === board.id && !l.trashed && !l.archived).map(list => (
                           <SelectItem 
                             key={list.id} 
                             value={list.id}

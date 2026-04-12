@@ -273,8 +273,9 @@ const SuppliersPage = () => {
                                         const visibleSuppliers = expandedSuppliers ? favoriteSuppliers : favoriteSuppliers.slice(0, INITIAL_COUNT);
                                         const visibleTransporters = expandedTransporters ? favoriteTransporters : favoriteTransporters.slice(0, INITIAL_COUNT);
 
-                                        const availableStates = Array.from(new Set(companies.map(c => c.uf).filter(Boolean))).sort();
-                                        const availableAreas = Array.from(new Set(companies.filter(c => c.type === 'Fornecedor').flatMap(c => c.areasAtuacao || []))).sort();
+                                        const activeCompanies = companies.filter(c => !c.trashed);
+                                        const availableStates = Array.from(new Set(activeCompanies.map(c => c.uf).filter(Boolean))).sort();
+                                        const availableAreas = Array.from(new Set(activeCompanies.filter(c => c.type === 'Fornecedor').flatMap(c => c.areasAtuacao || []))).sort();
 
                                         return (
                                             <div className="space-y-8">

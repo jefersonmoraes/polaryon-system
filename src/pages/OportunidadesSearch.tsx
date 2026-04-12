@@ -1840,7 +1840,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         </SelectTrigger>
                                         <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
                                             <SelectItem value="none" disabled className="text-xs font-bold">Selecione uma pasta...</SelectItem>
-                                            {folders.map(f => (
+                                            {folders.filter(f => !f.trashed && !f.archived).map(f => (
                                                 <SelectItem key={f.id} value={f.id} className="text-xs font-bold">
                                                     {f.name}
                                                 </SelectItem>
@@ -1866,7 +1866,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         </SelectTrigger>
                                         <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
                                             <SelectItem value="none" disabled className="text-xs font-bold">Selecione o quadro...</SelectItem>
-                                            {boards.filter(b => b.folderId === exportFolderId).map(b => (
+                                            {boards.filter(b => b.folderId === exportFolderId && !b.trashed && !b.archived).map(b => (
                                                 <SelectItem key={b.id} value={b.id} className="text-xs font-bold">
                                                     {b.name}
                                                 </SelectItem>
@@ -1891,7 +1891,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                         </SelectTrigger>
                                         <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
                                             <SelectItem value="none" disabled className="text-xs font-bold">Selecione a coluna (etapa)...</SelectItem>
-                                            {lists.filter(l => l.boardId === exportBoardId).map(l => (
+                                            {lists.filter(l => l.boardId === exportBoardId && !l.trashed && !l.archived).map(l => (
                                                 <SelectItem key={l.id} value={l.id} className="text-xs font-bold">
                                                     {l.title}
                                                 </SelectItem>
