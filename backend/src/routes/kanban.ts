@@ -432,6 +432,42 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
                     if (label) {
                         currentLabels = currentLabels.filter((id: string) => id !== label.id);
                     }
+                } else if (action.type === 'change-budget-status' && action.targetBudgetStatus) {
+                    await prisma.budget.updateMany({
+                        where: { cardId },
+                        data: { status: action.targetBudgetStatus }
+                    });
+                    const affectedBudgets = await prisma.budget.findMany({ where: { cardId }, select: { id: true } });
+                    try {
+                        const { getIO } = require('../socket');
+                        const io = getIO();
+                        affectedBudgets.forEach(b => {
+                            io.emit('system_sync', { 
+                                store: 'KANBAN', 
+                                type: 'UPDATE_BUDGET', 
+                                payload: { id: b.id, data: { status: action.targetBudgetStatus } } 
+                            });
+                        });
+                    } catch (err) { console.error("Socket broadcast failed:", err); }
+                }
+            }
+
+            // Budget-specific automations (stored in budget.automations)
+            const budgetSpecificAutomations = await prisma.budget.findMany({
+                where: { cardId, automations: { not: null } }
+            });
+            if (budgetSpecificAutomations.length > 0) {
+                for (const budget of budgetSpecificAutomations) {
+                    const automations = (budget.automations as any[]) || [];
+                    const moveRule = automations.find(a => a.type === 'kanban-move-status' && a.listId === updateData.listId);
+                    if (moveRule) {
+                        await prisma.budget.update({ where: { id: budget.id }, data: { status: moveRule.status } });
+                        try {
+                            const { getIO } = require('../socket');
+                            const io = getIO();
+                            io.emit('system_sync', { store: 'KANBAN', type: 'UPDATE_BUDGET', payload: { id: budget.id, data: { status: moveRule.status } } });
+                        } catch (err) { console.error("Socket broadcast failed:", err); }
+                    }
                 }
             }
         }

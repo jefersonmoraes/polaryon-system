@@ -118,11 +118,13 @@ export interface Budget {
   cardId?: string; // Linked kanban card
   items: BudgetItem[]; // Now called "Cotações"
   totalValue: number;
-  trashed?: boolean;
-  trashedAt?: string;
-  archived?: boolean;
   createdAt: string;
   isSkeleton?: boolean;
+  automations?: Array<{
+    type: 'kanban-move-status';
+    listId: string;
+    status: BudgetStatus;
+  }>;
 }
 
 export interface Folder {
@@ -256,11 +258,12 @@ export interface KanbanList {
   color?: string;
   icon?: string;
   // Automations: list of actions to perform when a card is dropped
-  automations?: Array<{
-    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar' | 'add-label' | 'remove-label';
+    automations?: Array<{
+    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar' | 'add-label' | 'remove-label' | 'change-budget-status';
     targetBoardId?: string;
     targetMilestoneTitle?: string;
     targetLabelName?: string;
+    targetBudgetStatus?: BudgetStatus;
   }>;
   archived?: boolean;
   trashed?: boolean;

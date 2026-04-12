@@ -1323,6 +1323,30 @@ export const useKanbanStore = create<KanbanState>()(
         });
         socketService.emit('system_action', { store: 'KANBAN', type: 'MOVE_CARD', payload: { cardId, toListId, newPosition } });
         api.put(`/kanban/cards/${cardId}`, { listId: toListId, position: newPosition }).catch(console.error);
+
+        // --- BUDGET AUTOMATION LOGIC ---
+        // Check for budget automations on the target list
+        if (targetList && targetList.automations) {
+          const budgetStatusAutomation = targetList.automations.find(a => a.type === 'change-budget-status');
+          if (budgetStatusAutomation && budgetStatusAutomation.targetBudgetStatus) {
+            // Find budgets linked to this card
+            const linkedBudgets = get().budgets.filter(b => b.cardId === cardId);
+            linkedBudgets.forEach(b => {
+              get().updateBudget(b.id, { status: budgetStatusAutomation.targetBudgetStatus });
+            });
+          }
+        }
+
+        // Check for specific budget-level automations
+        const linkedBudgets = get().budgets.filter(b => b.cardId === cardId);
+        linkedBudgets.forEach(b => {
+          if (b.automations) {
+            const moveRule = b.automations.find(a => a.type === 'kanban-move-status' && a.listId === toListId);
+            if (moveRule) {
+              get().updateBudget(b.id, { status: moveRule.status });
+            }
+          }
+        });
       },
       reorderCards: (listId, cardIds) => {
         set(s => ({

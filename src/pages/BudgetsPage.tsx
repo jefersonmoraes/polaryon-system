@@ -8,9 +8,10 @@ import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
     Trash2, Edit, Building2, Calendar, FileText, FolderOpen,
-    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign
+    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign, Zap
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
+import BudgetAutomationModal from '@/components/budgets/BudgetAutomationModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -46,6 +47,7 @@ const BudgetsPage = () => {
     const [statusFilter, setStatusFilter] = useState<BudgetStatus | 'Todos'>('Aguardando');
     const [selectedBudget, setSelectedBudget] = useState<Budget | undefined>();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isAutomationModalOpen, setIsAutomationModalOpen] = useState(false);
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
     const { currentUser } = useAuthStore();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -260,6 +262,9 @@ const BudgetsPage = () => {
                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(budget); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
                                                         <Edit className="h-3.5 w-3.5" /> Editar
                                                     </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setSelectedBudget(budget); setIsAutomationModalOpen(true); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-primary transition-colors flex items-center gap-2">
+                                                        <Zap className="h-3.5 w-3.5" /> Automações
+                                                    </button>
                                                     <button onClick={(e) => { e.stopPropagation(); updateBudget(budget.id, { archived: true }); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-muted-foreground transition-colors flex items-center gap-2">
                                                         <Archive className="h-3.5 w-3.5" /> Arquivar
                                                     </button>
@@ -457,8 +462,12 @@ const BudgetsPage = () => {
                             }
                         }}
                     />
-                )
-            }
+            {isAutomationModalOpen && selectedBudget && (
+                <BudgetAutomationModal
+                    budget={selectedBudget}
+                    onClose={() => { setIsAutomationModalOpen(false); setSelectedBudget(undefined); }}
+                />
+            )}
         </div >
     );
 };
