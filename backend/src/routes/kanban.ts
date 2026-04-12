@@ -1127,7 +1127,7 @@ router.get('/sync', async (req: Request, res: Response) => {
                 }
             }),
             prisma.budget.findMany({
-                select: { id: true, title: true, status: true, totalValue: true, trashed: true, archived: true, cardId: true, createdAt: true }
+                select: { id: true, title: true, status: true, totalValue: true, trashed: true, cardId: true, createdAt: true }
             }),
             prisma.notification.findMany({ take: 30, orderBy: { createdAt: 'desc' } }),
             prisma.user.findMany({
