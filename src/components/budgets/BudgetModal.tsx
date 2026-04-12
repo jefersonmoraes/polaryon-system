@@ -737,29 +737,53 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             )}
                         </div>
 
-                        <div className="space-y-1.5 flex flex-col justify-end h-full relative">
-                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-primary">
-                                <Percent className="h-3 w-3" /> MARGEM DE LUCRO
+                        <div className="space-y-1 flex flex-col justify-end h-full relative">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-primary">
+                                <span className="flex items-center gap-1"><Percent className="h-3 w-3" /> MARGEM</span>
                             </label>
-                            <div className="relative">
-                                <input
-                                    id={`budget-item-margin-${item.id}`}
-                                    name="profitMargin"
-                                    type="number"
-                                    min="0"
-                                    max="99.9"
-                                    step="0.1"
-                                    value={item.profitMargin || ''}
-                                    disabled={!canEdit}
-                                    onChange={e => {
-                                        let val = Number(e.target.value);
-                                        if (val >= 100) val = 99.9; // Prevent division by zero
-                                        if (val < 0) val = 0;
-                                        handleFieldChangeImpactingTotal('profitMargin', val);
-                                    }}
-                                    className="w-full bg-primary/10 border-primary/30 text-primary font-bold rounded text-xs pr-6 pl-2 py-1.5 focus:ring-1 focus:ring-primary/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">%</span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <div className="relative">
+                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[8px] font-black text-primary/60">MÍN</span>
+                                    <input
+                                        id={`budget-item-margin-${item.id}`}
+                                        name="profitMargin"
+                                        type="number"
+                                        min="0"
+                                        max="99.9"
+                                        step="0.1"
+                                        value={item.profitMargin || ''}
+                                        disabled={!canEdit}
+                                        onChange={e => {
+                                            let val = Number(e.target.value);
+                                            if (val >= 100) val = 99.9; // Prevent division by zero
+                                            if (val < 0) val = 0;
+                                            handleFieldChangeImpactingTotal('profitMargin', val);
+                                        }}
+                                        className="w-full bg-primary/10 border-primary/30 text-primary font-bold rounded text-xs pr-1 pl-6 py-1.5 focus:ring-1 focus:ring-primary/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed text-center"
+                                        title="Margem Mínima (%)"
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[8px] font-black text-teal-600/60">MÁX</span>
+                                    <input
+                                        id={`budget-item-margin-max-${item.id}`}
+                                        name="profitMarginMax"
+                                        type="number"
+                                        min="0"
+                                        max="99.9"
+                                        step="0.1"
+                                        value={item.profitMarginMax || ''}
+                                        disabled={!canEdit}
+                                        onChange={e => {
+                                            let val = Number(e.target.value);
+                                            if (val >= 100) val = 99.9; // Prevent division by zero
+                                            if (val < 0) val = 0;
+                                            handleFieldChangeImpactingTotal('profitMarginMax', val);
+                                        }}
+                                        className="w-full bg-teal-500/10 border-teal-500/30 text-teal-600 font-bold rounded text-xs pr-1 pl-6 py-1.5 focus:ring-1 focus:ring-teal-500/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed text-center"
+                                        title="Margem Máxima (%)"
+                                    />
+                                </div>
                             </div>
                         </div>
 
