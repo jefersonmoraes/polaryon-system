@@ -1120,36 +1120,59 @@ router.get('/favicon-proxy', async (req: Request, res: Response) => {
         return res.status(400).send('Domain is required');
     }
 
-    try {
-        const axios = require('axios');
-        // We use a small timeout and check for common favicon locations
-        const targetUrl = `https://icons.duckduckgo.com/ip3/${url}.ico`;
-        
-        const response = await axios({
-            method: 'get',
-            url: targetUrl,
-            responseType: 'stream',
-            timeout: 5000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-        });
+    const axios = require('axios');
+    
+    // Fallback Icon SVG
+    const fallbackSvg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+    `;
 
-        res.set('Content-Type', response.headers['content-type']);
-        res.set('Cache-Control', 'public, max-age=86400'); // 24h cache
-        response.data.pipe(res);
-    } catch (error) {
-        // Fallback to a neutral "globe" icon as a 200 OK result
-        // This is the key to preventing "404 Not Found" in the console
+    const tryFetch = async (targetUrl: string) => {
+        try {
+            const response = await axios({
+                method: 'get',
+                url: targetUrl,
+                responseType: 'arraybuffer',
+                timeout: 3000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            });
+            return {
+                data: response.data,
+                contentType: response.headers['content-type']
+            };
+        } catch (e) {
+            return null;
+        }
+    };
+
+    try {
+        // Attempt 1: DuckDuckGo (Faster, often has high quality)
+        let result = await tryFetch(`https://icons.duckduckgo.com/ip3/${url}.ico`);
+        
+        // Attempt 2: Google S2 (Massive database, very reliable fallback)
+        if (!result) {
+            result = await tryFetch(`https://www.google.com/s2/favicons?domain=${url}&sz=64`);
+        }
+
+        if (result) {
+            res.set('Content-Type', result.contentType || 'image/x-icon');
+            res.set('Cache-Control', 'public, max-age=86400'); // 24h cache
+            return res.send(result.data);
+        }
+
+        // Final Fallback: Internal SVG
         res.set('Content-Type', 'image/svg+xml');
         res.set('Cache-Control', 'public, max-age=3600');
-        res.status(200).send(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-            </svg>
-        `);
+        res.status(200).send(fallbackSvg);
+    } catch (error) {
+        res.set('Content-Type', 'image/svg+xml');
+        res.status(200).send(fallbackSvg);
     }
 });
 
