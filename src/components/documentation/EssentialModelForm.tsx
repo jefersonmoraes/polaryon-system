@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useModelStore, EssentialModel, ModelAttachment } from '@/store/model-store';
-import { X, Upload, FileText, CheckCircle, AlignLeft, Type, Paperclip, Search, Trash2 } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle, AlignLeft, Type, Paperclip, Search, Trash2, ExternalLink } from 'lucide-react';
 import { cn, compressImage } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -272,6 +272,15 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
                                                 >
                                                     <Search className="h-3.5 w-3.5" />
                                                 </button>
+                                                <a 
+                                                    href={attachment.fileData} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 text-primary hover:bg-primary/10 bg-transparent rounded-lg transition-all"
+                                                    title="Abrir em Nova Aba"
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </a>
                                                 <button
                                                     type="button"
                                                     onClick={removeAttachment}

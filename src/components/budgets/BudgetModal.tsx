@@ -1583,6 +1583,15 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     >
                                                         <Eye className="h-3 w-3" />
                                                     </button>
+                                                    <a 
+                                                        href={att.url || undefined} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"
+                                                        title="Abrir em Nova Aba"
+                                                    >
+                                                        <ExternalLink className="h-3 w-3" />
+                                                    </a>
                                                 </div>
                                             </div>
 

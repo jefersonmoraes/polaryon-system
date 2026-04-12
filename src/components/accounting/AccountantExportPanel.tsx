@@ -1,6 +1,6 @@
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { Download, FileDown, FileText, FileCode2, History, Trash2, RotateCcw, Activity, Eye, Search } from 'lucide-react';
+import { Download, FileDown, FileText, FileCode2, History, Trash2, RotateCcw, Activity, Eye, Search, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
@@ -445,6 +445,15 @@ export const AccountantExportPanel = () => {
                                         >
                                             <Download className="h-4 w-4" />
                                         </button>
+                                        <a
+                                            href={exp.fileContent.startsWith('data:') ? exp.fileContent : `data:text/plain;charset=utf-8,${encodeURIComponent(exp.fileContent)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-muted-foreground hover:text-primary p-1 rounded-md hover:bg-primary/10 transition-colors"
+                                            title="Abrir em Nova Aba"
+                                        >
+                                            <ExternalLink className="h-4 w-4" />
+                                        </a>
                                         <button
                                             onClick={() => {
                                                 deleteExport(exp.id);

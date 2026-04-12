@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useEssentialDocumentStore, EssentialDocumentModel, EssentialDocumentAttachment } from '@/store/essential-document-store';
-import { X, Upload, FileText, Trash2, Save, File, Search, Paperclip } from 'lucide-react';
+import { X, Upload, FileText, Trash2, Save, File, Search, Paperclip, ExternalLink } from 'lucide-react';
 import { cn, compressImage } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -258,6 +258,15 @@ const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocument
                                                             >
                                                                 <Search className="h-4 w-4" />
                                                             </button>
+                                                            <a 
+                                                                href={att.fileData} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="p-1.5 text-primary hover:bg-primary/10 rounded-md transition-colors"
+                                                                title="Abrir em Nova Aba"
+                                                            >
+                                                                <ExternalLink className="h-4 w-4" />
+                                                            </a>
                                                             <a
                                                                 href={att.fileData}
                                                                 download={att.fileName}

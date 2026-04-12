@@ -5,7 +5,7 @@ import { EntryType, AccountingCategory } from '@/types/accounting';
 import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import { useRef } from 'react';
-import { Paperclip, Search, Download, Trash2, RefreshCw } from 'lucide-react';
+import { Paperclip, Search, Download, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
 import { cn, compressImage } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -552,6 +552,15 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                                         >
                                                             <Search className="h-3.5 w-3.5" />
                                                         </button>
+                                                        <a 
+                                                            href={file} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                                                            title="Abrir em Nova Aba"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                        </a>
                                                         <button
                                                             type="button"
                                                             onClick={() => removeAttachment(index)}

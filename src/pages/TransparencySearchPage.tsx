@@ -1193,6 +1193,15 @@ export default function TransparencySearchPage() {
                                                                     </button>
                                                                     <a 
                                                                         href={file.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="px-3 h-8 border border-border text-primary text-[10px] font-bold rounded flex items-center justify-center hover:bg-primary/10 transition-colors"
+                                                                        title="Abrir em Nova Aba"
+                                                                    >
+                                                                        <ExternalLink className="h-4 w-4" />
+                                                                    </a>
+                                                                    <a 
+                                                                        href={file.url}
                                                                         download
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useDocumentStore, CompanyDocument, DocumentAttachment } from '@/store/document-store';
-import { X, Upload, FileText, Link as LinkIcon, AlertCircle, Building2, AlignLeft, Trash2, Search, Paperclip } from 'lucide-react';
+import { X, Upload, FileText, Link as LinkIcon, AlertCircle, Building2, AlignLeft, Trash2, Search, Paperclip, ExternalLink } from 'lucide-react';
 import { cn, compressImage } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -378,6 +378,15 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
                                                         >
                                                             <Search className="h-3.5 w-3.5" />
                                                         </button>
+                                                        <a 
+                                                            href={att.fileData} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="p-1.5 text-primary hover:bg-primary/10 rounded transition-colors flex items-center justify-center"
+                                                            title="Abrir em Nova Aba"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                        </a>
                                                         <button
                                                             type="button"
                                                             onClick={(e) => removeAttachment(att.id, e)}

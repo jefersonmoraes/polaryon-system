@@ -1058,6 +1058,15 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       >
                         <Search className="h-3.5 w-3.5" />
                       </button>
+                      <a 
+                        href={att.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="p-1 rounded hover:bg-background transition-colors text-muted-foreground hover:text-primary" 
+                        title="Abrir em Nova Aba"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
                       {canDownload && (
                         <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
                           <Download className="h-3.5 w-3.5" />

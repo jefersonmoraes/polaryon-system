@@ -430,6 +430,15 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                                             >
                                                                 <Search className="h-2.5 w-2.5" /> Preview
                                                             </button>
+                                                            <a 
+                                                                href={attachment.fileData} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="px-2 text-primary hover:bg-primary/10 py-1 rounded border border-primary/20 transition-all flex items-center justify-center"
+                                                                title="Abrir em Nova Aba"
+                                                            >
+                                                                <ExternalLink className="h-3 w-3" />
+                                                            </a>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => removeAttachment(slot, e)}

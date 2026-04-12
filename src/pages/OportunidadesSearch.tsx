@@ -1599,6 +1599,15 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                                         </button>
                                                                         <a 
                                                                             href={file.url} 
+                                                                            target="_blank" 
+                                                                            rel="noopener noreferrer" 
+                                                                            className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary hover:scale-110 active:scale-95 transition-all" 
+                                                                            title="Abrir em Nova Aba"
+                                                                        >
+                                                                            <ExternalLink className="h-4.5 w-4.5" />
+                                                                        </a>
+                                                                        <a 
+                                                                            href={file.url} 
                                                                             download 
                                                                             target="_blank" 
                                                                             rel="noopener noreferrer" 
