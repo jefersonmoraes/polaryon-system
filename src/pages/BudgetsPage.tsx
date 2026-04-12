@@ -43,7 +43,7 @@ const BudgetsPage = () => {
     }, [fetchBudgets, fetchCompanies]);
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState<BudgetType | 'Todos'>('Todos');
-    const [statusFilter, setStatusFilter] = useState<BudgetStatus | 'Todos'>('Todos');
+    const [statusFilter, setStatusFilter] = useState<BudgetStatus | 'Todos'>('Aguardando');
     const [selectedBudget, setSelectedBudget] = useState<Budget | undefined>();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
