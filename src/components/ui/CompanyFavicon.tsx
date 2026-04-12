@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Building2, Truck } from 'lucide-react';
 import { cn, getFaviconUrl } from '@/lib/utils';
 import { Company } from '@/types/kanban';
@@ -35,16 +35,26 @@ export const CompanyFavicon: React.FC<CompanyFaviconProps> = ({
     const DefaultIcon = isTransporter ? Truck : Building2;
     const bgColor = isTransporter ? 'bg-orange-500/10 text-orange-500' : 'bg-primary/10 text-primary';
 
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [hasError, setHasError] = useState(false);
+
     return (
         <div className={cn("relative shrink-0 flex items-center justify-center rounded-md overflow-hidden", sizeClasses[size], bgColor, className)}>
-            <DefaultIcon className={cn(iconSizeClasses[size], iconClassName)} />
+            {/* Show background icon only if not loaded or if there's an error */}
+            {(!isLoaded || hasError) && (
+                <DefaultIcon className={cn(iconSizeClasses[size], iconClassName, "transition-opacity duration-300", isLoaded && !hasError ? 'opacity-0' : 'opacity-100')} />
+            )}
             
-            {faviconUrl && (
+            {faviconUrl && !hasError && (
                 <img
                     src={faviconUrl}
                     alt=""
-                    className="absolute inset-0 w-full h-full object-contain bg-background"
-                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                    className={cn("absolute inset-0 w-full h-full object-contain bg-background transition-opacity duration-300", isLoaded ? 'opacity-100' : 'opacity-0')}
+                    onLoad={() => setIsLoaded(true)}
+                    onError={() => {
+                        setHasError(true);
+                        setIsLoaded(true);
+                    }}
                 />
             )}
         </div>

@@ -289,7 +289,6 @@ const BudgetsPage = () => {
                                         return (
                                             <>
                                                 <div className="flex items-center gap-1.5 min-w-0" title={suppliers.map(getCompanyName).join(', ')}>
-                                                <Building2 className="h-3 w-3 shrink-0" />
                                                 <div className="flex -space-x-1 overflow-hidden shrink-0">
                                                     {suppliers.slice(0, 3).map(sid => (
                                                         <CompanyFavicon key={sid} company={companies.find(c => c.id === sid)} size="sm" className="ring-1 ring-background" />
@@ -301,7 +300,6 @@ const BudgetsPage = () => {
                                             </div>
                                                 {transporters.length > 0 && (
                                                     <div className="flex items-center gap-1 line-clamp-1 text-primary/80" title={transporters.map(getCompanyName).join(', ')}>
-                                                        <Truck className="h-3.5 w-3.5 shrink-0" />
                                                         {transporters.length} Transportadora{transporters.length > 1 ? 's' : ''}
                                                     </div>
                                                 )}

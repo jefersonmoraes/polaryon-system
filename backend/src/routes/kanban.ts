@@ -1115,12 +1115,13 @@ router.get('/sync', async (req: Request, res: Response) => {
 
 // FAVICON PROXY (Silences 404 console errors by returning a default image on failure)
 router.get('/favicon-proxy', async (req: Request, res: Response) => {
-    const { url } = req.query;
+    let { url } = req.query;
     if (!url || typeof url !== 'string') {
         return res.status(400).send('Domain is required');
     }
 
     const axios = require('axios');
+    const domain = url.trim().toLowerCase();
     
     // Fallback Icon SVG
     const fallbackSvg = `
@@ -1133,31 +1134,53 @@ router.get('/favicon-proxy', async (req: Request, res: Response) => {
 
     const tryFetch = async (targetUrl: string) => {
         try {
+            console.log(`[FAVICON_PROXY] Fetching: ${targetUrl}`);
             const response = await axios({
                 method: 'get',
                 url: targetUrl,
                 responseType: 'arraybuffer',
-                timeout: 3000,
+                timeout: 5000,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
                 }
             });
+            
+            // Check if it's actually an image (Google sometimes returns 200 with HTML/text if blocked)
+            const contentType = response.headers['content-type'];
+            if (contentType && contentType.includes('text/html')) {
+                console.warn(`[FAVICON_PROXY] Warning: Received HTML instead of image from ${targetUrl}`);
+                return null;
+            }
+
+            console.log(`[FAVICON_PROXY] Success: ${targetUrl} (${contentType})`);
             return {
                 data: response.data,
-                contentType: response.headers['content-type']
+                contentType: contentType
             };
-        } catch (e) {
+        } catch (e: any) {
+            console.error(`[FAVICON_PROXY] Error fetching ${targetUrl}: ${e.message}`);
             return null;
         }
     };
 
     try {
-        // Attempt 1: DuckDuckGo (Faster, often has high quality)
-        let result = await tryFetch(`https://icons.duckduckgo.com/ip3/${url}.ico`);
-        
-        // Attempt 2: Google S2 (Massive database, very reliable fallback)
-        if (!result) {
-            result = await tryFetch(`https://www.google.com/s2/favicons?domain=${url}&sz=64`);
+        const variations = [
+            domain,
+            domain.startsWith('www.') ? domain.replace('www.', '') : `www.${domain}`
+        ];
+
+        let result = null;
+
+        // Attempt Chain
+        for (const variant of variations) {
+            // Attempt 1: Google S2 (The most reliable for many domains)
+            result = await tryFetch(`https://www.google.com/s2/favicons?domain=${variant}&sz=64`);
+            if (result) break;
+
+            // Attempt 2: DuckDuckGo
+            result = await tryFetch(`https://icons.duckduckgo.com/ip3/${variant}.ico`);
+            if (result) break;
         }
 
         if (result) {
@@ -1167,6 +1190,7 @@ router.get('/favicon-proxy', async (req: Request, res: Response) => {
         }
 
         // Final Fallback: Internal SVG
+        console.log(`[FAVICON_PROXY] No icon found for ${domain}. Serving fallback SVG.`);
         res.set('Content-Type', 'image/svg+xml');
         res.set('Cache-Control', 'public, max-age=3600');
         res.status(200).send(fallbackSvg);
