@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock, CheckSquare } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader, DialogDescription } from '@/components/ui/dialog';
 import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
 import { useKanbanStore } from '@/store/kanban-store';
@@ -1367,6 +1367,9 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     <DialogTitle className="text-xl font-bold leading-tight pt-1">
                                         {selectedItem.title}
                                     </DialogTitle>
+                                    <DialogDescription className="sr-only">
+                                        Detalhes da oportunidade: {selectedItem.title}
+                                    </DialogDescription>
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-3">
                                     <span className={`px-2 py-0.5 rounded text-[11px] uppercase font-bold border ${getStatusStyle(selectedItem.situacao_nome)}`}>
