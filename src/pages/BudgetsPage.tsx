@@ -461,7 +461,9 @@ const BudgetsPage = () => {
                                 setSearchParams(newParams, { replace: true });
                             }
                         }}
-                    />
+                )
+            }
+
             {isAutomationModalOpen && selectedBudget && (
                 <BudgetAutomationModal
                     budget={selectedBudget}
