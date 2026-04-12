@@ -44,7 +44,13 @@ export default function UserProfile() {
                 title="Meu Perfil"
             >
                 {currentUser.photoURL ? (
-                    <img src={currentUser.photoURL} alt={currentUser.name} className="w-full h-full object-cover" />
+                    <img 
+                        src={currentUser.photoURL} 
+                        alt={currentUser.name} 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                    />
                 ) : (
                     initial
                 )}
@@ -65,7 +71,13 @@ export default function UserProfile() {
                         <div className="p-4 bg-muted/30 border-b border-border flex flex-col items-center">
                             <div className="relative w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xl font-bold mb-3 overflow-hidden shadow-sm border border-border group gap-2">
                                 {currentUser.photoURL ? (
-                                    <img src={currentUser.photoURL} alt={currentUser.name} className="w-full h-full object-cover" />
+                                    <img 
+                                        src={currentUser.photoURL} 
+                                        alt={currentUser.name} 
+                                        className="w-full h-full object-cover" 
+                                        referrerPolicy="no-referrer"
+                                        crossOrigin="anonymous"
+                                    />
                                 ) : (
                                     initial
                                 )}
