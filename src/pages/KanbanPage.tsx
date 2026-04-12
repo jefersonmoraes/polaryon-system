@@ -19,8 +19,8 @@ const KanbanPage = () => {
     const [newFolderSideImage, setNewFolderSideImage] = useState<string | undefined>();
     const [searchQuery, setSearchQuery] = useState('');
 
-    const activeFolders = folders.filter(f => !f.archived && !f.trashed);
-    const activeBoards = boards.filter(b => !b.archived && !b.trashed);
+    const activeFolders = folders.filter(f => !f.archived && !f.trashed).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    const activeBoards = boards.filter(b => !b.archived && !b.trashed).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
     const filteredFolders = activeFolders.filter(f =>
         f.name.toLowerCase().includes(searchQuery.toLowerCase())

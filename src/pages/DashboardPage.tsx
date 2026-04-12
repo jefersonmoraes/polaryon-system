@@ -94,8 +94,14 @@ const Dashboard = () => {
   const [filterLabel, setFilterLabel] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const activeFolders = folders.filter(f => !f.archived && !f.trashed);
-  const activeBoards = boards.filter(b => !b.archived && !b.trashed);
+  const activeFolders = useMemo(() => {
+    return folders.filter(f => !f.archived && !f.trashed).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [folders]);
+
+  const activeBoards = useMemo(() => {
+    return boards.filter(b => !b.archived && !b.trashed).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [boards]);
+
   const activeLists = lists.filter(l => !l.archived && !l.trashed);
   const activeCards = cards.filter(c => !c.archived && !c.trashed && c.assignee === currentUser?.id);
 

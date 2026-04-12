@@ -82,7 +82,7 @@ const AppSidebar = () => {
     }
   }
   const activeKanbanFolder = folders.find(f => f.id === kanbanFolderId && !f.trashed && !f.archived);
-  const activeKanbanBoards = boards.filter(b => b.folderId === kanbanFolderId && !b.trashed && !b.archived);
+  const activeKanbanBoards = boards.filter(b => b.folderId === kanbanFolderId && !b.trashed && !b.archived).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
   // Connection module logic
   const { folders: connectionFolders, fetchFolders } = useConnectionStore();
