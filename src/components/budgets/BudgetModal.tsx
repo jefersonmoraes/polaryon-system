@@ -764,7 +764,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     />
                                 </div>
                                 <div className="relative">
-                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[8px] font-black text-teal-600/60">MÁX</span>
+                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[8px] font-black text-purple-600/60">MÁX</span>
                                     <input
                                         id={`budget-item-margin-max-${item.id}`}
                                         name="profitMarginMax"
@@ -780,7 +780,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                             if (val < 0) val = 0;
                                             handleFieldChangeImpactingTotal('profitMarginMax', val);
                                         }}
-                                        className="w-full bg-teal-500/10 border-teal-500/30 text-teal-600 font-bold rounded text-xs pr-1 pl-6 py-1.5 focus:ring-1 focus:ring-teal-500/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed text-center"
+                                        className="w-full bg-purple-500/10 border-purple-500/30 text-purple-600 font-bold rounded text-xs pr-1 pl-6 py-1.5 focus:ring-1 focus:ring-purple-500/50 outline-none disabled:opacity-50 disabled:cursor-not-allowed text-center"
                                         title="Margem Máxima (%)"
                                     />
                                 </div>
@@ -1520,8 +1520,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                                 {formatCurrency(vUnitResale).replace('R$ ', '')}
                                                             </div>
                                                             {item.profitMarginMax !== undefined && item.profitMarginMax > 0 && (
-                                                                <div className="text-[11px] sm:text-[10px] font-mono font-black text-teal-600 flex items-center gap-1 mt-0.5" title="Máximo Simulado">
-                                                                    <span className="text-[8px] hidden sm:inline text-teal-600/70">R$</span>
+                                                                <div className="text-[11px] sm:text-[10px] font-mono font-black text-purple-600 flex items-center gap-1 mt-0.5" title="Máximo Simulado">
+                                                                    <span className="text-[8px] hidden sm:inline text-purple-600/70">R$</span>
                                                                     {formatCurrency(vUnitResaleMax).replace('R$ ', '')}
                                                                 </div>
                                                             )}
@@ -1538,8 +1538,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                                     {formatCurrency(vTotalResale)}
                                                                 </span>
                                                                 {item.profitMarginMax !== undefined && item.profitMarginMax > 0 && (
-                                                                    <span className="truncate flex items-center gap-1 justify-end w-full text-[12px] sm:text-[10px] font-black text-teal-600 mt-0.5">
-                                                                        <DollarSign className="h-2.5 w-2.5 inline text-teal-600/50 mr-1" />
+                                                                    <span className="truncate flex items-center gap-1 justify-end w-full text-[12px] sm:text-[10px] font-black text-purple-600 mt-0.5">
+                                                                        <DollarSign className="h-2.5 w-2.5 inline text-purple-600/50 mr-1" />
                                                                         {formatCurrency(vTotalResaleMax)}
                                                                     </span>
                                                                 )}
@@ -2646,13 +2646,13 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                 />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block text-teal-500">Margem Máx (%)</label>
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block text-purple-500">Margem Máx (%)</label>
                                                 <input 
                                                     type="number"
                                                     disabled={!canEdit}
                                                     value={expandedQuote?.profitMarginMax || ''}
                                                     onChange={(e) => updateItemField(expandedQuote?.id as string, 'profitMarginMax', Number(e.target.value))}
-                                                    className="w-full bg-teal-500/5 border border-teal-500/20 text-teal-600 rounded p-2 text-xs font-mono font-bold focus:ring-teal-500"
+                                                    className="w-full bg-purple-500/5 border border-purple-500/20 text-purple-600 rounded p-2 text-xs font-mono font-bold focus:ring-purple-500"
                                                     placeholder="35%"
                                                 />
                                             </div>
@@ -2668,7 +2668,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                             <div className="flex flex-col items-end">
                                                 <span className="text-lg font-mono font-bold text-primary">{formatCurrency(expandedQuote?.finalSellingPrice || 0)}</span>
                                                 {(expandedQuote?.profitMarginMax ?? 0) > 0 && (
-                                                    <span className="text-xs font-mono font-bold text-teal-600 mt-0.5">Teto Simul.: {formatCurrency(expandedQuote?.finalSellingPriceMax || 0)}</span>
+                                                    <span className="text-xs font-mono font-bold text-purple-600 mt-0.5">Teto Simul.: {formatCurrency(expandedQuote?.finalSellingPriceMax || 0)}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -2706,7 +2706,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                     </div>
                                                     
                                                     {hasMaxMargin && (
-                                                        <div className="w-full py-2 rounded-lg text-center font-bold text-[10px] uppercase tracking-widest bg-teal-500/10 text-teal-600 border border-teal-500/20">
+                                                        <div className="w-full py-2 rounded-lg text-center font-bold text-[10px] uppercase tracking-widest bg-purple-500/10 text-purple-600 border border-purple-500/20">
                                                             <span className="opacity-70 text-[8px] block mb-0.5">TETO SIMULADO (MÁX)</span>
                                                             LUCRO: {profitPercentageMax.toFixed(1)}% ({formatCurrency(profitAmountMax)})
                                                         </div>
