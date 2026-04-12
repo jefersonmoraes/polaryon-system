@@ -10,6 +10,7 @@ import { BoardListView } from '@/components/board/BoardListView';
 import { BoardCalendarView } from '@/components/board/BoardCalendarView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConfirmAction } from '@/components/ui/ConfirmAction';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ReactDOM from 'react-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
@@ -293,16 +294,20 @@ const BoardPage = () => {
             </button>
           </div>
 
-          <select
+          <Select
             value={prefs.sortBy}
-            onChange={(e) => setBoardPreference(board.id, { sortBy: e.target.value as 'default' | 'priority' | 'assignee' | 'dueDate' })}
-            className="bg-white/10 text-white text-xs rounded px-2 py-1.5 outline-none border-none cursor-pointer shrink-0 appearance-none"
+            onValueChange={(v) => setBoardPreference(board.id, { sortBy: v as 'default' | 'priority' | 'assignee' | 'dueDate' })}
           >
-            <option value="default" className="text-black">Ordenar: Padrão</option>
-            <option value="priority" className="text-black">Ordenar: Prioridade</option>
-            <option value="assignee" className="text-black">Ordenar: Responsável</option>
-            <option value="dueDate" className="text-black">Ordenar: Data</option>
-          </select>
+            <SelectTrigger className="w-[160px] bg-white/10 text-white border-none h-8 text-xs font-medium">
+                <SelectValue placeholder="Ordenar por..." />
+            </SelectTrigger>
+            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                <SelectItem value="default" className="text-xs font-bold">Padrão</SelectItem>
+                <SelectItem value="priority" className="text-xs font-bold">Prioridade</SelectItem>
+                <SelectItem value="assignee" className="text-xs font-bold">Responsável</SelectItem>
+                <SelectItem value="dueDate" className="text-xs font-bold">Data (Vencimento)</SelectItem>
+            </SelectContent>
+          </Select>
 
           <button onClick={() => setShowArchiveViewer('archived')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition-colors text-white text-xs font-medium shrink-0">

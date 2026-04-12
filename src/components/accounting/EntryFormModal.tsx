@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { useAccountingStore } from '@/store/accounting-store';
 import { EntryType, AccountingCategory } from '@/types/accounting';
 import { useKanbanStore } from '@/store/kanban-store';
@@ -392,22 +399,22 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
                             <div className="space-y-2">
                                 <label htmlFor="entry-category" className="text-xs font-semibold uppercase text-muted-foreground">Categoria Contábil*</label>
-                                <select
-                                    id="entry-category"
-                                    name="categoryId"
-                                    required
-                                    value={formData.categoryId}
-                                    onChange={(e) => {
-                                        setFormData(p => ({ ...p, categoryId: e.target.value }));
+                                <Select 
+                                    value={formData.categoryId} 
+                                    onValueChange={(v) => {
+                                        setFormData(p => ({ ...p, categoryId: v }));
                                         if (errors.categoryId) setErrors(prev => ({ ...prev, categoryId: '' }));
                                     }}
-                                    className={`w-full bg-background text-foreground border rounded px-3 py-2 text-sm outline-none transition-colors cursor-pointer ${errors.categoryId ? 'border-destructive focus:border-destructive animate-shake shadow-[0_0_0_1px_rgba(239,68,68,0.5)]' : 'border-border focus:border-primary'}`}
                                 >
-                                    <option className="bg-background text-foreground" value="" disabled>Selecione uma categoria...</option>
-                                    {typeCategories.map(cat => (
-                                        <option className="bg-background text-foreground" key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
+                                    <SelectTrigger className={`w-full bg-background border rounded px-3 h-10 text-sm focus:ring-1 focus:ring-primary font-bold ${errors.categoryId ? 'border-destructive focus:ring-destructive animate-shake' : 'border-border'}`}>
+                                        <SelectValue placeholder="Selecione a categoria" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[300px]">
+                                        {typeCategories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.id} className="text-xs font-bold">{cat.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 {errors.categoryId && <span className="text-[10px] text-destructive font-bold uppercase">{errors.categoryId}</span>}
                             </div>
                         </div>
@@ -456,51 +463,54 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                             </div>
                             <div className="space-y-2">
                                 <label htmlFor="entry-payment-method" className="text-[10px] font-semibold uppercase text-muted-foreground">Forma de Pagamento</label>
-                                <select
-                                    id="entry-payment-method"
-                                    name="paymentMethod"
-                                    value={formData.paymentMethod}
-                                    onChange={(e) => setFormData(p => ({ ...p, paymentMethod: e.target.value as any }))}
-                                    className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                                <Select 
+                                    value={formData.paymentMethod} 
+                                    onValueChange={(v) => setFormData(p => ({ ...p, paymentMethod: v as any }))}
                                 >
-                                    <option className="bg-background text-foreground" value="pix">PIX</option>
-                                    <option className="bg-background text-foreground" value="bank_transfer">Transferência Bancária (TED/DOC)</option>
-                                    <option className="bg-background text-foreground" value="boleto">Boleto Bancário</option>
-                                    <option className="bg-background text-foreground" value="credit_card">Cartão de Crédito</option>
-                                    <option className="bg-background text-foreground" value="debit_card">Cartão de Débito</option>
-                                    <option className="bg-background text-foreground" value="cash">Dinheiro em Espécie</option>
-                                </select>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded px-2 h-8 text-xs focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Forma de Pagto" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="pix" className="text-xs font-bold">PIX</SelectItem>
+                                        <SelectItem value="bank_transfer" className="text-xs font-bold">Transferência Bancária (TED/DOC)</SelectItem>
+                                        <SelectItem value="boleto" className="text-xs font-bold">Boleto Bancário</SelectItem>
+                                        <SelectItem value="credit_card" className="text-xs font-bold">Cartão de Crédito</SelectItem>
+                                        <SelectItem value="debit_card" className="text-xs font-bold">Cartão de Débito</SelectItem>
+                                        <SelectItem value="cash" className="text-xs font-bold">Dinheiro em Espécie</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label htmlFor="entry-bank" className="text-[10px] font-semibold uppercase text-muted-foreground">Instituição Financeira (Conta)</label>
-                            <select
-                                id="entry-bank"
-                                name="bankAccountId"
-                                value={formData.bankAccountId}
-                                onChange={(e) => setFormData(p => ({ ...p, bankAccountId: e.target.value }))}
-                                className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                            <Select 
+                                value={formData.bankAccountId} 
+                                onValueChange={(v) => setFormData(p => ({ ...p, bankAccountId: v }))}
                             >
-                                <option className="bg-background text-foreground" value="">Sem vínculo / Caixa Interno</option>
-                                {bankAccounts.filter(b => b.companyId === activeCompany?.id).map(bank => (
-                                    <option className="bg-background text-foreground" key={bank.id} value={bank.id}>{bank.name}</option>
-                                ))}
-                                <optgroup label="Bancos Principais Brasileiros">
-                                    <option className="bg-background text-foreground" value="itau">Itaú Unibanco</option>
-                                    <option className="bg-background text-foreground" value="bb">Banco do Brasil</option>
-                                    <option className="bg-background text-foreground" value="bradesco">Bradesco</option>
-                                    <option className="bg-background text-foreground" value="caixa">Caixa Econômica Federal</option>
-                                    <option className="bg-background text-foreground" value="santander">Santander</option>
-                                    <option className="bg-background text-foreground" value="nubank">Nubank</option>
-                                    <option className="bg-background text-foreground" value="inter">Banco Inter</option>
-                                    <option className="bg-background text-foreground" value="c6">C6 Bank</option>
-                                    <option className="bg-background text-foreground" value="sicoob">Sicoob</option>
-                                    <option className="bg-background text-foreground" value="sicredi">Sicredi</option>
-                                    <option className="bg-background text-foreground" value="btg">BTG Pactual</option>
-                                    <option className="bg-background text-foreground" value="cora">Cora</option>
-                                </optgroup>
-                            </select>
+                                <SelectTrigger className="w-full bg-background border border-border rounded px-2 h-8 text-xs focus:ring-1 focus:ring-primary font-bold">
+                                    <SelectValue placeholder="Selecione a conta" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[300px]">
+                                    <SelectItem value="none" className="text-xs font-bold italic">Sem vínculo / Caixa Interno</SelectItem>
+                                    {bankAccounts.filter(b => b.companyId === activeCompany?.id).map(bank => (
+                                        <SelectItem key={bank.id} value={bank.id} className="text-xs font-bold">{bank.name}</SelectItem>
+                                    ))}
+                                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase bg-muted/30">Bancos Principais Brasileiros</div>
+                                    <SelectItem value="itau" className="text-xs font-bold">Itaú Unibanco</SelectItem>
+                                    <SelectItem value="bb" className="text-xs font-bold">Banco do Brasil</SelectItem>
+                                    <SelectItem value="bradesco" className="text-xs font-bold">Bradesco</SelectItem>
+                                    <SelectItem value="caixa" className="text-xs font-bold">Caixa Econômica Federal</SelectItem>
+                                    <SelectItem value="santander" className="text-xs font-bold">Santander</SelectItem>
+                                    <SelectItem value="nubank" className="text-xs font-bold">Nubank</SelectItem>
+                                    <SelectItem value="inter" className="text-xs font-bold">Banco Inter</SelectItem>
+                                    <SelectItem value="c6" className="text-xs font-bold">C6 Bank</SelectItem>
+                                    <SelectItem value="sicoob" className="text-xs font-bold">Sicoob</SelectItem>
+                                    <SelectItem value="sicredi" className="text-xs font-bold">Sicredi</SelectItem>
+                                    <SelectItem value="btg" className="text-xs font-bold">BTG Pactual</SelectItem>
+                                    <SelectItem value="cora" className="text-xs font-bold">Cora</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-2">
@@ -654,17 +664,19 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
                                     <div className="space-y-1.5">
                                         <label htmlFor="entry-recurrence-frequency" className="text-xs font-semibold text-muted-foreground">Frequência</label>
-                                        <select
-                                            id="entry-recurrence-frequency"
-                                            name="recurrenceFrequency"
-                                            value={recurrenceFrequency}
-                                            onChange={(e) => setRecurrenceFrequency(e.target.value as any)}
-                                            className="w-full bg-background text-foreground border border-border rounded px-3 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                                        <Select 
+                                            value={recurrenceFrequency} 
+                                            onValueChange={(v) => setRecurrenceFrequency(v as any)}
                                         >
-                                            <option className="bg-background text-foreground" value="weekly">Semanal</option>
-                                            <option className="bg-background text-foreground" value="monthly">Mensal</option>
-                                            <option className="bg-background text-foreground" value="yearly">Anual</option>
-                                        </select>
+                                            <SelectTrigger className="w-full bg-background border border-border rounded px-3 h-8 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                                <SelectValue placeholder="Frequência" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                                <SelectItem value="weekly" className="text-xs font-bold">Semanal</SelectItem>
+                                                <SelectItem value="monthly" className="text-xs font-bold">Mensal</SelectItem>
+                                                <SelectItem value="yearly" className="text-xs font-bold">Anual</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div className="space-y-1.5">
                                         <label htmlFor="entry-recurrence-count" className="text-xs font-semibold text-muted-foreground">Quantas vezes?</label>

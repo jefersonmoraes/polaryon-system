@@ -13,6 +13,13 @@ import { cn, getFaviconUrl, compressImage, openFileInNewTab } from '@/lib/utils'
 import { CompanyFavicon } from '../ui/CompanyFavicon';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../ui/select";
 import { toast } from 'sonner';
 
 interface BudgetModalProps {
@@ -630,17 +637,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-muted-foreground">
                                 <Package className="h-3 w-3" /> Natureza (Tipo)
                             </label>
-                            <select
-                                id={`budget-item-type-${item.id}`}
-                                name="itemType"
+                            <Select
                                 value={item.type || budgetType || 'Produto'}
+                                onValueChange={(val) => handleFieldChangeImpactingTotal('type', val as BudgetType)}
                                 disabled={!canEdit}
-                                onChange={(e) => handleFieldChangeImpactingTotal('type', e.target.value as BudgetType)}
-                                className="w-full bg-background border border-border rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <option value="Produto">Produto</option>
-                                <option value="Serviço">Serviço</option>
-                            </select>
+                                <SelectTrigger className="w-full bg-background border-border rounded text-xs h-8 px-2 focus:ring-1 focus:ring-primary/30 outline-none">
+                                    <SelectValue placeholder="Selecione o tipo" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="Produto" className="text-xs font-bold">Produto</SelectItem>
+                                    <SelectItem value="Serviço" className="text-xs font-bold">Serviço</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-1.5 flex flex-col justify-end h-full relative z-[50]" ref={adminRef}>
@@ -1201,22 +1210,24 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                         <div className="space-y-1.5">
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Forma de Pagamento</label>
-                            <select
-                                id={`budget-item-paym-${item.id}`}
-                                name="paymentTerms"
-                                value={item.paymentTerms || ''}
+                            <Select
+                                value={item.paymentTerms || "none"}
+                                onValueChange={(val) => handleFieldChangeImpactingTotal('paymentTerms', val === "none" ? "" : val)}
                                 disabled={!canEdit}
-                                onChange={e => handleFieldChangeImpactingTotal('paymentTerms', e.target.value)}
-                                className="w-full bg-background border border-border text-foreground rounded text-xs px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <option value="">Não informado</option>
-                                <option value="À vista">Dinheiro (À vista)</option>
-                                <option value="PIX">PIX</option>
-                                <option value="Boleto">Boleto Bancário</option>
-                                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                <option value="Cartão de Débito">Cartão de Débito</option>
-                                <option value="Transferência Bancária">Transferência (TED/DOC)</option>
-                            </select>
+                                <SelectTrigger className="w-full bg-background border-border text-foreground rounded text-xs h-8 px-2 focus:ring-1 focus:ring-primary/30 outline-none">
+                                    <SelectValue placeholder="Não informado" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="none" className="text-xs font-bold">Não informado</SelectItem>
+                                    <SelectItem value="À vista" className="text-xs font-bold">Dinheiro (À vista)</SelectItem>
+                                    <SelectItem value="PIX" className="text-xs font-bold">PIX</SelectItem>
+                                    <SelectItem value="Boleto" className="text-xs font-bold">Boleto Bancário</SelectItem>
+                                    <SelectItem value="Cartão de Crédito" className="text-xs font-bold">Cartão de Crédito</SelectItem>
+                                    <SelectItem value="Cartão de Débito" className="text-xs font-bold">Cartão de Débito</SelectItem>
+                                    <SelectItem value="Transferência Bancária" className="text-xs font-bold">Transferência (TED/DOC)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         {/* Desconto Híbrido Conditional */}

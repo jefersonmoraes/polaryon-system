@@ -13,6 +13,13 @@ import { BankReconciliation } from '@/components/accounting/BankReconciliation';
 import { CobrancasPanel } from '@/components/accounting/CobrancasPanel';
 import { TaxDash } from '@/components/accounting/TaxDash';
 import { ProLaboreDash } from '@/components/accounting/ProLaboreDash';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type FilterMode = 'current_month' | 'specific_month' | 'custom_period' | 'specific_year' | 'all';
 const AccountingDashboard = () => {
@@ -543,17 +550,21 @@ const AccountingDashboard = () => {
                                 </div>
                                 <div className="flex flex-col sm:flex-row items-center gap-2 bg-muted/30 border border-border p-2 rounded-lg">
                                     <Filter className="h-4 w-4 text-muted-foreground mr-1" />
-                                    <select
-                                        value={filterMode}
-                                        onChange={(e) => setFilterMode(e.target.value as FilterMode)}
-                                        className="bg-background text-foreground text-sm border-none rounded-md focus:ring-1 focus:ring-primary cursor-pointer font-medium px-2 py-1"
+                                    <Select 
+                                        value={filterMode} 
+                                        onValueChange={(v) => setFilterMode(v as FilterMode)}
                                     >
-                                        <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
-                                        <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
-                                        <option className="bg-background text-foreground" value="custom_period">Vários Meses</option>
-                                        <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
-                                        <option className="bg-background text-foreground" value="all">Todo o Período</option>
-                                    </select>
+                                        <SelectTrigger className="bg-transparent border-none shadow-none text-sm font-bold h-7 px-2 focus:ring-0 w-full sm:w-auto">
+                                            <SelectValue placeholder="Período" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="current_month" className="text-xs font-bold">Mês Atual</SelectItem>
+                                            <SelectItem value="specific_month" className="text-xs font-bold">Mês Específico</SelectItem>
+                                            <SelectItem value="custom_period" className="text-xs font-bold">Vários Meses</SelectItem>
+                                            <SelectItem value="specific_year" className="text-xs font-bold">Ano Específico</SelectItem>
+                                            <SelectItem value="all" className="text-xs font-bold">Todo o Período</SelectItem>
+                                        </SelectContent>
+                                    </Select>
 
                                     {filterMode === 'specific_month' && (
                                         <input

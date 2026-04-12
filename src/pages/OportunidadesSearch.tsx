@@ -11,6 +11,13 @@ import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap, Papercli
 import { socketService } from '@/lib/socket';
 import { FilePreviewModal } from '@/components/ui/FilePreviewModal';
 import { getSafeProxyUrl, normalizeFileUrl, cn } from '@/lib/utils';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const getStatusStyle = (situacao: string) => {
     const lower = (situacao || '').toLowerCase();
@@ -900,63 +907,88 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                             >
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Instrumento</label>
-                                    <select 
-                                        id="pncp-filter-instrumento"
-                                        name="instrumento"
-                                        value={instrumentoFilter} onChange={(e) => setInstrumentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todos Documentos</option>
-                                        <option value="edital">Editais / Avisos de Contratação</option>
-                                        <option value="ata">Atas de Registro de Preços</option>
-                                        <option value="contrato">Contratos</option>
-                                    </select>
+                                    <Select 
+                                        value={instrumentoFilter || 'all'} 
+                                        onValueChange={(v) => setInstrumentoFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todos Documentos" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todos Documentos</SelectItem>
+                                            <SelectItem value="edital" className="text-xs font-bold">Editais / Avisos de Contratação</SelectItem>
+                                            <SelectItem value="ata" className="text-xs font-bold">Atas de Registro de Preços</SelectItem>
+                                            <SelectItem value="contrato" className="text-xs font-bold">Contratos</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Status</label>
-                                    <select 
-                                        id="pncp-filter-status"
-                                        name="status"
-                                        value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todos os Status</option>
-                                        <option value="recebendo_proposta">Abertas (Recebendo Propostas)</option>
-                                        <option value="propostas_encerradas">Em Julgamento (Propostas Encerradas)</option>
-                                        <option value="encerradas">Concluída / Encerrada</option>
-                                        <option value="suspensas">Suspensa</option>
-                                        <option value="canceladas">Cancelada</option>
-                                    </select>
+                                    <Select 
+                                        value={statusFilter || 'all'} 
+                                        onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todos os Status" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todos os Status</SelectItem>
+                                            <SelectItem value="recebendo_proposta" className="text-xs font-bold">Abertas (Recebendo Propostas)</SelectItem>
+                                            <SelectItem value="propostas_encerradas" className="text-xs font-bold">Em Julgamento (Propostas Encerradas)</SelectItem>
+                                            <SelectItem value="encerradas" className="text-xs font-bold">Concluída / Encerrada</SelectItem>
+                                            <SelectItem value="suspensas" className="text-xs font-bold">Suspensa</SelectItem>
+                                            <SelectItem value="canceladas" className="text-xs font-bold">Cancelada</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">UF / Estado</label>
-                                    <select 
-                                        id="pncp-filter-uf"
-                                        name="uf"
-                                        value={ufFilter} onChange={(e) => setUfFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Qualquer UF</option>
-                                        {ESTADOS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                                    </select>
+                                    <Select 
+                                        value={ufFilter || 'all'} 
+                                        onValueChange={(v) => setUfFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Qualquer UF" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Qualquer UF</SelectItem>
+                                            {ESTADOS_BR.map(uf => <SelectItem key={uf} value={uf} className="text-xs font-bold">{uf}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Esferas</label>
-                                    <select 
-                                        id="pncp-filter-esfera"
-                                        name="esfera"
-                                        value={esferaFilter} onChange={(e) => setEsferaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todas Esferas</option>
-                                        <option value="F">Federal</option>
-                                        <option value="E">Estadual</option>
-                                        <option value="M">Municipal</option>
-                                    </select>
+                                    <Select 
+                                        value={esferaFilter || 'all'} 
+                                        onValueChange={(v) => setEsferaFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todas Esferas" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todas Esferas</SelectItem>
+                                            <SelectItem value="F" className="text-xs font-bold">Federal</SelectItem>
+                                            <SelectItem value="E" className="text-xs font-bold">Estadual</SelectItem>
+                                            <SelectItem value="M" className="text-xs font-bold">Municipal</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Poderes</label>
-                                    <select 
-                                        id="pncp-filter-poder"
-                                        name="poder"
-                                        value={poderFilter} onChange={(e) => setPoderFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todos</option>
-                                        <option value="Executivo">Executivo</option>
-                                        <option value="Legislativo">Legislativo</option>
-                                        <option value="Judiciário">Judiciário</option>
-                                    </select>
+                                    <Select 
+                                        value={poderFilter || 'all'} 
+                                        onValueChange={(v) => setPoderFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todos" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todos</SelectItem>
+                                            <SelectItem value="Executivo" className="text-xs font-bold">Executivo</SelectItem>
+                                            <SelectItem value="Legislativo" className="text-xs font-bold">Legislativo</SelectItem>
+                                            <SelectItem value="Judiciário" className="text-xs font-bold">Judiciário</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Organização / Órgão</label>
@@ -967,16 +999,21 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Modalidade Licit.</label>
-                                    <select 
-                                        id="pncp-filter-modalidade"
-                                        name="modalidade"
-                                        value={modalidadeFilter} onChange={(e) => setModalidadeFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todas</option>
-                                        <option value="Pregão">Pregão Eletrônico/Presencial</option>
-                                        <option value="Dispensa">Dispensa de Licitação</option>
-                                        <option value="Concorrência">Concorrência</option>
-                                        <option value="Inexigibilidade">Inexigibilidade</option>
-                                    </select>
+                                    <Select 
+                                        value={modalidadeFilter || 'all'} 
+                                        onValueChange={(v) => setModalidadeFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todas" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todas</SelectItem>
+                                            <SelectItem value="Pregão" className="text-xs font-bold">Pregão Eletrônico/Presencial</SelectItem>
+                                            <SelectItem value="Dispensa" className="text-xs font-bold">Dispensa de Licitação</SelectItem>
+                                            <SelectItem value="Concorrência" className="text-xs font-bold">Concorrência</SelectItem>
+                                            <SelectItem value="Inexigibilidade" className="text-xs font-bold">Inexigibilidade</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Municípios</label>
@@ -987,13 +1024,18 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Ordenação</label>
-                                    <select 
-                                        id="pncp-filter-ordenacao"
-                                        name="ordenacao"
-                                        value={ordenacaoFilter} onChange={(e) => setOrdenacaoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="-data_publicacao_pncp">Mais Recente Primeiro</option>
-                                        <option value="data_publicacao_pncp">Mais Antigo Primeiro</option>
-                                    </select>
+                                    <Select 
+                                        value={ordenacaoFilter} 
+                                        onValueChange={setOrdenacaoFilter}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Ordenação" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="-data_publicacao_pncp" className="text-xs font-bold">Mais Recente Primeiro</SelectItem>
+                                            <SelectItem value="data_publicacao_pncp" className="text-xs font-bold">Mais Antigo Primeiro</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Unid. de Compra</label>
@@ -1011,25 +1053,35 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Cont. Nacional</label>
-                                    <select 
-                                        id="pncp-filter-conteudo-nac"
-                                        name="conteudoNacional"
-                                        value={conteudoNacionalFilter} onChange={(e) => setConteudoNacionalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Qualquer Exigência</option>
-                                        <option value="Sim">Exige (Sim)</option>
-                                        <option value="Não">Não Exige</option>
-                                    </select>
+                                    <Select 
+                                        value={conteudoNacionalFilter || 'all'} 
+                                        onValueChange={(v) => setConteudoNacionalFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Qualquer Exigência" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Qualquer Exigência</SelectItem>
+                                            <SelectItem value="Sim" className="text-xs font-bold">Exige (Sim)</SelectItem>
+                                            <SelectItem value="Não" className="text-xs font-bold">Não Exige</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Margens Prefe.</label>
-                                    <select 
-                                        id="pncp-filter-margem"
-                                        name="margemPreferencia"
-                                        value={margemPreferenciaFilter} onChange={(e) => setMargemPreferenciaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
-                                        <option value="">Todas</option>
-                                        <option value="Normal">Normal</option>
-                                        <option value="ME">Exclusiva ME/EPP</option>
-                                    </select>
+                                    <Select 
+                                        value={margemPreferenciaFilter || 'all'} 
+                                        onValueChange={(v) => setMargemPreferenciaFilter(v === 'all' ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full h-9 bg-background border-border text-xs font-bold shadow-sm">
+                                            <SelectValue placeholder="Todas" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="all" className="text-xs font-bold">Todas</SelectItem>
+                                            <SelectItem value="Normal" className="text-xs font-bold">Normal</SelectItem>
+                                            <SelectItem value="ME" className="text-xs font-bold">Exclusiva ME/EPP</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Início)</label>
@@ -1774,58 +1826,78 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-bold uppercase text-muted-foreground">1. Escolha a Pasta</label>
-                                    <select
-                                        value={exportFolderId}
-                                        onChange={(e) => {
-                                            setExportFolderId(e.target.value);
+                                    <Select 
+                                        value={exportFolderId} 
+                                        onValueChange={(v) => {
+                                            setExportFolderId(v);
                                             setExportBoardId('');
                                             setExportListId('');
                                             setExportErrors(prev => ({ ...prev, folder: false }));
                                         }}
-                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all ${exportErrors.folder ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                     >
-                                        <option value="">Selecione uma pasta...</option>
-                                        {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                    </select>
+                                        <SelectTrigger className={`w-full h-9 bg-muted border text-sm transition-all ${exportErrors.folder ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}>
+                                            <SelectValue placeholder="Selecione uma pasta..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="none" disabled className="text-xs font-bold">Selecione uma pasta...</SelectItem>
+                                            {folders.map(f => (
+                                                <SelectItem key={f.id} value={f.id} className="text-xs font-bold">
+                                                    {f.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     {exportErrors.folder && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                 </div>
 
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-bold uppercase text-muted-foreground">2. Escolha o Quadro (Board)</label>
-                                    <select
-                                        value={exportBoardId}
-                                        onChange={(e) => {
-                                            setExportBoardId(e.target.value);
+                                    <Select 
+                                        value={exportBoardId} 
+                                        onValueChange={(v) => {
+                                            setExportBoardId(v);
                                             setExportListId('');
                                             setExportErrors(prev => ({ ...prev, board: false }));
                                         }}
                                         disabled={!exportFolderId}
-                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.board ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                     >
-                                        <option value="">Selecione o quadro...</option>
-                                        {boards.filter(b => b.folderId === exportFolderId).map(b => (
-                                            <option key={b.id} value={b.id}>{b.name}</option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className={`w-full h-9 bg-muted border text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.board ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}>
+                                            <SelectValue placeholder="Selecione o quadro..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="none" disabled className="text-xs font-bold">Selecione o quadro...</SelectItem>
+                                            {boards.filter(b => b.folderId === exportFolderId).map(b => (
+                                                <SelectItem key={b.id} value={b.id} className="text-xs font-bold">
+                                                    {b.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     {exportErrors.board && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                 </div>
 
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-bold uppercase text-muted-foreground">3. Escolha a Coluna</label>
-                                    <select
-                                        value={exportListId}
-                                        onChange={(e) => {
-                                            setExportListId(e.target.value);
+                                    <Select 
+                                        value={exportListId} 
+                                        onValueChange={(v) => {
+                                            setExportListId(v);
                                             setExportErrors(prev => ({ ...prev, list: false }));
                                         }}
                                         disabled={!exportBoardId}
-                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.list ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
                                     >
-                                        <option value="">Selecione a coluna (etapa)...</option>
-                                        {lists.filter(l => l.boardId === exportBoardId).map(l => (
-                                            <option key={l.id} value={l.id}>{l.title}</option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className={`w-full h-9 bg-muted border text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.list ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}>
+                                            <SelectValue placeholder="Selecione a coluna (etapa)..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="none" disabled className="text-xs font-bold">Selecione a coluna (etapa)...</SelectItem>
+                                            {lists.filter(l => l.boardId === exportBoardId).map(l => (
+                                                <SelectItem key={l.id} value={l.id} className="text-xs font-bold">
+                                                    {l.title}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     {exportErrors.list && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
                                 </div>
                             </div>

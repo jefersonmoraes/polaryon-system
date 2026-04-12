@@ -10,6 +10,13 @@ import { cn, compressImage } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Paperclip } from 'lucide-react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export const InvoiceManager = () => {
     const { invoices, addInvoice, updateInvoice, deleteInvoice, addEntry } = useAccountingStore();
@@ -472,14 +479,15 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                             />
                         </div>
                         <div className="h-6 w-px bg-border mx-2 self-center"></div>
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as any)}
-                            className="bg-background text-foreground border-none rounded px-2 py-1 text-xs font-semibold focus:outline-none cursor-pointer focus:ring-1 focus:ring-primary"
-                        >
-                            <option className="bg-background text-foreground" value="all">Ver Ativas</option>
-                            <option className="bg-background text-foreground" value="cancelled">Lixeira (Canceladas)</option>
-                        </select>
+                        <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
+                            <SelectTrigger className="bg-background text-foreground border-none h-7 px-2 text-xs font-semibold focus:ring-1 focus:ring-primary w-[140px]">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all" className="text-xs font-bold">Ver Ativas</SelectItem>
+                                <SelectItem value="cancelled" className="text-xs font-bold">Lixeira (Canceladas)</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
@@ -589,20 +597,26 @@ VALOR TOTAL: R$ ${invoice.amount.toLocaleString('pt-BR', { minimumFractionDigits
                                 <h4 className="font-bold">Dados do Faturamento</h4>
 
                                 <div className="mb-2">
-                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Preencher a partir de Orçamento/Cotação Aprovada</label>
-                                    <select
-                                        className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
-                                        onChange={(e) => handleAutoFillFromBudget(e.target.value)}
-                                        defaultValue=""
-                                    >
-                                        <option className="bg-background text-foreground" value="" disabled>Selecione um orçamento...</option>
-                                        {budgets.filter(b => b.status === 'Aprovado' && b.type.toLowerCase() === (invoiceType === 'product' ? 'produto' : 'serviço')).map(b => {
-                                            const finalAmount = b.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
-                                            return (
-                                                <option className="bg-background text-foreground" key={b.id} value={b.id}>{b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
-                                            );
-                                        })}
-                                    </select>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Preencher a partir de Orçamento/Cotação Aprovada</label>
+                                    <Select onValueChange={(v: string) => handleAutoFillFromBudget(v)}>
+                                        <SelectTrigger className="w-full bg-background text-foreground border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                            <SelectValue placeholder="Selecione um orçamento..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            {budgets.filter(b => b.status === 'Aprovado' && b.type.toLowerCase() === (invoiceType === 'product' ? 'produto' : 'serviço')).length === 0 ? (
+                                                <div className="p-2 text-xs text-muted-foreground text-center italic">Nenhum orçamento aprovado</div>
+                                            ) : (
+                                                budgets.filter(b => b.status === 'Aprovado' && b.type.toLowerCase() === (invoiceType === 'product' ? 'produto' : 'serviço')).map(b => {
+                                                    const finalAmount = b.items.reduce((sum, item) => sum + (item.finalSellingPrice || item.totalPrice || 0), 0);
+                                                    return (
+                                                        <SelectItem key={b.id} value={b.id} className="text-xs font-bold">
+                                                            {b.title} - R$ {finalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </SelectItem>
+                                                    );
+                                                })
+                                            )}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <p className="text-sm text-muted-foreground mb-4">

@@ -9,6 +9,7 @@ import { CompanyContact } from '@/types/kanban';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 interface CompanyListPageProps {
     type: 'Fornecedor' | 'Transportadora';
 }
@@ -383,27 +384,29 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
                         <div className="space-y-1.5 p-2 bg-background border border-border rounded-lg">
                             <p className="text-xs font-semibold text-muted-foreground px-1">Localização (Estado)</p>
-                            <select
-                                value={tempFilterState}
-                                onChange={(e) => setTempFilterState(e.target.value)}
-                                className="w-full text-sm bg-background text-foreground outline-none focus:ring-0 px-1 py-0.5"
-                            >
-                                <option value="">Todos os Estados</option>
-                                {availableStates.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                            </select>
+                            <Select value={tempFilterState} onValueChange={setTempFilterState}>
+                                <SelectTrigger className="w-full bg-background border-border h-9 text-sm font-medium">
+                                    <SelectValue placeholder="Todos os Estados" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="all" className="text-sm font-bold">Todos os Estados</SelectItem>
+                                    {availableStates.map(uf => <SelectItem key={uf} value={uf} className="text-sm font-bold">{uf}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         {type === 'Fornecedor' && (
                             <div className="space-y-1.5 p-2 bg-background border border-border rounded-lg">
                                 <p className="text-xs font-semibold text-muted-foreground px-1">Área de Atuação</p>
-                                <select
-                                    value={tempFilterArea}
-                                    onChange={(e) => setTempFilterArea(e.target.value)}
-                                    className="w-full text-sm bg-background text-foreground outline-none focus:ring-0 px-1 py-0.5"
-                                >
-                                    <option value="">Todas as Áreas</option>
-                                    {availableAreas.map(area => <option key={area} value={area}>{area}</option>)}
-                                </select>
+                                <Select value={tempFilterArea} onValueChange={setTempFilterArea}>
+                                    <SelectTrigger className="w-full bg-background border-border h-9 text-sm font-medium">
+                                        <SelectValue placeholder="Todas as Áreas" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="all" className="text-sm font-bold">Todas as Áreas</SelectItem>
+                                        {availableAreas.map(area => <SelectItem key={area} value={area} className="text-sm font-bold">{area}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
 
@@ -1124,27 +1127,35 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
 
                                             <div className="space-y-2">
                                                 <p className="text-xs font-semibold text-muted-foreground">Amostra</p>
-                                                <select
+                                                <Select
                                                     value={selectedCompany.amostra ? 'Sim' : 'Não'}
-                                                    onChange={(e) => updateCompany(selectedCompany.id, { amostra: e.target.value === 'Sim' })}
-                                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                                                    onValueChange={(v) => updateCompany(selectedCompany.id, { amostra: v === 'Sim' })}
                                                 >
-                                                    <option value="Não">Não</option>
-                                                    <option value="Sim">Sim</option>
-                                                </select>
+                                                    <SelectTrigger className="w-full bg-background border-border h-10 text-sm font-medium">
+                                                        <SelectValue placeholder="Amostra?" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                                        <SelectItem value="Não" className="text-sm font-bold">Não</SelectItem>
+                                                        <SelectItem value="Sim" className="text-sm font-bold">Sim</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
 
                                             <div className="space-y-2">
                                                 <p className="text-xs font-semibold text-muted-foreground">Tipo de Frete</p>
-                                                <select
-                                                    value={selectedCompany.frete || ''}
-                                                    onChange={(e) => updateCompany(selectedCompany.id, { frete: e.target.value as any })}
-                                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                                                <Select
+                                                    value={selectedCompany.frete || 'all'}
+                                                    onValueChange={(v) => updateCompany(selectedCompany.id, { frete: (v === 'all' ? '' : v) as any })}
                                                 >
-                                                    <option value="">Não Especificado</option>
-                                                    <option value="CIF">CIF (Por conta do Fornecedor)</option>
-                                                    <option value="FOB">FOB (Por conta do Comprador)</option>
-                                                </select>
+                                                    <SelectTrigger className="w-full bg-background border-border h-10 text-sm font-medium">
+                                                        <SelectValue placeholder="Tipo de Frete" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                                        <SelectItem value="all" className="text-sm font-bold">Não Especificado</SelectItem>
+                                                        <SelectItem value="CIF" className="text-sm font-bold">CIF (Por conta do Fornecedor)</SelectItem>
+                                                        <SelectItem value="FOB" className="text-sm font-bold">FOB (Por conta do Comprador)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
 
                                             <div className="space-y-2">

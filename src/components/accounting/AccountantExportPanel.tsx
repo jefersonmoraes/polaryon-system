@@ -7,7 +7,15 @@ import html2canvas from 'html2canvas';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { jsPDF } from 'jspdf';
 import { PdfDreReport } from './PdfDreReport';
+import { PdfDreReport } from './PdfDreReport';
 import { PdfHealthReport } from './PdfHealthReport';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export const AccountantExportPanel = () => {
     const { entries, categories, exports, addExport, deleteExport, restoreExport } = useAccountingStore();
@@ -230,8 +238,8 @@ export const AccountantExportPanel = () => {
         const matchesType = filterType === 'all' || exp.type === filterType;
         const expYear = exp.period.split('-')[0];
         const expMonth = exp.period.split('-')[1];
-        const matchesYear = !filterYear || expYear === filterYear;
-        const matchesMonth = !filterMonth || expMonth === filterMonth;
+        const matchesYear = !filterYear || filterYear === 'all_years' || expYear === filterYear;
+        const matchesMonth = !filterMonth || filterMonth === 'all_months' || expMonth === filterMonth;
         return matchesSearch && matchesType && matchesYear && matchesMonth;
     });
 
@@ -350,38 +358,43 @@ export const AccountantExportPanel = () => {
                         className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary text-foreground"
                     />
                     <div className="flex gap-2">
-                        <select
-                            value={filterType}
-                            onChange={(e) => setFilterType(e.target.value)}
-                            className="flex-1 bg-secondary/50 text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                        >
-                            <option className="bg-background text-foreground" value="all">Todos os Tipos</option>
-                            <option className="bg-background text-foreground" value="pdf_dre">DRE (PDF)</option>
-                            <option className="bg-background text-foreground" value="pdf_health">Saúde Fin. (PDF)</option>
-                            <option className="bg-background text-foreground" value="csv">Planilha (CSV)</option>
-                            <option className="bg-background text-foreground" value="sped_efd">SPED EFD</option>
-                            <option className="bg-background text-foreground" value="sintegra">SINTEGRA</option>
-                        </select>
-                        <select
-                            value={filterYear}
-                            onChange={(e) => setFilterYear(e.target.value)}
-                            className="bg-secondary/50 text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                        >
-                            <option className="bg-background text-foreground" value="">Qualquer Ano</option>
-                            {availableYears.map(year => (
-                                <option className="bg-background text-foreground" key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={filterMonth}
-                            onChange={(e) => setFilterMonth(e.target.value)}
-                            className="flex-1 bg-secondary/50 text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                        >
-                            <option className="bg-background text-foreground" value="">Qualquer Mês</option>
-                            {availableMonths.map(month => (
-                                <option className="bg-background text-foreground" key={month.value} value={month.value}>{month.label}</option>
-                            ))}
-                        </select>
+                        <Select value={filterType} onValueChange={(v: string) => setFilterType(v)}>
+                            <SelectTrigger className="flex-1 bg-secondary/50 text-foreground border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                <SelectValue placeholder="Tipo" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all" className="text-xs font-bold">Todos os Tipos</SelectItem>
+                                <SelectItem value="pdf_dre" className="text-xs font-bold">DRE (PDF)</SelectItem>
+                                <SelectItem value="pdf_health" className="text-xs font-bold">Saúde Fin. (PDF)</SelectItem>
+                                <SelectItem value="csv" className="text-xs font-bold">Planilha (CSV)</SelectItem>
+                                <SelectItem value="sped_efd" className="text-xs font-bold">SPED EFD</SelectItem>
+                                <SelectItem value="sintegra" className="text-xs font-bold">SINTEGRA</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={filterYear} onValueChange={(v: string) => setFilterYear(v)}>
+                            <SelectTrigger className="w-[120px] bg-secondary/50 text-foreground border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                <SelectValue placeholder="Ano" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all_years" className="text-xs font-bold">Qualquer Ano</SelectItem>
+                                {availableYears.map(year => (
+                                    <SelectItem key={year} value={year} className="text-xs font-bold">{year}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={filterMonth} onValueChange={(v: string) => setFilterMonth(v)}>
+                            <SelectTrigger className="flex-1 bg-secondary/50 text-foreground border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                <SelectValue placeholder="Mês" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all_months" className="text-xs font-bold">Qualquer Mês</SelectItem>
+                                {availableMonths.map(month => (
+                                    <SelectItem key={month.value} value={month.value} className="text-xs font-bold">{month.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 

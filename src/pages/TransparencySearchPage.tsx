@@ -49,6 +49,13 @@ import {
     ResponsiveContainer,
     Cell
 } from 'recharts';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Licitacao {
     id: string;
@@ -499,19 +506,21 @@ export default function TransparencySearchPage() {
                         </div>
 
                         <div className="flex flex-col sm:flex-row border border-border rounded-lg overflow-hidden sm:h-10 bg-background">
-                            <select 
-                                id="transparency-filter-situacao"
-                                name="situacao"
+                            <Select 
                                 value={situacao}
-                                onChange={(e) => setSituacao(e.target.value)}
-                                className="h-10 sm:h-full px-3 text-xs bg-transparent outline-none border-b sm:border-b-0 sm:border-r border-border font-medium cursor-pointer"
+                                onValueChange={setSituacao}
                             >
-                                <option value="todas">Todas as Situações</option>
-                                <option value="em-andamento">Em Andamento</option>
-                                <option value="concluido">Concluído</option>
-                                <option value="suspenso">Suspenso</option>
-                                <option value="cancelado">Cancelado</option>
-                            </select>
+                                <SelectTrigger className="h-10 sm:h-full px-3 text-xs bg-transparent outline-none border-b sm:border-b-0 sm:border-r border-border font-bold cursor-pointer min-w-[160px] rounded-none shadow-none">
+                                    <SelectValue placeholder="Situação" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="todas" className="text-xs font-bold">Todas as Situações</SelectItem>
+                                    <SelectItem value="em-andamento" className="text-xs font-bold">Em Andamento</SelectItem>
+                                    <SelectItem value="concluido" className="text-xs font-bold">Concluído</SelectItem>
+                                    <SelectItem value="suspenso" className="text-xs font-bold">Suspenso</SelectItem>
+                                    <SelectItem value="cancelado" className="text-xs font-bold">Cancelado</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <button 
                                 id="transparency-search-submit"
                                 name="search-submit"

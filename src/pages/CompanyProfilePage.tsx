@@ -5,6 +5,7 @@ import { Building2, Save, Calculator, MapPin, Percent, Search } from 'lucide-rea
 import { STATES, calculateDifal, SIMPLES_NACIONAL_RATES, PRESUMIDO_RATES, REAL_RATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const initialFormData = {
     razaoSocial: '',
@@ -488,30 +489,39 @@ export default function CompanyProfilePage() {
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-foreground/70 mb-1 uppercase">Estado (Origem)</label>
-                            <select
-                                name="state" value={formData.state} onChange={handleInputChange}
-                                className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors disabled:opacity-70 disabled:bg-muted"
+                            <Select
+                                value={formData.state || 'all'}
+                                onValueChange={(v) => setFormData(prev => ({ ...prev, state: v === 'all' ? '' : v }))}
                                 disabled={!!formData.cnpj && formData.state !== ''}
                             >
-                                <option value="">Selecione o Estado...</option>
-                                {STATES.map(s => <option key={s.short} value={s.short}>{s.name} ({s.short})</option>)}
-                            </select>
+                                <SelectTrigger className="w-full bg-background border-border h-10 text-sm font-medium">
+                                    <SelectValue placeholder="Selecione o Estado..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="all" className="text-sm font-bold">Selecione o Estado...</SelectItem>
+                                    {STATES.map(s => <SelectItem key={s.short} value={s.short} className="text-sm font-bold">{s.name} ({s.short})</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-foreground/70 mb-1 uppercase">Porte da Empresa</label>
-                            <select
-                                name="porte" value={formData.porte} onChange={handleInputChange}
-                                className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors disabled:opacity-70 disabled:bg-muted"
+                            <Select
+                                value={formData.porte || 'all'}
+                                onValueChange={() => {}} // Disabled read-only select
                                 disabled={true}
-                                title="Preenchido automaticamente via Receita Federal"
                             >
-                                <option value="">Pendente Consulta...</option>
-                                <option value="MEI">MEI (Microempreendedor Individual)</option>
-                                <option value="ME">ME (Microempresa)</option>
-                                <option value="EPP">EPP (Empresa de Pequeno Porte)</option>
-                                <option value="Médio">Médio/Outros</option>
-                                <option value="Grande">Grande Porte</option>
-                            </select>
+                                <SelectTrigger className="w-full bg-background border-border h-10 text-sm font-medium opacity-70 cursor-not-allowed">
+                                    <SelectValue placeholder="Pendente Consulta..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="all" className="text-sm font-bold">Pendente Consulta...</SelectItem>
+                                    <SelectItem value="MEI" className="text-sm font-bold">MEI (Microempreendedor Individual)</SelectItem>
+                                    <SelectItem value="ME" className="text-sm font-bold">ME (Microempresa)</SelectItem>
+                                    <SelectItem value="EPP" className="text-sm font-bold">EPP (Empresa de Pequeno Porte)</SelectItem>
+                                    <SelectItem value="Médio" className="text-sm font-bold">Médio/Outros</SelectItem>
+                                    <SelectItem value="Grande" className="text-sm font-bold">Grande Porte</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
@@ -587,17 +597,21 @@ export default function CompanyProfilePage() {
                     </h2>
                     <div className="mb-4">
                         <label className="block text-xs font-bold text-foreground/70 mb-1 uppercase">Regime</label>
-                        <select
-                            name="taxRegime" value={formData.taxRegime} onChange={handleRegimeChange}
-                            className="w-full max-w-xs bg-muted border border-border rounded px-3 py-2 text-sm outline-none disabled:opacity-70 disabled:cursor-not-allowed"
+                        <Select
+                            value={formData.taxRegime || 'all'}
+                            onValueChange={(v) => { if(v !== 'all') handleRegimeChange({ target: { name: 'taxRegime', value: v } } as any); }}
                             disabled={true}
-                            title="Regime Tributário detectado automaticamente."
                         >
-                            <option value="">Aguardando Consulta...</option>
-                            <option value="Simples Nacional">Simples Nacional</option>
-                            <option value="Lucro Presumido">Lucro Presumido</option>
-                            <option value="Lucro Real">Lucro Real</option>
-                        </select>
+                            <SelectTrigger className="w-full max-w-xs bg-muted border-border h-10 text-sm font-medium opacity-70 cursor-not-allowed">
+                                <SelectValue placeholder="Aguardando Consulta..." />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all" className="text-sm font-bold">Aguardando Consulta...</SelectItem>
+                                <SelectItem value="Simples Nacional" className="text-sm font-bold">Simples Nacional</SelectItem>
+                                <SelectItem value="Lucro Presumido" className="text-sm font-bold">Lucro Presumido</SelectItem>
+                                <SelectItem value="Lucro Real" className="text-sm font-bold">Lucro Real</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {formData.taxRegime === 'Simples Nacional' && (

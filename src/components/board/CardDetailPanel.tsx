@@ -17,6 +17,13 @@ import DOMPurify from 'dompurify';
 import { getFaviconUrl, cn, compressImage, openFileInNewTab } from '@/lib/utils';
 import { CompanyFavicon } from '../ui/CompanyFavicon';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { toast } from 'sonner';
 
 const ICONS = [
@@ -736,19 +743,21 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               {assignedMember && (
                 <img src={assignedMember.avatar} alt={assignedMember.name} className="w-8 h-8 rounded-full border border-border object-cover" />
               )}
-              <select
-                id="card-assignee"
-                name="assignee"
-                value={assignedMember?.id || ''}
-                onChange={e => handleSetAssignee(e.target.value)}
+              <Select
+                value={assignedMember?.id || "none"}
+                onValueChange={(val) => handleSetAssignee(val === "none" ? "" : val)}
                 disabled={!canEdit}
-                className="flex-1 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <option value="">Sem responsável</option>
-                {members.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="flex-1 bg-secondary border-border rounded px-3 h-8 text-xs focus:ring-1 focus:ring-primary/30 outline-none">
+                  <SelectValue placeholder="Sem responsável" />
+                </SelectTrigger>
+                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                  <SelectItem value="none" className="text-xs font-bold">Sem responsável</SelectItem>
+                  {members.map(m => (
+                    <SelectItem key={m.id} value={m.id} className="text-xs font-bold">{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         );
@@ -1017,14 +1026,17 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   <Link2 className="h-3 w-3" />
                 </button>
                 <div className="w-px h-4 bg-border mx-1" />
-                <select onChange={e => { if (e.target.value) execCommand('formatBlock', e.target.value); e.target.value = ''; }}
-                  className="text-[10px] bg-transparent outline-none text-muted-foreground" defaultValue="">
-                  <option value="" disabled>Cabeçalho</option>
-                  <option value="h1">H1</option>
-                  <option value="h2">H2</option>
-                  <option value="h3">H3</option>
-                  <option value="p">Normal</option>
-                </select>
+                <Select onValueChange={(val) => { if (val) execCommand('formatBlock', val); }}>
+                  <SelectTrigger className="w-[100px] bg-transparent border-none text-[10px] h-6 text-muted-foreground focus:ring-0">
+                    <SelectValue placeholder="Cabeçalho" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                    <SelectItem value="p" className="text-[10px] font-bold">Normal</SelectItem>
+                    <SelectItem value="h1" className="text-[10px] font-bold">H1</SelectItem>
+                    <SelectItem value="h2" className="text-[10px] font-bold">H2</SelectItem>
+                    <SelectItem value="h3" className="text-[10px] font-bold">H3</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <div className="relative">
@@ -1431,19 +1443,23 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
 
                   {/* Font Size */}
                   <div className="flex items-center gap-0.5 bg-background rounded-md border border-border p-1">
-                    <select 
-                        onChange={(e) => execCommand('fontSize', e.target.value)} 
-                        className="bg-transparent text-[10px] font-bold px-1 outline-none cursor-pointer"
+                    <Select 
                         defaultValue="3"
+                        onValueChange={(val) => execCommand('fontSize', val)}
                     >
-                        <option value="1">Pequeno</option>
-                        <option value="2">Normal</option>
-                        <option value="3">Médio</option>
-                        <option value="4">Grande</option>
-                        <option value="5">Título 3</option>
-                        <option value="6">Título 2</option>
-                        <option value="7">Título 1</option>
-                    </select>
+                        <SelectTrigger className="w-[85px] bg-transparent border-none text-[10px] h-6 font-bold px-1 focus:ring-0">
+                            <SelectValue placeholder="Médio" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                            <SelectItem value="1" className="text-[10px] font-bold">Pequeno</SelectItem>
+                            <SelectItem value="2" className="text-[10px] font-bold">Normal</SelectItem>
+                            <SelectItem value="3" className="text-[10px] font-bold">Médio</SelectItem>
+                            <SelectItem value="4" className="text-[10px] font-bold">Grande</SelectItem>
+                            <SelectItem value="5" className="text-[10px] font-bold">Título 3</SelectItem>
+                            <SelectItem value="6" className="text-[10px] font-bold">Título 2</SelectItem>
+                            <SelectItem value="7" className="text-[10px] font-bold">Título 1</SelectItem>
+                        </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Colors */}

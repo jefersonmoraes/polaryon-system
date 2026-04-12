@@ -4,6 +4,13 @@ import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Calculator, Settings, CheckCircle, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export const TaxDash = () => {
     const { taxObligations, settings, calculateTaxes, updateSettings, payTax, entries, updateTaxObligation, deleteTaxObligation } = useAccountingStore();
@@ -12,6 +19,8 @@ export const TaxDash = () => {
 
     const [showPaid, setShowPaid] = useState(false);
     const [taxToEdit, setTaxToEdit] = useState<any>(null);
+    const [taxRegime, setTaxRegime] = useState<'simples_nacional' | 'lucro_presumido' | 'lucro_real'>('simples_nacional');
+    const [meiActivityType, setMeiActivityType] = useState<'commerce' | 'service' | 'both'>('service');
 
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -58,22 +67,25 @@ export const TaxDash = () => {
             }
             // Auto calculate every time component mounts or company changes
             calculateTaxes(activeCompany.id, currentMonth, activeCompany.porte);
+
+            // Update controlled states
+            if (companySettings) {
+                if (companySettings.taxRegime) setTaxRegime(companySettings.taxRegime);
+                if (companySettings.meiActivityType) setMeiActivityType(companySettings.meiActivityType);
+            }
         }
     }, [activeCompany, companySettings, currentMonth, calculateTaxes, updateSettings, isMEI]);
 
     const handleSaveSettings = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-
         if (activeCompany) {
             if (isMEI) {
-                const meiActivityType = formData.get('meiActivityType') as 'commerce' | 'service' | 'both';
-                updateSettings(activeCompany.id, { meiActivityType });
+                updateSettings(activeCompany.id, { meiActivityType: meiActivityType });
                 toast.success("Atividade MEI atualizada com sucesso.");
             } else {
+                const formData = new FormData(e.currentTarget);
                 const taxRate = parseFloat(formData.get('taxRate') as string);
-                const taxRegime = formData.get('taxRegime') as 'simples_nacional' | 'lucro_presumido' | 'lucro_real';
-                updateSettings(activeCompany.id, { taxRegime, taxRatePercentage: taxRate });
+                updateSettings(activeCompany.id, { taxRegime: taxRegime, taxRatePercentage: taxRate });
                 toast.success("Configurações tributárias atualizadas.");
             }
             calculateTaxes(activeCompany.id, currentMonth, activeCompany.porte); // Recalculate immediately
@@ -238,16 +250,17 @@ export const TaxDash = () => {
                     {!isMEI && (
                         <form onSubmit={handleSaveSettings} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-1">Regime Tributário</label>
-                                <select
-                                    name="taxRegime"
-                                    defaultValue={companySettings?.taxRegime || 'simples_nacional'}
-                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                                >
-                                    <option className="bg-background text-foreground" value="simples_nacional">Simples Nacional</option>
-                                    <option className="bg-background text-foreground" value="lucro_presumido">Lucro Presumido</option>
-                                    <option className="bg-background text-foreground" value="lucro_real">Lucro Real</option>
-                                </select>
+                                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Regime Tributário</label>
+                                <Select value={taxRegime} onValueChange={(v: any) => setTaxRegime(v)}>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Selecione o regime" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="simples_nacional" className="text-xs font-bold">Simples Nacional</SelectItem>
+                                        <SelectItem value="lucro_presumido" className="text-xs font-bold">Lucro Presumido</SelectItem>
+                                        <SelectItem value="lucro_real" className="text-xs font-bold">Lucro Real</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-muted-foreground mb-1">Alíquota Efetiva (%)</label>
@@ -271,16 +284,17 @@ export const TaxDash = () => {
                         <div className="space-y-4">
                             <form onSubmit={handleSaveSettings} className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Ramo de Atividade (MEI)</label>
-                                    <select
-                                        name="meiActivityType"
-                                        defaultValue={companySettings?.meiActivityType || 'service'}
-                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                                    >
-                                        <option className="bg-background text-foreground" value="commerce">Comércio ou Indústria (INSS + ICMS)</option>
-                                        <option className="bg-background text-foreground" value="service">Prestação de Serviços (INSS + ISS)</option>
-                                        <option className="bg-background text-foreground" value="both">Comércio e Serviços (INSS + ICMS + ISS)</option>
-                                    </select>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Ramo de Atividade (MEI)</label>
+                                    <Select value={meiActivityType} onValueChange={(v: any) => setMeiActivityType(v)}>
+                                        <SelectTrigger className="w-full bg-background border border-border rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                            <SelectValue placeholder="Selecione a atividade" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="commerce" className="text-xs font-bold">Comércio ou Indústria (INSS + ICMS)</SelectItem>
+                                            <SelectItem value="service" className="text-xs font-bold">Prestação de Serviços (INSS + ISS)</SelectItem>
+                                            <SelectItem value="both" className="text-xs font-bold">Comércio e Serviços (INSS + ICMS + ISS)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <button type="submit" className="w-full bg-primary/20 hover:bg-primary/30 text-primary font-medium rounded-lg py-2 transition-colors text-sm border border-primary/30">
                                     Atualizar Guia Mensal

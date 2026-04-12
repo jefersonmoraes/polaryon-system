@@ -1,5 +1,12 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { useAccountingStore } from '@/store/accounting-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Plus, Trash2, CalendarClock } from 'lucide-react';
@@ -92,17 +99,16 @@ export default function RecurringExpensesModal({ open, onOpenChange }: Props) {
                             </div>
                             <div>
                                 <label className="block text-xs text-muted-foreground mb-1">Categoria</label>
-                                <select
-                                    required
-                                    value={categoryId}
-                                    onChange={e => setCategoryId(e.target.value)}
-                                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-primary"
-                                >
-                                    <option value="" disabled>Selecione...</option>
-                                    {expenseCategories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                <Select value={categoryId} onValueChange={setCategoryId}>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded-md px-3 h-10 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Selecione a categoria" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[250px]">
+                                        {expenseCategories.map(c => (
+                                            <SelectItem key={c.id} value={c.id} className="text-xs font-bold">{c.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <button type="submit" className="w-full mt-2 bg-primary text-primary-foreground font-bold rounded-md py-2 flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors">

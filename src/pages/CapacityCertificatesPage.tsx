@@ -7,6 +7,13 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { openFileInNewTab } from '@/lib/utils';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const CapacityCertificatesPage = () => {
     const currentUser = useAuthStore(state => state.currentUser);
@@ -118,15 +125,16 @@ const CapacityCertificatesPage = () => {
                         <div className="w-px h-6 bg-border/50 hidden sm:block"></div>
                         <div className="flex items-center gap-2 w-full sm:w-auto px-2 sm:pr-2">
                             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Tipo:</span>
-                            <select
-                                className="bg-transparent text-foreground border-none outline-none text-sm py-1.5 cursor-pointer focus:ring-0"
-                                value={selectedType}
-                                onChange={(e) => setSelectedType(e.target.value)}
-                            >
-                                <option className="bg-background text-foreground" value="Todos">Todos os Tipos</option>
-                                <option className="bg-background text-foreground" value="Serviço">Serviço Prestado</option>
-                                <option className="bg-background text-foreground" value="Produto">Venda de Produto</option>
-                            </select>
+                            <Select value={selectedType} onValueChange={setSelectedType}>
+                                <SelectTrigger className="bg-transparent border-none shadow-none h-auto py-1 px-1 focus:ring-0 text-sm font-bold w-[140px]">
+                                    <SelectValue placeholder="Tipo" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="Todos" className="text-xs font-bold">Todos os Tipos</SelectItem>
+                                    <SelectItem value="Serviço" className="text-xs font-bold">Serviço Prestado</SelectItem>
+                                    <SelectItem value="Produto" className="text-xs font-bold">Venda de Produto</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

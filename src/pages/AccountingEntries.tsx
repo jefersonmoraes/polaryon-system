@@ -7,6 +7,13 @@ import RecurringExpensesModal from '@/components/accounting/RecurringExpensesMod
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { AccountingTrashViewer } from '@/components/accounting/AccountingTrashViewer';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const AccountingEntries = () => {
     const { entries, categories, deleteEntry, fetchAccountingData } = useAccountingStore();
@@ -233,18 +240,22 @@ const AccountingEntries = () => {
                             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                                 <div className="flex flex-col sm:flex-row items-center gap-2 bg-background border border-border p-2 rounded-lg flex-1">
                                     <Filter className="h-4 w-4 text-muted-foreground mr-1" />
-                                    <select
-                                        value={filterMode}
-                                        onChange={(e) => setFilterMode(e.target.value as FilterMode)}
-                                        className="bg-background text-foreground text-sm border-none rounded-md focus:ring-1 focus:ring-primary cursor-pointer font-medium px-2 py-1 w-full sm:w-auto"
+                                    <Select 
+                                        value={filterMode} 
+                                        onValueChange={(v) => setFilterMode(v as FilterMode)}
                                     >
-                                        <option className="bg-background text-foreground" value="current_month">Mês Atual</option>
-                                        <option className="bg-background text-foreground" value="specific_month">Mês Específico</option>
-                                        <option className="bg-background text-foreground" value="custom_period">Vários Meses</option>
-                                        <option className="bg-background text-foreground" value="exact_period">Dias Específicos</option>
-                                        <option className="bg-background text-foreground" value="specific_year">Ano Específico</option>
-                                        <option className="bg-background text-foreground" value="all">Todo o Período</option>
-                                    </select>
+                                        <SelectTrigger className="bg-transparent border-none shadow-none text-sm font-bold h-7 px-2 focus:ring-0 w-full sm:w-auto">
+                                            <SelectValue placeholder="Período" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                            <SelectItem value="current_month" className="text-xs font-bold">Mês Atual</SelectItem>
+                                            <SelectItem value="specific_month" className="text-xs font-bold">Mês Específico</SelectItem>
+                                            <SelectItem value="custom_period" className="text-xs font-bold">Vários Meses</SelectItem>
+                                            <SelectItem value="exact_period" className="text-xs font-bold">Dias Específicos</SelectItem>
+                                            <SelectItem value="specific_year" className="text-xs font-bold">Ano Específico</SelectItem>
+                                            <SelectItem value="all" className="text-xs font-bold">Todo o Período</SelectItem>
+                                        </SelectContent>
+                                    </Select>
 
                                     {filterMode === 'specific_month' && (
                                         <input
@@ -306,28 +317,43 @@ const AccountingEntries = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Tipo</label>
-                                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
-                                    <option className="bg-background text-foreground" value="all">Todos</option>
-                                    <option className="bg-background text-foreground" value="revenue">Entradas</option>
-                                    <option className="bg-background text-foreground" value="expense">Saídas</option>
-                                </select>
+                                <Select value={filterType} onValueChange={setFilterType}>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded-md px-3 h-9 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="all" className="text-xs font-bold">Todos</SelectItem>
+                                        <SelectItem value="revenue" className="text-xs font-bold">Entradas</SelectItem>
+                                        <SelectItem value="expense" className="text-xs font-bold">Saídas</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Status</label>
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
-                                    <option className="bg-background text-foreground" value="all">Todos</option>
-                                    <option className="bg-background text-foreground" value="paid">Paga/Recebida</option>
-                                    <option className="bg-background text-foreground" value="pending">Pendente</option>
-                                </select>
+                                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded-md px-3 h-9 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="all" className="text-xs font-bold">Todos</SelectItem>
+                                        <SelectItem value="paid" className="text-xs font-bold">Paga/Recebida</SelectItem>
+                                        <SelectItem value="pending" className="text-xs font-bold">Pendente</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Categoria</label>
-                                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full bg-background text-foreground border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
-                                    <option className="bg-background text-foreground" value="all">Todas as Categorias</option>
-                                    {categories.map(c => (
-                                        <option className="bg-background text-foreground" key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                                    <SelectTrigger className="w-full bg-background border border-border rounded-md px-3 h-9 text-sm focus:ring-1 focus:ring-primary font-bold">
+                                        <SelectValue placeholder="Categoria" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[300px]">
+                                        <SelectItem value="all" className="text-xs font-bold">Todas as Categorias</SelectItem>
+                                        {categories.map(c => (
+                                            <SelectItem key={c.id} value={c.id} className="text-xs font-bold">{c.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             </div>
                         </div>

@@ -5,6 +5,13 @@ import { format } from 'date-fns';
 import DocumentForm from '@/components/documentation/DocumentForm';
 import DocumentCalendarView from '@/components/documentation/DocumentCalendarView';
 import { fixDateToBRT, openFileInNewTab } from '@/lib/utils';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
@@ -110,31 +117,33 @@ const DocumentationPage = () => {
 
                             <div className="flex items-center gap-2 w-full sm:w-auto px-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/50">
                                 <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Status:</span>
-                                <select
-                                    className="bg-transparent text-foreground border-none outline-none text-sm py-1.5 cursor-pointer focus:ring-0 max-w-[120px]"
-                                    value={selectedStatus}
-                                    onChange={(e) => setSelectedStatus(e.target.value)}
-                                >
-                                    <option className="bg-background text-foreground" value="Todos">Todos</option>
-                                    <option className="bg-background text-foreground" value="valid">Em Dia</option>
-                                    <option className="bg-background text-foreground" value="expiring">Vencendo</option>
-                                    <option className="bg-background text-foreground" value="expired">Vencido</option>
-                                </select>
+                                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                                    <SelectTrigger className="bg-transparent border-none shadow-none text-sm h-auto py-1 px-1 focus:ring-0 max-w-[120px] font-bold">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="Todos" className="text-xs font-bold">Todos</SelectItem>
+                                        <SelectItem value="valid" className="text-xs font-bold">Em Dia</SelectItem>
+                                        <SelectItem value="expiring" className="text-xs font-bold">Vencendo</SelectItem>
+                                        <SelectItem value="expired" className="text-xs font-bold">Vencido</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="w-px h-6 bg-border/50 hidden sm:block"></div>
 
                             <div className="flex items-center gap-2 w-full sm:w-auto px-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/50">
                                 <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Tipo:</span>
-                                <select
-                                    className="bg-transparent text-foreground border-none outline-none text-sm py-1.5 cursor-pointer focus:ring-0 max-w-[180px] truncate"
-                                    value={selectedType}
-                                    onChange={(e) => setSelectedType(e.target.value)}
-                                >
-                                    <option className="bg-background text-foreground" value="Todos">Todos os Tipos</option>
-                                    {documentTypes.map(t => (
-                                        <option className="bg-background text-foreground" key={t} value={t}>{t}</option>
-                                    ))}
-                                </select>
+                                <Select value={selectedType} onValueChange={setSelectedType}>
+                                    <SelectTrigger className="bg-transparent border-none shadow-none text-sm h-auto py-1 px-1 focus:ring-0 max-w-[180px] font-bold">
+                                        <SelectValue placeholder="Tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[300px]">
+                                        <SelectItem value="Todos" className="text-xs font-bold">Todos os Tipos</SelectItem>
+                                        {documentTypes.map(t => (
+                                            <SelectItem key={t} value={t} className="text-xs font-bold">{t}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 

@@ -7,6 +7,7 @@ import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, FolderOpen, 
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState, useMemo, useEffect } from 'react';
 import api from '@/lib/api';
 import { fixDateToBRT } from '@/lib/utils';
@@ -477,23 +478,42 @@ const Dashboard = () => {
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Filtros:</span>
           </div>
-          <select value={filterBoard} onChange={e => setFilterBoard(e.target.value)}
-            className="bg-secondary rounded px-2 py-1 text-xs outline-none border border-border">
-            <option value="all">Todos os Boards</option>
-            {activeBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select value={filterLabel} onChange={e => setFilterLabel(e.target.value)}
-            className="bg-secondary rounded px-2 py-1 text-xs outline-none border border-border">
-            <option value="all">Todas as Etiquetas</option>
-            {labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="bg-secondary rounded px-2 py-1 text-xs outline-none border border-border">
-            <option value="all">Todos os Status</option>
-            <option value="pending">Pendentes</option>
-            <option value="completed">Concluídas</option>
-            <option value="overdue">Atrasadas</option>
-          </select>
+          
+          <Select value={filterBoard} onValueChange={setFilterBoard}>
+            <SelectTrigger className="w-[180px] bg-secondary border-border h-9 text-xs font-bold">
+                <SelectValue placeholder="Todos os Boards" />
+            </SelectTrigger>
+            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                <SelectItem value="all" className="text-xs font-bold">Todos os Boards</SelectItem>
+                {activeBoards.map(b => (
+                    <SelectItem key={b.id} value={b.id} className="text-xs font-bold">{b.name}</SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterLabel} onValueChange={setFilterLabel}>
+            <SelectTrigger className="w-[180px] bg-secondary border-border h-9 text-xs font-bold">
+                <SelectValue placeholder="Todas as Etiquetas" />
+            </SelectTrigger>
+            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                <SelectItem value="all" className="text-xs font-bold">Todas as Etiquetas</SelectItem>
+                {labels.map(l => (
+                    <SelectItem key={l.id} value={l.id} className="text-xs font-bold">{l.name}</SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[150px] bg-secondary border-border h-9 text-xs font-bold">
+                <SelectValue placeholder="Todos os Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                <SelectItem value="all" className="text-xs font-bold">Todos os Status</SelectItem>
+                <SelectItem value="pending" className="text-xs font-bold">Pendentes</SelectItem>
+                <SelectItem value="completed" className="text-xs font-bold">Concluídas</SelectItem>
+                <SelectItem value="overdue" className="text-xs font-bold">Atrasadas</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* System-Wide Alerts */}

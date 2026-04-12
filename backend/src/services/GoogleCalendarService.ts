@@ -9,10 +9,13 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'dummy';
 // In Hetzner, this should be in .env. We use a fallback so it doesn't crash locally if missing
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'dummy_secret';
 // The Redirect URI must match what's configured in Google Cloud Console
-const GOOGLE_REDIRECT_URI = process.env.NODE_ENV === 'production'
-    ? 'https://polaryon.com.br/api/calendar/callback' // Update to correct domain or IP
+// The Redirect URI must match what's configured in Google Cloud Console
+const isProd = process.env.NODE_ENV === 'production' || process.env.DOMAIN?.includes('polaryon.com.br');
+const GOOGLE_REDIRECT_URI = isProd
+    ? 'https://polaryon.com.br/api/calendar/callback'
     : 'http://localhost:3000/api/calendar/callback';
 
+// Loaded once at startup, but the values inside are used dynamically
 export const oauth2Client = new OAuth2Client(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -22,19 +25,29 @@ export const oauth2Client = new OAuth2Client(
 // Load previous tokens into the client if they exist
 export const loadTokens = () => {
     try {
-        console.log(`📂 Attempting to load tokens from: ${TOKEN_PATH}`);
+        console.log(`📂 Checking Google tokens at: ${TOKEN_PATH}`);
         if (fs.existsSync(TOKEN_PATH)) {
             const tokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
-            oauth2Client.setCredentials(tokens);
-            console.log("✅ Tokens loaded and credentials set.");
-            return true;
+            if (tokens && (tokens.access_token || tokens.refresh_token)) {
+                oauth2Client.setCredentials(tokens);
+                console.log("✅ Google tokens successfully loaded into OAuth client.");
+                return true;
+            }
         } else {
-            console.warn("⚠️ Token file not found at expected path.");
+            console.warn("⚠️ Google token file not found. Re-auth will be required.");
         }
     } catch (e) {
         console.error("❌ Failed to load or parse tokens:", e);
     }
     return false;
+};
+
+// Defensive check to ensure we always have the best tokens available
+const ensureAuthenticated = async () => {
+    // If no credentials are set, try loading them from disk first
+    if (!oauth2Client.credentials || (!oauth2Client.credentials.access_token && !oauth2Client.credentials.refresh_token)) {
+        loadTokens();
+    }
 };
 
 // Auto-save tokens on refresh
@@ -79,14 +92,18 @@ export const saveTokens = async (code: string) => {
 
 // Simple fetcher using the auth client's access token
 export const fetchGoogleEvents = async () => {
+    await ensureAuthenticated();
     let accessToken: string | null | undefined = null;
     try {
         accessToken = (await oauth2Client.getAccessToken()).token;
     } catch (error: any) {
-        console.error('getAccessToken Error in fetchGoogleEvents:', error.message);
+        console.error('❌ Failed to retrieve Google Access Token:', error.message);
         throw new Error("NEEDS_AUTH");
     }
-    if (!accessToken) throw new Error("NEEDS_AUTH");
+    if (!accessToken) {
+        console.warn("⚠️ No access token returned from Google. Re-auth needed.");
+        throw new Error("NEEDS_AUTH");
+    }
 
     const timeMin = new Date();
     timeMin.setMonth(timeMin.getMonth() - 2); // Fetch from 2 months ago to see recent past
@@ -121,14 +138,18 @@ export const pushEventToGoogle = async (
     event: { summary: string, description?: string, start: { date?: string, dateTime?: string }, end: { date?: string, dateTime?: string } },
     cardId?: string
 ) => {
+    await ensureAuthenticated();
     let accessToken: string | null | undefined = null;
     try {
         accessToken = (await oauth2Client.getAccessToken()).token;
     } catch (error: any) {
-        console.error('getAccessToken Error in pushEventToGoogle:', error.message);
+        console.error('❌ Failed to retrieve Google Access Token for push:', error.message);
         throw new Error("NEEDS_AUTH");
     }
-    if (!accessToken) throw new Error("NEEDS_AUTH");
+    if (!accessToken) {
+        console.warn("⚠️ No access token for push. Re-auth needed.");
+        throw new Error("NEEDS_AUTH");
+    }
 
     let eventToPush = { ...event };
 
@@ -196,11 +217,12 @@ export const pushEventToGoogle = async (
 };
 
 export const deleteEventFromGoogle = async (cardId: string) => {
+    await ensureAuthenticated();
     let accessToken: string | null | undefined = null;
     try {
         accessToken = (await oauth2Client.getAccessToken()).token;
     } catch (error: any) {
-        console.error('getAccessToken Error in deleteEventFromGoogle:', error.message);
+        console.error('❌ Failed to retrieve Google Access Token for delete:', error.message);
         return; // Silent fail for sync
     }
     if (!accessToken) return;

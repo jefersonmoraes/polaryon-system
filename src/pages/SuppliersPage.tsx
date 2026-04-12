@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
 import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CnpjResult {
     cnpj: string;
@@ -284,16 +285,17 @@ const SuppliersPage = () => {
                                                             <Briefcase className="h-5 w-5 text-blue-500" />
                                                             Fornecedores em Destaque
                                                         </h2>
-                                                        <select
-                                                            value={filterArea}
-                                                            onChange={(e) => setFilterArea(e.target.value)}
-                                                            className="text-xs bg-muted border border-border rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-primary w-full sm:w-auto"
-                                                        >
-                                                            <option value="">Todas as Áreas</option>
-                                                            {availableAreas.map(area => (
-                                                                <option key={area} value={area}>{area}</option>
-                                                            ))}
-                                                        </select>
+                                                        <Select value={filterArea} onValueChange={setFilterArea}>
+                                                            <SelectTrigger className="w-full sm:w-[180px] bg-muted border-border h-9 text-xs font-bold">
+                                                                <SelectValue placeholder="Todas as Áreas" />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                                                <SelectItem value="all" className="text-xs font-bold">Todas as Áreas</SelectItem>
+                                                                {availableAreas.map(area => (
+                                                                    <SelectItem key={area} value={area} className="text-xs font-bold">{area}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
 
                                                     {favoriteSuppliers.length === 0 ? (
@@ -354,16 +356,17 @@ const SuppliersPage = () => {
                                                             <Truck className="h-5 w-5 text-emerald-500" />
                                                             Transportadoras em Destaque
                                                         </h2>
-                                                        <select
-                                                            value={filterRegiao}
-                                                            onChange={(e) => setFilterRegiao(e.target.value)}
-                                                            className="text-xs bg-muted border border-border rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-primary w-full sm:w-auto"
-                                                        >
-                                                            <option value="">Todas as Regiões (UF)</option>
-                                                            {availableStates.map(uf => (
-                                                                <option key={uf} value={uf}>{uf === '?' ? 'N/A' : uf}</option>
-                                                            ))}
-                                                        </select>
+                                                        <Select value={filterRegiao} onValueChange={setFilterRegiao}>
+                                                            <SelectTrigger className="w-full sm:w-[200px] bg-muted border-border h-9 text-xs font-bold">
+                                                                <SelectValue placeholder="Todas as Regiões (UF)" />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                                                <SelectItem value="all" className="text-xs font-bold">Todas as Regiões (UF)</SelectItem>
+                                                                {availableStates.map(uf => (
+                                                                    <SelectItem key={uf} value={uf} className="text-xs font-bold">{uf === '?' ? 'N/A' : uf}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
 
                                                     {favoriteTransporters.length === 0 ? (

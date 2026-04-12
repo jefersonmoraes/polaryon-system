@@ -5,6 +5,13 @@ import { cn, compressImage, openFileInNewTab } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface DocumentFormProps {
     onClose: () => void;
@@ -235,15 +242,21 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
                                 </div>
                                 <div className="space-y-1 col-span-2 sm:col-span-1">
                                     <label className="text-xs font-bold text-muted-foreground uppercase">Tipo do Documento</label>
-                                    <select
-                                        value={formData.type}
-                                        onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                        className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                                    <Select 
+                                        value={formData.type} 
+                                        onValueChange={v => setFormData({ ...formData, type: v })}
                                     >
-                                        {documentTypes.map(type => (
-                                            <option key={type} value={type}>{type}</option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className="w-full bg-background border border-border rounded px-3 h-9 text-sm focus:ring-1 focus:ring-primary transition-all font-bold">
+                                            <SelectValue placeholder="Selecione o tipo..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card/95 backdrop-blur-xl border-border max-h-[300px]">
+                                            {documentTypes.map(type => (
+                                                <SelectItem key={type} value={type} className="text-xs font-bold">
+                                                    {type}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 

@@ -309,17 +309,17 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
                     <div className="space-y-3">
                         <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Modo de Disputa</Label>
                         <Select value={strategy.mode} onValueChange={(v: any) => setStrategy({...strategy, mode: v})}>
-                            <SelectTrigger className="bg-slate-950 border-white/10 h-12">
+                            <SelectTrigger className="bg-slate-950/50 border-white/10 h-12 text-sm font-bold">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
-                                <SelectItem value="follower">Seguidor (Reação Imediata)</SelectItem>
-                                <SelectItem value="sniper">Sniper (Segundo Final)</SelectItem>
-                                <SelectItem value="cover">Cobertura (Sempre Topo)</SelectItem>
+                            <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
+                                <SelectItem value="follower" className="text-sm font-bold">Seguidor (Reação Imediata)</SelectItem>
+                                <SelectItem value="sniper" className="text-sm font-bold">Sniper (Segundo Final)</SelectItem>
+                                <SelectItem value="cover" className="text-sm font-bold">Cobertura (Sempre Topo)</SelectItem>
                             </SelectContent>
                         </Select>
                         <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                            <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                                 {strategy.mode === 'follower' && "⚡ Reage instantaneamente a cada lance baixado por concorrentes."}
                                 {strategy.mode === 'sniper' && "🎯 Aguardará o encerramento iminente para dar o lance único."}
                                 {strategy.mode === 'cover' && "🛡️ Garantirá que seu lance seja o melhor até o preço mínimo."}
@@ -354,12 +354,12 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
                     <div className="space-y-3">
                         <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Tipo</Label>
                         <Select value={strategy.decrementType} onValueChange={(v: any) => setStrategy({...strategy, decrementType: v})}>
-                            <SelectTrigger className="bg-slate-950 border-white/10 h-11">
+                            <SelectTrigger className="bg-slate-950/50 border-white/10 h-11 text-sm font-bold">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
-                                <SelectItem value="fixed">Valor Fixo (R$)</SelectItem>
-                                <SelectItem value="percent">Percentual (%)</SelectItem>
+                            <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
+                                <SelectItem value="fixed" className="text-sm font-bold">Valor Fixo (R$)</SelectItem>
+                                <SelectItem value="percent" className="text-sm font-bold">Percentual (%)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

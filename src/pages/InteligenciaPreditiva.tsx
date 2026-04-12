@@ -9,6 +9,13 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const ESTADOS_BR = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
@@ -249,15 +256,19 @@ const InteligenciaPreditiva: React.FC = () => {
                     <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-muted-foreground pl-1">Estado (UF)</label>
                         <div className="relative">
-                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <select 
-                                className="w-full h-9 pl-9 pr-4 bg-background/50 border border-border rounded-lg text-xs focus:ring-1 focus:ring-primary outline-none appearance-none"
-                                value={ufFilter}
-                                onChange={(e) => setUfFilter(e.target.value)}
+                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                            <Select 
+                                value={ufFilter || 'all'} 
+                                onValueChange={(v) => setUfFilter(v === 'all' ? '' : v)}
                             >
-                                <option value="">Todos</option>
-                                {ESTADOS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                            </select>
+                                <SelectTrigger className="w-full h-9 pl-9 bg-background/50 border-border text-xs font-bold shadow-sm">
+                                    <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                    <SelectItem value="all" className="text-xs font-bold">Todos</SelectItem>
+                                    {ESTADOS_BR.map(uf => <SelectItem key={uf} value={uf} className="text-xs font-bold">{uf}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
@@ -290,14 +301,22 @@ const InteligenciaPreditiva: React.FC = () => {
 
                     <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-muted-foreground pl-1">Tipo de Instrumento</label>
-                        <select 
-                            className="w-full h-9 px-3 bg-background/50 border border-border rounded-lg text-xs focus:ring-1 focus:ring-primary outline-none"
-                            value={tipoFilter}
-                            onChange={(e) => setTipoFilter(e.target.value)}
+                        <Select 
+                            value={tipoFilter || 'all'} 
+                            onValueChange={(v) => setTipoFilter(v === 'all' ? '' : v)}
                         >
-                            <option value="">Todos Tipos</option>
-                            {tiposOptions.map(t => <option key={t.codigo} value={t.codigo}>{t.descricao}</option>)}
-                        </select>
+                            <SelectTrigger className="w-full h-9 bg-background/50 border-border text-xs font-bold shadow-sm">
+                                <SelectValue placeholder="Todos Tipos" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                <SelectItem value="all" className="text-xs font-bold">Todos Tipos</SelectItem>
+                                {tiposOptions.map(t => (
+                                    <SelectItem key={t.codigo} value={t.codigo} className="text-xs font-bold">
+                                        {t.descricao}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             </div>
