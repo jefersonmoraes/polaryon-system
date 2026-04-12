@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { cn, fixDateToBRT } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag, AlertCircle, AlertTriangle, Download } from 'lucide-react';
