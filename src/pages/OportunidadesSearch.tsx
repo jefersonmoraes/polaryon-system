@@ -165,7 +165,7 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     const formatNativeDate = (dateStr?: string) => {
         if (!dateStr) return '-';
         try {
-            return new Date(dateStr).toLocaleDateString('pt-BR');
+            return new Date(dateStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
         } catch {
             return '-';
         }
@@ -461,6 +461,7 @@ export default function OportunidadesSearch() {
     const allMembers = useKanbanStore(state => state?.members);
     const currentUser = (allMembers || [])[0] || null;
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [directExportItem, setDirectExportItem] = useState<PncpItem | null>(null);
     const [exportFolderId, setExportFolderId] = useState('');
     const [exportBoardId, setExportBoardId] = useState('');
     const [exportListId, setExportListId] = useState('');
@@ -497,7 +498,8 @@ export default function OportunidadesSearch() {
             return;
         }
 
-        if (!selectedItem) return;
+        const exportTarget = directExportItem || selectedItem;
+        if (!exportTarget) return;
 
         const board = boards.find(b => b.id === exportBoardId);
         if (!board) return;
@@ -506,29 +508,29 @@ export default function OportunidadesSearch() {
         const descriptionMD = `
 **[GOV.BR] Oportunidade PNCP mapeada pelo Polaryon**
 ---
-**Órgão Licitante:** ${selectedItem.orgao_nome}
-**CNPJ:** ${selectedItem.orgao_cnpj}
-**Unidade Compradora:** ${selectedItem.unidade_nome || 'N/A'} (Cód: ${selectedItem.unidade_codigo || '-'})
-**Localidade:** ${selectedItem.municipio_nome} - ${selectedItem.uf}
-**Modalidade:** ${selectedItem.modalidade_licitacao_nome}
-**Instrumento:** ${selectedItem.tipo_instrumento_convocacao_nome || '-'}
-**SRP (Registro de Preços):** ${selectedItem.srp ? 'Sim' : 'Não'}
-**Amparo Legal:** ${selectedItem.amparo_legal_nome || 'N/A'}
-**Valor Estimado:** ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedItem.valorTotalEstimado || selectedItem.valor_global || 0)}
-**Datas do Edital:** Publicação PNCP (${selectedItem.data_publicacao_pncp ? new Date(selectedItem.data_publicacao_pncp).toLocaleDateString('pt-BR') : '-'}) • **Atualização:** ${selectedItem.data_atualizacao_pncp ? new Date(selectedItem.data_atualizacao_pncp).toLocaleDateString('pt-BR') : '-'}
-**Encerramento de Propostas:** ${selectedItem.data_fim_vigencia ? new Date(selectedItem.data_fim_vigencia).toLocaleDateString('pt-BR') : '-'}
+**Órgão Licitante:** ${exportTarget.orgao_nome}
+**CNPJ:** ${exportTarget.orgao_cnpj}
+**Unidade Compradora:** ${exportTarget.unidade_nome || 'N/A'} (Cód: ${exportTarget.unidade_codigo || '-'})
+**Localidade:** ${exportTarget.municipio_nome} - ${exportTarget.uf}
+**Modalidade:** ${exportTarget.modalidade_licitacao_nome}
+**Instrumento:** ${exportTarget.tipo_instrumento_convocacao_nome || '-'}
+**SRP (Registro de Preços):** ${exportTarget.srp ? 'Sim' : 'Não'}
+**Amparo Legal:** ${exportTarget.amparo_legal_nome || 'N/A'}
+**Valor Estimado:** ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(exportTarget.valorTotalEstimado || exportTarget.valor_global || 0)}
+**Datas do Edital:** Publicação PNCP (${exportTarget.data_publicacao_pncp ? new Date(exportTarget.data_publicacao_pncp).toLocaleDateString('pt-BR') : '-'}) • **Atualização:** ${exportTarget.data_atualizacao_pncp ? new Date(exportTarget.data_atualizacao_pncp).toLocaleDateString('pt-BR') : '-'}
+**Encerramento de Propostas:** ${exportTarget.data_fim_vigencia ? new Date(exportTarget.data_fim_vigencia).toLocaleDateString('pt-BR') : '-'}
 
 ### Objeto:
-${selectedItem.description || selectedItem.title}
+${exportTarget.description || exportTarget.title}
 
 ### Arquivos Anexos:
 ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f.tipoDocumentoNome})](${f.url})`).join('\n') : '*Nenhum arquivo capturado automaticamente.*'}
 
-[🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(selectedItem)})
+[🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(exportTarget)})
         `.trim();
 
         // Robustly extract estimated value - PRIORITIZE itemDetail if available
-        const itemAny = selectedItem as any;
+        const itemAny = exportTarget as any;
         const detailAny = itemDetail as any;
         
         const estimatedValue = 
@@ -545,8 +547,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             : '';
 
         const cardParams = {
-            title: `${selectedItem.title}${formattedValue}`,
-            summary: selectedItem.description || selectedItem.title || "Oportunidade importada do GovBr",
+            title: `${exportTarget.title}${formattedValue}`,
+            summary: exportTarget.description || exportTarget.title || "Oportunidade importada do GovBr",
             description: descriptionMD,
             listId: exportListId,
             position: 0,
@@ -555,7 +557,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             completed: false,
             archived: false,
             trashed: false,
-            customLink: getOfficialLink(selectedItem),
+            customLink: getOfficialLink(exportTarget),
         };
 
         // Inject Attachments (Selected Files only)
@@ -587,8 +589,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         // Create Milestones (New: LANCES)
         const endDateTime = itemDetail?.dataFimRecebimentoProposta || 
                           itemDetail?.dataEncerramentoProposta || 
-                          selectedItem.data_encerramento_proposta ||
-                          selectedItem.data_fim_vigencia;
+                          exportTarget.data_encerramento_proposta ||
+                          exportTarget.data_fim_vigencia;
         const cardMilestones: any[] = [];
 
         if (endDateTime) {
@@ -616,7 +618,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
             timeEntries: [],
             milestones: cardMilestones,
             descriptionEntries: [],
-            pncpId: selectedItem.numero_controle_pncp || selectedItem.orgao_cnpj,
+            pncpId: exportTarget.numero_controle_pncp || exportTarget.orgao_cnpj,
             ...cardParams
         };
 
@@ -1099,9 +1101,26 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                     <span className="font-medium">{item.uf || '-'}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3.5 align-top text-right">
-                                                <div className="h-7 w-7 rounded bg-secondary text-muted-foreground flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors ml-auto">
-                                                    <ChevronRight className="h-4 w-4" />
+                                            <td className="px-4 py-3.5 align-top text-right" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button 
+                                                        title="Importar para Kanban"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setDirectExportItem(item);
+                                                            setIsExportDialogOpen(true);
+                                                        }}
+                                                        className="h-7 px-2 rounded bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors flex items-center gap-1 opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <KanbanSquare className="h-3.5 w-3.5" />
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider">Importar</span>
+                                                    </button>
+                                                    <div 
+                                                        onClick={() => setSelectedItem(item)}
+                                                        className="h-7 w-7 rounded bg-secondary text-muted-foreground flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+                                                    >
+                                                        <ChevronRight className="h-4 w-4" />
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1151,11 +1170,26 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                             <div className="flex flex-col">
                                                 <span className="uppercase text-[8px] font-black opacity-50">Encerramento</span>
                                                 <span className="font-bold text-rose-500/80">
-                                                    {item.data_fim_vigencia ? new Date(item.data_fim_vigencia).toLocaleDateString('pt-BR') : '-'}
+                                                    {item.data_fim_vigencia ? new Date(item.data_fim_vigencia).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
                                                 </span>
                                             </div>
                                         </div>
-                                        <ChevronRight className="h-4 w-4 text-primary" />
+                                        
+                                        <div className="flex items-center gap-3">
+                                            <button 
+                                                title="Importar para Kanban"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDirectExportItem(item);
+                                                    setIsExportDialogOpen(true);
+                                                }}
+                                                className="h-8 px-3 rounded-md bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors flex items-center gap-1.5"
+                                            >
+                                                <KanbanSquare className="h-4 w-4" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">Importar</span>
+                                            </button>
+                                            <ChevronRight className="h-4 w-4 text-primary" />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -1605,108 +1639,113 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 >
                                     Abrir Edital Oficial <ExternalLink className="h-4 w-4" />
                                 </a>
+                            </div></DialogContent>
+                    </Dialog>
+                )}
+            </AnimatePresence>
+
+            {/* Modal de Preview da Nota de Empenho (Dentro do Sistema) */}
+            <AnimatePresence>
+                {isExportDialogOpen && (
+                    <Dialog open={isExportDialogOpen} onOpenChange={(open) => {
+                        setIsExportDialogOpen(open);
+                        if (!open) setDirectExportItem(null);
+                    }}>
+                        <DialogContent className="max-w-md bg-background border border-border rounded-xl shadow-2xl p-6 z-[160]">
+                            <DialogHeader className="mb-4">
+                                <DialogTitle className="flex items-center gap-2 text-lg">
+                                    <KanbanSquare className="h-5 w-5 text-primary" />
+                                    Exportar para o Kanban
+                                </DialogTitle>
+                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                    Escolha a pasta, o quadro e a coluna onde este edital deverá ser inserido como um novo Cartão de tarefa.
+                                </p>
+                            </DialogHeader>
+
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">1. Escolha a Pasta</label>
+                                    <select
+                                        value={exportFolderId}
+                                        onChange={(e) => {
+                                            setExportFolderId(e.target.value);
+                                            setExportBoardId('');
+                                            setExportListId('');
+                                            setExportErrors(prev => ({ ...prev, folder: false }));
+                                        }}
+                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all ${exportErrors.folder ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
+                                    >
+                                        <option value="">Selecione uma pasta...</option>
+                                        {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                    </select>
+                                    {exportErrors.folder && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">2. Escolha o Quadro (Board)</label>
+                                    <select
+                                        value={exportBoardId}
+                                        onChange={(e) => {
+                                            setExportBoardId(e.target.value);
+                                            setExportListId('');
+                                            setExportErrors(prev => ({ ...prev, board: false }));
+                                        }}
+                                        disabled={!exportFolderId}
+                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.board ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
+                                    >
+                                        <option value="">Selecione o quadro...</option>
+                                        {boards.filter(b => b.folderId === exportFolderId).map(b => (
+                                            <option key={b.id} value={b.id}>{b.title}</option>
+                                        ))}
+                                    </select>
+                                    {exportErrors.board && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">3. Escolha a Coluna</label>
+                                    <select
+                                        value={exportListId}
+                                        onChange={(e) => {
+                                            setExportListId(e.target.value);
+                                            setExportErrors(prev => ({ ...prev, list: false }));
+                                        }}
+                                        disabled={!exportBoardId}
+                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportErrors.list ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
+                                    >
+                                        <option value="">Selecione a coluna (etapa)...</option>
+                                        {lists.filter(l => l.boardId === exportBoardId).map(l => (
+                                            <option key={l.id} value={l.id}>{l.title}</option>
+                                        ))}
+                                    </select>
+                                    {exportErrors.list && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
+                                </div>
                             </div>
 
-                            {/* Export to Kanban Internal Dialog */}
-                            <AnimatePresence>
-                                {isExportDialogOpen && (
-                                    <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-                                        <DialogContent className="max-w-md bg-background border border-border rounded-xl shadow-2xl p-6 z-[110]">
-                                            <DialogHeader className="mb-4">
-                                                <DialogTitle className="flex items-center gap-2 text-lg">
-                                                    <KanbanSquare className="h-5 w-5 text-primary" />
-                                                    Exportar para o Kanban
-                                                </DialogTitle>
-                                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                                    Escolha a pasta, o quadro e a coluna onde este edital deverá ser inserido como um novo Cartão de tarefa.
-                                                </p>
-                                            </DialogHeader>
-
-                                            <div className="space-y-4">
-                                                <div className="space-y-1">
-                                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">1. Escolha a Pasta</label>
-                                                    <select
-                                                        value={exportFolderId}
-                                                        onChange={(e) => {
-                                                            setExportFolderId(e.target.value);
-                                                            setExportBoardId('');
-                                                            setExportListId('');
-                                                            setExportErrors(prev => ({ ...prev, folder: false }));
-                                                        }}
-                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all ${exportErrors.folder ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
-                                                    >
-                                                        <option value="">Selecione uma pasta...</option>
-                                                        {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                                    </select>
-                                                    {exportErrors.folder && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
-                                                </div>
-
-                                                <div className="space-y-1">
-                                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">2. Escolha o Quadro (Board)</label>
-                                                    <select
-                                                        value={exportBoardId}
-                                                        onChange={(e) => {
-                                                            setExportBoardId(e.target.value);
-                                                            setExportListId('');
-                                                            setExportErrors(prev => ({ ...prev, board: false }));
-                                                        }}
-                                                        disabled={!exportFolderId}
-                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 ${exportErrors.board ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
-                                                    >
-                                                        <option value="">Selecione um quadro...</option>
-                                                        {boards.filter(b => b.folderId === exportFolderId).map(b => (
-                                                            <option key={b.id} value={b.id}>{b.name}</option>
-                                                        ))}
-                                                    </select>
-                                                    {exportErrors.board && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
-                                                </div>
-
-                                                <div className="space-y-1">
-                                                    <label className="text-[11px] font-bold uppercase text-muted-foreground">3. Escolha a Coluna Principal</label>
-                                                    <select
-                                                        value={exportListId}
-                                                        onChange={(e) => {
-                                                            setExportListId(e.target.value);
-                                                            setExportErrors(prev => ({ ...prev, list: false }));
-                                                        }}
-                                                        disabled={!exportBoardId}
-                                                        className={`w-full h-9 bg-muted border rounded px-2 text-sm focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 ${exportErrors.list ? 'border-destructive ring-1 ring-destructive animate-shake' : 'border-border'}`}
-                                                    >
-                                                        <option value="">Selecione a Lista de Destino...</option>
-                                                        {lists.filter(l => l.boardId === exportBoardId).map(l => (
-                                                            <option key={l.id} value={l.id}>{l.title}</option>
-                                                        ))}
-                                                    </select>
-                                                    {exportErrors.list && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-8 flex items-center justify-end gap-3">
-                                                <button
-                                                    onClick={() => setIsExportDialogOpen(false)}
-                                                    className="px-4 py-2 border border-border hover:bg-muted text-sm font-medium rounded-md transition-colors"
-                                                >
-                                                    Cancelar
-                                                </button>
-                                                <button
-                                                    onClick={handleExportToKanban}
-                                                    disabled={loadingFullItems}
-                                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                >
-                                                    {loadingFullItems ? (
-                                                        <>
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                            Carregando Itens...
-                                                        </>
-                                                    ) : (
-                                                        'Adicionar Cartão'
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
-                                )}
-                            </AnimatePresence>
+                            <div className="mt-8 flex items-center justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        setIsExportDialogOpen(false);
+                                        setDirectExportItem(null);
+                                    }}
+                                    className="px-4 py-2 border border-border hover:bg-muted text-sm font-medium rounded-md transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleExportToKanban}
+                                    disabled={loadingFullItems && directExportItem === null}
+                                    className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {loadingFullItems && directExportItem === null ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Carregando Itens...
+                                        </>
+                                    ) : (
+                                        'Adicionar Cartão'
+                                    )}
+                                </button>
+                            </div>
                         </DialogContent>
                     </Dialog>
                 )}
@@ -1772,3 +1811,4 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
         </div>
     );
 }
+
