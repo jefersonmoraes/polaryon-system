@@ -2,7 +2,7 @@ import { Droppable, Draggable, DraggableProvidedDragHandleProps } from '@hello-p
 import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { KanbanList, Card } from '@/types/kanban';
-import { MoreHorizontal, Plus, Trash2, GripVertical, Palette, Zap, ArrowRight, Archive, SmilePlus, CheckSquare, Calendar } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, GripVertical, Palette, Zap, ArrowRight, Archive, SmilePlus, CheckSquare, Calendar, Tag } from 'lucide-react';
 import { useState } from 'react';
 import ReactDOM from 'react-dom';
 import KanbanCardComponent from './KanbanCard';
@@ -69,6 +69,8 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
   const [colorHex, setColorHex] = useState(list.color || '');
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [milestoneInput, setMilestoneInput] = useState('');
+  const [labelAddInput, setLabelAddInput] = useState('');
+  const [labelRemoveInput, setLabelRemoveInput] = useState('');
 
   const ICONS = [
     '📋', '📝', '✅', '☑️', '✔️', '❌', '🚫', '⚠️', '❗', '❓',
@@ -107,17 +109,29 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
     ? { background: isDark ? hexToRgba(list.color, 0.1) : hexToRgba(list.color, 0.15), minWidth: 280, maxWidth: 280, backdropFilter: 'blur(12px)', borderColor: hexToRgba(list.color, isDark ? 0.2 : 0.4), borderWidth: '1px' }
     : { minWidth: 280, maxWidth: 280, background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(12px)', borderWidth: '1px', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' };
 
-  const toggleAutomationType = (type: 'archive' | 'trash' | 'move-to-board' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar', targetBoardId?: string, targetMilestoneTitle?: string) => {
+  const toggleAutomationType = (
+    type: 'archive' | 'trash' | 'move-to-board' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar' | 'add-label' | 'remove-label', 
+    targetBoardId?: string, 
+    targetMilestoneTitle?: string,
+    targetLabelName?: string
+  ) => {
     const current = list.automations || [];
-    const existsIndex = current.findIndex(a => a.type === type && a.targetBoardId === targetBoardId && a.targetMilestoneTitle === targetMilestoneTitle);
+    const existsIndex = current.findIndex(a => 
+      a.type === type && 
+      a.targetBoardId === targetBoardId && 
+      a.targetMilestoneTitle === targetMilestoneTitle &&
+      a.targetLabelName === targetLabelName
+    );
     let updated;
     if (existsIndex >= 0) {
       updated = current.filter((_, i) => i !== existsIndex);
     } else {
-      updated = [...current, { type, targetBoardId, targetMilestoneTitle }];
+      updated = [...current, { type, targetBoardId, targetMilestoneTitle, targetLabelName }];
     }
     updateList(list.id, { automations: updated.length > 0 ? updated : undefined });
     setMilestoneInput('');
+    setLabelAddInput('');
+    setLabelRemoveInput('');
   };
 
   return (
@@ -297,6 +311,50 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
                 <div key={a.targetMilestoneTitle} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
                   <span className="text-foreground flex items-center gap-1 font-medium"><CheckSquare className="h-2.5 w-2.5 text-primary" /> {a.targetMilestoneTitle}</span>
                   <button onClick={() => toggleAutomationType('mark-milestone', undefined, a.targetMilestoneTitle)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
+                </div>
+              ))}
+              
+              <div className="flex items-center gap-1 w-full bg-secondary/50 rounded pr-1 mt-1">
+                <button onClick={() => { if (labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }}
+                  className={`flex flex-1 items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'add-label') ? 'text-primary font-medium' : ''}`}
+                >
+                  <Tag className="h-3 w-3" /> Add Etiqueta:
+                </button>
+                <input 
+                  id={`list-auto-label-add-${list.id}`}
+                  name="labelAddAutomationName"
+                  value={labelAddInput} 
+                  onChange={e => setLabelAddInput(e.target.value.toUpperCase())} 
+                  onKeyDown={e => { if (e.key === 'Enter' && labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }} 
+                  placeholder="EX: URGENTE" 
+                  className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary uppercase" />
+              </div>
+              {list.automations?.filter(a => a.type === 'add-label').map(a => (
+                <div key={a.targetLabelName} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
+                  <span className="text-foreground flex items-center gap-1 font-medium"><Tag className="h-2.5 w-2.5 text-primary" /> {a.targetLabelName}</span>
+                  <button onClick={() => toggleAutomationType('add-label', undefined, undefined, a.targetLabelName)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
+                </div>
+              ))}
+
+              <div className="flex items-center gap-1 w-full bg-secondary/50 rounded pr-1 mt-1">
+                <button onClick={() => { if (labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }}
+                  className={`flex flex-1 items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-secondary transition-colors ${list.automations?.some(a => a.type === 'remove-label') ? 'text-destructive font-medium' : ''}`}
+                >
+                  <Tag className="h-3 w-3" /> Rem Etiqueta:
+                </button>
+                <input 
+                  id={`list-auto-label-rem-${list.id}`}
+                  name="labelRemoveAutomationName"
+                  value={labelRemoveInput} 
+                  onChange={e => setLabelRemoveInput(e.target.value.toUpperCase())} 
+                  onKeyDown={e => { if (e.key === 'Enter' && labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }} 
+                  placeholder="EX: TESTE" 
+                  className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary uppercase" />
+              </div>
+              {list.automations?.filter(a => a.type === 'remove-label').map(a => (
+                <div key={a.targetLabelName} className="flex items-center justify-between px-2 py-1 text-[10px] bg-secondary/80 rounded mt-1 border border-border">
+                  <span className="text-foreground flex items-center gap-1 font-medium"><Tag className="h-2.5 w-2.5 text-destructive" /> {a.targetLabelName}</span>
+                  <button onClick={() => toggleAutomationType('remove-label', undefined, undefined, a.targetLabelName)} className="text-destructive hover:text-destructive/80 p-0.5"><Trash2 className="h-2.5 w-2.5" /></button>
                 </div>
               ))}
               <button onClick={() => toggleAutomationType('archive')}

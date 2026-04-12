@@ -257,9 +257,10 @@ export interface KanbanList {
   icon?: string;
   // Automations: list of actions to perform when a card is dropped
   automations?: Array<{
-    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar';
+    type: 'move-to-board' | 'archive' | 'trash' | 'mark-completed' | 'mark-milestone' | 'sync-google-calendar' | 'add-label' | 'remove-label';
     targetBoardId?: string;
     targetMilestoneTitle?: string;
+    targetLabelName?: string;
   }>;
   archived?: boolean;
   trashed?: boolean;
@@ -368,14 +369,14 @@ export interface Card {
 }
 
 export const DEFAULT_LABELS: Label[] = [
-  { id: 'l1', name: 'Urgente', color: '#ef4444' },
-  { id: 'l2', name: 'Importante', color: '#f97316' },
-  { id: 'l3', name: 'Em progresso', color: '#eab308' },
-  { id: 'l4', name: 'Concluído', color: '#22c55e' },
-  { id: 'l5', name: 'Bug', color: '#a855f7' },
-  { id: 'l6', name: 'Feature', color: '#3b82f6' },
-  { id: 'l7', name: 'Design', color: '#14b8a6' },
-  { id: 'l8', name: 'Review', color: '#ec4899' },
+  { id: 'l1', name: 'URGENTE', color: '#ef4444' },
+  { id: 'l2', name: 'IMPORTANTE', color: '#f97316' },
+  { id: 'l3', name: 'EM PROGRESSO', color: '#eab308' },
+  { id: 'l4', name: 'CONCLUÍDO', color: '#22c55e' },
+  { id: 'l5', name: 'BUG', color: '#a855f7' },
+  { id: 'l6', name: 'FEATURE', color: '#3b82f6' },
+  { id: 'l7', name: 'DESIGN', color: '#14b8a6' },
+  { id: 'l8', name: 'REVIEW', color: '#ec4899' },
 ];
 
 export const BOARD_COLORS = [

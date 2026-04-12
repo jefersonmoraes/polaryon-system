@@ -214,6 +214,35 @@ const BoardPage = () => {
               }
             }
             break;
+          case 'add-label':
+            if (action.targetLabelName) {
+              const labelName = action.targetLabelName.toUpperCase();
+              let label = store.labels.find(l => l.name.toUpperCase() === labelName);
+              let labelId = label?.id;
+              
+              if (!labelId) {
+                // Predefined colors for new labels
+                const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#64748b'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                labelId = store.addLabel(labelName, randomColor);
+              }
+
+              if (!card.labels.includes(labelId)) {
+                const newLabels = [...card.labels, labelId];
+                updateCard(cardId, { labels: newLabels, automationUndoAction: { ...undoActionPayload, message: `Etiqueta "${labelName}" adicionada` } });
+              }
+            }
+            break;
+          case 'remove-label':
+            if (action.targetLabelName) {
+              const labelName = action.targetLabelName.toUpperCase();
+              const label = store.labels.find(l => l.name.toUpperCase() === labelName);
+              if (label && card.labels.includes(label.id)) {
+                const newLabels = card.labels.filter(id => id !== label.id);
+                updateCard(cardId, { labels: newLabels, automationUndoAction: { ...undoActionPayload, message: `Etiqueta "${labelName}" removida` } });
+              }
+            }
+            break;
         }
       });
     }

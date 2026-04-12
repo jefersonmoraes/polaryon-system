@@ -34,14 +34,14 @@ router.get('/file-proxy', async (req: Request, res: Response) => {
 });
 
 const DEFAULT_LABELS = [
-    { id: 'l1', name: 'Urgente', color: '#ef4444' },
-    { id: 'l2', name: 'Importante', color: '#f97316' },
-    { id: 'l3', name: 'Em progresso', color: '#eab308' },
-    { id: 'l4', name: 'Concluído', color: '#22c55e' },
-    { id: 'l5', name: 'Bug', color: '#a855f7' },
-    { id: 'l6', name: 'Feature', color: '#3b82f6' },
-    { id: 'l7', name: 'Design', color: '#14b8a6' },
-    { id: 'l8', name: 'Review', color: '#ec4899' },
+    { id: 'l1', name: 'URGENTE', color: '#ef4444' },
+    { id: 'l2', name: 'IMPORTANTE', color: '#f97316' },
+    { id: 'l3', name: 'EM PROGRESSO', color: '#eab308' },
+    { id: 'l4', name: 'CONCLUÍDO', color: '#22c55e' },
+    { id: 'l5', name: 'BUG', color: '#a855f7' },
+    { id: 'l6', name: 'FEATURE', color: '#3b82f6' },
+    { id: 'l7', name: 'DESIGN', color: '#14b8a6' },
+    { id: 'l8', name: 'REVIEW', color: '#ec4899' },
 ];
 
 // FOLDERS
@@ -218,6 +218,7 @@ router.delete('/lists/:id', async (req: Request, res: Response) => {
 router.post('/labels', async (req: Request, res: Response) => {
     try {
         const { id, createdAt, updatedAt, ...data } = req.body;
+        if (data.name) data.name = data.name.toUpperCase();
         const label = await prisma.label.create({ data });
         res.json(label);
     } catch (e: any) {
@@ -230,6 +231,7 @@ router.post('/labels', async (req: Request, res: Response) => {
 router.put('/labels/:id', async (req: Request, res: Response) => {
     try {
         const { id, createdAt, ...data } = req.body;
+        if (data.name) data.name = data.name.toUpperCase();
         const label = await prisma.label.update({ where: { id: req.params.id as string }, data });
         res.json(label);
     } catch (e: any) {
@@ -282,6 +284,27 @@ router.get('/cards', async (req: Request, res: Response) => {
 router.post('/cards', async (req: Request, res: Response) => {
     try {
         const { labels, checklist, items, comments, descriptionEntries, attachments, timeEntries, milestones, automationUndoAction, ...data } = req.body;
+        
+        let finalLabels = labels || [];
+
+        // Automation check on Create
+        if (data.listId) {
+            const list = await prisma.kanbanList.findUnique({ where: { id: data.listId } });
+            const automations = (list?.automations as any[]) || [];
+            
+            for (const action of automations) {
+                if (action.type === 'add-label' && action.targetLabelName) {
+                    const labelName = action.targetLabelName.toUpperCase();
+                    let label = await prisma.label.findFirst({ where: { name: labelName } });
+                    if (!label) {
+                        label = await prisma.label.create({ data: { name: labelName, color: '#838C91' } });
+                    }
+                    if (!finalLabels.includes(label.id)) {
+                        finalLabels.push(label.id);
+                    }
+                }
+            }
+        }
 
         if (data.dueDate === '') data.dueDate = null;
         else if (data.dueDate && typeof data.dueDate === 'string' && data.dueDate.length === 10) {
@@ -295,9 +318,9 @@ router.post('/cards', async (req: Request, res: Response) => {
         const card = await prisma.card.create({ data });
 
         // Link nested collections on create
-        if (labels && labels.length > 0) {
+        if (finalLabels && finalLabels.length > 0) {
             await prisma.cardLabel.createMany({
-                data: labels.map((labelId: string) => ({ cardId: card.id, labelId }))
+                data: finalLabels.map((labelId: string) => ({ cardId: card.id, labelId }))
             }).catch(e => console.error("Failed to link labels on create:", e));
         }
 
@@ -384,6 +407,34 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         
         const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, force, ...updateData } = req.body;
         const cardId = req.params.id as string;
+        
+        const oldCard = await prisma.card.findUnique({ where: { id: cardId }, include: { labels: true } });
+        let currentLabels = labels || oldCard?.labels.map(l => l.labelId) || [];
+
+        // Automation check on Move (PUT)
+        if (updateData.listId && updateData.listId !== oldCard?.listId) {
+            const list = await prisma.kanbanList.findUnique({ where: { id: updateData.listId } });
+            const automations = (list?.automations as any[]) || [];
+            
+            for (const action of automations) {
+                if (action.type === 'add-label' && action.targetLabelName) {
+                    const labelName = action.targetLabelName.toUpperCase();
+                    let label = await prisma.label.findFirst({ where: { name: labelName } });
+                    if (!label) {
+                        label = await prisma.label.create({ data: { name: labelName, color: '#838C91' } });
+                    }
+                    if (!currentLabels.includes(label.id)) {
+                        currentLabels.push(label.id);
+                    }
+                } else if (action.type === 'remove-label' && action.targetLabelName) {
+                    const labelName = action.targetLabelName.toUpperCase();
+                    const label = await prisma.label.findFirst({ where: { name: labelName } });
+                    if (label) {
+                        currentLabels = currentLabels.filter((id: string) => id !== label.id);
+                    }
+                }
+            }
+        }
 
         if (updateData.assignee !== undefined) {
             console.log(`[DEBUG_PERSISTENCE] Recebendo atualização de RESPONSÁVEL para card ${cardId}:`, updateData.assignee);
@@ -504,12 +555,12 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         }
 
         // Update Labels relationship (Array of Strings to link table)
-        if (labels !== undefined) {
+        if (currentLabels !== undefined) {
             updatePromises.push((async () => {
                 await prisma.cardLabel.deleteMany({ where: { cardId } });
-                if (labels.length > 0) {
+                if (currentLabels.length > 0) {
                     await prisma.cardLabel.createMany({
-                        data: labels.map((labelId: string) => ({ cardId, labelId }))
+                        data: currentLabels.map((l: string) => ({ cardId, labelId: l }))
                     });
                 }
             })());

@@ -96,7 +96,7 @@ interface KanbanState {
   // comments
   addComment: (cardId: string, text: string) => void;
   // labels
-  addLabel: (name: string, color: string) => void;
+  addLabel: (name: string, color: string) => string;
   updateLabel: (id: string, data: Partial<Label>) => void;
   deleteLabel: (id: string) => void;
   updateCardDescriptionSync: (id: string, description: string) => void;
@@ -1457,13 +1457,18 @@ export const useKanbanStore = create<KanbanState>()(
 
       // Labels
       addLabel: (name, color) => {
-        const newLabel = { id: uid(), name, color };
+        const upperName = name.toUpperCase();
+        const id = uid();
+        const newLabel = { id, name: upperName, color };
         set(s => ({ labels: [...s.labels, newLabel] }));
         api.post('/kanban/labels', newLabel).catch(console.error);
+        return id;
       },
       updateLabel: (id, data) => {
-        set(s => ({ labels: s.labels.map(l => l.id === id ? { ...l, ...data } : l) }));
-        api.put(`/kanban/labels/${id}`, data).catch(console.error);
+        const updateData = { ...data };
+        if (updateData.name) updateData.name = updateData.name.toUpperCase();
+        set(s => ({ labels: s.labels.map(l => l.id === id ? { ...l, ...updateData } : l) }));
+        api.put(`/kanban/labels/${id}`, updateData).catch(console.error);
       },
       deleteLabel: (id) => {
         set(s => ({
