@@ -315,9 +315,16 @@ const BudgetsPage = () => {
 
                                     return (
                                         <div className="flex flex-wrap items-center gap-1.5 mb-4">
-                                            <div className="text-[10px] text-primary/80 bg-primary/10 px-2 py-1 rounded w-fit flex items-center gap-1 line-clamp-1 border border-primary/20" title={`Cartão: ${linkedCard?.title || 'não encontrado'}`}>
-                                                <LinkIcon className="h-3 w-3 shrink-0" />
-                                                {linkedCard?.title || 'Cartão não encontrado'}
+                                            <div className="text-[10px] text-primary/80 bg-primary/10 px-2 py-1 rounded w-fit flex flex-col gap-0.5 border border-primary/20" title={`Cartão: ${linkedCard?.title || 'não encontrado'}`}>
+                                                <div className="flex items-center gap-1 font-medium">
+                                                    <LinkIcon className="h-3 w-3 shrink-0" />
+                                                    {linkedCard?.summary || linkedCard?.title || 'Cartão não encontrado'}
+                                                </div>
+                                                {linkedCard && linkedCard.items && linkedCard.items.length > 0 && (
+                                                    <div className="pl-4 opacity-80 text-[9px] font-bold">
+                                                        {formatCurrency(linkedCard.items.reduce((acc, item) => acc + (item.unitValue * item.quantity), 0))}
+                                                    </div>
+                                                )}
                                             </div>
                                             {linkedList && (
                                                 <div
