@@ -3,11 +3,15 @@ import { useEssentialDocumentStore, EssentialDocumentModel } from '@/store/essen
 import { Plus, Search, FileText, Trash2, Edit } from 'lucide-react';
 import EssentialDocumentModelForm from '@/components/documentation/EssentialDocumentModelForm';
 import { useAuthStore } from '@/store/auth-store';
+import { openFileInNewTab } from '@/lib/utils';
 
 const EssentialDocumentModelsPage = () => {
-    const { currentUser } = useAuthStore();
+    const currentUser = useAuthStore(state => state.currentUser);
     const canEdit = currentUser?.permissions?.canEdit ?? false;
-    const { models, trashModel, initializeDefaultModels, fetchModels } = useEssentialDocumentStore();
+    const models = useEssentialDocumentStore(state => state.models);
+    const trashModel = useEssentialDocumentStore(state => state.trashModel);
+    const initializeDefaultModels = useEssentialDocumentStore(state => state.initializeDefaultModels);
+    const fetchModels = useEssentialDocumentStore(state => state.fetchModels);
     const [searchQuery, setSearchQuery] = useState('');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingModel, setEditingModel] = useState<EssentialDocumentModel | null>(null);
@@ -73,7 +77,7 @@ const EssentialDocumentModelsPage = () => {
                         </div>
                     </div>
 
-                    <div className="bg-card rounded-xl border border-border/20 shadow-sm overflow-hidden animate-in fade-in duration-300">
+                    <div className="bg-card rounded-xl border border-border/20 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-muted-foreground bg-muted/20 uppercase border-b border-border/20">
@@ -116,15 +120,14 @@ const EssentialDocumentModelsPage = () => {
                                                     <div className="flex gap-1 items-center">
                                                         {model.attachments && model.attachments.length > 0 && (
                                                             model.attachments.map(att => (
-                                                                <a
+                                                                <button
                                                                     key={att.id}
-                                                                    href={att.fileData}
-                                                                    download={att.fileName}
+                                                                    onClick={() => openFileInNewTab(att.fileData, att.fileName)}
                                                                     className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded transition-colors"
-                                                                    title={`Baixar ${att.fileName}`}
+                                                                    title={`Abrir ${att.fileName}`}
                                                                 >
                                                                     <FileText className="h-4 w-4" />
-                                                                </a>
+                                                                </button>
                                                             ))
                                                         )}
                                                     </div>

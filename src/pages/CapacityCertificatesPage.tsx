@@ -6,12 +6,16 @@ import CertificateForm from '@/components/documentation/CertificateForm';
 import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
+import { openFileInNewTab } from '@/lib/utils';
 
 const CapacityCertificatesPage = () => {
-    const { currentUser } = useAuthStore();
+    const currentUser = useAuthStore(state => state.currentUser);
     const canEdit = currentUser?.permissions?.canEdit ?? false;
-    const { certificates, trashCertificate, fetchCertificates } = useCertificateStore();
-    const { cards, fetchKanbanData } = useKanbanStore();
+    const certificates = useCertificateStore(state => state.certificates);
+    const trashCertificate = useCertificateStore(state => state.trashCertificate);
+    const fetchCertificates = useCertificateStore(state => state.fetchCertificates);
+    const cards = useKanbanStore(state => state.cards);
+    const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
 
     useEffect(() => {
         fetchCertificates();
@@ -193,31 +197,51 @@ const CapacityCertificatesPage = () => {
                                                         <div className="flex flex-wrap gap-1.5 max-w-[250px]">
                                                             {cert.attachments && cert.attachments.length > 0 ? (
                                                                 cert.attachments.map(att => (
-                                                                    <button
-                                                                        key={att.id}
-                                                                        onClick={async () => {
-                                                                            try {
-                                                                                const response = await api.get(`/certificates/attachment/${att.id}`);
-                                                                                if (response.data && response.data.fileData) {
-                                                                                    const link = document.createElement('a');
-                                                                                    link.href = response.data.fileData;
-                                                                                    link.download = att.fileName || 'arquivo';
-                                                                                    document.body.appendChild(link);
-                                                                                    link.click();
-                                                                                    document.body.removeChild(link);
-                                                                                } else {
-                                                                                    alert('Erro: Arquivo não encontrado no servidor.');
+                                                                    <div key={att.id} className="flex items-center gap-1 group">
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                try {
+                                                                                    const response = await api.get(`/certificates/attachment/${att.id}`);
+                                                                                    if (response.data && response.data.fileData) {
+                                                                                        const link = document.createElement('a');
+                                                                                        link.href = response.data.fileData;
+                                                                                        link.download = att.fileName || 'arquivo';
+                                                                                        document.body.appendChild(link);
+                                                                                        link.click();
+                                                                                        document.body.removeChild(link);
+                                                                                    } else {
+                                                                                        alert('Erro: Arquivo não encontrado no servidor.');
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    console.error('Failed to download attachment', e);
+                                                                                    alert('Ocorreu um erro ao baixar o anexo.');
                                                                                 }
-                                                                            } catch (e) {
-                                                                                console.error('Failed to download attachment', e);
-                                                                                alert('Ocorreu um erro ao baixar o anexo.');
-                                                                            }
-                                                                        }}
-                                                                        className="text-[10px] px-2 py-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
-                                                                        title={`Baixar ${att.fileSlot}: ${att.fileName}`}
-                                                                    >
-                                                                        {att.fileSlot}
-                                                                    </button>
+                                                                            }}
+                                                                            className="text-[10px] px-2 py-1 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                                                                            title={`Baixar ${att.fileSlot}: ${att.fileName}`}
+                                                                        >
+                                                                            <Download className="h-3 w-3" />
+                                                                            {att.fileSlot}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                try {
+                                                                                    const response = await api.get(`/certificates/attachment/${att.id}`);
+                                                                                    if (response.data && response.data.fileData) {
+                                                                                        openFileInNewTab(response.data.fileData, att.fileName);
+                                                                                    } else {
+                                                                                        alert('Erro: Arquivo não encontrado no servidor.');
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    console.error('Failed to open attachment', e);
+                                                                                }
+                                                                            }}
+                                                                            className="p-1 px-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded text-[10px] transition-colors"
+                                                                            title="Abrir em Nova Aba"
+                                                                        >
+                                                                            <ExternalLink className="h-3 w-3" />
+                                                                        </button>
+                                                                    </div>
                                                                 ))
                                                             ) : (
                                                                 <span className="text-[10px] text-muted-foreground italic">Sem comprovantes</span>

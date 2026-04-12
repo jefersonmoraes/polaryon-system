@@ -58,13 +58,26 @@ const CashflowForecastDash = lazy(() => import("./components/accounting/Cashflow
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { cleanupTrash, cleanOldTrash: cleanKanbanTrash, companies, permanentlyDeleteCompany, updateCompany, fetchKanbanData } = useKanbanStore();
-  const { isAuthenticated, currentUser: authUser, setOnlineUsers, setSocketConnected } = useAuthStore();
-  const { uiZoom, isDark } = useUserPrefsStore();
-  const { documents, validateDocumentStatuses, cleanOldTrash: cleanDocsTrash } = useDocumentStore();
-  const { cleanOldTrash: cleanAccountingTrash } = useAccountingStore();
-  const { cleanOldTrash: cleanEssentialDocsTrash } = useEssentialDocumentStore();
-  const { cleanOldTrash: cleanCertificateTrash } = useCertificateStore();
+  const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
+  const cleanupTrash = useKanbanStore(state => state.cleanupTrash);
+  const cleanKanbanTrash = useKanbanStore(state => state.cleanOldTrash);
+  const companies = useKanbanStore(state => state.companies);
+
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const authUser = useAuthStore(state => state.currentUser);
+  const setOnlineUsers = useAuthStore(state => state.setOnlineUsers);
+  const setSocketConnected = useAuthStore(state => state.setSocketConnected);
+
+  const uiZoom = useUserPrefsStore(state => state.uiZoom);
+  const isDark = useUserPrefsStore(state => state.isDark);
+
+  const cleanDocsTrash = useDocumentStore(state => state.cleanOldTrash);
+  const validateDocumentStatuses = useDocumentStore(state => state.validateDocumentStatuses);
+  const documents = useDocumentStore(state => state.documents);
+
+  const cleanAccountingTrash = useAccountingStore(state => state.cleanOldTrash);
+  const cleanEssentialDocsTrash = useEssentialDocumentStore(state => state.cleanOldTrash);
+  const cleanCertificateTrash = useCertificateStore(state => state.cleanOldTrash);
   
   // Defensive ref for presence notifications (Industrial-grade shielding)
   const lastNotificationTimes = useRef<Record<string, number>>({});
