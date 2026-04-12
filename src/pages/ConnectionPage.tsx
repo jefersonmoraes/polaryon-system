@@ -13,9 +13,12 @@ import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 const getFavicon = (url: string) => {
     try {
         const hostname = new URL(url).hostname;
-        return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+        // Using DuckDuckGo's favicon service because it always returns 200 OK 
+        // with a default globe icon if the site's favicon is missing, 
+        // preventing console 404 errors.
+        return `https://icons.duckduckgo.com/ip3/${hostname}.ico`;
     } catch (e) {
-        return `https://www.google.com/s2/favicons?domain=google.com&sz=128`;
+        return `https://icons.duckduckgo.com/ip3/google.com.ico`;
     }
 };
 
@@ -48,7 +51,7 @@ const RenderLink = ({
                     src={getFavicon(link.url)} 
                     alt={link.title} 
                     className="w-full h-full object-contain filter drop-shadow-sm"
-                    onError={(e) => { (e.target as any).src = 'https://www.google.com/s2/favicons?domain=google.com&sz=128' }}
+                    onError={(e) => { (e.target as any).src = 'https://icons.duckduckgo.com/ip3/google.com.ico' }}
                 />
             </div>
                         

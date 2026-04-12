@@ -1,8 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
+import { cn, fixDateToBRT } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Search, MapPin, Phone, Mail, Globe, Calendar, Star, Trash2, Building2, Truck, Copy, Check, Link2, ExternalLink, Heart, Briefcase, Plus, X, MessageSquare, Info, Filter, ChevronDown, ChevronUp, GripVertical, ArchiveRestore, RefreshCcw, ArrowUp, ArrowDown, ChevronLeft, Edit, Tag, AlertCircle, AlertTriangle, Download } from 'lucide-react';
+import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 import { useAuthStore } from '@/store/auth-store';
 import { CompanyContact } from '@/types/kanban';
 import * as XLSX from 'xlsx';
@@ -518,14 +517,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                                 <div className="flex items-center gap-2">
                                                     <div className="relative shrink-0">
                                                         {type === 'Fornecedor' ? <Briefcase className={`h-4 w-4 shrink-0 ${selectedCompanyId === company.id ? 'text-white' : 'text-yellow-600'}`} /> : <Truck className={`h-4 w-4 shrink-0 ${selectedCompanyId === company.id ? 'text-white' : 'text-yellow-600'}`} />}
-                                                        {company.customLink && (
-                                                            <img 
-                                                                src={getFaviconUrl(company.customLink)} 
-                                                                alt=""
-                                                                className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm bg-background border border-border"
-                                                                onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                            />
-                                                        )}
+                                                        <CompanyFavicon company={company} size="sm" className="bg-background border border-border absolute -bottom-1 -right-1" />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="font-bold text-sm line-clamp-1">{company.nickname || company.nome_fantasia || company.razao_social}</p>
@@ -552,14 +544,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="min-w-0 flex-1 flex items-center gap-1.5">
                                                 {company.isFavorite && <Heart className={`h-3.5 w-3.5 shrink-0 ${selectedCompanyId === company.id ? 'fill-primary-foreground text-primary-foreground' : 'fill-red-500 text-red-500'}`} />}
-                                                {company.customLink && (
-                                                    <img 
-                                                        src={getFaviconUrl(company.customLink)} 
-                                                        alt=""
-                                                        className="w-6 h-6 rounded-sm shrink-0"
-                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                    />
-                                                )}
+                                                <CompanyFavicon company={company} size="md" />
                                                 <p className="font-bold text-sm line-clamp-1">{company.nickname || company.nome_fantasia || company.razao_social}</p>
                                             </div>
                                             {companyRatings[company.id] ? (
@@ -729,14 +714,7 @@ const CompanyListPage = ({ type }: CompanyListPageProps) => {
                                             <Heart className={`h-5 w-5 ${selectedCompany.isFavorite ? 'fill-current' : ''}`} />
                                         </button>
                                         <h2 className="text-3xl font-bold tracking-tight text-foreground leading-tight flex items-center gap-3">
-                                            {selectedCompany.customLink && (
-                                                <img 
-                                                    src={getFaviconUrl(selectedCompany.customLink)} 
-                                                    alt=""
-                                                    className="w-12 h-12 rounded-md shrink-0"
-                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                />
-                                            )}
+                                            <CompanyFavicon company={selectedCompany} size="lg" />
                                             {selectedCompany.nickname || selectedCompany.nome_fantasia || selectedCompany.razao_social}
                                         </h2>
                                     </div>

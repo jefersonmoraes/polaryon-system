@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
 import { cn, getFaviconUrl, compressImage, openFileInNewTab } from '@/lib/utils';
+import { CompanyFavicon } from '../ui/CompanyFavicon';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -2895,14 +2896,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                             ) : supplierProfile ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-3">
-                                        {supplierProfile.customLink && (
-                                            <img
-                                                src={getFaviconUrl(supplierProfile.customLink)}
-                                                alt=""
-                                                className="w-10 h-10 rounded-md shrink-0"
-                                                onError={(e) => (e.currentTarget.style.display = 'none')}
-                                            />
-                                        )}
+                                        <CompanyFavicon company={supplierProfile} size="md" />
                                         <div>
                                             <h4 className="font-bold text-foreground text-sm">{supplierProfile.nickname || supplierProfile.nome_fantasia || supplierProfile.razao_social}</h4>
                                             <p className="text-xs text-muted-foreground mt-0.5">{supplierProfile.razao_social}</p>

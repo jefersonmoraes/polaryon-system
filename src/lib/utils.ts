@@ -25,6 +25,7 @@ export function fixDateToBRT(dateStr: string | null | undefined): Date | null {
 
     return d;
 }
+
 export function getFaviconUrl(url?: string): string | undefined {
     if (!url) return undefined;
     try {
@@ -33,7 +34,10 @@ export function getFaviconUrl(url?: string): string | undefined {
             domain = 'https://' + domain;
         }
         const urlObj = new URL(domain);
-        return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
+        // Using DuckDuckGo's favicon service because it is faster and 
+        // returns a default globe icon with 200 OK instead of 404,
+        // which prevents console error noise in the browser.
+        return `https://icons.duckduckgo.com/ip3/${urlObj.hostname}.ico`;
     } catch (e) {
         return undefined;
     }

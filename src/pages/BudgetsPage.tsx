@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { cn, fixDateToBRT, getFaviconUrl } from '@/lib/utils';
+import { cn, fixDateToBRT } from '@/lib/utils';
 import { useKanbanStore } from '@/store/kanban-store';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
+import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
@@ -95,12 +96,6 @@ const BudgetsPage = () => {
                 return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
             });
     }, [budgets, typeFilter, statusFilter, searchQuery, companies, sortOrder]);
-
-    const getCompanyFavicon = (id?: string) => {
-        if (!id) return undefined;
-        const c = companies.find(c => c.id === id);
-        return c?.customLink ? getFaviconUrl(c.customLink) : undefined;
-    };
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -296,19 +291,9 @@ const BudgetsPage = () => {
                                                 <div className="flex items-center gap-1.5 min-w-0" title={suppliers.map(getCompanyName).join(', ')}>
                                                 <Building2 className="h-3 w-3 shrink-0" />
                                                 <div className="flex -space-x-1 overflow-hidden shrink-0">
-                                                    {suppliers.slice(0, 3).map(sid => {
-                                                        const fav = getCompanyFavicon(sid);
-                                                        if (!fav) return null;
-                                                        return (
-                                                            <img 
-                                                                key={sid}
-                                                                src={fav} 
-                                                                alt=""
-                                                                className="w-6 h-6 rounded-sm shrink-0 ring-1 ring-background"
-                                                                onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                            />
-                                                        );
-                                                    })}
+                                                    {suppliers.slice(0, 3).map(sid => (
+                                                        <CompanyFavicon key={sid} company={companies.find(c => c.id === sid)} size="sm" className="ring-1 ring-background" />
+                                                    ))}
                                                 </div>
                                                 {suppliers.length > 0 ? (
                                                     <span className="truncate">{suppliers.length} Fornecedor{suppliers.length > 1 ? 'es' : ''}</span>

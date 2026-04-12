@@ -4,7 +4,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
-import { getFaviconUrl } from '@/lib/utils';
+import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 
 interface CnpjResult {
     cnpj: string;
@@ -308,14 +308,7 @@ const SuppliersPage = () => {
                                                                                 <div className="p-1.5 bg-blue-500/10 text-blue-500 rounded-md">
                                                                                     <Building2 className="h-4 w-4" />
                                                                                 </div>
-                                                                                {company.customLink && (
-                                                                                    <img 
-                                                                                        src={getFaviconUrl(company.customLink)} 
-                                                                                        alt=""
-                                                                                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-sm shrink-0"
-                                                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                                                    />
-                                                                                )}
+                                                                                <CompanyFavicon company={company} size="sm" className="absolute -bottom-1 -right-1 bg-background border border-border" />
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nickname || company.nome_fantasia || company.razao_social}</p>
@@ -385,14 +378,7 @@ const SuppliersPage = () => {
                                                                                 <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-md">
                                                                                     <Truck className="h-4 w-4" />
                                                                                 </div>
-                                                                                {company.customLink && (
-                                                                                    <img 
-                                                                                        src={getFaviconUrl(company.customLink)} 
-                                                                                        alt=""
-                                                                                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-sm shrink-0"
-                                                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                                                    />
-                                                                                )}
+                                                                                <CompanyFavicon company={company} size="sm" className="absolute -bottom-1 -right-1 bg-background border border-border" />
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-xs font-semibold text-foreground truncate max-w-[140px]">{company.nome_fantasia || company.razao_social}</p>

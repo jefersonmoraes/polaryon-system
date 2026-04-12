@@ -15,6 +15,7 @@ import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
 import { getFaviconUrl, cn, compressImage, openFileInNewTab } from '@/lib/utils';
+import { CompanyFavicon } from '../ui/CompanyFavicon';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { toast } from 'sonner';
 
@@ -70,11 +71,6 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
   const canDownload = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canDownload;
 
-  const getCompanyFavicon = (id?: string) => {
-    if (!id) return undefined;
-    const c = companies.find(c => c.id === id);
-    return c?.customLink ? getFaviconUrl(c.customLink) : undefined;
-  };
 
   const getCompanyName = (id?: string) => {
     if (!id) return '';
@@ -1266,17 +1262,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                                 </span>
                               </div>
                               <span className="text-[9px] text-muted-foreground max-w-[120px] truncate flex items-center justify-end gap-1" title={getCompanyName(winningQuotation.companyId)}>
-                                {(() => {
-                                  const fav = getCompanyFavicon(winningQuotation.companyId);
-                                  return fav ? (
-                                    <img 
-                                      src={fav} 
-                                      alt=""
-                                      className="w-5 h-5 rounded-sm shrink-0"
-                                      onError={(e) => (e.currentTarget.style.display = 'none')}
-                                    />
-                                  ) : null;
-                                })()}
+                                <CompanyFavicon company={companies.find(c => c.id === winningQuotation.companyId)} size="sm" className="ring-1 ring-background" />
                                 {getCompanyName(winningQuotation.companyId)}
                               </span>
                             </div>
