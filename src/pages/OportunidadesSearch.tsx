@@ -1695,7 +1695,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                     >
                                         <option value="">Selecione o quadro...</option>
                                         {boards.filter(b => b.folderId === exportFolderId).map(b => (
-                                            <option key={b.id} value={b.id}>{b.title}</option>
+                                            <option key={b.id} value={b.id}>{b.name}</option>
                                         ))}
                                     </select>
                                     {exportErrors.board && <p className="text-[10px] text-destructive font-bold uppercase mt-0.5 animate-in fade-in slide-in-from-top-1">Seleção obrigatória</p>}
