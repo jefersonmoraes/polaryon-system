@@ -11,7 +11,7 @@ import {
     Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign, Zap
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
-import BudgetAutomationModal from '@/components/budgets/BudgetAutomationModal';
+import GlobalBudgetAutomationModal from '@/components/budgets/GlobalBudgetAutomationModal';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -134,14 +134,23 @@ const BudgetsPage = () => {
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleNew}
-                        disabled={!canEdit}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Novo Orçamento
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsAutomationModalOpen(true)}
+                            className="bg-secondary/50 text-primary border border-primary/20 hover:bg-primary/10 px-4 py-2 rounded-lg font-bold text-sm transition-all shadow-sm flex items-center gap-2"
+                        >
+                            <Zap className="h-4 w-4" />
+                            Automações
+                        </button>
+                        <button
+                            onClick={handleNew}
+                            disabled={!canEdit}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Novo Orçamento
+                        </button>
+                    </div>
                 </div>
 
                 {/* Filters Bar */}
@@ -261,9 +270,6 @@ const BudgetsPage = () => {
                                                 <>
                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(budget); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary transition-colors flex items-center gap-2">
                                                         <Edit className="h-3.5 w-3.5" /> Editar
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setSelectedBudget(budget); setIsAutomationModalOpen(true); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-primary transition-colors flex items-center gap-2">
-                                                        <Zap className="h-3.5 w-3.5" /> Automações
                                                     </button>
                                                     <button onClick={(e) => { e.stopPropagation(); updateBudget(budget.id, { archived: true }); }} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-secondary text-muted-foreground transition-colors flex items-center gap-2">
                                                         <Archive className="h-3.5 w-3.5" /> Arquivar
@@ -465,10 +471,9 @@ const BudgetsPage = () => {
                 )
             }
 
-            {isAutomationModalOpen && selectedBudget && (
-                <BudgetAutomationModal
-                    budget={selectedBudget}
-                    onClose={() => { setIsAutomationModalOpen(false); setSelectedBudget(undefined); }}
+            {isAutomationModalOpen && (
+                <GlobalBudgetAutomationModal
+                    onClose={() => setIsAutomationModalOpen(false)}
                 />
             )}
         </div >
