@@ -76,6 +76,7 @@ export interface BudgetItem {
   mainCompanyId?: string; // ID da Administradora Padrão Selecionada
   destinationState?: string; // Estado de Destino
   profitMargin?: number; // Margem de Lucro percentual desejada (Markup divisor)
+  profitMarginMax?: number; // Margem de Lucro Máxima percentual simulada
   difalValue?: number; // Valor nominal somado de DIFAL
   taxValue?: number; // Valor nominal somado TOTAL de impostos (para legados)
 
@@ -101,6 +102,7 @@ export interface BudgetItem {
   };
 
   finalSellingPrice?: number; // Preço Final do Fornecedor baseado no Custo + Margem
+  finalSellingPriceMax?: number; // Preço Final de Simulação da Margem Máxima
 
   items: QuotationSubItem[]; // The products/services inside this quote
   attachments?: Attachment[]; // Attached images/PDFs specifically for this supplier/quote

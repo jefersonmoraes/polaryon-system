@@ -309,7 +309,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         destState?: string,
         marginPercent?: number,
         itemType?: BudgetType,
-        installmentsCost: number = 0 // Stubbing backwards compatibility
+        installmentsCost: number = 0, // Stubbing backwards compatibility
+        marginMaxPercent?: number
     ) => {
         const productsTotal = currentItems.reduce((sum: number, sub: any) => sum + (sub.totalPrice || 0), 0);
         let baseTotal = productsTotal + freight;
@@ -370,6 +371,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         // Formula: Preço = Custo / (1 - (AlíquotaImposto% + AliquotaDIFAL% + MargemLucro%) / 100)
 
         let finalPrice = effectiveCost;
+        let finalPriceMax = effectiveCost;
         // The fixed cost allocation is a vital metric; if not provided, assume 0 for exact cost mode.
         const fixedCostsRate = 0; // In future updates, we can let user input this. For now, it secures the parameter.
         const totalDeductionPercent = taxRate + difalPercent + fixedCostsRate + (marginPercent || 0);
@@ -379,6 +381,13 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         } else if (totalDeductionPercent >= 100) {
             // Safety against division by zero or negative pricing
             finalPrice = effectiveCost; // Fallback
+        }
+
+        const totalDeductionMaxPercent = taxRate + difalPercent + fixedCostsRate + (marginMaxPercent || 0);
+        if (totalDeductionMaxPercent > 0 && totalDeductionMaxPercent < 100) {
+            finalPriceMax = effectiveCost / (1 - (totalDeductionMaxPercent / 100));
+        } else if (totalDeductionMaxPercent >= 100) {
+            finalPriceMax = effectiveCost; // Fallback
         }
 
         // 4. Agora calculamos o valor Nominal dos impostos a partir do Preço Final
@@ -405,7 +414,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             };
         }
 
-        return { cost: effectiveCost, taxNominal, difalNominal, finalPrice, breakdown, difalBreakdown };
+        return { cost: effectiveCost, taxNominal, difalNominal, finalPrice, finalPriceMax, breakdown, difalBreakdown };
     }, [budgetType, mainCompanies]);
 
     const flushRecalculation = useCallback((
@@ -416,10 +425,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         adminId: string | undefined,
         destState: string | undefined,
         margin: number | undefined,
-        itemType: BudgetType | undefined
+        itemType: BudgetType | undefined,
+        marginMax: number | undefined
     ) => {
         const result = recalculateTotal(
-            subItems, freight, discountValue, discountOpt, adminId, destState, margin, itemType
+            subItems, freight, discountValue, discountOpt, adminId, destState, margin, itemType, 0, marginMax
         );
 
         // Batch update all calculated fields at once
@@ -433,6 +443,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                 difalValue: result.difalNominal,
                 taxesBreakdown: result.breakdown,
                 finalSellingPrice: result.finalPrice,
+                finalSellingPriceMax: result.finalPriceMax,
                 difalBreakdown: result.difalBreakdown || undefined
             }, undefined, false);
         }, 0);
@@ -448,7 +459,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             item.mainCompanyId,
             item.destinationState,
             item.profitMargin,
-            item.type
+            item.type,
+            item.profitMarginMax
         );
     }, [
         item.items,
@@ -458,6 +470,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         item.mainCompanyId,
         item.destinationState,
         item.profitMargin,
+        item.profitMarginMax,
         item.type,
         flushRecalculation
     ]);
@@ -1380,11 +1393,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         <span className="mt-0.5">Total</span>
                                     </div>
                                     <div className="col-span-2 text-right flex flex-col items-end leading-none text-primary">
-                                        <span className="text-[7px] text-primary/50">VENDA</span>
+                                        <span className="text-[7px] text-primary/50 uppercase tracking-widest pl-1">{item.profitMarginMax ? 'VENDA (MÍN/MÁX)' : 'VENDA (MÍN)'}</span>
                                         <span className="mt-0.5">V. Revenda Un.</span>
                                     </div>
                                     <div className="col-span-2 text-right flex flex-col items-end leading-none text-primary pr-6">
-                                        <span className="text-[7px] text-primary/50">VENDA</span>
+                                        <span className="text-[7px] text-primary/50 uppercase tracking-widest pl-1">{item.profitMarginMax ? 'VENDA (MÍN/MÁX)' : 'VENDA (MÍN)'}</span>
                                         <span className="mt-0.5">V. Revenda Tot.</span>
                                     </div>
                                 </div>
@@ -1408,9 +1421,15 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                         {(() => {
                                             const totalCost = item.totalPrice || 0;
                                             const totalSell = item.finalSellingPrice || totalCost;
+                                            const totalSellMax = item.finalSellingPriceMax || totalCost;
+                                            
                                             const resaleFactor = totalCost > 0 ? (totalSell / totalCost) : 1;
                                             const vUnitResale = sub.unitPrice * resaleFactor;
                                             const vTotalResale = sub.totalPrice * resaleFactor;
+
+                                            const resaleFactorMax = totalCost > 0 ? (totalSellMax / totalCost) : 1;
+                                            const vUnitResaleMax = sub.unitPrice * resaleFactorMax;
+                                            const vTotalResaleMax = sub.totalPrice * resaleFactorMax;
 
                                             return (
                                                 <>
@@ -1471,9 +1490,17 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     {/* NEW: V. Revenda Unitário */}
                                                     <div className="w-full sm:col-span-2 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center px-3 sm:px-1 py-2 sm:py-0 bg-primary/5 sm:bg-transparent rounded-lg sm:rounded-none border-primary/10 border sm:border-none">
                                                         <label className="sm:hidden text-[9px] font-black text-primary uppercase">Revenda Unidade</label>
-                                                        <div className="text-sm sm:text-xs font-mono font-black text-primary flex items-center gap-1">
-                                                            <span className="text-[10px] hidden sm:inline">R$</span>
-                                                            {formatCurrency(vUnitResale).replace('R$ ', '')}
+                                                        <div className="flex flex-col items-end">
+                                                            <div className="text-sm sm:text-xs font-mono font-black text-primary flex items-center gap-1">
+                                                                <span className="text-[10px] hidden sm:inline">R$</span>
+                                                                {formatCurrency(vUnitResale).replace('R$ ', '')}
+                                                            </div>
+                                                            {item.profitMarginMax !== undefined && item.profitMarginMax > 0 && (
+                                                                <div className="text-[11px] sm:text-[10px] font-mono font-black text-teal-600 flex items-center gap-1 mt-0.5" title="Máximo Simulado">
+                                                                    <span className="text-[8px] hidden sm:inline text-teal-600/70">R$</span>
+                                                                    {formatCurrency(vUnitResaleMax).replace('R$ ', '')}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -1481,10 +1508,18 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     <div className="w-full sm:col-span-2 text-right text-xs font-mono font-bold text-primary flex justify-between items-center sm:pl-1 border-t sm:border-none border-border/50 pt-2 sm:pt-0">
                                                         <div className="flex flex-col sm:contents items-end w-full">
                                                             <label className="sm:hidden text-[9px] font-black text-primary uppercase mb-0.5 block">Revenda Total</label>
-                                                            <span className="truncate flex items-center gap-1 justify-end w-full text-base sm:text-xs font-black">
-                                                                <DollarSign className="h-3 w-3 inline text-primary/50 mr-1" />
-                                                                {formatCurrency(vTotalResale)}
-                                                            </span>
+                                                            <div className="flex flex-col items-end w-full">
+                                                                <span className="truncate flex items-center gap-1 justify-end w-full text-base sm:text-xs font-black">
+                                                                    <DollarSign className="h-3 w-3 inline text-primary/50 mr-1" />
+                                                                    {formatCurrency(vTotalResale)}
+                                                                </span>
+                                                                {item.profitMarginMax !== undefined && item.profitMarginMax > 0 && (
+                                                                    <span className="truncate flex items-center gap-1 justify-end w-full text-[12px] sm:text-[10px] font-black text-teal-600 mt-0.5">
+                                                                        <DollarSign className="h-2.5 w-2.5 inline text-teal-600/50 mr-1" />
+                                                                        {formatCurrency(vTotalResaleMax)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         {canEdit && (
                                                             <button
@@ -2563,7 +2598,7 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                             <span className="font-mono font-bold">{formatCurrency(expandedQuote?.totalPrice || 0)}</span>
                                         </div>
                                         
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-3 gap-3">
                                             <div className="space-y-1">
                                                 <label className="text-[9px] font-bold uppercase text-muted-foreground block">Vl. Frete (R$)</label>
                                                 <input 
@@ -2576,14 +2611,25 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                                                 />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block">Margem de Lucro (%)</label>
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block text-primary">Margem Mín (%)</label>
                                                 <input 
                                                     type="number"
                                                     disabled={!canEdit}
                                                     value={expandedQuote?.profitMargin || ''}
                                                     onChange={(e) => updateItemField(expandedQuote?.id as string, 'profitMargin', Number(e.target.value))}
-                                                    className="w-full bg-secondary/20 border border-border rounded p-2 text-xs font-mono font-bold"
+                                                    className="w-full bg-primary/5 border border-primary/20 text-primary rounded p-2 text-xs font-mono font-bold"
                                                     placeholder="20%"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold uppercase text-muted-foreground block text-teal-500">Margem Máx (%)</label>
+                                                <input 
+                                                    type="number"
+                                                    disabled={!canEdit}
+                                                    value={expandedQuote?.profitMarginMax || ''}
+                                                    onChange={(e) => updateItemField(expandedQuote?.id as string, 'profitMarginMax', Number(e.target.value))}
+                                                    className="w-full bg-teal-500/5 border border-teal-500/20 text-teal-600 rounded p-2 text-xs font-mono font-bold focus:ring-teal-500"
+                                                    placeholder="35%"
                                                 />
                                             </div>
                                         </div>
@@ -2595,28 +2641,52 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
 
                                         <div className="pt-2 border-t border-border flex justify-between items-center">
                                             <span className="text-sm font-bold">PREÇO FINAL DE VENDA</span>
-                                            <span className="text-lg font-mono font-bold text-primary">{formatCurrency(expandedQuote?.finalSellingPrice || 0)}</span>
+                                            <div className="flex flex-col items-end">
+                                                <span className="text-lg font-mono font-bold text-primary">{formatCurrency(expandedQuote?.finalSellingPrice || 0)}</span>
+                                                {(expandedQuote?.profitMarginMax ?? 0) > 0 && (
+                                                    <span className="text-xs font-mono font-bold text-teal-600 mt-0.5">Teto Simul.: {formatCurrency(expandedQuote?.finalSellingPriceMax || 0)}</span>
+                                                )}
+                                            </div>
                                         </div>
                                         
                                         {/* Profit Badge */}
                                         {(() => {
                                             const sell = expandedQuote?.finalSellingPrice || expandedQuote?.totalPrice || 0;
+                                            const sellMax = expandedQuote?.finalSellingPriceMax || sell;
                                             const cost = expandedQuote?.totalPrice || 0;
                                             const tax = expandedQuote?.taxValue || 0;
                                             const difal = expandedQuote?.difalValue || 0;
+                                            
+                                            // MÍNIMO
                                             const profitAmount = sell - cost - tax - difal;
                                             const profitPercentage = sell > 0 ? (profitAmount / sell) * 100 : 0;
                                             const isLoss = profitAmount < 0;
 
+                                            // MÁXIMO
+                                            const profitAmountMax = sellMax - cost - tax - difal;
+                                            const profitPercentageMax = sellMax > 0 ? (profitAmountMax / sellMax) * 100 : 0;
+
                                             if (sell === 0) return null;
 
+                                            const hasMaxMargin = (expandedQuote?.profitMarginMax ?? 0) > 0;
+
                                             return (
-                                                <div className={cn(
-                                                    "w-full py-2 rounded-lg text-center font-bold text-xs uppercase tracking-widest mt-2",
-                                                    !isLoss ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
-                                                )}>
-                                                    {!isLoss ? 'Lucro Bruto: ' : 'Prejuízo Bruto: '}
-                                                    {profitPercentage.toFixed(1)}% ({formatCurrency(profitAmount)})
+                                                <div className={cn("grid gap-2 mt-2", hasMaxMargin ? "grid-cols-2" : "grid-cols-1")}>
+                                                    <div className={cn(
+                                                        "w-full py-2 rounded-lg text-center font-bold text-[10px] uppercase tracking-widest border",
+                                                        !isLoss ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"
+                                                    )}>
+                                                        <span className="opacity-70 text-[8px] block mb-0.5">MARGEM PADRÃO (MÍN)</span>
+                                                        {!isLoss ? 'LUCRO: ' : 'PREJUÍZO: '}
+                                                        {profitPercentage.toFixed(1)}% ({formatCurrency(profitAmount)})
+                                                    </div>
+                                                    
+                                                    {hasMaxMargin && (
+                                                        <div className="w-full py-2 rounded-lg text-center font-bold text-[10px] uppercase tracking-widest bg-teal-500/10 text-teal-600 border border-teal-500/20">
+                                                            <span className="opacity-70 text-[8px] block mb-0.5">TETO SIMULADO (MÁX)</span>
+                                                            LUCRO: {profitPercentageMax.toFixed(1)}% ({formatCurrency(profitAmountMax)})
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })()}
