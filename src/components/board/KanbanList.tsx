@@ -95,6 +95,97 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
     }
   };
 
+  // Helper component for Label selection in Automations
+  const LabelAutomationSelect = ({ 
+    value, 
+    onChange, 
+    onSelect, 
+    placeholder, 
+    type 
+  }: { 
+    value: string, 
+    onChange: (val: string) => void, 
+    onSelect: (name: string) => void, 
+    placeholder: string,
+    type: 'add' | 'remove'
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const filteredLabels = labels.filter(l => l.name.toLowerCase().includes(value.toLowerCase()));
+    const exactMatch = labels.find(l => l.name.toUpperCase() === value.toUpperCase());
+
+    return (
+      <div className="relative flex-1">
+        <div className={cn(
+          "flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 transition-colors focus-within:ring-1",
+          type === 'add' ? "focus-within:border-primary focus-within:ring-primary/30" : "focus-within:border-destructive focus-within:ring-destructive/30"
+        )}>
+          <div className="p-1.5 rounded bg-background text-muted-foreground">
+            <Tag className="h-3.5 w-3.5" />
+          </div>
+          <input 
+            value={value} 
+            onChange={e => { onChange(e.target.value.toUpperCase()); setIsOpen(true); }} 
+            onFocus={() => setIsOpen(true)}
+            onKeyDown={e => { 
+                if (e.key === 'Enter' && value.trim()) {
+                    onSelect(value.trim());
+                    setIsOpen(false);
+                }
+                if (e.key === 'Escape') setIsOpen(false);
+            }} 
+            placeholder={placeholder} 
+            className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60 uppercase" 
+          />
+          <button 
+            onClick={() => { if (value.trim()) onSelect(value.trim()); setIsOpen(false); }}
+            className={cn(
+                "p-1 px-2 rounded text-[10px] font-bold transition-colors",
+                type === 'add' ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            )}
+          >
+            {type === 'add' ? 'ADD' : 'REMOVER'}
+          </button>
+        </div>
+
+        {isOpen && (value.length > 0 || filteredLabels.length > 0) && (
+          <>
+            <div className="fixed inset-0 z-[110]" onClick={() => setIsOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute left-0 right-0 top-full mt-1 z-[120] bg-popover border border-border rounded-lg shadow-xl overflow-hidden max-h-[200px] overflow-y-auto custom-scrollbar"
+            >
+              {filteredLabels.map(label => (
+                <button
+                  key={label.id}
+                  onClick={() => { onSelect(label.name); setIsOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-secondary transition-colors text-left"
+                >
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: label.color }} />
+                  <span className="flex-1 font-medium">{label.name}</span>
+                </button>
+              ))}
+              
+              {!exactMatch && value.trim().length > 0 && (
+                 <button
+                   onClick={() => { 
+                     const newId = useKanbanStore.getState().addLabel(value.trim().toUpperCase(), '#3b82f6');
+                     onSelect(value.trim().toUpperCase()); 
+                     setIsOpen(false); 
+                   }}
+                   className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-primary/10 text-primary transition-colors text-left border-t border-border mt-1 font-bold"
+                 >
+                   <Plus className="h-3 w-3" />
+                   Criar nova etiqueta: "{value.trim().toUpperCase()}"
+                 </button>
+              )}
+            </motion.div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const handleRename = () => {
     if (currentUser?.role !== 'ADMIN' && !currentUser?.permissions?.canEdit) {
       setEditing(false);
@@ -412,24 +503,13 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
 
                   {/* Add Label */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 focus-within:border-primary transition-colors">
-                      <div className="p-1.5 rounded bg-background text-muted-foreground">
-                        <Tag className="h-3.5 w-3.5" />
-                      </div>
-                      <input 
-                        value={labelAddInput} 
-                        onChange={e => setLabelAddInput(e.target.value.toUpperCase())} 
-                        onKeyDown={e => { if (e.key === 'Enter' && labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }} 
-                        placeholder="Adicionar etiqueta: ex. URGENTE" 
-                        className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60 uppercase" 
-                      />
-                      <button 
-                         onClick={() => { if (labelAddInput.trim()) toggleAutomationType('add-label', undefined, undefined, labelAddInput.trim().toUpperCase()); }}
-                         className="p-1 px-2 rounded bg-primary text-primary-foreground text-[10px] font-bold hover:bg-primary/90 transition-colors"
-                      >
-                        ADD
-                      </button>
-                    </div>
+                    <LabelAutomationSelect 
+                        value={labelAddInput}
+                        onChange={setLabelAddInput}
+                        onSelect={(name) => toggleAutomationType('add-label', undefined, undefined, name)}
+                        placeholder="Adicionar etiqueta: ex. URGENTE"
+                        type="add"
+                    />
                     {list.automations?.filter(a => a.type === 'add-label').map(a => (
                       <div key={a.targetLabelName} className="flex items-center justify-between px-3 py-2 text-xs bg-green-500/5 rounded-lg border border-green-500/20 group">
                         <span className="text-foreground flex items-center gap-2 font-medium">
@@ -445,24 +525,13 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
 
                   {/* Remove Label */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 bg-secondary/50 p-1.5 rounded-lg border border-border/50 focus-within:border-destructive transition-colors">
-                      <div className="p-1.5 rounded bg-background text-muted-foreground">
-                        <Tag className="h-3.5 w-3.5" />
-                      </div>
-                      <input 
-                        value={labelRemoveInput} 
-                        onChange={e => setLabelRemoveInput(e.target.value.toUpperCase())} 
-                        onKeyDown={e => { if (e.key === 'Enter' && labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }} 
-                        placeholder="Remover etiqueta: ex. REVISÃO" 
-                        className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-muted-foreground/60 uppercase" 
-                      />
-                      <button 
-                        onClick={() => { if (labelRemoveInput.trim()) toggleAutomationType('remove-label', undefined, undefined, labelRemoveInput.trim().toUpperCase()); }}
-                        className="p-1 px-2 rounded bg-destructive text-destructive-foreground text-[10px] font-bold hover:bg-destructive/90 transition-colors"
-                      >
-                        REMOVER
-                      </button>
-                    </div>
+                    <LabelAutomationSelect 
+                      value={labelRemoveInput}
+                      onChange={setLabelRemoveInput}
+                      onSelect={(name) => toggleAutomationType('remove-label', undefined, undefined, name)}
+                      placeholder="Remover etiqueta: ex. REVISÃO"
+                      type="remove"
+                    />
                     {list.automations?.filter(a => a.type === 'remove-label').map(a => (
                       <div key={a.targetLabelName} className="flex items-center justify-between px-3 py-2 text-xs bg-red-500/5 rounded-lg border border-red-500/20 group">
                         <span className="text-foreground flex items-center gap-2 font-medium">
