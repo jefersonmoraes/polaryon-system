@@ -434,11 +434,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       setShowMentionSuggestions(false);
     }
   };
-  const handleSetDueDate = (val: string) => { setDueDate(val); updateCard(cardId, { dueDate: val || undefined }); };
-  const handleSetStartDate = (val: string) => { setStartDate(val); updateCard(cardId, { startDate: val || undefined }); };
+  const handleSetDueDate = (val: string) => { setDueDate(val); updateCard(cardId, { dueDate: val || null }); };
+  const handleSetStartDate = (val: string) => { setStartDate(val); updateCard(cardId, { startDate: val || null }); };
   const handleSetAssignee = (val: string) => {
     setAssignee(val);
-    updateCard(cardId, { assignee: val || undefined });
+    updateCard(cardId, { assignee: val || null });
     if (val && val !== card.assignee) {
       const member = members.find(m => m.id === val);
       const list = lists.find(l => l.id === card.listId);
@@ -453,7 +453,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
   };
   const handleSetEstimatedTime = (val: string) => {
     setEstimatedTime(val);
-    updateCard(cardId, { estimatedTime: val ? parseInt(val) : undefined });
+    updateCard(cardId, { estimatedTime: val ? parseInt(val) : null });
   };
   const handleSaveLabel = () => {
     if (!labelName.trim()) return;
@@ -916,7 +916,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             <textarea
               value={deliveryAddress}
               onChange={e => setDeliveryAddress(e.target.value)}
-              onBlur={() => updateCard(cardId, { deliveryAddress: deliveryAddress.trim() || undefined })}
+              onBlur={() => updateCard(cardId, { deliveryAddress: deliveryAddress.trim() || null })}
               disabled={!canEdit}
               placeholder="Digite o local para entrega..."
               className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed min-h-[60px]"
@@ -933,7 +933,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             <input
               value={deliveryTime}
               onChange={e => setDeliveryTime(e.target.value)}
-              onBlur={() => updateCard(cardId, { deliveryTime: deliveryTime.trim() || undefined })}
+              onBlur={() => updateCard(cardId, { deliveryTime: deliveryTime.trim() || null })}
               disabled={!canEdit}
               placeholder="Ex: 5 dias úteis, Imediata..."
               className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"

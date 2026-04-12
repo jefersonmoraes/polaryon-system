@@ -342,14 +342,14 @@ export interface Card {
   labels: string[]; // label ids
   checklist: ChecklistItem[];
   comments: Comment[];
-  dueDate?: string;
-  startDate?: string;
+  dueDate?: string | null;
+  startDate?: string | null;
   milestones?: Milestone[];
   completed: boolean;
   archived: boolean;
   trashed: boolean;
   trashedAt?: string; // ISO string when sent to trash
-  assignee?: string;
+  assignee?: string | null;
   automationUndoAction?: {
     previousListId: string;
     timestamp: number;
@@ -358,11 +358,11 @@ export interface Card {
   attachments: Attachment[];
   timeEntries: TimeEntry[];
   items: CardItem[];
-  estimatedTime?: number; // minutes
-  customLink?: string; // Editável para links externos como PNCP
-  pncpId?: string; // Para o botão interno de Acessar Oportunidade
-  deliveryAddress?: string;
-  deliveryTime?: string;
+  estimatedTime?: number | null; // minutes
+  customLink?: string | null; // Editável para links externos como PNCP
+  pncpId?: string | null; // Para o botão interno de Acessar Oportunidade
+  deliveryAddress?: string | null;
+  deliveryTime?: string | null;
   createdAt: string;
   isSkeleton?: boolean;
 }
