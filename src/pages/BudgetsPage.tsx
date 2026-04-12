@@ -321,9 +321,18 @@ const BudgetsPage = () => {
                                                     {linkedCard?.summary || linkedCard?.title || 'Cartão não encontrado'}
                                                 </div>
                                                 {linkedCard && linkedCard.items && linkedCard.items.length > 0 && (
-                                                    <div className="pl-4 opacity-80 text-[9px] font-bold">
-                                                        {formatCurrency(linkedCard.items.reduce((acc, item) => acc + (item.unitValue * item.quantity), 0))}
-                                                    </div>
+                                                     <div className="pl-4 opacity-80 text-[9px] font-bold">
+                                                         {(() => {
+                                                             const total = linkedCard.items.reduce((acc, item) => {
+                                                                 // Skip skeleton items that don't have price data yet
+                                                                 if ((item as any).isSkeleton) return acc;
+                                                                 const val = Number(item.unitValue) || 0;
+                                                                 const qty = Number(item.quantity) || 0;
+                                                                 return acc + (val * qty);
+                                                             }, 0);
+                                                             return total > 0 ? formatCurrency(total) : null;
+                                                         })()}
+                                                     </div>
                                                 )}
                                             </div>
                                             {linkedList && (

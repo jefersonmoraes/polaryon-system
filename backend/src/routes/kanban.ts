@@ -1022,7 +1022,7 @@ router.get('/sync', async (req: Request, res: Response) => {
                     id: true, title: true, listId: true, position: true,
                     dueDate: true, startDate: true, completed: true, archived: true,
                     trashed: true, pncpId: true, assignee: true, createdAt: true,
-                    customLink: true,
+                    customLink: true, summary: true,
                     labels: { select: { labelId: true } },
                     milestones: {
                         select: { id: true, title: true, dueDate: true, hour: true, completed: true }
