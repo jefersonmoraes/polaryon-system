@@ -162,8 +162,17 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
     if (card) {
       if (card.description) setShowDescriptionPane(true);
       else if (card.comments.length > 0) setShowChat(true);
+      
+      // Keep simple fields in sync with store (optimistic or remote)
+      // but only if we are NOT currently editing them to avoid input resets
+      if (document.activeElement?.id !== 'card-title') setTitle(card.title || '');
+      setSummary(card.summary || '');
+      setCustomLink(card.customLink || '');
+      setDueDate(card.dueDate || '');
+      setStartDate(card.startDate || '');
+      setAssignee(card.assignee || '');
     }
-  }, [cardId]);
+  }, [cardId, card?.title, card?.summary, card?.customLink, card?.dueDate, card?.startDate, card?.assignee]);
 
   useEffect(() => {
     let timeout: number;
@@ -612,10 +621,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       case 'summary': {
         return (
           <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+            <label htmlFor="card-summary" className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <FileText className="h-3.5 w-3.5" /> Resumo
             </label>
-            <input value={summary} onChange={e => setSummary(e.target.value)} onBlur={handleSaveSummary}
+            <input id="card-summary" name="summary" value={summary} onChange={e => setSummary(e.target.value)} onBlur={handleSaveSummary}
               disabled={!canEdit}
               placeholder="Breve resumo da tarefa..."
               className="w-full bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
@@ -670,8 +679,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       ))}
                     </div>
                     <div className="flex gap-2 items-center mb-2">
-                      <label className="text-[10px] text-muted-foreground">HEX:</label>
-                      <input value={labelHex} onChange={e => handleColorHexChange(e.target.value)} maxLength={7}
+                      <label htmlFor="card-label-hex" className="text-[10px] text-muted-foreground">HEX:</label>
+                      <input id="card-label-hex" name="labelHex" value={labelHex} onChange={e => handleColorHexChange(e.target.value)} maxLength={7}
                         className="w-20 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border font-mono" />
                       <div className="w-6 h-6 rounded border border-border flex items-center justify-center text-xs" style={{ backgroundColor: labelColor }}>
                         {labelIcon}
@@ -704,11 +713,11 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       case 'assignee': {
         const assignedMember = members.find(m => 
           m.id === assignee || 
-          (m.email && assignee && m.email.toLowerCase() === assignee.toLowerCase())
+          m.email === assignee
         );
         return (
           <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+            <label htmlFor="card-assignee" className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <User className="h-3.5 w-3.5" /> Responsável
             </label>
             <div className="flex items-center gap-2">
@@ -716,6 +725,8 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                 <img src={assignedMember.avatar} alt={assignedMember.name} className="w-8 h-8 rounded-full border border-border object-cover" />
               )}
               <select
+                id="card-assignee"
+                name="assignee"
                 value={assignedMember?.id || ''}
                 onChange={e => handleSetAssignee(e.target.value)}
                 disabled={!canEdit}
@@ -751,9 +762,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   </div>
                   <div className="flex flex-col sm:flex-row items-center gap-3 pl-5">
                     <div className="flex items-center gap-1.5 w-full sm:flex-1">
-                      <span className="text-[10px] text-muted-foreground w-max font-semibold shrink-0">Prazo:</span>
-                      <input type="date" value={ms.dueDate ? ms.dueDate.split('T')[0] : ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary shrink-0" />
-                      <input type="time" value={ms.hour || ''} onChange={(e) => handleUpdateMilestone(ms.id, { hour: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border w-[85px] focus:border-primary shrink-0" />
+                      <label htmlFor={`card-ms-date-${ms.id}`} className="text-[10px] text-muted-foreground w-max font-semibold shrink-0">Prazo:</label>
+                      <input id={`card-ms-date-${ms.id}`} name={`ms-due-date-${ms.id}`} type="date" value={ms.dueDate ? ms.dueDate.split('T')[0] : ''} onChange={(e) => handleUpdateMilestone(ms.id, { dueDate: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border flex-1 focus:border-primary shrink-0" />
+                      <input id={`card-ms-hour-${ms.id}`} name={`ms-hour-${ms.id}`} type="time" value={ms.hour || ''} onChange={(e) => handleUpdateMilestone(ms.id, { hour: e.target.value })} className="bg-background cursor-pointer rounded px-1.5 py-1 text-[10px] outline-none border border-border w-[85px] focus:border-primary shrink-0" />
                     </div>
                   </div>
                 </div>
@@ -761,7 +772,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             </div>
 
             <div className="flex gap-2 mb-3">
-              <input value={newMilestoneTitle} onChange={e => setNewMilestoneTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMilestone(newMilestoneTitle)} placeholder="Nova etapa (ex: Planejamento)" className="flex-1 bg-secondary rounded px-2 py-1.5 text-xs outline-none border border-border focus:border-primary" />
+              <input id="card-new-ms-title" name="newMilestoneTitle" value={newMilestoneTitle} onChange={e => setNewMilestoneTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMilestone(newMilestoneTitle)} placeholder="Nova etapa (ex: Planejamento)" className="flex-1 bg-secondary rounded px-2 py-1.5 text-xs outline-none border border-border focus:border-primary" />
               <button onClick={() => handleAddMilestone(newMilestoneTitle)} className="px-3 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">Adicionar</button>
             </div>
 
@@ -867,8 +878,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
             {canEdit && (
               <div className="grid grid-cols-[1fr,100px,70px,auto] gap-2 items-end bg-secondary/20 p-2 rounded-lg border border-dashed border-border/60">
                 <div className="space-y-1">
-                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Novo Item</label>
+                  <label htmlFor="card-new-item-name" className="text-[9px] uppercase font-bold text-muted-foreground px-1">Novo Item</label>
                   <input 
+                    id="card-new-item-name"
+                    name="newItemName"
                     value={newItemName}
                     onChange={e => setNewItemName(e.target.value)}
                     placeholder="Descrição do item..."
@@ -876,8 +889,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Valor Unit.</label>
+                  <label htmlFor="card-new-item-value" className="text-[9px] uppercase font-bold text-muted-foreground px-1">Valor Unit.</label>
                   <input 
+                    id="card-new-item-value"
+                    name="newItemValue"
                     value={newItemValue}
                     onChange={e => setNewItemValue(e.target.value)}
                     placeholder="0,00"
@@ -885,8 +900,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] uppercase font-bold text-muted-foreground px-1">Qtd</label>
+                  <label htmlFor="card-new-item-qty" className="text-[9px] uppercase font-bold text-muted-foreground px-1">Qtd</label>
                   <input 
+                    id="card-new-item-qty"
+                    name="newItemQuantity"
                     value={newItemQuantity}
                     onChange={e => setNewItemQuantity(e.target.value)}
                     type="number"
@@ -910,10 +927,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       case 'deliveryAddress': {
         return (
           <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+            <label htmlFor="card-delivery-address" className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <MapPin className="h-3.5 w-3.5" /> Endereço de entrega
             </label>
             <textarea
+              id="card-delivery-address"
+              name="deliveryAddress"
               value={deliveryAddress}
               onChange={e => setDeliveryAddress(e.target.value)}
               onBlur={() => updateCard(cardId, { deliveryAddress: deliveryAddress.trim() || null })}
@@ -927,10 +946,12 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       case 'deliveryTime': {
         return (
           <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+            <label htmlFor="card-delivery-time" className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <Truck className="h-3.5 w-3.5" /> Prazo de Entrega
             </label>
             <input
+              id="card-delivery-time"
+              name="deliveryTime"
               value={deliveryTime}
               onChange={e => setDeliveryTime(e.target.value)}
               onBlur={() => updateCard(cardId, { deliveryTime: deliveryTime.trim() || null })}
@@ -944,10 +965,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
       case 'estimated': {
         return (
           <div key={section}>
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+            <label htmlFor="card-estimated-time" className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
               <Timer className="h-3.5 w-3.5" /> Estimativa de Tempo (minutos)
             </label>
-            <input type="number" value={estimatedTime} onChange={e => handleSetEstimatedTime(e.target.value)} placeholder="Ex: 120"
+            <input id="card-estimated-time" name="estimatedTime" type="number" value={estimatedTime} onChange={e => handleSetEstimatedTime(e.target.value)} placeholder="Ex: 120"
               disabled={!canEdit}
               className="w-32 bg-secondary rounded px-3 py-2 text-xs outline-none border border-border focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
@@ -1772,7 +1793,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         ))}
                       </div>
                     )}
-                    <textarea value={newComment} 
+                    <textarea 
+                      id="card-new-comment"
+                      name="newComment"
+                      value={newComment} 
                       onChange={e => {
                         const text = e.target.value;
                         setNewComment(text);

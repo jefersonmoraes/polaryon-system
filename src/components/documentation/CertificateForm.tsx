@@ -220,11 +220,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                             {/* Grid 1: Basic Classification */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium flex items-center gap-2">
+                                    <label htmlFor="cert-agency" className="text-sm font-medium flex items-center gap-2">
                                         <Building2 className="h-4 w-4 text-primary" />
                                         Órgão Emissor <span className="text-destructive">*</span>
                                     </label>
                                     <input
+                                        id="cert-agency"
+                                        name="issuingAgency"
                                         type="text"
                                         required
                                         placeholder="Ex: Prefeitura de São Paulo"
@@ -235,11 +237,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium flex items-center gap-2">
+                                    <label htmlFor="cert-execution-date" className="text-sm font-medium flex items-center gap-2">
                                         <Calendar className="h-4 w-4 text-primary" />
                                         Data de Execução <span className="text-destructive">*</span>
                                     </label>
                                     <input
+                                        id="cert-execution-date"
+                                        name="executionDate"
                                         type="date"
                                         required
                                         className="w-full p-2 bg-background border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all [&::-webkit-calendar-picker-indicator]:dark:invert"
@@ -256,8 +260,9 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                         Tipo de Fornecimento <span className="text-destructive">*</span>
                                     </label>
                                     <div className="flex gap-4 mt-2">
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <label htmlFor="cert-type-service" className="flex items-center gap-2 cursor-pointer group">
                                             <input
+                                                id="cert-type-service"
                                                 type="checkbox"
                                                 name="type"
                                                 value="Serviço"
@@ -267,8 +272,9 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                             />
                                             <span className="text-sm font-medium group-hover:text-primary transition-colors">Serviço Prestado</span>
                                         </label>
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <label htmlFor="cert-type-product" className="flex items-center gap-2 cursor-pointer group">
                                             <input
+                                                id="cert-type-product"
                                                 type="checkbox"
                                                 name="type"
                                                 value="Produto"
@@ -283,10 +289,12 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
 
                                 {formData.type.includes('Produto') && (
                                     <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <label className="text-sm font-medium flex items-center gap-2">
+                                        <label htmlFor="cert-quantity" className="text-sm font-medium flex items-center gap-2">
                                             Quantidade de Itens Fornecidos
                                         </label>
                                         <input
+                                            id="cert-quantity"
+                                            name="suppliedQuantity"
                                             type="text"
                                             placeholder="Ex: 500 unidades, 20 caixas..."
                                             className="w-full p-2 bg-background border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/30"
@@ -297,10 +305,12 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                 )}
 
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium flex items-center gap-2">
+                                    <label htmlFor="cert-items" className="text-sm font-medium flex items-center gap-2">
                                         Itens Fornecidos ou Serviçoss <span className="text-destructive">*</span>
                                     </label>
                                     <input
+                                        id="cert-items"
+                                        name="suppliedItems"
                                         type="text"
                                         required
                                         placeholder="Descreva resumidamente os itens ou escopo..."
@@ -311,11 +321,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium flex items-center gap-2">
+                                    <label htmlFor="cert-card-id" className="text-sm font-medium flex items-center gap-2">
                                         <Search className="h-4 w-4 text-muted-foreground" />
                                         Cartão Relacionado (Opcional)
                                     </label>
                                     <input
+                                        id="cert-card-id"
+                                        name="kanbanCardId"
                                         type="text"
                                         list="kanban-cards"
                                         placeholder="Digite ou selecione um cartão..."
@@ -336,11 +348,13 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium flex items-center gap-2">
+                                    <label htmlFor="cert-description" className="text-sm font-medium flex items-center gap-2">
                                         <AlignLeft className="h-4 w-4 text-muted-foreground" />
                                         Descrição Detalhada / Observações
                                     </label>
                                     <textarea
+                                        id="cert-description"
+                                        name="description"
                                         placeholder="Adicione informações extras ou anotações..."
                                         className="w-full p-2 bg-background border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all min-h-[80px] resize-none placeholder:text-muted-foreground/30 custom-scrollbar"
                                         value={formData.description}

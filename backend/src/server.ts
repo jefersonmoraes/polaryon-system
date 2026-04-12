@@ -44,6 +44,21 @@ app.use(helmet({
     dnsPrefetchControl: { allow: false },
     frameguard: { action: 'deny' },
     hidePoweredBy: true,
+    contentSecurityPolicy: {
+        directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com"],
+            "script-src-elem": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com"],
+            "script-src-attr": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "img-src": ["'self'", "data:", "https:", "https://lh3.googleusercontent.com"],
+            "connect-src": ["'self'", "https:", "wss:", "ws:"],
+            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "object-src": ["'none'"],
+            "media-src": ["'self'"],
+            "frame-src": ["'self'", "https://*.google.com"],
+        },
+    },
 }));
 
 // Rate Limiting (Anti-DDoS / Brute Force)

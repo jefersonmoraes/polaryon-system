@@ -354,8 +354,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                     <div className="space-y-4">
                         <h4 className="text-sm font-bold border-b border-border pb-1">Informações Básicas</h4>
                         <div className="space-y-2">
-                            <label className="text-xs font-semibold uppercase text-muted-foreground">Título / Descrição Curta*</label>
+                            <label htmlFor="entry-title" className="text-xs font-semibold uppercase text-muted-foreground">Título / Descrição Curta*</label>
                             <input
+                                id="entry-title"
+                                name="title"
                                 required
                                 autoFocus
                                 value={formData.title}
@@ -371,8 +373,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold uppercase text-muted-foreground">Valor (R$)*</label>
+                                <label htmlFor="entry-amount" className="text-xs font-semibold uppercase text-muted-foreground">Valor (R$)*</label>
                                 <input
+                                    id="entry-amount"
+                                    name="amount"
                                     required
                                     value={formData.amount}
                                     onChange={(e) => {
@@ -387,8 +391,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold uppercase text-muted-foreground">Categoria Contábil*</label>
+                                <label htmlFor="entry-category" className="text-xs font-semibold uppercase text-muted-foreground">Categoria Contábil*</label>
                                 <select
+                                    id="entry-category"
+                                    name="categoryId"
                                     required
                                     value={formData.categoryId}
                                     onChange={(e) => {
@@ -413,8 +419,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-semibold uppercase text-muted-foreground">CPF/CNPJ do {isRevenue ? 'Cliente' : 'Fornecedor'}</label>
+                                <label htmlFor="entry-entity-id" className="text-[10px] font-semibold uppercase text-muted-foreground">CPF/CNPJ do {isRevenue ? 'Cliente' : 'Fornecedor'}</label>
                                 <input
+                                    id="entry-entity-id"
+                                    name="documentEntityId"
                                     value={formData.documentEntityId}
                                     onChange={(e) => setFormData(p => ({ ...p, documentEntityId: e.target.value }))}
                                     placeholder="00.000.000/0000-00"
@@ -422,8 +430,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-semibold uppercase text-muted-foreground">Nome da Entidade</label>
+                                <label htmlFor="entry-entity-name" className="text-[10px] font-semibold uppercase text-muted-foreground">Nome da Entidade</label>
                                 <input
+                                    id="entry-entity-name"
+                                    name="documentEntity"
                                     value={formData.documentEntity}
                                     onChange={(e) => setFormData(p => ({ ...p, documentEntity: e.target.value }))}
                                     placeholder={isRevenue ? "Nome do Cliente/Órgão" : "Nome do Fornecedor"}
@@ -434,8 +444,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-semibold uppercase text-muted-foreground">Nº do Documento (NF/Fatura)</label>
+                                <label htmlFor="entry-doc-number" className="text-[10px] font-semibold uppercase text-muted-foreground">Nº do Documento (NF/Fatura)</label>
                                 <input
+                                    id="entry-doc-number"
+                                    name="documentNumber"
                                     value={formData.documentNumber}
                                     onChange={(e) => setFormData(p => ({ ...p, documentNumber: e.target.value }))}
                                     placeholder="Ex: NF-1234"
@@ -443,8 +455,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-semibold uppercase text-muted-foreground">Forma de Pagamento</label>
+                                <label htmlFor="entry-payment-method" className="text-[10px] font-semibold uppercase text-muted-foreground">Forma de Pagamento</label>
                                 <select
+                                    id="entry-payment-method"
+                                    name="paymentMethod"
                                     value={formData.paymentMethod}
                                     onChange={(e) => setFormData(p => ({ ...p, paymentMethod: e.target.value as any }))}
                                     className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
@@ -460,8 +474,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-semibold uppercase text-muted-foreground">Instituição Financeira (Conta)</label>
+                            <label htmlFor="entry-bank" className="text-[10px] font-semibold uppercase text-muted-foreground">Instituição Financeira (Conta)</label>
                             <select
+                                id="entry-bank"
+                                name="bankAccountId"
                                 value={formData.bankAccountId}
                                 onChange={(e) => setFormData(p => ({ ...p, bankAccountId: e.target.value }))}
                                 className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
@@ -488,8 +504,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-semibold uppercase text-muted-foreground">Data de Competência (Fato Gerador)</label>
+                            <label htmlFor="entry-competence-date" className="text-[10px] font-semibold uppercase text-muted-foreground">Data de Competência (Fato Gerador)</label>
                             <input
+                                id="entry-competence-date"
+                                name="competenceDate"
                                 type="date"
                                 value={formData.competenceDate}
                                 onChange={(e) => setFormData(p => ({ ...p, competenceDate: e.target.value }))}
@@ -499,8 +517,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-semibold uppercase text-muted-foreground">Observações / Centro de Custo</label>
+                            <label htmlFor="entry-notes" className="text-[10px] font-semibold uppercase text-muted-foreground">Observações / Centro de Custo</label>
                             <textarea
+                                id="entry-notes"
+                                name="notes"
                                 rows={2}
                                 value={formData.notes}
                                 onChange={(e) => setFormData(p => ({ ...p, notes: e.target.value }))}
@@ -583,8 +603,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                         <h4 className="text-sm font-bold border-b border-border pb-1">Liquidação / Pagamento</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold uppercase text-muted-foreground">Data do Caixa (Pagto/Recto)*</label>
+                                <label htmlFor="entry-cash-date" className="text-xs font-semibold uppercase text-muted-foreground">Data do Caixa (Pagto/Recto)*</label>
                                 <input
+                                    id="entry-cash-date"
+                                    name="date"
                                     required
                                     type="date"
                                     value={formData.date}
@@ -616,8 +638,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
 
                     {!existingEntryId && (
                         <div className="bg-secondary/20 border border-border rounded-lg p-3 space-y-3">
-                            <label className="flex items-center gap-2 cursor-pointer">
+                            <label htmlFor="entry-recurring" className="flex items-center gap-2 cursor-pointer">
                                 <input
+                                    id="entry-recurring"
+                                    name="isRecurring"
                                     type="checkbox"
                                     checked={isRecurring}
                                     onChange={(e) => setIsRecurring(e.target.checked)}
@@ -629,8 +653,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                             {isRecurring && (
                                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-muted-foreground">Frequência</label>
+                                        <label htmlFor="entry-recurrence-frequency" className="text-xs font-semibold text-muted-foreground">Frequência</label>
                                         <select
+                                            id="entry-recurrence-frequency"
+                                            name="recurrenceFrequency"
                                             value={recurrenceFrequency}
                                             onChange={(e) => setRecurrenceFrequency(e.target.value as any)}
                                             className="w-full bg-background text-foreground border border-border rounded px-3 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
@@ -641,8 +667,10 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                         </select>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-muted-foreground">Quantas vezes?</label>
+                                        <label htmlFor="entry-recurrence-count" className="text-xs font-semibold text-muted-foreground">Quantas vezes?</label>
                                         <input
+                                            id="entry-recurrence-count"
+                                            name="recurrenceCount"
                                             type="number"
                                             min="2"
                                             max="120"

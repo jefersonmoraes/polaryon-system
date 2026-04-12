@@ -630,6 +630,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 <Package className="h-3 w-3" /> Natureza (Tipo)
                             </label>
                             <select
+                                id={`budget-item-type-${item.id}`}
+                                name="itemType"
                                 value={item.type || budgetType || 'Produto'}
                                 disabled={!canEdit}
                                 onChange={(e) => handleFieldChangeImpactingTotal('type', e.target.value as BudgetType)}
@@ -718,6 +720,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             </label>
                             <div className="relative">
                                 <input
+                                    id={`budget-item-margin-${item.id}`}
+                                    name="profitMargin"
                                     type="number"
                                     min="0"
                                     max="99.9"
@@ -831,6 +835,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     <div className="p-2.5 border-b border-border flex items-center gap-2 bg-muted/30">
                                         <Search className="h-4 w-4 text-muted-foreground opacity-70 shrink-0" />
                                         <input
+                                            id={`budget-item-supsearch-${item.id}`}
+                                            name="supplierSearch"
                                             autoFocus
                                             value={supplierSearch}
                                             onChange={e => setSupplierSearch(e.target.value)}
@@ -971,6 +977,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     <div className="p-2.5 border-b border-border flex items-center gap-2 bg-muted/30">
                                         <Search className="h-4 w-4 text-muted-foreground opacity-70 shrink-0" />
                                         <input
+                                            id={`budget-item-transpsearch-${item.id}`}
+                                            name="transporterSearch"
                                             autoFocus
                                             value={transporterSearch}
                                             onChange={e => setTransporterSearch(e.target.value)}
@@ -1090,6 +1098,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <div className="relative">
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
                                 <input
+                                    id={`budget-item-freight-${item.id}`}
+                                    name="freightValue"
                                     type="number"
                                     min="0"
                                     step="0.01"
@@ -1120,6 +1130,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                         <div className="space-y-1.5">
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">VALIDADE DA PROPOSTA</label>
                             <input
+                                id={`budget-item-validity-${item.id}`}
+                                name="validity"
                                 value={item.validity || ''}
                                 onChange={e => updateItem(item.id, 'validity', e.target.value)}
                                 disabled={!canEdit}
@@ -1132,6 +1144,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Prazo de Entrega</label>
                             <div className="flex flex-col gap-1.5">
                                 <input
+                                    id={`budget-item-del-date-${item.id}`}
+                                    name="deliveryDate"
                                     type="date"
                                     value={item.deliveryDate || ''}
                                     disabled={!canEdit}
@@ -1139,6 +1153,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     className="w-full bg-background border border-border rounded text-[11px] px-2 py-1.5 focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <input
+                                    id={`budget-item-del-time-${item.id}`}
+                                    name="deliveryTime"
                                     value={item.deliveryTime || ''}
                                     disabled={!canEdit}
                                     onChange={e => updateItem(item.id, 'deliveryTime', e.target.value)}
@@ -1151,6 +1167,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                         <div className="space-y-1.5">
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Garantia</label>
                             <input
+                                id={`budget-item-warranty-${item.id}`}
+                                name="warrantyDays"
                                 value={item.warrantyDays || ''}
                                 disabled={!canEdit}
                                 onChange={e => updateItem(item.id, 'warrantyDays', e.target.value)}
@@ -1168,6 +1186,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 </div>
                                 {item.invoicedSales && (
                                     <input
+                                        id={`budget-item-inv-term-${item.id}`}
+                                        name="invoiceTerm"
                                         value={item.invoiceTerm || ''}
                                         disabled={!canEdit}
                                         onChange={e => updateItem(item.id, 'invoiceTerm', e.target.value)}
@@ -1181,6 +1201,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                         <div className="space-y-1.5">
                             <label className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1">Forma de Pagamento</label>
                             <select
+                                id={`budget-item-paym-${item.id}`}
+                                name="paymentTerms"
                                 value={item.paymentTerms || ''}
                                 disabled={!canEdit}
                                 onChange={e => handleFieldChangeImpactingTotal('paymentTerms', e.target.value)}
@@ -1218,6 +1240,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                 <div className="animate-in fade-in slide-in-from-top-1 relative">
                                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
                                     <input
+                                        id={`budget-item-cash-disc-${item.id}`}
+                                        name="cashDiscount"
                                         type="number"
                                         min="0"
                                         step="0.1"
@@ -1242,6 +1266,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     <div className="flex-1 relative">
                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground ml-1">Parcelas</span>
                                         <input
+                                            id={`budget-item-inst-count-${item.id}`}
+                                            name="installmentsCount"
                                             type="number"
                                             min="1"
                                             value={item.installmentsCount || ''}
@@ -1383,6 +1409,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                     <div className="w-full sm:col-span-3 relative">
                                                         <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Descrição</label>
                                                         <input
+                                                            id={`budget-subitem-desc-${sub.id}`}
+                                                            name="subItemDescription"
                                                             value={sub.description}
                                                             disabled={!canEdit}
                                                             onChange={e => updateSubItem(sub.id, 'description', e.target.value)}
@@ -1395,6 +1423,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         <div className="sm:col-span-1">
                                                             <label className="sm:hidden text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Qtd</label>
                                                             <input
+                                                                id={`budget-subitem-qty-${sub.id}`}
+                                                                name="subItemQuantity"
                                                                 type="number"
                                                                 min="1"
                                                                 disabled={!canEdit}
@@ -1408,6 +1438,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                             <div className="relative">
                                                                 <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">R$</span>
                                                                 <input
+                                                                    id={`budget-subitem-price-${sub.id}`}
+                                                                    name="subItemUnitPrice"
                                                                     type="number"
                                                                     step="0.01"
                                                                     min="0"
@@ -1474,6 +1506,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                         {isNotesExpanded && (
                             <textarea
+                                id={`budget-item-notes-${item.id}`}
+                                name="itemNotes"
                                 value={item.notes || ''}
                                 onChange={e => updateItem(item.id, 'notes', e.target.value)}
                                 placeholder="Condições de frete, impostos aplicáveis ou isenções..."

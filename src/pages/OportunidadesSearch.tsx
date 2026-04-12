@@ -844,6 +844,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input
+                                    id="pncp-search-keyword"
+                                    name="keyword"
                                     type="text"
                                     placeholder="Buscar objeto, nº do edital ou CNPJ..."
                                     value={keyword}
@@ -891,7 +893,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                             >
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Instrumento</label>
-                                    <select value={instrumentoFilter} onChange={(e) => setInstrumentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-instrumento"
+                                        name="instrumento"
+                                        value={instrumentoFilter} onChange={(e) => setInstrumentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todos Documentos</option>
                                         <option value="edital">Editais / Avisos de Contratação</option>
                                         <option value="ata">Atas de Registro de Preços</option>
@@ -900,7 +905,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Status</label>
-                                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-status"
+                                        name="status"
+                                        value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todos os Status</option>
                                         <option value="recebendo_proposta">Abertas (Recebendo Propostas)</option>
                                         <option value="propostas_encerradas">Em Julgamento (Propostas Encerradas)</option>
@@ -911,14 +919,20 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">UF / Estado</label>
-                                    <select value={ufFilter} onChange={(e) => setUfFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-uf"
+                                        name="uf"
+                                        value={ufFilter} onChange={(e) => setUfFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Qualquer UF</option>
                                         {ESTADOS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Esferas</label>
-                                    <select value={esferaFilter} onChange={(e) => setEsferaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-esfera"
+                                        name="esfera"
+                                        value={esferaFilter} onChange={(e) => setEsferaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todas Esferas</option>
                                         <option value="F">Federal</option>
                                         <option value="E">Estadual</option>
@@ -927,7 +941,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Poderes</label>
-                                    <select value={poderFilter} onChange={(e) => setPoderFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-poder"
+                                        name="poder"
+                                        value={poderFilter} onChange={(e) => setPoderFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todos</option>
                                         <option value="Executivo">Executivo</option>
                                         <option value="Legislativo">Legislativo</option>
@@ -936,11 +953,17 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Organização / Órgão</label>
-                                    <input type="text" placeholder="Nome ou CNPJ..." value={orgaoFilter} onChange={(e) => setOrgaoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-orgao"
+                                        name="orgao"
+                                        type="text" placeholder="Nome ou CNPJ..." value={orgaoFilter} onChange={(e) => setOrgaoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Modalidade Licit.</label>
-                                    <select value={modalidadeFilter} onChange={(e) => setModalidadeFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-modalidade"
+                                        name="modalidade"
+                                        value={modalidadeFilter} onChange={(e) => setModalidadeFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todas</option>
                                         <option value="Pregão">Pregão Eletrônico/Presencial</option>
                                         <option value="Dispensa">Dispensa de Licitação</option>
@@ -950,26 +973,41 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Municípios</label>
-                                    <input type="text" placeholder="Ex: São Paulo" value={municipioFilter} onChange={(e) => setMunicipioFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-municipio"
+                                        name="municipio"
+                                        type="text" placeholder="Ex: São Paulo" value={municipioFilter} onChange={(e) => setMunicipioFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Ordenação</label>
-                                    <select value={ordenacaoFilter} onChange={(e) => setOrdenacaoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-ordenacao"
+                                        name="ordenacao"
+                                        value={ordenacaoFilter} onChange={(e) => setOrdenacaoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="-data_publicacao_pncp">Mais Recente Primeiro</option>
                                         <option value="data_publicacao_pncp">Mais Antigo Primeiro</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Unid. de Compra</label>
-                                    <input type="text" placeholder="UASG / Unidade" value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-unidade"
+                                        name="unidade"
+                                        type="text" placeholder="UASG / Unidade" value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Fonte Orçamentária</label>
-                                    <input type="text" placeholder="Código Fon." value={fonteOrcamentoFilter} onChange={(e) => setFonteOrcamentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-fonte"
+                                        name="fonteOrcamento"
+                                        type="text" placeholder="Código Fon." value={fonteOrcamentoFilter} onChange={(e) => setFonteOrcamentoFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Cont. Nacional</label>
-                                    <select value={conteudoNacionalFilter} onChange={(e) => setConteudoNacionalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-conteudo-nac"
+                                        name="conteudoNacional"
+                                        value={conteudoNacionalFilter} onChange={(e) => setConteudoNacionalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Qualquer Exigência</option>
                                         <option value="Sim">Exige (Sim)</option>
                                         <option value="Não">Não Exige</option>
@@ -977,7 +1015,10 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Margens Prefe.</label>
-                                    <select value={margemPreferenciaFilter} onChange={(e) => setMargemPreferenciaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
+                                    <select 
+                                        id="pncp-filter-margem"
+                                        name="margemPreferencia"
+                                        value={margemPreferenciaFilter} onChange={(e) => setMargemPreferenciaFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary">
                                         <option value="">Todas</option>
                                         <option value="Normal">Normal</option>
                                         <option value="ME">Exclusiva ME/EPP</option>
@@ -985,15 +1026,23 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Início)</label>
-                                    <input type="date" value={dataInicialFilter} onChange={(e) => setDataInicialFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-data-ini"
+                                        name="dataInicial"
+                                        type="date" value={dataInicialFilter} onChange={(e) => setDataInicialFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Fim)</label>
-                                    <input type="date" value={dataFinalFilter} onChange={(e) => setDataFinalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
+                                    <input 
+                                        id="pncp-filter-data-fim"
+                                        name="dataFinal"
+                                        type="date" value={dataFinalFilter} onChange={(e) => setDataFinalFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1"><DollarSign className="h-2.5 w-2.5" /> Valor Mínimo (R$)</label>
                                     <input 
+                                        id="pncp-filter-val-min"
+                                        name="valorMin"
                                         type="number" 
                                         placeholder="Ex: 5000" 
                                         value={valorMinFilter} 
@@ -1004,6 +1053,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1"><DollarSign className="h-2.5 w-2.5" /> Valor Máximo (R$)</label>
                                     <input 
+                                        id="pncp-filter-val-max"
+                                        name="valorMax"
                                         type="number" 
                                         placeholder="Ex: 100000" 
                                         value={valorMaxFilter} 
@@ -1229,6 +1280,8 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                     <div className="flex items-center gap-1.5 px-2">
                         <span>Pág</span>
                         <input
+                            id="pncp-pagination-page"
+                            name="pageNumber"
                             type="text"
                             className="w-12 h-7 text-center text-xs font-bold bg-muted border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
                             value={pageInput}

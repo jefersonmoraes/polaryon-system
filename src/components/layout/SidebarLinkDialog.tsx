@@ -66,6 +66,8 @@ const SidebarLinkDialog = ({ open, onOpenChange, category }: SidebarLinkDialogPr
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Título</label>
                         <input
+                            id="sidebar-link-title"
+                            name="linkTitle"
                             required
                             autoFocus
                             value={title}
@@ -77,6 +79,8 @@ const SidebarLinkDialog = ({ open, onOpenChange, category }: SidebarLinkDialogPr
                     <div className="space-y-2">
                         <label className="text-sm font-medium">URL</label>
                         <input
+                            id="sidebar-link-url"
+                            name="linkUrl"
                             required
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}

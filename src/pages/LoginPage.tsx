@@ -204,6 +204,7 @@ export default function LoginPage() {
                 <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl relative overflow-hidden">
                     {/* Security Overlay for Bots */}
                     <input
+                        id="login-honeypot"
                         type="text"
                         name="email_secondary_verification"
                         className="fixed -top-100 -left-100 opacity-0 pointer-events-none"
@@ -232,6 +233,8 @@ export default function LoginPage() {
                                     </button>
                                 </div>
                                 <input
+                                    id="login-captcha"
+                                    name="captchaAnswer"
                                     type="text"
                                     value={captchaAnswer}
                                     onChange={handleCaptchaChange}
@@ -245,6 +248,8 @@ export default function LoginPage() {
                         <div className="flex items-center justify-center gap-4">
                             <label className="flex items-center gap-3 cursor-pointer group">
                                 <input
+                                    id="login-remember"
+                                    name="rememberMe"
                                     type="checkbox"
                                     className="w-5 h-5 bg-black/40 border-2 border-white/10 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer appearance-none"
                                     checked={rememberMe}

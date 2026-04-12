@@ -384,6 +384,10 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
         
         const { labels, checklist, items, descriptionEntries, comments, attachments, timeEntries, milestones, automationUndoAction, force, ...updateData } = req.body;
         const cardId = req.params.id as string;
+
+        if (updateData.assignee !== undefined) {
+            console.log(`[DEBUG_PERSISTENCE] Recebendo atualização de RESPONSÁVEL para card ${cardId}:`, updateData.assignee);
+        }
         
         if (updateData.description !== undefined) {
             console.log(`[DEBUG_DB] Recebendo atualização de descrição para o card ${cardId}: "${updateData.description.substring(0, 50)}..." (${updateData.description.length} chars)`);

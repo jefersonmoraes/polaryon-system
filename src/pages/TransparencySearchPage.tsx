@@ -424,6 +424,8 @@ export default function TransparencySearchPage() {
                         <div className="flex-1 relative group">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <input 
+                                id="transparency-search-keyword"
+                                name="keyword"
                                 type="text"
                                 placeholder="O que você procura? (ex: Notebook, Arroz, Consultoria)..."
                                 value={keyword}
@@ -474,6 +476,8 @@ export default function TransparencySearchPage() {
                                 <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">De</span>
                                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
+                                    id="transparency-filter-data-ini"
+                                    name="dataInicial"
                                     type="date" 
                                     value={dataInicial}
                                     onChange={(e) => setDataInicial(e.target.value)}
@@ -484,6 +488,8 @@ export default function TransparencySearchPage() {
                                 <span className="absolute -top-2.5 left-2 bg-background px-1 text-[8px] font-bold text-muted-foreground uppercase">Até</span>
                                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
+                                    id="transparency-filter-data-fim"
+                                    name="dataFinal"
                                     type="date" 
                                     value={dataFinal}
                                     onChange={(e) => setDataFinal(e.target.value)}
@@ -494,6 +500,8 @@ export default function TransparencySearchPage() {
 
                         <div className="flex flex-col sm:flex-row border border-border rounded-lg overflow-hidden sm:h-10 bg-background">
                             <select 
+                                id="transparency-filter-situacao"
+                                name="situacao"
                                 value={situacao}
                                 onChange={(e) => setSituacao(e.target.value)}
                                 className="h-10 sm:h-full px-3 text-xs bg-transparent outline-none border-b sm:border-b-0 sm:border-r border-border font-medium cursor-pointer"
@@ -505,6 +513,8 @@ export default function TransparencySearchPage() {
                                 <option value="cancelado">Cancelado</option>
                             </select>
                             <button 
+                                id="transparency-search-submit"
+                                name="search-submit"
                                 type="submit"
                                 disabled={loading}
                                 className="h-10 sm:h-full px-6 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
@@ -624,6 +634,8 @@ export default function TransparencySearchPage() {
                                     <div className="flex flex-col items-center gap-4 pb-12 mt-8 border-t border-border/50 pt-8">
                                         <div className="flex items-center gap-1 sm:gap-2">
                                             <button 
+                                                id="transparency-pagination-prev"
+                                                name="pagination-prev"
                                                 onClick={() => {
                                                     const prev = Math.max(1, page - 1);
                                                     handlePageChange(prev);
@@ -643,6 +655,8 @@ export default function TransparencySearchPage() {
                                                     return (
                                                         <button
                                                             key={p}
+                                                            id={`transparency-pagination-page-${p}`}
+                                                            name={`pagination-page-${p}`}
                                                             onClick={() => handlePageChange(p)}
                                                             disabled={loading}
                                                             className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl text-xs font-bold transition-all ${isMobileHide ? 'hidden sm:flex' : 'flex'} items-center justify-center ${page === p ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-card border border-border hover:border-primary/50'}`}
@@ -654,6 +668,8 @@ export default function TransparencySearchPage() {
                                                 {Math.ceil(totalResults / 10) > 5 && <span className="text-muted-foreground px-1 hidden sm:inline">...</span>}
                                             </div>
                                             <button 
+                                                id="transparency-pagination-next"
+                                                name="pagination-next"
                                                 onClick={() => {
                                                     const next = page + 1;
                                                     handlePageChange(next);
@@ -806,6 +822,7 @@ export default function TransparencySearchPage() {
                                     <div className="px-4 md:px-6 border-b border-border bg-card">
                                         <TabsList className="bg-transparent h-12 gap-3 md:gap-6 p-0 flex-nowrap overflow-x-auto scrollbar-hide">
                                             <TabsTrigger 
+                                                id="transparency-tab-itens"
                                                 value="itens" 
                                                 className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >
@@ -813,6 +830,7 @@ export default function TransparencySearchPage() {
                                                 Itens e Vencedores
                                             </TabsTrigger>
                                             <TabsTrigger 
+                                                id="transparency-tab-winner-docs"
                                                 value="winner-docs" 
                                                 className="h-full border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-1 text-[10px] md:text-sm font-bold whitespace-nowrap"
                                             >

@@ -130,6 +130,8 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
         {list.icon && <span className="text-sm">{list.icon}</span>}
         {editing ? (
           <input
+            id={`list-rename-${list.id}`}
+            name="listTitle"
             autoFocus
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -230,8 +232,11 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
                 title="Remover cor">✕</button>
             </div>
             <div className="flex gap-2 items-center">
-              <label className="text-[10px] text-muted-foreground">HEX:</label>
-              <input value={colorHex} onChange={e => setColorHex(e.target.value)} maxLength={7}
+              <label htmlFor={`list-color-hex-${list.id}`} className="text-[10px] text-muted-foreground">HEX:</label>
+              <input 
+                id={`list-color-hex-${list.id}`}
+                name="listColorHex"
+                value={colorHex} onChange={e => setColorHex(e.target.value)} maxLength={7}
                 onKeyDown={e => { if (e.key === 'Enter' && /^#[0-9a-fA-F]{6}$/.test(colorHex)) { updateList(list.id, { color: colorHex }); setShowColorPicker(false); } }}
                 className="w-20 bg-secondary rounded px-2 py-1 text-xs outline-none border border-border font-mono" />
             </div>
@@ -282,7 +287,10 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
                 >
                   <CheckSquare className="h-3 w-3" /> Concluir Etapa:
                 </button>
-                <input value={milestoneInput} onChange={e => setMilestoneInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }} placeholder="Ex: Planejamento" className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary" />
+                <input 
+                  id={`list-auto-ms-${list.id}`}
+                  name="milestoneAutomationTitle"
+                  value={milestoneInput} onChange={e => setMilestoneInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && milestoneInput.trim()) toggleAutomationType('mark-milestone', undefined, milestoneInput.trim()); }} placeholder="Ex: Planejamento" className="w-[100px] bg-background px-1.5 py-1 text-[10px] rounded border border-border outline-none focus:border-primary" />
               </div>
 
               {list.automations?.filter(a => a.type === 'mark-milestone').map(a => (
@@ -366,6 +374,8 @@ const KanbanListComponent = ({ list, dragHandleProps, onCardClick }: Props) => {
         {adding ? (
           <div className="mt-1">
             <textarea
+              id={`list-new-card-${list.id}`}
+              name="newCardTitle"
               autoFocus
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
