@@ -280,6 +280,7 @@ model Budget {
   trashed    Boolean  @default(false)
   trashedAt  DateTime?
   archived   Boolean  @default(false)
+  automations Json?
   createdAt  DateTime @default(now())
 
   @@index([archived, trashed])
