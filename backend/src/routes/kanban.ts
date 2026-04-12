@@ -1113,6 +1113,46 @@ router.get('/sync', async (req: Request, res: Response) => {
     }
 });
 
+// FAVICON PROXY (Silences 404 console errors by returning a default image on failure)
+router.get('/favicon-proxy', async (req: Request, res: Response) => {
+    const { url } = req.query;
+    if (!url || typeof url !== 'string') {
+        return res.status(400).send('Domain is required');
+    }
+
+    try {
+        const axios = require('axios');
+        // We use a small timeout and check for common favicon locations
+        const targetUrl = `https://icons.duckduckgo.com/ip3/${url}.ico`;
+        
+        const response = await axios({
+            method: 'get',
+            url: targetUrl,
+            responseType: 'stream',
+            timeout: 5000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        res.set('Content-Type', response.headers['content-type']);
+        res.set('Cache-Control', 'public, max-age=86400'); // 24h cache
+        response.data.pipe(res);
+    } catch (error) {
+        // Fallback to a neutral "globe" icon as a 200 OK result
+        // This is the key to preventing "404 Not Found" in the console
+        res.set('Content-Type', 'image/svg+xml');
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.status(200).send(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+        `);
+    }
+});
+
 // SOCKET PROXY (Allows frontend to trigger broadcasts via server)
 router.post('/socketproxy', async (req: Request, res: Response) => {
     try {

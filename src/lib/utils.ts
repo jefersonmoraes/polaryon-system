@@ -34,10 +34,10 @@ export function getFaviconUrl(url?: string): string | undefined {
             domain = 'https://' + domain;
         }
         const urlObj = new URL(domain);
-        // Using DuckDuckGo's favicon service because it is faster and 
-        // returns a default globe icon with 200 OK instead of 404,
-        // which prevents console error noise in the browser.
-        return `https://icons.duckduckgo.com/ip3/${urlObj.hostname}.ico`;
+        // Using our internal backend proxy to fetch the favicon.
+        // The backend will return a default icon if the site's icon is not found,
+        // which completely eliminates "404 Not Found" console errors for the browser.
+        return `/api/kanban/favicon-proxy?url=${urlObj.hostname}`;
     } catch (e) {
         return undefined;
     }
