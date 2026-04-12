@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useDocumentStore, CompanyDocument, DocumentAttachment } from '@/store/document-store';
 import { X, Upload, FileText, Link as LinkIcon, AlertCircle, Building2, AlignLeft, Trash2, Search, Paperclip, ExternalLink } from 'lucide-react';
-import { cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
+import { cn, compressImage, openFileInNewTab } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -378,15 +378,14 @@ const DocumentForm = ({ onClose, editingDoc }: DocumentFormProps) => {
                                                         >
                                                             <Search className="h-3.5 w-3.5" />
                                                         </button>
-                                                        <a 
-                                                            href={getSafeProxyUrl(normalizeFileUrl(att.fileData, att.fileName))} 
-                                                            target="_blank" 
-                                                            rel="noopener noreferrer"
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => openFileInNewTab(att.fileData, att.fileName)} 
                                                             className="p-1.5 text-primary hover:bg-primary/10 rounded transition-colors flex items-center justify-center"
                                                             title="Abrir em Nova Aba"
                                                         >
                                                             <ExternalLink className="h-3.5 w-3.5" />
-                                                        </a>
+                                                        </button>
                                                         <button
                                                             type="button"
                                                             onClick={(e) => removeAttachment(att.id, e)}

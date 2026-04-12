@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useModelStore, EssentialModel, ModelAttachment } from '@/store/model-store';
 import { X, Upload, FileText, CheckCircle, AlignLeft, Type, Paperclip, Search, Trash2, ExternalLink } from 'lucide-react';
-import { cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
+import { cn, compressImage, openFileInNewTab } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -272,15 +272,14 @@ const EssentialModelForm = ({ onClose, editingModel }: EssentialModelFormProps) 
                                                 >
                                                     <Search className="h-3.5 w-3.5" />
                                                 </button>
-                                                <a 
-                                                    href={getSafeProxyUrl(normalizeFileUrl(attachment.fileData, attachment.fileName))} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => openFileInNewTab(attachment.fileData, attachment.fileName)} 
                                                     className="p-2 text-primary hover:bg-primary/10 bg-transparent rounded-lg transition-all"
                                                     title="Abrir em Nova Aba"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
-                                                </a>
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={removeAttachment}

@@ -147,3 +147,43 @@ export const getSafeProxyUrl = (url: string | undefined | null) => {
     }
     return url;
 };
+/**
+ * Abre um arquivo em uma nova aba com segurança.
+ * Se for Base64 (Data URL), converte para Blob URL para evitar bloqueios do navegador.
+ * Se for HTTP externo, utiliza o proxy de segurança.
+ */
+export async function openFileInNewTab(fileUrl: string | undefined | null, fileName: string = '') {
+    if (!fileUrl) return;
+    
+    // 1. Normalizar (tratar base64 puro -> data url se necessário)
+    const normalized = normalizeFileUrl(fileUrl, fileName);
+    
+    // 2. Se for Data URL, converter para Blob para contornar restrições de navegação do browser
+    if (normalized.startsWith('data:')) {
+        try {
+            // Extrair mime type da data url
+            const mimeMatch = normalized.match(/^data:([^;]+);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            
+            // Converter data URL para array buffer
+            const base64Content = normalized.split(',')[1];
+            const binaryString = window.atob(base64Content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            const blob = new Blob([bytes], { type: mime });
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank');
+            
+            // Nota: O ideal seria revogar, mas como abre em nova aba, mantemos para visualização
+        } catch (e) {
+            console.error("Erro ao converter data URL para blob:", e);
+            window.open(normalized, '_blank'); // Fallback (provavelmente será bloqueado pelo browser)
+        }
+    } else {
+        // Se for URL externa, usar proxy e abrir normalmente
+        window.open(getSafeProxyUrl(normalized), '_blank');
+    }
+}

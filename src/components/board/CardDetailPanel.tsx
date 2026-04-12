@@ -14,7 +14,7 @@ import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
-import { getFaviconUrl, cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
+import { getFaviconUrl, cn, compressImage, openFileInNewTab } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { toast } from 'sonner';
 
@@ -1058,15 +1058,14 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       >
                         <Search className="h-3.5 w-3.5" />
                       </button>
-                      <a 
-                        href={getSafeProxyUrl(normalizeFileUrl(att.url, att.name))} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <button 
+                        type="button"
+                        onClick={() => openFileInNewTab(att.url, att.name)} 
                         className="p-1 rounded hover:bg-background transition-colors text-muted-foreground hover:text-primary" 
                         title="Abrir em Nova Aba"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      </button>
                       {canDownload && (
                         <a href={att.url} download={att.name} className="p-1 rounded hover:bg-background transition-colors text-muted-foreground" title="Download">
                           <Download className="h-3.5 w-3.5" />
