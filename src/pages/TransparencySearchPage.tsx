@@ -22,7 +22,7 @@ import {
     X,
     Paperclip
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, getSafeProxyUrl, normalizeFileUrl } from '../lib/utils';
 import { FilePreviewModal } from '../components/ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
@@ -1192,7 +1192,7 @@ export default function TransparencySearchPage() {
                                                                         <FileText className="h-3 w-3" /> VISUALIZAR
                                                                     </button>
                                                                     <a 
-                                                                        href={file.url}
+                                                                        href={getSafeProxyUrl(normalizeFileUrl(file.url, file.nome))}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="px-3 h-8 border border-border text-primary text-[10px] font-bold rounded flex items-center justify-center hover:bg-primary/10 transition-colors"

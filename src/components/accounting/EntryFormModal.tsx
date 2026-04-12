@@ -6,7 +6,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { toast } from 'sonner';
 import { useRef } from 'react';
 import { Paperclip, Search, Download, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
-import { cn, compressImage } from '@/lib/utils';
+import { cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -553,7 +553,7 @@ const EntryFormModal = ({ open, onOpenChange, type, onSuccess, existingEntryId }
                                                             <Search className="h-3.5 w-3.5" />
                                                         </button>
                                                         <a 
-                                                            href={file} 
+                                                            href={getSafeProxyUrl(normalizeFileUrl(file, `Comprovante-${index + 1}`))} 
                                                             target="_blank" 
                                                             rel="noopener noreferrer"
                                                             className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"

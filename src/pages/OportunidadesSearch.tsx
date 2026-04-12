@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, Award, Info, Package, ShieldCheck, TrendingUp, Zap, Paperclip } from 'lucide-react';
 import { socketService } from '@/lib/socket';
 import { FilePreviewModal } from '@/components/ui/FilePreviewModal';
+import { getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
 
 const getStatusStyle = (situacao: string) => {
     const lower = (situacao || '').toLowerCase();
@@ -1598,7 +1599,7 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                                                             <FileText className="h-4 w-4" /> VISUALIZAR
                                                                         </button>
                                                                         <a 
-                                                                            href={file.url} 
+                                                                            href={getSafeProxyUrl(normalizeFileUrl(file.url, file.nome))} 
                                                                             target="_blank" 
                                                                             rel="noopener noreferrer" 
                                                                             className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary hover:scale-110 active:scale-95 transition-all" 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useEssentialDocumentStore, EssentialDocumentModel, EssentialDocumentAttachment } from '@/store/essential-document-store';
 import { X, Upload, FileText, Trash2, Save, File, Search, Paperclip, ExternalLink } from 'lucide-react';
-import { cn, compressImage } from '@/lib/utils';
+import { cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -259,7 +259,7 @@ const EssentialDocumentModelForm = ({ onClose, editingModel }: EssentialDocument
                                                                 <Search className="h-4 w-4" />
                                                             </button>
                                                             <a 
-                                                                href={att.fileData} 
+                                                                href={getSafeProxyUrl(normalizeFileUrl(att.fileData, att.fileName))} 
                                                                 target="_blank" 
                                                                 rel="noopener noreferrer"
                                                                 className="p-1.5 text-primary hover:bg-primary/10 rounded-md transition-colors"

@@ -9,7 +9,7 @@ import {
     Phone, Mail, MessageCircle, ExternalLink, ClipboardList, Package, Info, ChevronLeft, Paperclip, Download, Eye, Image as ImageIcon
 } from 'lucide-react';
 import { calculateDifal, calculateDifalDetailed, STATES, inferAnnexFromCnae } from '@/utils/taxData';
-import { cn, getFaviconUrl, compressImage } from '@/lib/utils';
+import { cn, getFaviconUrl, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -1584,7 +1584,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         <Eye className="h-3 w-3" />
                                                     </button>
                                                     <a 
-                                                        href={att.url || undefined} 
+                                                        href={getSafeProxyUrl(normalizeFileUrl(att.url, att.name)) || undefined} 
                                                         target="_blank" 
                                                         rel="noopener noreferrer"
                                                         className="p-1 hover:bg-primary/10 rounded transition-colors text-primary"

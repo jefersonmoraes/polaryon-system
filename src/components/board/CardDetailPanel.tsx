@@ -14,7 +14,7 @@ import BudgetModal from '../budgets/BudgetModal';
 import { Budget, BudgetStatus, BudgetType } from '@/types/kanban';
 import { useAuthStore } from '@/store/auth-store';
 import DOMPurify from 'dompurify';
-import { getFaviconUrl, cn, compressImage } from '@/lib/utils';
+import { getFaviconUrl, cn, compressImage, getSafeProxyUrl, normalizeFileUrl } from '@/lib/utils';
 import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { toast } from 'sonner';
 
@@ -1059,7 +1059,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         <Search className="h-3.5 w-3.5" />
                       </button>
                       <a 
-                        href={att.url} 
+                        href={getSafeProxyUrl(normalizeFileUrl(att.url, att.name))} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="p-1 rounded hover:bg-background transition-colors text-muted-foreground hover:text-primary" 

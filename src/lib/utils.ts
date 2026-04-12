@@ -120,3 +120,30 @@ export async function compressImage(
         }
     });
 }
+/**
+ * Normaliza URLs de arquivos, tratando Base64 puro para Data URLs.
+ */
+export function normalizeFileUrl(fileUrl: string | undefined | null, fileName: string = ''): string {
+    if (!fileUrl) return '';
+    if (!fileUrl.startsWith('http') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')) {
+        if (fileName.toLowerCase().endsWith('.pdf')) {
+            return `data:application/pdf;base64,${fileUrl}`;
+        } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext => fileName.toLowerCase().endsWith(ext))) {
+            const ext = fileName.split('.').pop()?.toLowerCase();
+            return `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fileUrl}`;
+        }
+    }
+    return fileUrl;
+}
+
+/**
+ * Retorna uma URL segura mapeada pelo proxy interno para contornar headers de download
+ * e forçar a exibição in-line do arquivo no navegador.
+ */
+export const getSafeProxyUrl = (url: string | undefined | null) => {
+    if (!url) return '';
+    if (url.startsWith('http') && !url.includes('localhost') && !url.includes('polaryon.com.br')) {
+        return `/api/kanban/file-proxy?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+};
