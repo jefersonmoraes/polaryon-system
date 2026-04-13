@@ -126,8 +126,7 @@
         "nsis"
       ],
       "icon": "public/favicon.ico",
-      "artifactName": "Polaryon-Setup.${ext}",
-      "publisherName": "Polaryon Tecnologia"
+      "artifactName": "Polaryon-Setup.${ext}"
     }
   }
 }
