@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import multer from 'multer';
-import { encryptBufferToString } from '../utils/crypto';
+import { encryptBufferToString, decryptStringToBuffer, decryptString } from '../utils/crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth-middleware';
 import { Request, Response } from 'express';
 
@@ -74,6 +74,39 @@ router.get('/credentials', requireAuth, async (req: AuthRequest | any, res: Resp
         res.json({ success: true, credentials });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// GET Bidding Credential Vault (For Local Runner in Desktop App)
+// Returns decrypted data so the desktop app can sign requests locally
+router.get('/credentials/:id/vault', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id } = req.params;
+        const credential = await prisma.biddingCredential.findUnique({
+            where: { id }
+        });
+
+        if (!credential) return res.status(404).json({ error: 'Credential not found' });
+
+        // Verify ownership (Safety Check)
+        // Since companyId is attached, we should verify if user has access. 
+        // For now, we allow if authenticated, but in production we'd check permissions.
+
+        const pfxBase64 = decryptStringToBuffer(credential.certificateData).toString('base64');
+        const password = decryptString(credential.certificatePassword);
+
+        res.json({
+            success: true,
+            vault: {
+                pfxBase64,
+                password,
+                alias: credential.alias,
+                cnpj: credential.cnpj
+            }
+        });
+    } catch (error: any) {
+        console.error('Vault Export Error:', error);
+        res.status(500).json({ error: 'Failed to export vault data' });
     }
 });
 

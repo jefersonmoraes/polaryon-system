@@ -76,6 +76,8 @@ export default function BiddingDashboardPage() {
     const [serverOffset, setServerOffset] = useState(0);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
+    const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
+    const [isLocalRunning, setIsLocalRunning] = useState(false);
 
     // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
@@ -87,10 +89,53 @@ export default function BiddingDashboardPage() {
         }
         
         try {
-            // Attempt to create session. 
-            // In Etapa 4, we would fetch real credentialId from a list.
+            // Se for Desktop, tentamos rodar LOCALMENTE
+            if (isDesktop && (window as any).electronAPI) {
+                const api = (window as any).api || (await import('@/lib/api')).default;
+                
+                // 1. Criar sessão no servidor (para herdar as estratégias salvas)
+                const res = await api.post('/bidding/sessions', {
+                    credentialId: selectedCredentialId || dummyCredentialId,
+                    portal: 'compras_gov',
+                    uasg,
+                    numeroPregao,
+                    anoPregao
+                });
+
+                if (res.data.success) {
+                    const session = res.data.session;
+                    setSessionId(session.id);
+
+                    // 2. Buscar Vault (Certificado decriptado para assinar localmente)
+                    if (selectedCredentialId && selectedCredentialId !== dummyCredentialId) {
+                        try {
+                            const vaultRes = await api.get(`/bidding/credentials/${selectedCredentialId}/vault`);
+                            if (vaultRes.data.success) {
+                                (window as any).electronAPI.startLocalBidding({
+                                    sessionId: session.id,
+                                    uasg,
+                                    numero: numeroPregao,
+                                    ano: anoPregao,
+                                    vault: vaultRes.data.vault
+                                });
+                                setIsLocalRunning(true);
+                                setIsListening(true);
+                                toast.success("Radar LOCAL ativado via Desktop! 📡⚡");
+                                return;
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch vault for local usage", e);
+                        }
+                    }
+                    
+                    // Fallback para modo nuvem se o vault falhar ou não houver credencial real
+                    toast.info("Iniciando via Nuvem (Backup)...");
+                }
+            }
+
+            // MODO CLOUD (Original)
             const res = await api.post('/bidding/sessions', {
-                credentialId: dummyCredentialId, // Backend will convert this to null if it's the dummy ⚒️🚀⚙️
+                credentialId: selectedCredentialId || dummyCredentialId,
                 portal: 'compras_gov',
                 uasg,
                 numeroPregao,
@@ -109,21 +154,26 @@ export default function BiddingDashboardPage() {
 
                 await api.post(`/bidding/sessions/${newSessionId}/start`);
                 setIsListening(true);
-                import('sonner').then(({ toast }) => toast.success("Radar Polaryon ativado com sucesso! ⚡"));
+                toast.success("Radar Polaryon NUVEM ativado com sucesso! ☁️");
             }
         } catch (error: any) {
             console.error("Failed to start radar:", error);
             const msg = error.response?.data?.error || "Erro ao conectar com o servidor de lances.";
-            import('sonner').then(({ toast }) => toast.error(msg));
+            toast.error(msg);
         }
     };
 
     const stopRadar = async () => {
         if (!sessionId) return;
         try {
-            await api.post(`/bidding/sessions/${sessionId}/stop`);
-            if (socketService) {
-                socketService.emit('leave_bidding_room', sessionId);
+            if (isLocalRunning && (window as any).electronAPI) {
+                (window as any).electronAPI.stopLocalBidding(sessionId);
+                setIsLocalRunning(false);
+            } else {
+                await api.post(`/bidding/sessions/${sessionId}/stop`);
+                if (socketService) {
+                    socketService.emit('leave_bidding_room', sessionId);
+                }
             }
             setIsListening(false);
         } catch (error) {
@@ -154,6 +204,7 @@ export default function BiddingDashboardPage() {
     }, [authUser]);
 
     // Radar Integration: Capture params from URL
+    // Radar Integration: Capture params from URL
     useEffect(() => {
         const uasgParam = searchParams.get('uasg');
         const numeroParam = searchParams.get('numero');
@@ -167,6 +218,28 @@ export default function BiddingDashboardPage() {
             import('sonner').then(({ toast }) => toast.info("Dados do Radar carregados com sucesso."));
         }
     }, [searchParams]);
+
+    // ELECTRON LOCAL RUNNER LISTENER
+    useEffect(() => {
+        if (isDesktop && (window as any).electronAPI) {
+            const handleUpdate = (data: any) => {
+                if (data.sessionId === sessionId) {
+                    setItems(data.items);
+                    setLastUpdate(data.timestamp);
+                    // Aqui os logs locais podem ser injetados se necessário
+                }
+            };
+            
+            const handleError = (data: any) => {
+                if (data.sessionId === sessionId) {
+                    toast.error(`Erro no motor local: ${data.error}`);
+                }
+            };
+            
+            (window as any).electronAPI.onBiddingUpdate(handleUpdate);
+            (window as any).electronAPI.onBiddingError(handleError);
+        }
+    }, [isDesktop, sessionId]);
 
     const saveStrategy = async (itemId: string, strategy: ItemStrategy) => {
         if (!sessionId) return;

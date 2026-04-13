@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
+const BiddingRunner = require('./bidding-runner');
+
+let biddingRunner;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -16,6 +19,9 @@ function createWindow() {
     backgroundColor: '#020817', // Match our design
     autoHideMenuBar: true,
   });
+
+  // Initialize Bidding Runner
+  biddingRunner = new BiddingRunner(win.webContents);
 
   // Decide what to load
   const url = isDev 
@@ -52,4 +58,17 @@ app.on('window-all-closed', () => {
 // IPC Handler for native notifications
 ipcMain.on('show-notification', (event, { title, body }) => {
   new Notification({ title, body }).show();
+});
+
+// LOCAL BIDDING IPC HANDLERS
+ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault }) => {
+  if (biddingRunner) {
+    await biddingRunner.start(sessionId, uasg, numero, ano, vault);
+  }
+});
+
+ipcMain.on('stop-local-bidding', (event, sessionId) => {
+  if (biddingRunner) {
+    biddingRunner.stop(sessionId);
+  }
 });
