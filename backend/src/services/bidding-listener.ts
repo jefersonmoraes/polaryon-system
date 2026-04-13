@@ -3,6 +3,7 @@ import { getSocketServer } from '../socket';
 import { prisma } from '../lib/prisma';
 
 import { BiddingStrategyEngine, ItemStrategyConfig } from './bidding-strategy-engine';
+import { BiddingAuthService } from './BiddingAuthService';
 
 // In Etapa 4 we will use mutual TLS with the A1 certificate here
 const apiClient = axios.create({
@@ -39,7 +40,11 @@ export class BiddingListener {
         const intervalId = setInterval(async () => {
             try {
                 // 1. Fetch current session to get strategy configs
-                const session = await prisma.biddingSession.findUnique({ where: { id: sessionId } });
+                const session = await prisma.biddingSession.findUnique({ 
+                    where: { id: sessionId },
+                    include: { credential: true }
+                });
+                
                 const itemsConfig = (session?.itemsConfig as any) || {};
                 const simulationMode = itemsConfig.__global__?.simulationMode ?? itemsConfig.simulationMode ?? true;
 
@@ -62,11 +67,11 @@ export class BiddingListener {
                     });
                     
                     if (response.status === 204) {
-                         console.warn(`[PBE] Bloqueio hCaptcha Detectado (Status 204) para ${idCompra}`);
+                         console.warn(`[PBE] Bloqueio hCaptcha Detectado para ${idCompra}`);
                          if (io) {
                              io.to(`bidding_room_${sessionId}`).emit('bidding_alert', {
                                  type: 'CAPTCHA_BLOCK',
-                                 message: 'Bloqueio de hCaptcha detectado pelo portal Gov.br. Intervenção necessária.',
+                                 message: 'Bloqueio de hCaptcha detectado pelo portal Gov.br.',
                                  critical: true
                              });
                          }
@@ -80,23 +85,16 @@ export class BiddingListener {
                         }));
                     }
                 } catch (apiErr: any) {
-                    console.error(`[PBE] Falha na API: ${apiErr.message}`);
-                    if (io) {
-                        io.to(`bidding_room_${sessionId}`).emit('bidding_alert', {
-                            type: 'API_ERROR',
-                            message: `Erro na API do portal: ${apiErr.message}`,
-                            critical: false
-                        });
-                    }
+                    console.error(`[PBE] API Error: ${apiErr.message}`);
                     return; 
                 }
 
                 if (realItems.length === 0) return;
 
-                // 3. Evaluate Strategies and Handle Simulation/Real Bidding
+                // 3. Evaluate Strategies and Handle Execution
                 const executedActions: any[] = [];
 
-                realItems.forEach(item => {
+                for (const item of realItems) {
                     const config: ItemStrategyConfig = itemsConfig[item.itemId] || {
                         mode: 'follower',
                         minPrice: 0.10,
@@ -112,53 +110,95 @@ export class BiddingListener {
                             value: decision.value,
                             reason: decision.reason,
                             type: simulationMode ? 'SIMULATED' : 'REAL',
+                            status: 'pending',
                             timestamp: new Date().toISOString()
                         };
                         
-                        executedActions.push(actionLog);
-
                         if (simulationMode) {
-                            console.log(`[PBE] SIMULAÇÃO: Item ${item.itemId} -> Lance de R$ ${decision.value}`);
+                            actionLog.status = 'success';
+                            console.log(`[PBE] SIMULAÇÃO: Item ${item.itemId} -> R$ ${decision.value}`);
+                        } else if (session?.credentialId) {
+                            // REAL BIDDING DISPATCH
+                            try {
+                                const result = await this.executeRealBid(session.id, session.credentialId, item.itemId, decision.value);
+                                actionLog.status = 'success';
+                                console.log(`[PBE] LANCE REAL SUCESSO: Item ${item.itemId} -> R$ ${decision.value}`);
+                            } catch (e: any) {
+                                actionLog.status = 'error';
+                                (actionLog as any).error = e.message;
+                                console.error(`[PBE] LANCE REAL FALHA: ${e.message}`);
+                            }
                         } else {
-                            // REAL BIDDING LOGIC (Etapa 4.2)
-                            console.log(`[PBE] MODO REAL: Preparando disparo para Item ${item.itemId}`);
+                            actionLog.status = 'error';
+                            (actionLog as any).error = 'Credencial (Certificado A1) não configurado.';
                         }
+                        
+                        executedActions.push(actionLog);
                     }
-                });
+                }
                 
-                // Emite os dados REAIS e as AÇÕES para o front-end
+                // Emite os dados e ações para o front-end
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
                         timestamp: new Date().toISOString(),
                         uasg,
                         numeroPregao,
                         items: realItems,
-                        actions: executedActions
+                        actions: executedActions,
+                        isAuthenticated: !!session?.credentialId
                     });
                 }
                 
-                // Salvar logs no banco se houver ações
                 if (executedActions.length > 0) {
                     const existingLogs = (session?.logs as any[]) || [];
                     await prisma.biddingSession.update({
                         where: { id: sessionId },
-                        data: { logs: [...existingLogs, ...executedActions].slice(-50) } // Keep last 50
+                        data: { logs: [...existingLogs, ...executedActions].slice(-100) }
                     });
                 }
                 
             } catch (error: any) {
-                console.error(`[PBE] Erro no polling da sessão ${sessionId}: ${error.message}`);
+                console.error(`[PBE] Polling Error ${sessionId}: ${error.message}`);
             }
         }, 3000); 
 
-
         this.activeJobs.set(sessionId, { sessionId, intervalId });
-
-        // Update DB status
         await prisma.biddingSession.update({
             where: { id: sessionId },
             data: { sessionStatus: 'active' }
         });
+    }
+
+    /**
+     * Executa um lance real no portal Compras.gov.br
+     */
+    private static async executeRealBid(sessionId: string, credentialId: string, itemId: string, value: number) {
+        try {
+            const token = await BiddingAuthService.login(credentialId);
+            const agent = await BiddingAuthService.getHttpsAgent(credentialId);
+            
+            const bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances';
+            
+            const response = await axios.post(bidUrl, {
+                sequencialItem: parseInt(itemId),
+                valorLance: value
+            }, {
+                httpsAgent: agent,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Polaryon/1.0'
+                }
+            });
+
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                BiddingAuthService.invalidateToken(credentialId);
+            }
+            const msg = error.response?.data?.message || error.message;
+            throw new Error(`Erro ao enviar lance real: ${msg}`);
+        }
     }
 
     /**

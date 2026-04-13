@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -53,6 +63,8 @@ export default function BiddingDashboardPage() {
     const [credentials, setCredentials] = useState<any[]>([]);
     const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
     const [actionLogs, setActionLogs] = useState<any[]>([]);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [showRealModeWarning, setShowRealModeWarning] = useState(false);
 
     // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
@@ -163,7 +175,10 @@ export default function BiddingDashboardPage() {
         const handleUpdate = (data: any) => {
             setItems(data.items);
             if (data.actions && data.actions.length > 0) {
-                setActionLogs(prev => [...data.actions, ...prev].slice(0, 50));
+                setActionLogs(prev => [...data.actions, ...prev].slice(0, 100));
+            }
+            if (data.isAuthenticated !== undefined) {
+                setIsAuthenticated(data.isAuthenticated);
             }
             setLastUpdate(new Date().toLocaleTimeString());
         };
@@ -258,14 +273,25 @@ export default function BiddingDashboardPage() {
                                 </div>
                                 <Switch 
                                     checked={simulationMode} 
-                                    onCheckedChange={toggleSimulation}
+                                    onCheckedChange={(val) => {
+                                        if (!val) {
+                                            setShowRealModeWarning(true);
+                                        } else {
+                                            toggleSimulation(true);
+                                        }
+                                    }}
                                     className="data-[state=checked]:bg-amber-500"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <Key className="w-3 h-3" /> Conta de Disputa (Certificado)
+                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+                                    <span className="flex items-center gap-2"><Key className="w-3 h-3" /> Conta de Disputa</span>
+                                    {isAuthenticated && (
+                                        <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-black animate-pulse">
+                                            <CheckCircle2 className="w-3 h-3" /> AUTENTICADO
+                                        </span>
+                                    )}
                                 </Label>
                                 <Select value={selectedCredentialId} onValueChange={setSelectedCredentialId} disabled={isListening}>
                                     <SelectTrigger className="bg-slate-950/50 border-white/10 text-slate-100 h-11">
@@ -393,23 +419,52 @@ export default function BiddingDashboardPage() {
                             actionLogs.map((log, idx) => (
                                 <div key={idx} className="p-3 bg-slate-950/50 rounded-xl border border-white/5 space-y-1.5 animate-in slide-in-from-right-4 duration-300">
                                     <div className="flex items-center justify-between">
-                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
-                                            {log.type}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
+                                                {log.type}
+                                            </span>
+                                            {log.status === 'error' && (
+                                                <AlertTriangle className="w-3 h-3 text-red-500" />
+                                            )}
+                                        </div>
                                         <span className="text-[9px] font-mono text-slate-500">
                                             {new Date(log.timestamp).toLocaleTimeString()}
                                         </span>
                                     </div>
-                                    <p className="text-xs font-bold text-slate-200">
-                                        ITEM {log.itemId} <span className="text-slate-400 font-medium">→</span> <span className="text-emerald-400">R$ {log.value.toFixed(2)}</span>
+                                    <p className={`text-xs font-bold ${log.status === 'error' ? 'text-red-400' : 'text-slate-200'}`}>
+                                        ITEM {log.itemId} <span className="text-slate-400 font-medium">→</span> <span className={log.status === 'error' ? 'text-red-400' : 'text-emerald-400'}>R$ {log.value.toFixed(2)}</span>
                                     </p>
-                                    <p className="text-[10px] text-slate-500 italic">"{log.reason}"</p>
+                                    <p className="text-[10px] text-slate-500 italic">"{log.error || log.reason}"</p>
                                 </div>
                             ))
                         )}
                     </CardContent>
                 </Card>
             </div>
+
+            <AlertDialog open={showRealModeWarning} onOpenChange={setShowRealModeWarning}>
+                <AlertDialogContent className="bg-slate-900 border-white/10 text-slate-100">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-red-500">
+                            <ShieldAlert className="w-5 h-5" /> ATENÇÃO: MODO REAL ATIVADO
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                            Ao desativar o modo simulação, o robô irá realizar lances REAIS no portal Gov.br usando seu Certificado Digital. Estes lances têm validade jurídica e financeira.
+                            <br /><br />
+                            Deseja prosseguir com a operação real?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700">CANCELAR</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => toggleSimulation(false)}
+                            className="bg-red-600 hover:bg-red-500 text-white font-bold"
+                        >
+                            SIM, ATIVAR MODO REAL
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
