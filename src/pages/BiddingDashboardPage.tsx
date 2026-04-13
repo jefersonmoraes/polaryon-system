@@ -65,6 +65,8 @@ export default function BiddingDashboardPage() {
     const [actionLogs, setActionLogs] = useState<any[]>([]);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showRealModeWarning, setShowRealModeWarning] = useState(false);
+    const [chatMessages, setChatMessages] = useState<any[]>([]);
+    const [serverOffset, setServerOffset] = useState(0);
 
     // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
@@ -180,14 +182,22 @@ export default function BiddingDashboardPage() {
             if (data.isAuthenticated !== undefined) {
                 setIsAuthenticated(data.isAuthenticated);
             }
+            if (data.serverOffset !== undefined) {
+                setServerOffset(data.serverOffset);
+            }
             setLastUpdate(new Date().toLocaleTimeString());
+        };
+
+        const handleChat = (data: any) => {
+            if (data.messages) {
+                setChatMessages(data.messages);
+            }
         };
 
         const handleAlert = (alert: any) => {
             import('sonner').then(({ toast }) => {
                 if (alert.critical) {
                     toast.error(alert.message, { duration: 10000 });
-                    // Optional: Play alert sound here if allowed
                 } else {
                     toast.warning(alert.message);
                 }
@@ -195,10 +205,12 @@ export default function BiddingDashboardPage() {
         };
 
         socketService.on('biddingUpdate', handleUpdate);
+        socketService.on('biddingChat', handleChat);
         socketService.on('bidding_alert', handleAlert);
 
         return () => {
             socketService.off('biddingUpdate', handleUpdate);
+            socketService.off('biddingChat', handleChat);
             socketService.off('bidding_alert', handleAlert);
         };
     }, [socketService, sessionId, isListening]);
@@ -375,6 +387,11 @@ export default function BiddingDashboardPage() {
                                                             {strategy.mode}
                                                         </span>
                                                         <p className="text-[10px] font-bold text-slate-500">RES: R$ {strategy.minPrice.toFixed(2)}</p>
+                                                        {item.tempoRestante > 0 && (
+                                                            <span className="text-[10px] font-black text-red-500 animate-pulse ml-2">
+                                                                FECHANDO EM: {item.tempoRestante}s
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -401,6 +418,41 @@ export default function BiddingDashboardPage() {
                             </div>
                         )}
                     </CardContent>
+                {/* Chat Panel Card */}
+                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
+                    <CardHeader className="pb-3 border-b border-white/5 bg-slate-950/20">
+                        <CardTitle className="flex items-center gap-2 text-slate-100 text-lg">
+                            <Zap className="w-5 h-5 text-amber-500"/> Chat do Pregoeiro
+                        </CardTitle>
+                        <CardDescription className="text-slate-400">Mensagens oficiais da sessão.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-y-auto px-4 space-y-4 pt-4 custom-scrollbar bg-slate-950/10">
+                        {chatMessages.length === 0 ? (
+                            <div className="text-center py-12 text-slate-600">
+                                <Activity className="w-8 h-8 mx-auto opacity-20 mb-2" />
+                                <p className="text-xs font-medium">Aguardando mensagens...</p>
+                            </div>
+                        ) : (
+                            chatMessages.map((msg, idx) => {
+                                const isOfficial = msg.tipo === 'OFICIAL' || msg.enviadoPeloPregoeiro;
+                                return (
+                                    <div key={idx} className={`p-3 rounded-2xl text-[11px] leading-relaxed shadow-sm ${
+                                        isOfficial 
+                                        ? 'bg-amber-500/10 border-l-2 border-amber-500 text-slate-200 ml-0 mr-4' 
+                                        : 'bg-slate-800/40 border-l-2 border-slate-600 text-slate-400 ml-4 mr-0'
+                                    }`}>
+                                        <div className="flex items-center justify-between mb-1 opacity-60 font-bold uppercase tracking-tighter text-[9px]">
+                                            <span>{isOfficial ? 'PREGOEIRO' : (msg.apelido || 'SISTEMA')}</span>
+                                            <span>{msg.dataEnvio ? new Date(msg.dataEnvio).toLocaleTimeString() : ''}</span>
+                                        </div>
+                                        <p className="font-medium">{msg.texto}</p>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Action Logs Card */}
                 <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
                     <CardHeader className="pb-3">

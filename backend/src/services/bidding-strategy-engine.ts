@@ -17,10 +17,8 @@ export interface ItemStrategyConfig {
 export class BiddingStrategyEngine {
     /**
      * Avalia a situação de um item específico e decide se deve disparar um lance.
-     * @param currentItem Estado atual do item vindo do Radar
-     * @param config Configuração de estratégia salva no banco
      */
-    static evaluate(currentItem: BiddingItem, config: ItemStrategyConfig) {
+    static evaluate(currentItem: any, config: ItemStrategyConfig, currentTime: number) {
         const { mode, minPrice, decrementValue, decrementType } = config;
         
         // Se eu já sou o ganhador, não faço nada
@@ -40,28 +38,27 @@ export class BiddingStrategyEngine {
             nextBid = currentItem.valorAtual * (1 - decrementValue / 100);
         }
 
-        // Round to 2 decimal places to avoid floating point precision issues
         nextBid = Math.round(nextBid * 100) / 100;
-
-        // Garante que o próximo lance não fure o mínimo
-        if (nextBid < minPrice) {
-            nextBid = minPrice;
-        }
+        if (nextBid < minPrice) nextBid = minPrice;
 
 
         // --- Lógica por Modo ---
         switch (mode) {
             case 'follower':
-                // Reage imediatamente (a Etapa 2 já dispara este evento)
                 return { action: 'bid', value: nextBid, reason: 'Seguindo concorrente.' };
 
             case 'sniper':
-                // Sniper precisa do cronômetro. (A implementar na Etapa 4)
-                // Por enquato apenas recomenda segurar
-                return { action: 'hold', reason: 'Aguardando cronômetro (Modo Sniper).' };
+                // Se o portal informar o tempo restante (segundosParaEncerramento)
+                const timeLeft = currentItem.tempoRestante; // Vindo da API Serpro
+                const secondsToSnipe = 5; // Configurável futuramente
+
+                if (timeLeft > 0 && timeLeft <= secondsToSnipe) {
+                    return { action: 'bid', value: nextBid, reason: `Sniper disparado (T-${timeLeft}s).` };
+                }
+                
+                return { action: 'hold', reason: timeLeft > 0 ? `Sniper aguardando (T-${timeLeft}s)...` : 'Sniper aguardando encerramento iminente...' };
 
             case 'cover':
-                // Tenta sempre ser o primeiro. 
                 return { action: 'bid', value: nextBid, reason: 'Cobertura ativa.' };
                 
             default:
