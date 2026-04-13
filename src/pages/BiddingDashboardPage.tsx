@@ -148,6 +148,7 @@ export default function BiddingDashboardPage() {
                 }
             } catch (e) {
                 console.error("Failed to fetch credentials", e);
+            }
         };
         fetchCredentials();
     }, [authUser]);
