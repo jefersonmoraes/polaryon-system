@@ -67,6 +67,8 @@ export default function BiddingDashboardPage() {
     const [showRealModeWarning, setShowRealModeWarning] = useState(false);
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [serverOffset, setServerOffset] = useState(0);
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+    const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
 
     // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
@@ -195,6 +197,19 @@ export default function BiddingDashboardPage() {
         };
 
         const handleAlert = (alert: any) => {
+            if (alert.type === 'BID_COVERED') {
+                const itemId = alert.message.match(/Item (\d+)/)?.[1];
+                if (itemId) {
+                    setCoveredItems(prev => new Set(prev).add(itemId));
+                    setTimeout(() => {
+                        setCoveredItems(prev => {
+                            const next = new Set(prev);
+                            next.delete(itemId);
+                            return next;
+                        });
+                    }, 3000);
+                }
+            }
             import('sonner').then(({ toast }) => {
                 if (alert.critical) {
                     toast.error(alert.message, { duration: 10000 });
@@ -217,14 +232,29 @@ export default function BiddingDashboardPage() {
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
-                <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 bg-clip-text text-transparent">
-                        Polaryon Bidding Engine
-                    </h1>
-                    <p className="text-slate-400 mt-2 font-medium">
-                        O Cérebro: Estratégias de Lances Automáticos <span className="text-emerald-500/80">(V3.0 Beta)</span>
-                    </p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
+                <div className="flex items-center gap-6">
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent uppercase">
+                            POLARYON TERMINAL
+                        </h1>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1 italic">
+                            Military Grade Bidding Automation
+                        </p>
+                    </div>
+
+                    <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
+
+                    <div className="flex items-center gap-6">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-500 font-black uppercase">Vencendo</span>
+                            <span className="text-xl font-black text-emerald-500">{items.filter(i => i.ganhador === 'Você').length}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-500 font-black uppercase">Economia</span>
+                            <span className="text-xl font-black text-cyan-400">R$ {items.reduce((acc, i) => acc + (i.ganhador === 'Você' ? (i.valorEstimado || 0) - i.valorAtual : 0), 0).toFixed(2)}</span>
+                        </div>
+                    </div>
                 </div>
                 {isListening && (
                     <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
@@ -348,73 +378,106 @@ export default function BiddingDashboardPage() {
                              <div className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-widest">Último Sync: {lastUpdate || '--:--:--'}</div>
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-6 relative min-h-[300px]">
+                    <CardContent className="p-0 relative min-h-[400px]">
                         {!isListening ? (
                             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
-                                <div className="p-6 rounded-full bg-slate-800/30 mb-6 ring-1 ring-white/5">
-                                    <Zap className="w-12 h-12 text-slate-600" />
-                                </div>
-                                <p className="font-semibold text-slate-400">Motor em Standby</p>
-                                <p className="text-sm text-slate-500 mt-1 text-center max-w-[200px]">Configure o pregão para iniciar o monitoramento.</p>
+                                <Activity className="w-12 h-12 text-slate-700 mb-4 opacity-50" />
+                                <p className="font-bold text-slate-500 text-xs">SISTEMA EM STANDBY</p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                {items.map(item => {
-                                    const strategy = itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.10, decrementType: 'fixed' };
-                                    
-                                    let statusBg = "bg-slate-800/40 ring-1 ring-white/5";
-                                    let dotColor = "bg-slate-600";
-                                    let priceColor = "text-slate-100";
-                                    
-                                    if (item.ganhador === 'Você') {
-                                        statusBg = "bg-emerald-500/5 ring-1 ring-emerald-500/30";
-                                        dotColor = "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]";
-                                        priceColor = "text-emerald-400";
-                                    } else {
-                                        statusBg = "bg-amber-500/5 ring-1 ring-amber-500/30";
-                                        dotColor = "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.8)]";
-                                        priceColor = "text-amber-400";
-                                    }
-
-                                    return (
-                                        <div key={item.itemId} className={`p-5 rounded-2xl flex items-center justify-between transition-all hover:translate-x-1 ${statusBg}`}>
-                                            <div className="flex items-center gap-5">
-                                                <div className={`w-3.5 h-3.5 rounded-full ${dotColor}`}></div>
-                                                <div>
-                                                    <h4 className="font-black text-slate-200 tracking-tight">ITEM {item.itemId}</h4>
-                                                    <div className="flex items-center gap-2 mt-1.5">
-                                                        <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 border border-white/5">
-                                                            {strategy.mode}
-                                                        </span>
-                                                        <p className="text-[10px] font-bold text-slate-500">RES: R$ {strategy.minPrice.toFixed(2)}</p>
-                                                        {item.tempoRestante > 0 && (
-                                                            <span className="text-[10px] font-black text-red-500 animate-pulse ml-2">
-                                                                FECHANDO EM: {item.tempoRestante}s
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="flex items-center gap-10">
-                                                <div className="text-right">
-                                                    <div className={`text-2xl font-black tabular-nums tracking-tighter ${priceColor}`}>R$ {item.valorAtual.toFixed(2)}</div>
-                                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                                                        <p className={`text-[10px] font-black uppercase tracking-tighter ${item.ganhador === 'Você' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                                            {item.ganhador}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <StrategyModal 
-                                                    item={item} 
-                                                    initialStrategy={strategy} 
-                                                    onSave={(s) => saveStrategy(item.itemId, s)} 
-                                                />
-                                            </div>
+                            <div className="flex flex-col h-full">
+                                {/* Bulk Actions Header */}
+                                {selectedItems.size > 0 && (
+                                    <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-black text-emerald-500">{selectedItems.size} ITENS SELECIONADOS</span>
+                                            <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="h-7 text-[10px] font-black bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40"
+                                                onClick={() => {
+                                                    // TODO: Bulk apply modal
+                                                    toast.info("Ação em Massa iniciada...");
+                                                }}
+                                            >
+                                                APLICAR ESTRATÉGIA
+                                            </Button>
                                         </div>
-                                    );
-                                })}
+                                        <Button variant="ghost" size="sm" onClick={() => setSelectedItems(new Set())} className="text-xs text-slate-500">Cancelar</Button>
+                                    </div>
+                                )}
+
+                                <div className="divide-y divide-white/5">
+                                    {items.map(item => {
+                                        const strategy = itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.10, decrementType: 'fixed' };
+                                        const isSelected = selectedItems.has(item.itemId);
+                                        const isCovered = coveredItems.has(item.itemId);
+                                        
+                                        return (
+                                            <div 
+                                                key={item.itemId} 
+                                                className={`p-3 md:p-4 flex items-center justify-between transition-all group ${
+                                                    item.ganhador === 'Você' ? 'bg-emerald-500/[0.03]' : 'bg-transparent'
+                                                } ${isCovered ? 'bg-red-500/10 animate-pulse ring-1 ring-red-500/40' : ''}`}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <Checkbox 
+                                                        checked={isSelected}
+                                                        onCheckedChange={(val) => {
+                                                            const next = new Set(selectedItems);
+                                                            if (val) next.add(item.itemId);
+                                                            else next.delete(item.itemId);
+                                                            setSelectedItems(next);
+                                                        }}
+                                                        className="border-white/20 data-[state=checked]:bg-emerald-500"
+                                                    />
+
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black text-slate-100 uppercase tracking-tighter">ITEM {item.itemId}</span>
+                                                            {item.position > 0 && (
+                                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                                                    item.position === 1 ? 'bg-emerald-500 text-black' : 'bg-slate-700 text-slate-300'
+                                                                }`}>
+                                                                    {item.position}º
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${
+                                                                strategy.mode === 'shadow' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-slate-800 text-slate-500 border-white/5'
+                                                            }`}>
+                                                                {strategy.mode === 'shadow' ? 'SOMBRA (2º)' : strategy.mode.toUpperCase()}
+                                                            </span>
+                                                            {item.tempoRestante > 0 && (
+                                                                <span className="text-[9px] font-black text-red-500 flex items-center gap-1">
+                                                                    <Activity className="w-2.5 h-2.5 animate-spin"/> {item.tempoRestante}s
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-8">
+                                                    <div className="text-right flex flex-col items-end">
+                                                        <div className={`text-xl font-black tabular-nums tracking-tighter ${
+                                                            item.ganhador === 'Você' ? 'text-emerald-400' : 'text-amber-500 font-bold'
+                                                        }`}>
+                                                            R$ {item.valorAtual.toFixed(2)}
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{item.ganhador}</span>
+                                                    </div>
+
+                                                    <StrategyModal 
+                                                        item={item} 
+                                                        initialStrategy={strategy} 
+                                                        onSave={(s) => saveStrategy(item.itemId, s)} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </CardContent>
@@ -547,9 +610,10 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
                             <SelectTrigger className="bg-slate-950/50 border-white/10 h-12 text-sm font-bold">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
+                             <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
                                 <SelectItem value="follower" className="text-sm font-bold">Seguidor (Reação Imediata)</SelectItem>
                                 <SelectItem value="sniper" className="text-sm font-bold">Sniper (Segundo Final)</SelectItem>
+                                <SelectItem value="shadow" className="text-sm font-bold">Modo Sombra (Manter 2º)</SelectItem>
                                 <SelectItem value="cover" className="text-sm font-bold">Cobertura (Sempre Topo)</SelectItem>
                             </SelectContent>
                         </Select>
@@ -557,6 +621,7 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
                             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                                 {strategy.mode === 'follower' && "⚡ Reage instantaneamente a cada lance baixado por concorrentes."}
                                 {strategy.mode === 'sniper' && "🎯 Aguardará o encerramento iminente para dar o lance único."}
+                                {strategy.mode === 'shadow' && "👤 Mantém-se colado no 1º lugar, forçando-o a baixar o preço."}
                                 {strategy.mode === 'cover' && "🛡️ Garantirá que seu lance seja o melhor até o preço mínimo."}
                             </p>
                         </div>

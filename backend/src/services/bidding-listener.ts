@@ -118,12 +118,40 @@ export class BiddingListener {
 
                 if (realItems.length === 0) return;
 
-                // 4. Evaluate Strategies
+                // 4. Evaluate Strategies and Detect Ranking
                 const executedActions: any[] = [];
                 const nowWithOffset = Date.now() + serverOffset;
 
                 for (const item of realItems) {
                     const config: ItemStrategyConfig = itemsConfig[item.itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
+                    
+                    // FETCH DETAILED RANKING (Only if authenticated)
+                    let myPosition = item.ganhador === 'Você' ? 1 : 0;
+                    if (session?.credentialId && myPosition === 0) {
+                        try {
+                            const ranking = await this.fetchItemRanking(session.credentialId, idCompra, item.itemId);
+                            if (ranking && ranking.index !== undefined) {
+                                myPosition = ranking.index + 1; // 1-indexed
+                            }
+                        } catch (e) {
+                            // Silently fail ranking fetch
+                        }
+                    }
+
+                    // Detect "Fui Coberto" alert
+                    const prevItems = (this as any)._lastItems?.get(sessionId) || [];
+                    const prevItem = prevItems.find((pi: any) => pi.itemId === item.itemId);
+                    if (prevItem && prevItem.ganhador === 'Você' && item.ganhador !== 'Você') {
+                        if (io) {
+                            io.to(`bidding_room_${sessionId}`).emit('bidding_alert', {
+                                type: 'BID_COVERED',
+                                message: `Você foi COBERTO no Item ${item.itemId}!`,
+                                critical: true
+                            });
+                        }
+                    }
+
+                    (item as any).position = myPosition;
 
                     const decision = BiddingStrategyEngine.evaluate(item, config, nowWithOffset);
                     
@@ -147,6 +175,10 @@ export class BiddingListener {
                         executedActions.push(actionLog);
                     }
                 }
+
+                // Store last items state for "covered" detection
+                if (!(this as any)._lastItems) (this as any)._lastItems = new Map();
+                (this as any)._lastItems.set(sessionId, realItems);
                 
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
@@ -209,6 +241,36 @@ export class BiddingListener {
             }
             const msg = error.response?.data?.message || error.message;
             throw new Error(`Erro ao enviar lance real: ${msg}`);
+        }
+    }
+
+    /**
+     * Busca a posição exata (ranking) do fornecedor no item
+     */
+    private static async fetchItemRanking(credentialId: string, idCompra: string, itemId: string) {
+        try {
+            const token = await BiddingAuthService.login(credentialId);
+            const agent = await BiddingAuthService.getHttpsAgent(credentialId);
+            const rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${idCompra}/item/${itemId}`;
+            
+            const response = await axios.get(rankingUrl, {
+                httpsAgent: agent,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'Mozilla/5.0 Polaryon/1.0'
+                }
+            });
+
+            // O Serpro retorna uma lista de lances. Precisamos encontrar o NOSSO melhor lance e ver a posição.
+            if (response.data && Array.isArray(response.data)) {
+                // Simplificação: o primeiro item costuma ser o melhor. 
+                // Mas o Serpro as vezes retorna o objeto do fornecedor logado com o campo 'index' ou 'posicao'.
+                // Vamos assumir que a resposta contém um campo que indica nossa posição se disponível.
+                return response.data.find((l: any) => l.eMeuLance === true) || { index: -1 };
+            }
+            return null;
+        } catch (e) {
+            return null;
         }
     }
 

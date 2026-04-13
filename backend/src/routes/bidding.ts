@@ -148,24 +148,31 @@ router.post('/sessions/:id/stop', requireAuth, async (req: AuthRequest | any, re
     }
 });
 
-// Update strategy for a specific item in a session
-router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest | any, res: Response) => {
+// Update strategy in bulk
+router.patch('/sessions/:id/items/bulk', requireAuth, async (req: AuthRequest | any, res: Response) => {
     try {
-        const { id, itemId } = req.params;
-        const config = req.body;
+        const { id } = req.params;
+        const { itemIds, config } = req.body;
+
+        if (!Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ error: 'itemIds array is required' });
+        }
 
         const session = await prisma.biddingSession.findUnique({ where: { id } });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         const currentConfig = (session.itemsConfig as any) || {};
-        currentConfig[itemId] = { ...currentConfig[itemId], ...config };
+        
+        itemIds.forEach(itemId => {
+            currentConfig[itemId] = { ...(currentConfig[itemId] || {}), ...config };
+        });
 
         await prisma.biddingSession.update({
             where: { id },
             data: { itemsConfig: currentConfig }
         });
 
-        res.json({ success: true, message: 'Item strategy updated.' });
+        res.json({ success: true, message: `${itemIds.length} items updated successfully.` });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

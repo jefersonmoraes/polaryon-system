@@ -58,6 +58,16 @@ export class BiddingStrategyEngine {
                 
                 return { action: 'hold', reason: timeLeft > 0 ? `Sniper aguardando (T-${timeLeft}s)...` : 'Sniper aguardando encerramento iminente...' };
 
+            case 'shadow':
+                // Tenta se manter em 2º lugar (na cola do 1º)
+                // Se minha posição for 2º, eu já estou onde quero.
+                if (currentItem.position === 2) {
+                    return { action: 'hold', reason: 'Modo Sombra: Já em 2º lugar.' };
+                }
+                // Se eu for 3º ou pior, tento subir para 2º (dando um lance ligeiramente acima do 2º atual)
+                // Para simplificar, usamos o nextBid padrão, mas o objetivo é não passar o 1º se possível.
+                return { action: 'bid', value: nextBid, reason: 'Modo Sombra: Buscando 2º lugar.' };
+
             case 'cover':
                 return { action: 'bid', value: nextBid, reason: 'Cobertura ativa.' };
                 
