@@ -33,16 +33,21 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 interface BiddingItem {
     itemId: string;
     valorAtual: number;
+    valorEstimado?: number;
     ganhador: string;
     status: string;
+    position: number;
+    tempoRestante: number;
 }
 
 interface ItemStrategy {
-    mode: 'follower' | 'sniper' | 'cover';
+    mode: 'follower' | 'sniper' | 'cover' | 'shadow';
     minPrice: number;
     decrementValue: number;
     decrementType: 'fixed' | 'percent';
@@ -481,6 +486,8 @@ export default function BiddingDashboardPage() {
                             </div>
                         )}
                     </CardContent>
+                </Card>
+
                 {/* Chat Panel Card */}
                 <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
                     <CardHeader className="pb-3 border-b border-white/5 bg-slate-950/20">

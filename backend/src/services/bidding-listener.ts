@@ -22,6 +22,7 @@ interface PollingJob {
 
 export class BiddingListener {
     private static activeJobs: Map<string, PollingJob> = new Map();
+    private static _lastItems: Map<string, any[]> = new Map();
 
     /**
      * Inicia o radar de monitoramento para uma sessão específica
@@ -139,7 +140,7 @@ export class BiddingListener {
                     }
 
                     // Detect "Fui Coberto" alert
-                    const prevItems = (this as any)._lastItems?.get(sessionId) || [];
+                    const prevItems = BiddingListener._lastItems.get(sessionId) || [];
                     const prevItem = prevItems.find((pi: any) => pi.itemId === item.itemId);
                     if (prevItem && prevItem.ganhador === 'Você' && item.ganhador !== 'Você') {
                         if (io) {
@@ -162,7 +163,7 @@ export class BiddingListener {
                             actionLog.status = 'success';
                         } else if (session?.credentialId) {
                             try {
-                                await this.executeRealBid(session.id, session.credentialId, item.itemId, decision.value);
+                                await BiddingListener.executeRealBid(session.id, session.credentialId, item.itemId, decision.value);
                                 actionLog.status = 'success';
                             } catch (e: any) {
                                 actionLog.status = 'error';
@@ -177,8 +178,7 @@ export class BiddingListener {
                 }
 
                 // Store last items state for "covered" detection
-                if (!(this as any)._lastItems) (this as any)._lastItems = new Map();
-                (this as any)._lastItems.set(sessionId, realItems);
+                BiddingListener._lastItems.set(sessionId, realItems);
                 
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
