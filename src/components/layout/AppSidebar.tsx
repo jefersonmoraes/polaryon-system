@@ -416,23 +416,18 @@ const AppSidebar = () => {
           )
         }
 
-        {/* DOWNLOAD DESKTOP APP BUTTON */}
+        {/* DESKTOP APP CENTRAL */}
         <div className={`mt-2 border-t border-sidebar-border/30 pt-4 px-3 mb-2`}>
-          <a 
-            href="/download/Polaryon-Setup.exe" 
-            download
-            className={`flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all border border-emerald-500/20 group`}
-            title="Instalar Robô no PC"
+          {!isCollapsed && <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2">Desktop Bot</h3>}
+          <Link
+            to="/desktop"
+            className={`flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-semibold hover:bg-emerald-500/10 hover:text-emerald-500 transition-all group ${location.pathname === '/desktop' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'text-sidebar-foreground'}`}
+            title="Central do Desktop"
           >
-            <MonitorDown className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
-            {!isCollapsed && <span>INSTALAR NO MEU PC</span>}
-            {!isCollapsed && <Zap className="h-3 w-3 ml-auto animate-pulse" />}
-          </a>
-          {!isCollapsed && (
-            <p className="text-[9px] text-muted-foreground mt-2 px-1 leading-tight">
-              O Windows pode exibir um alerta de "risco". Clique em <span className="text-foreground font-semibold">Manter</span> para continuar.
-            </p>
-          )}
+            <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
+            {!isCollapsed && <span>CENTRAL DO BOT</span>}
+            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.0.1</div>}
+          </Link>
         </div>
 
         {currencyQuotes && (

@@ -51,6 +51,7 @@ const BiddingDashboardPage = lazy(() => import("./pages/BiddingDashboardPage"));
 const RadarScannerPage = lazy(() => import("./pages/RadarScannerPage"));
 const TrashPage = lazy(() => import("./pages/TrashPage"));
 const BackupsPage = lazy(() => import("./pages/BackupsPage"));
+const DesktopDownloadPage = lazy(() => import("./pages/DesktopDownloadPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Heavy component split-out
@@ -435,6 +436,7 @@ const AppContent = () => {
       <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
       <Route path="/admin/audit" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
       <Route path="/admin/backups" element={<ProtectedRoute><BackupsPage /></ProtectedRoute>} />
+      <Route path="/desktop" element={<ProtectedRoute><DesktopDownloadPage /></ProtectedRoute>} />
       <Route path="/lixeira" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
       <Route path="/conexao" element={<ProtectedRoute><ConnectionPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
