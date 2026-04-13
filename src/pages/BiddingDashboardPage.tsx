@@ -136,7 +136,7 @@ export default function BiddingDashboardPage() {
             if (!authUser?.id) return;
             try {
                 // Fetch profiles first to get companyId
-                const profileRes = await api.get('/accounting/profiles');
+                const profileRes = await api.get('/kanban/main-companies');
                 const defaultCompany = profileRes.data.find((p: any) => p.isDefault) || profileRes.data[0];
                 
                 if (defaultCompany) {

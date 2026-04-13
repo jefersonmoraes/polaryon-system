@@ -1083,6 +1083,43 @@ router.delete('/notifications/:id', async (req: Request, res: Response) => {
     }
 });
 
+// MAIN COMPANY PROFILES (Administradoras)
+router.get('/main-companies', async (req: Request, res: Response) => {
+    try {
+        const companies = await prisma.mainCompanyProfile.findMany();
+        res.json(companies);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/main-companies', async (req: Request, res: Response) => {
+    try {
+        const company = await prisma.mainCompanyProfile.create({ data: req.body });
+        res.json(company);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.put('/main-companies/:id', async (req: Request, res: Response) => {
+    try {
+        const company = await prisma.mainCompanyProfile.update({ where: { id: req.params.id as string }, data: req.body });
+        res.json(company);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.delete('/main-companies/:id', async (req: Request, res: Response) => {
+    try {
+        await prisma.mainCompanyProfile.delete({ where: { id: req.params.id as string } });
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // New endpoint for standalone attachment content (Card Attachments)
 router.get('/attachments/:id/content', async (req: Request, res: Response) => {
     try {
