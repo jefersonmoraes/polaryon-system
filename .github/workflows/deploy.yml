@@ -22,4 +22,33 @@ jobs:
             cd /var/www/polaryon
             git fetch origin main
             git reset --hard origin/main
+            mkdir -p public/download
             bash -l vps-deploy.sh
+
+  build-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build Electron App
+        run: npm run electron:build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Installer to VPS
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME || 'root' }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "dist_desktop/Polaryon-Setup.exe"
+          target: "/var/www/polaryon/public/download/"
+          strip_components: 1

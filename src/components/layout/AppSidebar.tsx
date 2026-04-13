@@ -6,7 +6,7 @@ import { useSidebarLinkStore } from '@/store/sidebar-link-store';
 import { useConnectionStore, ConnectionFolder } from '@/store/connection-store';
 import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp, Radar } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp, Radar, MonitorDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Database } from 'lucide-react';
@@ -415,6 +415,20 @@ const AppSidebar = () => {
             </>
           )
         }
+
+        {/* DOWNLOAD DESKTOP APP BUTTON */}
+        <div className={`mt-2 border-t border-sidebar-border/30 pt-4 px-3 mb-2`}>
+          <a 
+            href="/download/Polaryon-Setup.exe" 
+            download
+            className={`flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all border border-emerald-500/20 group`}
+            title="Instalar Robô no PC"
+          >
+            <MonitorDown className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
+            {!isCollapsed && <span>INSTALAR NO MEU PC</span>}
+            {!isCollapsed && <Zap className="h-3 w-3 ml-auto animate-pulse" />}
+          </a>
+        </div>
 
         {currencyQuotes && (
           <div className={`mt-auto border-t border-sidebar-border/50 shrink-0 bg-sidebar-accent/10 ${isCollapsed ? 'p-2 py-4 flex flex-col items-center gap-3' : 'p-4'}`}>

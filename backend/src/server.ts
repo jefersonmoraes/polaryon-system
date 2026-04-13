@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
+import path from 'path';
 import { PORT } from './config';
 import { prisma } from './lib/prisma';
 
@@ -110,6 +111,9 @@ app.get('/api/health', async (req: Request, res: Response) => {
         res.status(500).json({ status: 'ERROR', message: 'API is running but DB is disconnected.' });
     }
 });
+
+// DOWNLOADS ROUTE (Desktop App Installer)
+app.use('/download', express.static(path.join(__dirname, '../../public/download')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
