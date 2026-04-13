@@ -48,6 +48,7 @@ const ConnectionPage = lazy(() => import("./pages/ConnectionPage"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const TransparencySearchPage = lazy(() => import("./pages/TransparencySearchPage"));
 const BiddingDashboardPage = lazy(() => import("./pages/BiddingDashboardPage"));
+const RadarScannerPage = lazy(() => import("./pages/RadarScannerPage"));
 const TrashPage = lazy(() => import("./pages/TrashPage"));
 const BackupsPage = lazy(() => import("./pages/BackupsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -414,6 +415,7 @@ const AppContent = () => {
       <Route path="/board/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesDashboard /></ProtectedRoute>} />
       <Route path="/oportunidades/busca" element={<ProtectedRoute><OportunidadesSearch /></ProtectedRoute>} />
+      <Route path="/oportunidades/radar" element={<ProtectedRoute><RadarScannerPage /></ProtectedRoute>} />
       <Route path="/oportunidades/preditivo" element={<ProtectedRoute><InteligenciaPreditiva /></ProtectedRoute>} />
       <Route path="/robo-lances" element={<ProtectedRoute><BiddingDashboardPage /></ProtectedRoute>} />
       <Route path="/transparencia" element={<ProtectedRoute><TransparencySearchPage /></ProtectedRoute>} />

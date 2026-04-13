@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -55,6 +56,7 @@ interface ItemStrategy {
 
 export default function BiddingDashboardPage() {
     const { currentUser: authUser } = useAuthStore();
+    const [searchParams] = useSearchParams();
     
     const [uasg, setUasg] = useState('');
     const [numeroPregao, setNumeroPregao] = useState('');
@@ -146,10 +148,24 @@ export default function BiddingDashboardPage() {
                 }
             } catch (e) {
                 console.error("Failed to fetch credentials", e);
-            }
         };
         fetchCredentials();
     }, [authUser]);
+
+    // Radar Integration: Capture params from URL
+    useEffect(() => {
+        const uasgParam = searchParams.get('uasg');
+        const numeroParam = searchParams.get('numero');
+        const anoParam = searchParams.get('ano');
+
+        if (uasgParam) setUasg(uasgParam);
+        if (numeroParam) setNumeroPregao(numeroParam);
+        if (anoParam) setAnoPregao(anoParam);
+        
+        if (uasgParam && numeroParam) {
+            import('sonner').then(({ toast }) => toast.info("Dados do Radar carregados com sucesso."));
+        }
+    }, [searchParams]);
 
     const saveStrategy = async (itemId: string, strategy: ItemStrategy) => {
         if (!sessionId) return;

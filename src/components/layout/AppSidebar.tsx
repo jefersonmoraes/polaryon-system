@@ -6,7 +6,7 @@ import { useSidebarLinkStore } from '@/store/sidebar-link-store';
 import { useConnectionStore, ConnectionFolder } from '@/store/connection-store';
 import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp, Radar } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Database } from 'lucide-react';
@@ -315,6 +315,15 @@ const AppSidebar = () => {
 
                 <Link to="/oportunidades/busca" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/busca' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Busca Exata PNCP">
                   <Target className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Pesquisa no PNCP</span>}
+                </Link>
+
+                <Link to="/oportunidades/radar" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/radar' ? 'bg-emerald-500/10 text-emerald-600 font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Radar em Tempo Real">
+                  <Radar className={`h-4 w-4 shrink-0 ${location.pathname === '/oportunidades/radar' ? 'text-emerald-500 animate-pulse' : 'text-slate-400'}`} /> 
+                  {!isCollapsed && (
+                    <span className="flex items-center justify-between w-full">
+                      Radar PNCP <span className="text-[7px] bg-red-500 text-white px-1 rounded animate-pulse">LIVE</span>
+                    </span>
+                  )}
                 </Link>
 
                 <Link to="/oportunidades/preditivo" className={`flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${location.pathname === '/oportunidades/preditivo' ? 'bg-primary text-primary-foreground font-medium' : 'text-sidebar-foreground hover:bg-sidebar-accent'}`} title="Radar de Investimentos">

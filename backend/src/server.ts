@@ -31,10 +31,12 @@ import backupsRoutes from './routes/backups';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 import { initBackupCron } from './services/backup-service';
+import { PncpRadarService } from './services/pncp-radar-service';
 
 // Initialize Scheduled Tasks
 initComplianceCron();
 initBackupCron();
+PncpRadarService.getInstance().start();
 
 // Security and Parsing Middlewares
 app.use(compression());
