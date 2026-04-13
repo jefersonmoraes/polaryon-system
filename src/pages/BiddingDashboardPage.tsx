@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -48,6 +49,10 @@ export default function BiddingDashboardPage() {
     const [items, setItems] = useState<BiddingItem[]>([]);
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
     const [itemStrategies, setItemStrategies] = useState<Record<string, ItemStrategy>>({});
+    const [simulationMode, setSimulationMode] = useState(true);
+    const [credentials, setCredentials] = useState<any[]>([]);
+    const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
+    const [actionLogs, setActionLogs] = useState<any[]>([]);
 
     // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
@@ -103,13 +108,52 @@ export default function BiddingDashboardPage() {
         }
     };
 
+    useEffect(() => {
+        const fetchCredentials = async () => {
+            if (!authUser?.id) return;
+            try {
+                // Fetch profiles first to get companyId
+                const profileRes = await api.get('/accounting/profiles');
+                const defaultCompany = profileRes.data.find((p: any) => p.isDefault) || profileRes.data[0];
+                
+                if (defaultCompany) {
+                    const res = await api.get('/bidding/credentials', { params: { companyId: defaultCompany.id } });
+                    setCredentials(res.data.credentials || []);
+                    if (res.data.credentials?.length > 0) {
+                        setSelectedCredentialId(res.data.credentials[0].id);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch credentials", e);
+            }
+        };
+        fetchCredentials();
+    }, [authUser]);
+
     const saveStrategy = async (itemId: string, strategy: ItemStrategy) => {
         if (!sessionId) return;
         try {
-            await api.patch(`/bidding/sessions/${sessionId}/items/${itemId}`, strategy);
+            await api.patch(`/bidding/sessions/${sessionId}/items/${itemId}`, {
+                ...strategy,
+                simulationMode // Pass global simulation mode to item config
+            });
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
         } catch (error) {
             console.error("Failed to save strategy:", error);
+        }
+    };
+
+    // Toggle Simulation Mode for the whole session
+    const toggleSimulation = async (val: boolean) => {
+        setSimulationMode(val);
+        if (sessionId) {
+            try {
+                // Update first item or a special key to sync global simulation mode
+                await api.patch(`/bidding/sessions/${sessionId}/items/__global__`, { simulationMode: val });
+                import('sonner').then(({ toast }) => toast.info(`Modo ${val ? 'SIMULADO' : 'REAL'} ativado.`));
+            } catch (e) {
+                console.error("Failed to sync simulation mode", e);
+            }
         }
     };
 
@@ -118,13 +162,29 @@ export default function BiddingDashboardPage() {
 
         const handleUpdate = (data: any) => {
             setItems(data.items);
+            if (data.actions && data.actions.length > 0) {
+                setActionLogs(prev => [...data.actions, ...prev].slice(0, 50));
+            }
             setLastUpdate(new Date().toLocaleTimeString());
         };
 
+        const handleAlert = (alert: any) => {
+            import('sonner').then(({ toast }) => {
+                if (alert.critical) {
+                    toast.error(alert.message, { duration: 10000 });
+                    // Optional: Play alert sound here if allowed
+                } else {
+                    toast.warning(alert.message);
+                }
+            });
+        };
+
         socketService.on('biddingUpdate', handleUpdate);
+        socketService.on('bidding_alert', handleAlert);
 
         return () => {
             socketService.off('biddingUpdate', handleUpdate);
+            socketService.off('bidding_alert', handleAlert);
         };
     }, [socketService, sessionId, isListening]);
 
@@ -190,14 +250,49 @@ export default function BiddingDashboardPage() {
                             </div>
                         </div>
                         
+                        <div className="space-y-4 pt-2 border-t border-white/5 mt-4">
+                            <div className="flex items-center justify-between p-3 bg-slate-950/30 rounded-xl border border-white/5">
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-bold text-slate-300">MODO SIMULAÇÃO</Label>
+                                    <p className="text-[10px] text-slate-500">Não envia lances reais</p>
+                                </div>
+                                <Switch 
+                                    checked={simulationMode} 
+                                    onCheckedChange={toggleSimulation}
+                                    className="data-[state=checked]:bg-amber-500"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <Key className="w-3 h-3" /> Conta de Disputa (Certificado)
+                                </Label>
+                                <Select value={selectedCredentialId} onValueChange={setSelectedCredentialId} disabled={isListening}>
+                                    <SelectTrigger className="bg-slate-950/50 border-white/10 text-slate-100 h-11">
+                                        <SelectValue placeholder="Selecione um certificado..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
+                                        {credentials.map(c => (
+                                            <SelectItem key={c.id} value={c.id} className="text-xs font-medium">
+                                                {c.alias} ({c.cnpj})
+                                            </SelectItem>
+                                        ))}
+                                        {credentials.length === 0 && (
+                                            <SelectItem value="none" disabled>Nenhum certificado encontrado</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
                         <div className="pt-4">
                             {!isListening ? (
                                 <Button onClick={startRadar} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Play className="w-4 h-4 mr-2 fill-current"/> Ligar Radar
+                                    <Play className="w-4 h-4 mr-2 fill-current"/> ATIVAR ROBÔ
                                 </Button>
                             ) : (
                                 <Button onClick={stopRadar} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Square className="w-4 h-4 mr-2 fill-current"/> Desligar Radar
+                                    <Square className="w-4 h-4 mr-2 fill-current"/> PARAR OPERAÇÃO
                                 </Button>
                             )}
                         </div>
@@ -278,6 +373,39 @@ export default function BiddingDashboardPage() {
                                     );
                                 })}
                             </div>
+                        )}
+                    </CardContent>
+                {/* Action Logs Card */}
+                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-slate-100 text-lg">
+                            <History className="w-5 h-5 text-indigo-400"/> Histórico de Combate
+                        </CardTitle>
+                        <CardDescription className="text-slate-400">Últimas ações do robô.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-y-auto px-4 space-y-3 pb-6 custom-scrollbar">
+                        {actionLogs.length === 0 ? (
+                            <div className="text-center py-12 text-slate-600">
+                                <Activity className="w-8 h-8 mx-auto opacity-20 mb-2" />
+                                <p className="text-xs font-medium">Nenhuma ação registrada.</p>
+                            </div>
+                        ) : (
+                            actionLogs.map((log, idx) => (
+                                <div key={idx} className="p-3 bg-slate-950/50 rounded-xl border border-white/5 space-y-1.5 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
+                                            {log.type}
+                                        </span>
+                                        <span className="text-[9px] font-mono text-slate-500">
+                                            {new Date(log.timestamp).toLocaleTimeString()}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs font-bold text-slate-200">
+                                        ITEM {log.itemId} <span className="text-slate-400 font-medium">→</span> <span className="text-emerald-400">R$ {log.value.toFixed(2)}</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 italic">"{log.reason}"</p>
+                                </div>
+                            ))
                         )}
                     </CardContent>
                 </Card>

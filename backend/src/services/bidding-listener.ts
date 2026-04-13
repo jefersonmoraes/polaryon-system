@@ -41,10 +41,9 @@ export class BiddingListener {
                 // 1. Fetch current session to get strategy configs
                 const session = await prisma.biddingSession.findUnique({ where: { id: sessionId } });
                 const itemsConfig = (session?.itemsConfig as any) || {};
+                const simulationMode = itemsConfig.__global__?.simulationMode ?? itemsConfig.simulationMode ?? true;
 
                 // 2. BUSCA DADOS REAIS NO SERPRO (MODO PÚBLICO / TRANSPARÊNCIA)
-                // NOVO PADRÃO SERPRO (17 Dígitos): UASG(6) + Modalidade(2) + Sequencial(5) + Ano(4)
-                // Exemplo: 153978 + 06 (Dispensa) + 00006 + 2026 = 15397806000062026
                 const modalidade = '06'; // Dispensa Eletrônica
                 const paddedNum = String(numeroPregao).padStart(5, '0');
                 const ano = session?.anoPregao || '2026';
@@ -52,8 +51,6 @@ export class BiddingListener {
                 
                 const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
                 
-                console.log(`[PBE] Sincronizando (Novo Formato): ${publicApiUrl}`);
-
                 let realItems: any[] = [];
                 try {
                     const response = await axios.get(publicApiUrl, { 
@@ -65,8 +62,14 @@ export class BiddingListener {
                     });
                     
                     if (response.status === 204) {
-                         console.warn(`[PBE] Bloqueio hCaptcha Detectado (Status 204) na API de Transparência para ${idCompra}`);
-                         // A API retorna 204 quando a requisição não inclui o token captcha=? gerado pela interface
+                         console.warn(`[PBE] Bloqueio hCaptcha Detectado (Status 204) para ${idCompra}`);
+                         if (io) {
+                             io.to(`bidding_room_${sessionId}`).emit('bidding_alert', {
+                                 type: 'CAPTCHA_BLOCK',
+                                 message: 'Bloqueio de hCaptcha detectado pelo portal Gov.br. Intervenção necessária.',
+                                 critical: true
+                             });
+                         }
                     } else if (response.data && Array.isArray(response.data)) {
                         realItems = response.data.map((item: any) => ({
                             itemId: String(item.numeroItem || item.sequencial),
@@ -77,13 +80,22 @@ export class BiddingListener {
                         }));
                     }
                 } catch (apiErr: any) {
-                    console.error(`[PBE] Falha ao buscar dados oficiais (Transparência): ${apiErr.message}`);
+                    console.error(`[PBE] Falha na API: ${apiErr.message}`);
+                    if (io) {
+                        io.to(`bidding_room_${sessionId}`).emit('bidding_alert', {
+                            type: 'API_ERROR',
+                            message: `Erro na API do portal: ${apiErr.message}`,
+                            critical: false
+                        });
+                    }
                     return; 
                 }
 
                 if (realItems.length === 0) return;
 
-                // 3. Evaluate Strategies for each real item
+                // 3. Evaluate Strategies and Handle Simulation/Real Bidding
+                const executedActions: any[] = [];
+
                 realItems.forEach(item => {
                     const config: ItemStrategyConfig = itemsConfig[item.itemId] || {
                         mode: 'follower',
@@ -95,17 +107,42 @@ export class BiddingListener {
                     const decision = BiddingStrategyEngine.evaluate(item, config);
                     
                     if (decision.action === 'bid') {
-                        console.log(`[PBE] RECOMENDAÇÃO REAL: Item ${item.itemId} -> Lance de R$ ${decision.value} (${decision.reason})`);
+                        const actionLog = {
+                            itemId: item.itemId,
+                            value: decision.value,
+                            reason: decision.reason,
+                            type: simulationMode ? 'SIMULATED' : 'REAL',
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        executedActions.push(actionLog);
+
+                        if (simulationMode) {
+                            console.log(`[PBE] SIMULAÇÃO: Item ${item.itemId} -> Lance de R$ ${decision.value}`);
+                        } else {
+                            // REAL BIDDING LOGIC (Etapa 4.2)
+                            console.log(`[PBE] MODO REAL: Preparando disparo para Item ${item.itemId}`);
+                        }
                     }
                 });
                 
-                // Emite os dados REAIS para o front-end
+                // Emite os dados REAIS e as AÇÕES para o front-end
                 if (io) {
                     io.to(`bidding_room_${sessionId}`).emit('biddingUpdate', {
                         timestamp: new Date().toISOString(),
                         uasg,
                         numeroPregao,
-                        items: realItems
+                        items: realItems,
+                        actions: executedActions
+                    });
+                }
+                
+                // Salvar logs no banco se houver ações
+                if (executedActions.length > 0) {
+                    const existingLogs = (session?.logs as any[]) || [];
+                    await prisma.biddingSession.update({
+                        where: { id: sessionId },
+                        data: { logs: [...existingLogs, ...executedActions].slice(-50) } // Keep last 50
                     });
                 }
                 
