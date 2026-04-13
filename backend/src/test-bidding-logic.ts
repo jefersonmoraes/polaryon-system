@@ -31,7 +31,7 @@ function runInternalAudit() {
     ];
 
     testCases.forEach((t, i) => {
-        const decision = BiddingStrategyEngine.evaluate(t.item, t.config);
+        const decision = BiddingStrategyEngine.evaluate(t.item, t.config, Date.now());
         console.log(`\nCaso #${i+1}: ${t.expected}`);
         console.log(`Resultado: ${decision.action} | Valor: ${decision.value || 'N/A'} | Motivo: ${decision.reason}`);
         

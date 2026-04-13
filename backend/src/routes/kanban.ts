@@ -453,7 +453,7 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
             }
 
             // Budget-specific automations (stored in budget.automations)
-            const budgetSpecificAutomations = await prisma.budget.findMany({
+            const budgetSpecificAutomations = await (prisma.budget as any).findMany({
                 where: { cardId, automations: { not: 'JsonNull' } }
             });
             if (budgetSpecificAutomations.length > 0) {

@@ -96,7 +96,7 @@ export class BiddingListener {
                 if (chatCounter >= 3) {
                     chatCounter = 0;
                     try {
-                        const messages = await this.fetchChatMessages(session?.credentialId, idCompra);
+                        const messages = await BiddingListener.fetchChatMessages(session?.credentialId ?? undefined, idCompra);
                         if (messages && messages.length > 0 && io) {
                             io.to(`bidding_room_${sessionId}`).emit('biddingChat', { messages });
                             
@@ -112,7 +112,7 @@ export class BiddingListener {
                                 });
                             }
                         }
-                    } catch (chatErr) {
+                    } catch (chatErr: any) {
                         console.error(`[PBE] Falha ao buscar chat: ${chatErr.message}`);
                     }
                 }
@@ -163,7 +163,7 @@ export class BiddingListener {
                             actionLog.status = 'success';
                         } else if (session?.credentialId) {
                             try {
-                                await BiddingListener.executeRealBid(session.id, session.credentialId, item.itemId, decision.value);
+                                await BiddingListener.executeRealBid(session.id, session.credentialId, item.itemId, decision.value!);
                                 actionLog.status = 'success';
                             } catch (e: any) {
                                 actionLog.status = 'error';
@@ -297,7 +297,7 @@ export class BiddingListener {
             
             // Fallback para modo público se disponível (Geralmente não é para chat em tempo real)
             return [];
-        } catch (e) {
+        } catch (e: any) {
             console.error(`[PBE] Erro ao buscar mensagens: ${e.message}`);
             return [];
         }

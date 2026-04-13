@@ -8,7 +8,7 @@ export interface BiddingItem {
 }
 
 export interface ItemStrategyConfig {
-    mode: 'follower' | 'sniper' | 'cover';
+    mode: 'follower' | 'sniper' | 'cover' | 'shadow';
     minPrice: number;
     decrementValue: number;
     decrementType: 'fixed' | 'percent';
