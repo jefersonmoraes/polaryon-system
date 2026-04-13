@@ -2,6 +2,8 @@
   "name": "polaryon-system",
   "private": true,
   "version": "0.0.0",
+  "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
+  "author": "Polaryon Tecnologia",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -111,6 +113,7 @@
   "build": {
     "appId": "com.polaryon.system",
     "productName": "Polaryon",
+    "copyright": "Copyright © 2026 Polaryon Tecnologia",
     "directories": {
       "output": "dist_desktop"
     },
@@ -123,7 +126,8 @@
         "nsis"
       ],
       "icon": "public/favicon.ico",
-      "artifactName": "Polaryon-Setup.${ext}"
+      "artifactName": "Polaryon-Setup.${ext}",
+      "publisherName": "Polaryon Tecnologia"
     }
   }
 }

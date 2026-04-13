@@ -428,6 +428,11 @@ const AppSidebar = () => {
             {!isCollapsed && <span>INSTALAR NO MEU PC</span>}
             {!isCollapsed && <Zap className="h-3 w-3 ml-auto animate-pulse" />}
           </a>
+          {!isCollapsed && (
+            <p className="text-[9px] text-muted-foreground mt-2 px-1 leading-tight">
+              O Windows pode exibir um alerta de "risco". Clique em <span className="text-foreground font-semibold">Manter</span> para continuar.
+            </p>
+          )}
         </div>
 
         {currencyQuotes && (
