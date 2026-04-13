@@ -5,7 +5,7 @@
   "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
   "author": "Polaryon Tecnologia",
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
@@ -119,7 +119,7 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*.cjs"
     ],
     "win": {
       "target": [

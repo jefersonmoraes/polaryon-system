@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
-const BiddingRunner = require('./bidding-runner');
+const BiddingRunner = require('./bidding-runner.cjs');
 
 let biddingRunner;
 
@@ -12,7 +12,7 @@ function createWindow() {
     title: "Polaryon - Robô de Lances",
     icon: path.join(__dirname, '../public/favicon.ico'), // Fallback icon
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
     },
