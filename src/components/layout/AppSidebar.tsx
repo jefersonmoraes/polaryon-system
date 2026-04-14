@@ -6,7 +6,7 @@ import { useSidebarLinkStore } from '@/store/sidebar-link-store';
 import { useConnectionStore, ConnectionFolder } from '@/store/connection-store';
 import SidebarLinkDialog from './SidebarLinkDialog';
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp, Radar, MonitorDown, Monitor } from 'lucide-react';
+import { FolderOpen, Plus, ChevronRight, ChevronLeft, LayoutGrid, Calendar, Users, Building2, Truck, Briefcase, MapPin, Calculator, FileText, PiggyBank, LayoutDashboard, FileBarChart, ArrowLeftRight, Activity, ShieldAlert, Target, Trash2, Star, MoreVertical, Edit2, FolderPlus, Zap, TrendingUp, Radar, MonitorDown, Monitor, Shield } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Database } from 'lucide-react';
@@ -416,7 +416,6 @@ const AppSidebar = () => {
           )
         }
 
-        {/* DESKTOP APP CENTRAL */}
         <div className={`mt-2 border-t border-sidebar-border/30 pt-4 px-3 mb-2`}>
           {!isCollapsed && <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2">Desktop Bot</h3>}
           <Link
@@ -426,7 +425,20 @@ const AppSidebar = () => {
           >
             <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
             {!isCollapsed && <span>CENTRAL DO BOT</span>}
-            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.0.3</div>}
+            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.0.4</div>}
+          </Link>
+        </div>
+
+        {/* SEGURANÇA E CREDENCIAIS */}
+        <div className={`mt-0 border-t border-sidebar-border/30 pt-4 px-3 mb-4`}>
+          {!isCollapsed && <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2">Segurança</h3>}
+          <Link
+            to="/seguranca/cofre"
+            className={`flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-semibold hover:bg-emerald-500/10 hover:text-emerald-500 transition-all group ${location.pathname === '/seguranca/cofre' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'text-sidebar-foreground'}`}
+            title="Cofre de Certificados"
+          >
+            <Shield className={`h-4 w-4 shrink-0 group-hover:rotate-12 transition-transform`} /> 
+            {!isCollapsed && <span>COFRE DE CERTIFICADOS</span>}
           </Link>
         </div>
 

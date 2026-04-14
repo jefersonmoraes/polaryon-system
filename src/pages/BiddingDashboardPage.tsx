@@ -19,6 +19,9 @@ import { Label } from '../components/ui/label';
 import { socketService } from '@/lib/socket';
 import { useAuthStore } from '../store/auth-store';
 import api from '@/lib/api';
+import { useVaultStore } from '@/store/vault-store';
+import { useKanbanStore } from '@/store/kanban-store';
+import { Link } from 'react-router-dom';
 import { 
     Dialog, 
     DialogContent, 
@@ -68,7 +71,7 @@ export default function BiddingDashboardPage() {
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
     const [itemStrategies, setItemStrategies] = useState<Record<string, ItemStrategy>>({});
     const [simulationMode, setSimulationMode] = useState(true);
-    const [credentials, setCredentials] = useState<any[]>([]);
+    const { credentials, fetchCredentials: fetchVaultCredentials } = useVaultStore();
     const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
     const [actionLogs, setActionLogs] = useState<any[]>([]);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -183,26 +186,26 @@ export default function BiddingDashboardPage() {
     };
 
     useEffect(() => {
-        const fetchCredentials = async () => {
-            if (!authUser?.id) return;
+        const syncVault = async () => {
             try {
-                // Fetch profiles first to get companyId
                 const profileRes = await api.get('/kanban/main-companies');
                 const defaultCompany = profileRes.data.find((p: any) => p.isDefault) || profileRes.data[0];
-                
                 if (defaultCompany) {
-                    const res = await api.get('/bidding/credentials', { params: { companyId: defaultCompany.id } });
-                    setCredentials(res.data.credentials || []);
-                    if (res.data.credentials?.length > 0) {
-                        setSelectedCredentialId(res.data.credentials[0].id);
-                    }
+                    await fetchVaultCredentials(defaultCompany.id);
                 }
             } catch (e) {
-                console.error("Failed to fetch credentials", e);
+                console.error("Failed to sync vault", e);
             }
         };
-        fetchCredentials();
-    }, [authUser]);
+        syncVault();
+    }, [fetchVaultCredentials]);
+
+    // Update selected credential if none selected
+    useEffect(() => {
+        if (credentials.length > 0 && !selectedCredentialId) {
+            setSelectedCredentialId(credentials[0].id);
+        }
+    }, [credentials, selectedCredentialId]);
 
     // Radar Integration: Capture params from URL
     // Radar Integration: Capture params from URL
@@ -516,14 +519,21 @@ export default function BiddingDashboardPage() {
                                         <SelectValue placeholder="Selecione um certificado..." />
                                     </SelectTrigger>
                                     <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
+                                        {credentials.length === 0 && (
+                                            <div className="p-4 text-center">
+                                                <p className="text-[10px] text-slate-500 mb-2">Sem certificados cadastrados</p>
+                                                <Link to="/seguranca/cofre">
+                                                    <Button size="sm" className="w-full text-[10px] h-7 bg-emerald-600 hover:bg-emerald-500">
+                                                        CONFIGURAR COFRE
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        )}
                                         {credentials.map(c => (
                                             <SelectItem key={c.id} value={c.id} className="text-xs font-medium">
                                                 {c.alias} ({c.cnpj})
                                             </SelectItem>
                                         ))}
-                                        {credentials.length === 0 && (
-                                            <SelectItem value="none" disabled>Nenhum certificado encontrado</SelectItem>
-                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>

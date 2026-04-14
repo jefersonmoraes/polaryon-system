@@ -53,6 +53,7 @@ const RadarScannerPage = lazy(() => import("./pages/RadarScannerPage"));
 const TrashPage = lazy(() => import("./pages/TrashPage"));
 const BackupsPage = lazy(() => import("./pages/BackupsPage"));
 const DesktopDownloadPage = lazy(() => import("./pages/DesktopDownloadPage"));
+const SecretVaultPage = lazy(() => import("./pages/SecretVaultPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Heavy component split-out
@@ -440,6 +441,7 @@ const AppContent = () => {
       <Route path="/desktop" element={<ProtectedRoute><DesktopDownloadPage /></ProtectedRoute>} />
       <Route path="/lixeira" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
       <Route path="/conexao" element={<ProtectedRoute><ConnectionPage /></ProtectedRoute>} />
+      <Route path="/seguranca/cofre" element={<ProtectedRoute><SecretVaultPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
