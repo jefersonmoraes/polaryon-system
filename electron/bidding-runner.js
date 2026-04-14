@@ -1,5 +1,6 @@
 const axios = require('axios');
 const https = require('https');
+const { ipcMain } = require('electron');
 
 /**
  * BiddingRunner - Motor de Lances Local (Rodando no PC do Usuário)
@@ -67,8 +68,19 @@ class BiddingRunner {
                                     'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' 
                                 }
                             });
-                            if (chatRes.data) {
+                            if (chatRes.data && Array.isArray(chatRes.data)) {
                                 this.webContents.send('bidding-chat', { messages: chatRes.data });
+                                
+                                // Notificação de nova mensagem oficial
+                                const lastMsg = chatRes.data[0];
+                                const isOfficial = lastMsg?.tipo === 'OFICIAL' || lastMsg?.enviadoPeloPregoeiro;
+                                if (isOfficial && lastMsg.id !== this.lastChatId) {
+                                    this.lastChatId = lastMsg.id;
+                                    ipcMain.emit('show-notification', null, { 
+                                        title: 'Mensagem do Pregoeiro', 
+                                        body: lastMsg.texto.substring(0, 100) + '...' 
+                                    });
+                                }
                             }
                         } catch (e) {
                             // Silently fail chat polling if not authenticated
@@ -113,6 +125,25 @@ class BiddingRunner {
                             currentItem.ganhador = 'Você';
                         }
 
+                        // DETECÇÃO DE MUDANÇAS PARA NOTIFICAÇÕES
+                        const prevItem = (this.prevItemsState || {})[itemId];
+                        if (prevItem) {
+                            // 1. Perda de 1º lugar
+                            if (prevItem.ganhador === 'Você' && currentItem.ganhador !== 'Você') {
+                                ipcMain.emit('show-notification', null, { 
+                                    title: '🚨 Lance Superado!', 
+                                    body: `Você perdeu o 1º lugar no Item ${itemId}.` 
+                                });
+                            }
+                            // 2. Entrada em Iminente
+                            if (!prevItem.status.includes('IMINENTE') && currentItem.status.includes('IMINENTE')) {
+                                ipcMain.emit('show-notification', null, { 
+                                    title: '🎯 Fase Iminente!', 
+                                    body: `O Item ${itemId} entrou em fase iminente.` 
+                                });
+                            }
+                        }
+
                         items.push(currentItem);
 
                         const config = itemsConfig[itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
@@ -142,6 +173,9 @@ class BiddingRunner {
                             executedActions.push(actionLog);
                         }
                     }
+
+                    // Guardar estado atual para próxima comparação
+                    this.prevItemsState = items.reduce((acc, item) => ({ ...acc, [item.itemId]: item }), {});
 
                     // Enviar atualização para o Frontend
                     this.webContents.send('bidding-update', {

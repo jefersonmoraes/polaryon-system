@@ -249,14 +249,41 @@ export default function BiddingDashboardPage() {
             const restore = async () => {
                 const activeSessions = await (window as any).electronAPI.getRestoredSessions();
                 const sessionIds = Object.keys(activeSessions);
+                
                 if (sessionIds.length > 0) {
-                    toast.info(`Restaurando ${sessionIds.length} sessões ativas...`);
+                    toast.info(`Retomando ${sessionIds.length} sessões anteriores...`);
+                    
                     for (const id of sessionIds) {
                         const s = activeSessions[id];
-                        // Nota: Para modo real, o vault precisaria ser buscado novamente pois não persistimos o certificado
-                        // Mas para o Dashboard, mostramos que estão "reativando"
-                        setUasg(s.uasg);
-                        setNumeroPregao(s.numero);
+                        const credId = s.vault?.credentialId;
+
+                        if (credId) {
+                            try {
+                                const vaultRes = await api.get(`/bidding/credentials/${credId}/vault`);
+                                if (vaultRes.data.success) {
+                                    (window as any).electronAPI.startLocalBidding({
+                                        sessionId: id,
+                                        uasg: s.uasg,
+                                        numero: s.numero,
+                                        ano: s.ano || new Date().getFullYear().toString(),
+                                        vault: {
+                                            ...vaultRes.data.vault,
+                                            itemsConfig: s.vault.itemsConfig,
+                                            simulationMode: s.vault.simulationMode
+                                        }
+                                    });
+                                    
+                                    setUasg(s.uasg);
+                                    setNumeroPregao(s.numero);
+                                    setSessionId(id);
+                                    setIsLocalRunning(true);
+                                    setIsListening(true);
+                                    toast.success(`Sessão ${s.uasg} retomada com sucesso! ⚡`);
+                                }
+                            } catch (e) {
+                                console.error(`Failed to resume session ${id}`, e);
+                            }
+                        }
                     }
                 }
             };
