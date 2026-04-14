@@ -76,12 +76,26 @@ export default function DesktopDownloadPage() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-800">
+                                <div className="pt-4 border-t border-slate-800 space-y-4">
                                     <a href={downloadUrl} download>
                                         <Button className="w-full h-16 text-lg font-bold gap-3 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]">
                                             <Download className="h-5 w-5" /> BAIXAR INSTALADOR AGORA
                                         </Button>
                                     </a>
+                                    
+                                    <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex gap-3">
+                                        <Zap className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                                        <p className="text-[10px] text-slate-400 leading-snug">
+                                            <span className="text-emerald-500 font-bold uppercase">Auto-Update Ativo:</span> Se você já possui o Polaryon instalado, ele atualizará <span className="text-white">automaticamente</span> para a v{version} em instantes. Basta manter o app aberto.
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="p-2 rounded bg-amber-500/5 border border-amber-500/10 flex gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                        <p className="text-[9px] text-amber-500/70 leading-tight italic">
+                                            Nota: Após um lançamento, o instalador leva cerca de 8 minutos para ser gerado. Se o download falhar, aguarde um momento e tente novamente.
+                                        </p>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
