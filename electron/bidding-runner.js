@@ -29,6 +29,9 @@ class BiddingRunner {
         const paddedNum = String(numero).padStart(5, '0');
         const idCompra = `${uasg}06${paddedNum}${ano}`;
 
+        let chatCounter = 0;
+        let serverOffset = 0;
+
         const intervalId = setInterval(async () => {
             try {
                 // 1. Busca Itens (Modo Público)
@@ -38,45 +41,98 @@ class BiddingRunner {
                     headers: { 'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' }
                 });
 
+                // SYNC CLOCK (Header Date)
+                if (response.headers.date) {
+                    const serverTime = new Date(response.headers.date).getTime();
+                    serverOffset = serverTime - Date.now();
+                }
+
                 if (response.data && Array.isArray(response.data)) {
-                    const items = response.data.map(item => ({
-                        itemId: String(item.numeroItem || item.sequencial),
-                        valorAtual: item.melhorLance || item.valorEstimado || 0,
-                        ganhador: item.fase === 'DISPUTA' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
-                        status: item.situacao || item.fase || 'Aberto',
-                        descricao: item.descricao,
-                        tempoRestante: item.segundosParaEncerramento || -1
-                    }));
-
-                    // 2. BUSCAR CONFIGURAÇÕES ATUALIZADAS (Simulando o que o backend faz)
-                    // No Desktop, as configs vêm do "vault" ou de uma mensagem anterior.
-                    // Para simplificar, assumimos que o Runner recebeu as configs iniciais.
-                    const itemsConfig = vault.itemsConfig || {};
+                    // 2. BUSCAR RANKING REAL (Se estiver logado no modo real)
                     const simulationMode = vault.simulationMode ?? true;
-
+                    const itemsConfig = vault.itemsConfig || {};
                     const executedActions = [];
 
-                    for (const item of items) {
-                        const config = itemsConfig[item.itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
-                        
-                        // Lógica de Decisão (Cópia da BiddingStrategyEngine para evitar problemas de import)
-                        const decision = this.evaluateStrategy(item, config);
+                    // 3. MONITORAMENTO DE CHAT (A cada 5 ciclos = ~15s)
+                    chatCounter++;
+                    if (chatCounter >= 5) {
+                        chatCounter = 0;
+                        try {
+                            const token = await this.getLocalLoginToken(agent);
+                            const chatUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagens/api/v1/mensagens/compra/${idCompra}`;
+                            const chatRes = await axios.get(chatUrl, {
+                                httpsAgent: agent,
+                                headers: { 
+                                    'Authorization': `Bearer ${token}`,
+                                    'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' 
+                                }
+                            });
+                            if (chatRes.data) {
+                                this.webContents.send('bidding-chat', { messages: chatRes.data });
+                            }
+                        } catch (e) {
+                            // Silently fail chat polling if not authenticated
+                        }
+                    }
+
+                    const items = [];
+                    for (const item of response.data) {
+                        const itemId = String(item.numeroItem || item.sequencial);
+                        let myPosition = item.melhorLance === item.valorLanceProposta ? 1 : 0;
+
+                        // Se não estiver em 1º lugar e tiver certificado, tenta buscar ranking exato
+                        if (myPosition === 0 && !simulationMode) {
+                            try {
+                                const token = await this.getLocalLoginToken(agent);
+                                const rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${idCompra}/item/${itemId}`;
+                                const rankingRes = await axios.get(rankingUrl, {
+                                    httpsAgent: agent,
+                                    headers: { 
+                                        'Authorization': `Bearer ${token}`,
+                                        'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' 
+                                    }
+                                });
+                                if (rankingRes.data && Array.isArray(rankingRes.data)) {
+                                    const myBid = rankingRes.data.find(l => l.eMeuLance === true);
+                                    if (myBid) myPosition = (myBid.index || 0) + 1;
+                                }
+                            } catch (e) { /* ignore ranking error */ }
+                        }
+
+                        const currentItem = {
+                            itemId,
+                            valorAtual: item.melhorLance || item.valorEstimado || 0,
+                            ganhador: item.fase === 'DISPUTA' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
+                            status: item.situacao || item.fase || 'Aberto',
+                            descricao: item.descricao,
+                            tempoRestante: item.segundosParaEncerramento || -1,
+                            position: myPosition
+                        };
+
+                        if (item.melhorLance && item.melhorLance === item.meuUltimoLance) {
+                            currentItem.ganhador = 'Você';
+                        }
+
+                        items.push(currentItem);
+
+                        const config = itemsConfig[itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
+                        const decision = this.evaluateStrategy(currentItem, config);
                         
                         if (decision.action === 'bid') {
                             const actionLog = { 
-                                itemId: item.itemId, 
+                                itemId: itemId, 
                                 value: decision.value, 
                                 reason: decision.reason, 
                                 type: simulationMode ? 'SIMULATED' : 'REAL', 
                                 status: 'pending', 
-                                timestamp: new Date().toISOString() 
+                                timestamp: new Date(Date.now() + serverOffset).toISOString() 
                             };
                             
                             if (simulationMode) {
                                 actionLog.status = 'success';
                             } else {
                                 try {
-                                    await this.executeRealBid(idCompra, item.itemId, decision.value, agent);
+                                    await this.executeRealBid(idCompra, itemId, decision.value, agent);
                                     actionLog.status = 'success';
                                 } catch (e) {
                                     actionLog.status = 'error';
@@ -87,13 +143,14 @@ class BiddingRunner {
                         }
                     }
 
-                    // 3. Enviar atualização para o Frontend (React)
+                    // Enviar atualização para o Frontend
                     this.webContents.send('bidding-update', {
                         sessionId,
                         items,
                         actions: executedActions,
-                        timestamp: new Date().toISOString(),
-                        source: 'LOCAL'
+                        timestamp: new Date(Date.now() + serverOffset).toISOString(),
+                        source: 'LOCAL',
+                        serverOffset
                     });
                 }
             } catch (error) {
@@ -177,8 +234,15 @@ class BiddingRunner {
     evaluateStrategy(currentItem, config) {
         const { mode, minPrice, decrementValue, decrementType } = config;
         
-        if (currentItem.ganhador === 'Você') return { action: 'hold' };
-        if (currentItem.valorAtual <= minPrice) return { action: 'stop' };
+        // Se eu já sou o ganhador, não faço nada
+        if (currentItem.ganhador === 'Você') {
+            return { action: 'hold', reason: 'Já ganhando. Aguardando.' };
+        }
+
+        // Se o valor atual já está abaixo do meu mínimo, paro
+        if (currentItem.valorAtual <= minPrice) {
+            return { action: 'stop', reason: 'Preço mínimo atingido.' };
+        }
 
         let nextBid = 0;
         if (decrementType === 'fixed') {
@@ -190,19 +254,40 @@ class BiddingRunner {
         nextBid = Math.round(nextBid * 100) / 100;
         if (nextBid < minPrice) nextBid = minPrice;
 
+        const isImminente = currentItem.status?.toUpperCase().includes('IMINENTE') || 
+                           (currentItem.tempoRestante > 0 && currentItem.tempoRestante < 60);
+
         switch (mode) {
             case 'follower': 
-                return { action: 'bid', value: nextBid, reason: 'Seguindo concorrente (Local).' };
+                const followerReason = isImminente ? 'Seguindo concorrente (FASE IMINENTE - Local).' : 'Seguindo concorrente (Local).';
+                return { action: 'bid', value: nextBid, reason: followerReason };
+
             case 'cover':
                 return { action: 'bid', value: nextBid, reason: 'Cobertura ativa (Local).' };
+
             case 'sniper':
                 const timeLeft = currentItem.tempoRestante;
-                if (timeLeft > 0 && timeLeft <= 5) {
-                    return { action: 'bid', value: nextBid, reason: 'Sniper Local disparado.' };
+                const secondsToSnipe = 3; 
+
+                if (timeLeft > 0 && timeLeft <= secondsToSnipe) {
+                    return { action: 'bid', value: nextBid, reason: `Sniper Local disparado (T-${timeLeft}s).` };
                 }
-                return { action: 'hold' };
+                
+                if (isImminente && (timeLeft === -1 || timeLeft > secondsToSnipe)) {
+                    return { action: 'hold', reason: 'Sniper em prontidão (Fase Iminente Local).' };
+                }
+                
+                return { action: 'hold', reason: timeLeft > 0 ? `Sniper aguardando (T-${timeLeft}s)...` : 'Sniper aguardando (Local)...' };
+
+            case 'shadow':
+                // Tenta se manter em 2º lugar (na cola do 1º)
+                if (currentItem.position === 2) {
+                    return { action: 'hold', reason: 'Modo Sombra: Mantendo 2º lugar (Local).' };
+                }
+                return { action: 'bid', value: nextBid, reason: 'Modo Sombra: Buscando 2º lugar (Local).' };
+
             default:
-                return { action: 'hold' };
+                return { action: 'hold', reason: 'Sem estratégia definida.' };
         }
     }
 }

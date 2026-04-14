@@ -236,8 +236,31 @@ export default function BiddingDashboardPage() {
                 }
             };
             
+            const handleChat = (data: any) => {
+                if (data.messages) {
+                    setChatMessages(data.messages);
+                }
+            };
+            
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
-            (window as any).electronAPI.onBiddingError(handleError);
+            (window as any).electronAPI.onBiddingChat(handleChat);
+
+            // Reativar sessões se existirem no store local
+            const restore = async () => {
+                const activeSessions = await (window as any).electronAPI.getRestoredSessions();
+                const sessionIds = Object.keys(activeSessions);
+                if (sessionIds.length > 0) {
+                    toast.info(`Restaurando ${sessionIds.length} sessões ativas...`);
+                    for (const id of sessionIds) {
+                        const s = activeSessions[id];
+                        // Nota: Para modo real, o vault precisaria ser buscado novamente pois não persistimos o certificado
+                        // Mas para o Dashboard, mostramos que estão "reativando"
+                        setUasg(s.uasg);
+                        setNumeroPregao(s.numero);
+                    }
+                }
+            };
+            restore();
         }
     }, [isDesktop, sessionId]);
 

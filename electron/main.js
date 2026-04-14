@@ -3,6 +3,7 @@ const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const isDev = !app.isPackaged;
 const BiddingRunner = require('./bidding-runner');
+const sessionStore = require('./session-store');
 
 let biddingRunner;
 let mainWindow;
@@ -14,16 +15,15 @@ autoUpdater.autoInstallOnAppQuit = true;
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
-    width: 1280,
     height: 800,
     title: "Polaryon - Robô de Lances",
-    icon: path.join(__dirname, '../public/favicon.ico'), // Fallback icon
+    icon: path.join(__dirname, '../public/favicon.ico'), 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
-    backgroundColor: '#020817', // Match our design
+    backgroundColor: '#020817',
     autoHideMenuBar: true,
   });
 
@@ -76,19 +76,26 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault }) => {
   if (biddingRunner) {
     await biddingRunner.start(sessionId, uasg, numero, ano, vault);
+    sessionStore.save(biddingRunner.activeSessions);
   }
 });
 
 ipcMain.on('stop-local-bidding', (event, sessionId) => {
   if (biddingRunner) {
     biddingRunner.stop(sessionId);
+    sessionStore.save(biddingRunner.activeSessions);
   }
 });
 
 ipcMain.on('update-local-config', (event, { sessionId, config }) => {
   if (biddingRunner) {
     biddingRunner.updateConfig(sessionId, config);
+    sessionStore.save(biddingRunner.activeSessions);
   }
+});
+
+ipcMain.handle('get-restored-sessions', () => {
+  return sessionStore.load();
 });
 
 // AUTO-UPDATER EVENTS
