@@ -677,7 +677,6 @@ export default function BiddingDashboardPage() {
                                                     />
                                                 </div>
                                             </div>
-                                     </div>
                                         );
                                     })}
                                 </div>
