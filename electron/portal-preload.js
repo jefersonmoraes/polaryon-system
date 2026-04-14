@@ -8,6 +8,20 @@ let currentVault = {
     simulationMode: true,
     itemsConfig: {}
 };
+// Bidding Control Variables
+let isBiddingActive = false;
+let itemLimits = {}; // { "1": { price: 50.0, mode: 'follower' } }
+
+// Inject global functions for the panel inputs
+window.polaryonUpdateLimit = function(itemId, val) {
+    if (!itemLimits[itemId]) itemLimits[itemId] = { price: '', mode: 'follower' };
+    itemLimits[itemId].price = val;
+};
+window.polaryonUpdateMode = function(itemId, val) {
+    if (!itemLimits[itemId]) itemLimits[itemId] = { price: '', mode: 'follower' };
+    itemLimits[itemId].mode = val;
+};
+
 let mySessionId = null;
 let currentConfig = {
     uasg: '',
@@ -150,6 +164,38 @@ function scrapeDisputeRoom() {
         }
 
         if (items.length > 0) {
+            renderBiddingPanel(items);
+            
+            // Lógica Autônoma se Máquina Ativa
+            if (isBiddingActive) {
+                items.forEach(it => {
+                    const limit = itemLimits[it.itemId];
+                    if (!limit || !limit.price) return;
+                    
+                    // Converte string com vírgula para float
+                    const valLim = parseFloat(limit.price.replace(/\./g, '').replace(',', '.'));
+                    if (isNaN(valLim)) return;
+
+                    if (it.ganhador !== 'Você' && it.status === 'Disputa') {
+                        // Anti-flood rate limit global (3 segundos)
+                        if (Date.now() - (window.lastBidTime || 0) < 3000) return;
+                        
+                        let targetBid = it.valorAtual - 0.01; // decremento fixo de 1 centavo
+                        
+                        // Se for sniper, espera tempo, mas como não temos timer ainda, atira como follower mas no limite
+                        if (limit.mode === 'sniper') {
+                            // Sniper mode: drop directly to the minimum allowed if it beats the current
+                            targetBid = valLim; 
+                        }
+
+                        if (targetBid >= valLim && targetBid < it.valorAtual) {
+                            enviarLanceVisual(it.itemId, targetBid);
+                            window.lastBidTime = Date.now();
+                        }
+                    }
+                });
+            }
+            
             // Emite pro Electron Master atualizar a tela do Polaryon
             ipcRenderer.send('portal-update', {
                 sessionId: mySessionId,
@@ -193,3 +239,194 @@ ipcRenderer.on('update-config', (event, config) => {
     currentVault = config;
     console.log("[POLARYON] Estratégia atualizada no navegador injetado:", currentVault);
 });
+
+// -------------- FUNÇÕES DO PAINEL CIBERNÉTICO --------------
+function renderBiddingPanel(items) {
+    let panel = document.getElementById('polaryon-combat-panel');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'polaryon-combat-panel';
+        panel.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            max-height: 90vh;
+            background: rgba(11, 16, 30, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            z-index: 2147483647; /* MAX Z-INDEX */
+            display: flex;
+            flex-direction: column;
+            color: #fff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        `;
+        
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: 15px; border-bottom: 1px solid rgba(16,185,129,0.2); background: linear-gradient(90deg, rgba(16,185,129,0.1) 0%, rgba(0,0,0,0) 100%); font-weight: 800; display: flex; align-items: center; justify-content: space-between; cursor: move;';
+        header.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div id="polaryon-led" style="width:8px; height:8px; border-radius:50%; background:#eab308; box-shadow:0 0 10px #eab308;"></div>
+                <span style="letter-spacing: 1px;">MÁQUINA DE LANCES</span>
+            </div>
+            <div style="font-size:9px; opacity:0.5; border:1px solid rgba(255,255,255,0.2); padding:2px 4px; border-radius:3px;">V3.0</div>
+        `;
+        
+        const listContainer = document.createElement('div');
+        listContainer.id = 'polaryon-items-list';
+        listContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px;';
+        // Add scrollbar styling via injected style
+        const style = document.createElement('style');
+        style.innerHTML = `
+            #polaryon-items-list::-webkit-scrollbar { width: 5px; }
+            #polaryon-items-list::-webkit-scrollbar-track { background: transparent; }
+            #polaryon-items-list::-webkit-scrollbar-thumb { background: rgba(16,185,129,0.3); border-radius: 4px; }
+        `;
+        document.head.appendChild(style);
+        
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding: 15px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.4);';
+        
+        const startBtn = document.createElement('button');
+        startBtn.id = 'polaryon-combat-btn';
+        startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCES';
+        startBtn.style.cssText = 'width: 100%; padding: 14px; background: #10b981; color: #000; font-weight: 900; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; font-size: 12px; box-shadow: 0 0 20px rgba(16,185,129,0.3); letter-spacing: 0.5px;';
+        startBtn.onmouseover = () => { if(!isBiddingActive) startBtn.style.transform = 'scale(1.02)'; };
+        startBtn.onmouseout = () => { startBtn.style.transform = 'scale(1)'; };
+        startBtn.onclick = () => {
+            isBiddingActive = !isBiddingActive;
+            const led = document.getElementById('polaryon-led');
+            if (isBiddingActive) {
+                startBtn.innerText = '🛑 ABORTAR OPERAÇÃO AUTOMÁTICA';
+                startBtn.style.background = '#ef4444';
+                startBtn.style.color = '#fff';
+                startBtn.style.boxShadow = '0 0 20px rgba(239,68,68,0.4)';
+                if (led) { led.style.background = '#ef4444'; led.style.boxShadow = '0 0 10px #ef4444'; }
+            } else {
+                startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCES';
+                startBtn.style.background = '#10b981';
+                startBtn.style.color = '#000';
+                startBtn.style.boxShadow = '0 0 20px rgba(16,185,129,0.3)';
+                if (led) { led.style.background = '#eab308'; led.style.boxShadow = '0 0 10px #eab308'; }
+            }
+        };
+        
+        footer.appendChild(startBtn);
+        panel.appendChild(header);
+        panel.appendChild(listContainer);
+        panel.appendChild(footer);
+        document.body.appendChild(panel);
+    }
+    
+    // Update Items gracefully to avoid losing input focus
+    const list = document.getElementById('polaryon-items-list');
+    if (list) {
+        items.forEach(it => {
+            let itemDiv = document.getElementById('pol-item-' + it.itemId);
+            if (!itemDiv) {
+                // Monta o Card do Item pela primeira vez
+                itemDiv = document.createElement('div');
+                itemDiv.id = 'pol-item-' + it.itemId;
+                itemDiv.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: border-color 0.3s;';
+                
+                const limit = itemLimits[it.itemId] || { price: '', mode: 'follower' };
+                
+                itemDiv.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px; align-items:center;">
+                        <span style="font-size:11px; font-weight:800; color:rgba(255,255,255,0.9);">Item ${it.itemId}</span>
+                        <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                           <span id="pol-item-status-${it.itemId}" style="font-size:8px; padding:2px 4px; border-radius:3px; background:rgba(255,255,255,0.1); margin-bottom:2px; font-weight:bold; letter-spacing:0.5px;">${it.status.toUpperCase()}</span>
+                           <span id="pol-item-val-${it.itemId}" style="font-size:11px; font-weight:bold; color: #10b981;">R$ ${it.valorAtual.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap: 6px;">
+                        <div style="position:relative; flex:1;">
+                           <span style="position:absolute; left:6px; top:5px; font-size:10px; color:rgba(255,255,255,0.4); font-weight:bold;">R$</span>
+                           <input type="text" placeholder="Meu Limite Mínimo" value="${limit.price}" 
+                               onchange="window.polaryonUpdateLimit('${it.itemId}', this.value)"
+                               style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:6px 6px 6px 22px; color:#fff; font-size:11px; outline:none; font-weight:bold;" />
+                        </div>
+                        <select onchange="window.polaryonUpdateMode('${it.itemId}', this.value)"
+                            style="width: 85px; background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:4px; color:#10b981; font-size:10px; font-weight:bold; outline:none; cursor:pointer;">
+                            <option value="follower" ${limit.mode === 'follower' ? 'selected' : ''}>SEGUIDOR</option>
+                            <option value="sniper" ${limit.mode === 'sniper' ? 'selected' : ''}>SNIPER</option>
+                        </select>
+                    </div>
+                `;
+                list.appendChild(itemDiv);
+            } else {
+                // Atualiza apenas os valores visuais do span (sem tocar no input para o usuário não perder o foco)
+                const valSpan = document.getElementById('pol-item-val-' + it.itemId);
+                const statusSpan = document.getElementById('pol-item-status-' + it.itemId);
+                if (valSpan) valSpan.innerText = 'R$ ' + it.valorAtual.toFixed(2);
+                if (statusSpan) {
+                    statusSpan.innerText = it.status.toUpperCase();
+                    if (it.ganhador === 'Você') {
+                        statusSpan.style.background = 'rgba(16,185,129,0.2)';
+                        statusSpan.style.color = '#10b981';
+                        statusSpan.innerText = 'Ganhando';
+                    } else if (it.status === 'Disputa') {
+                        statusSpan.style.background = 'rgba(239,68,68,0.2)';
+                        statusSpan.style.color = '#ef4444';
+                        statusSpan.innerText = 'EM DISPUTA';
+                    } else {
+                        statusSpan.style.background = 'rgba(255,255,255,0.1)';
+                        statusSpan.style.color = '#fff';
+                    }
+                }
+// -------------- ROTINA DE DISPARO VISUAL --------------
+function enviarLanceVisual(itemId, valorStr) {
+    try {
+        const rows = Array.from(document.querySelectorAll('tr, div[class*="item"], div[class*="card"]'));
+        const itemRow = rows.find(r => r.innerText.includes('Item ' + itemId) || r.innerText.match(new RegExp(`^\\s*${itemId}\\s+`)));
+        
+        if (itemRow) {
+            // Acha todos os inputs texto dentro do Container do Item
+            const inputs = Array.from(itemRow.querySelectorAll('input[type="text"], input[class*="moeda"], input[class*="valor"]'));
+            // Remove inputs readonly ou desabilitados
+            const activeInputs = inputs.filter(i => !i.disabled && !i.readOnly);
+            
+            if (activeInputs.length > 0) {
+                const input = activeInputs[0];
+                const cleanValue = valorStr.toFixed(2).replace('.', ',');
+                
+                // Set the value via object property descriptor trick for React/Angular SPAs
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+                if (nativeInputValueSetter) {
+                    nativeInputValueSetter.call(input, cleanValue);
+                } else {
+                    input.value = cleanValue;
+                }
+                
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.dispatchEvent(new KeyboardEvent('keyup', {'key':'Enter'}));
+
+                // Find the submit button next to it
+                const buttons = Array.from(itemRow.querySelectorAll('button, input[type="button"], a[class*="btn"]'));
+                const submitBtn = buttons.find(b => b.innerText.toUpperCase().includes('LANCE') || b.innerText.toUpperCase().includes('ENVIAR') || b.title.toUpperCase().includes('LANCE'));
+                
+                if (submitBtn) {
+                    submitBtn.click();
+                    console.log(`[POLARYON COMBAT TACTICAL] Fire: Item ${itemId} -> R$ ${cleanValue}`);
+                    
+                    // Identifica Modal de Confirmação (Gov.br 14.133 frequentemente pergunta: "Deseja confirmar o lance?")
+                    setTimeout(() => {
+                        const confirmBtns = Array.from(document.querySelectorAll('button'));
+                        const btnConfirma = confirmBtns.find(b => b.innerText.toUpperCase() === 'CONFIRMAR' || b.innerText.toUpperCase() === 'SIM');
+                        if (btnConfirma) {
+                            btnConfirma.click();
+                            console.log(`[POLARYON COMBAT TACTICAL] Auto-Confirmação Clicada para Item ${itemId}`);
+                        }
+                    }, 500); // 500ms delay for modal to popup
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Polaryon Combat Error:", e);
+    }
+}

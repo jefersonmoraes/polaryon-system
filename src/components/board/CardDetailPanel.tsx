@@ -1697,10 +1697,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         <button 
                           onClick={() => { 
                             onClose(); 
-                            navigate(`/bidding?uasg=${uasg}&numero=${numero}&ano=${ano}&autoStart=true`); 
+                            window.location.href = `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`;
                           }} 
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-black shadow-[0_0_15px_rgba(5,150,105,0.4)] animate-pulse-alert hover:scale-105 transition-all shrink-0" 
-                          title="Iniciar Operação no Terminal de Lances"
+                          title="Iniciar Operação no Terminal de Lances de Mesa"
                         >
                           <Play className="h-3.5 w-3.5 fill-white" /> INICIAR LANCES
                         </button>

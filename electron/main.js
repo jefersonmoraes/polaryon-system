@@ -58,6 +58,64 @@ function createWindow() {
   }
 }
 
+// Configuração de Deep Linking
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('polaryon', process.execPath, [path.resolve(process.argv[1])])
+  }
+} else {
+  app.setAsDefaultProtocolClient('polaryon')
+}
+
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Alguém tentou abrir uma segunda instância (ex: clicou num link polaryon://)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+    
+    // Processa a URL vinda da linha de comando no Windows
+    const url = commandLine.pop();
+    handleDeepLink(url);
+  })
+}
+
+function handleDeepLink(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('polaryon://')) return;
+  
+  // url format: polaryon://combat?uasg=160001&numero=90001&ano=2026
+  try {
+    const rawUrl = url.replace('polaryon://', 'http://localhost/');
+    const parsedUrl = new URL(rawUrl);
+    const action = parsedUrl.pathname.replace('/', '');
+    
+    if (action === 'combat') {
+      const uasg = parsedUrl.searchParams.get('uasg');
+      const numero = parsedUrl.searchParams.get('numero');
+      const ano = parsedUrl.searchParams.get('ano');
+      
+      // Inicia combate diretamente
+      if (uasg && numero && mainWindow) {
+        // Usa sessionId fake/temporário para visual-only se não houver backend (ou podemos gerar um UUID)
+        const sessionId = require('crypto').randomUUID();
+        
+        if (!visualRunner) {
+            visualRunner = require('./visual-runner')(mainWindow.webContents);
+        }
+        
+        visualRunner.startVisualSession(sessionId, { uasg, numero, ano: ano || new Date().getFullYear().toString(), modality: '05', vault: {} });
+      }
+    }
+  } catch (e) {
+    console.error("Deep link parse error:", e);
+  }
+}
+
 app.whenReady().then(async () => {
   // Inicializa o Proxy Seguro para suporte a A1
   await secureProxy.start();
@@ -82,6 +140,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Handling macOS deep links
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
 });
 
 // IPC Handler for native notifications
