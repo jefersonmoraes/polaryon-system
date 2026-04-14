@@ -518,7 +518,6 @@ export default function BiddingDashboardPage() {
                                         <Button variant="ghost" size="sm" onClick={() => setSelectedItems(new Set())} className="text-xs text-slate-500">Cancelar</Button>
                                     </div>
                                 )}
-                                )}
 
                                 <div className="divide-y divide-white/5">
                                     {items.map(item => {
