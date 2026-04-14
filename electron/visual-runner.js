@@ -72,8 +72,11 @@ class VisualRunner {
         ipcMain.on('visual-focus', (event, sessionId) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window) {
+                if (session.window.isMinimized()) session.window.restore();
+                session.window.setAlwaysOnTop(true, 'screen-saver');
                 session.window.show();
                 session.window.focus();
+                session.window.setAlwaysOnTop(false);
             }
         });
 

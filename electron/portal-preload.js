@@ -72,36 +72,52 @@ function scrapeDisputeRoom() {
         const items = [];
         let hasItemsInDispute = false;
 
-        // EXEMPLO DE INJEÇÃO V3: Motor de Identificação de Precisão (Siga Pregão Style)
-        const rowSelector = 'mat-row, tr[role="row"], .br-item, .card-item';
+        // EXEMPLO DE INJEÇÃO V3: Motor de Identificação de Precisão (Dispensa 14.133 e Siga Pregão Style)
+        const rowSelector = 'mat-expansion-panel, mat-row, tr[role="row"], .br-item, .card-item';
         const itemCards = document.querySelectorAll(rowSelector); 
         
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
                 const text = card.innerText;
                 
-                // Critério de identificação de linha de item: deve ter "R$" e um número de item
-                if (text.includes('R$') && (text.includes('Item') || text.match(/^\d+/))) {
+                // Dispensa 14.133 layout: Has "Melhor valor" or "Meu valor" and an item number
+                const isDispensaItem = text.includes('Melhor valor') || text.includes('Meu valor') || text.includes('Valor final');
+                // General layout: Has "R$" and "Item"
+                const isGeneralItem = text.includes('R$') && (text.includes('Item') || text.match(/^\d+/));
+
+                if (isDispensaItem || isGeneralItem) {
                     const isDispute = text.toUpperCase().includes('EM DISPUTA') || 
                                      text.toUpperCase().includes('ABERTO') ||
                                      text.toUpperCase().includes('IMINÊNCIA');
 
                     if (isDispute) hasItemsInDispute = true;
                     
-                    // Regex mais poderosa para valores em Real (ex: 1.300,00)
-                    const matches = text.match(/R\$\s*([\d,.]+)/g);
                     let valorAtual = 0;
                     let meuValor = 0;
 
-                    if (matches && matches.length >= 1) {
-                         valorAtual = parseFloat(matches[0].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
-                         if (matches.length >= 2) {
-                            meuValor = parseFloat(matches[1].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
-                         }
+                    // Extração Dispensa 14.133 explícita
+                    if (isDispensaItem) {
+                        const melhorMatch = text.match(/Melhor valor[^\d]+([\d,.]+)/i);
+                        const meuMatch = text.match(/Meu valor[^\d]+([\d,.]+)/i);
+                        
+                        if (melhorMatch) valorAtual = parseFloat(melhorMatch[1].replace(/\./g, '').replace(',', '.'));
+                        if (meuMatch) meuValor = parseFloat(meuMatch[1].replace(/\./g, '').replace(',', '.'));
+                    } else {
+                        // Regex genérica
+                        const matches = text.match(/R\$\s*([\d,.]+)/g);
+                        if (matches && matches.length >= 1) {
+                             valorAtual = parseFloat(matches[0].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
+                             if (matches.length >= 2) {
+                                meuValor = parseFloat(matches[1].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
+                             }
+                        }
                     }
 
-                    // Extração de ID
-                    const idMatch = text.match(/(?:Item)\s*(\d+)/i) || text.match(/^(\d+)/);
+                    // Se não achou nenhum valor limpo, ignora
+                    if (valorAtual === 0 && !text.includes('R$')) return;
+
+                    // Extração de ID - Pega o primeiro número antes de espaço ou descritivo
+                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i) || text.match(/^(\d+)/);
                     const itemId = idMatch ? idMatch[1] : "1";
 
                     const ganhador = text.toUpperCase().includes('MELHOR LANCE') || (meuValor > 0 && meuValor <= valorAtual) ? 'Você' : 'Outro';
@@ -111,7 +127,7 @@ function scrapeDisputeRoom() {
                         valorAtual: valorAtual,
                         meuValor: meuValor,
                         ganhador: ganhador,
-                        status: isDispute ? 'Disputa' : 'Aguardando',
+                        status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
                         tempoRestante: -1, 
                         position: ganhador === 'Você' ? 1 : 0
                     });
