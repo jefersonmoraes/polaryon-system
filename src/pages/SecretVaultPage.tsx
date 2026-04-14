@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function SecretVaultPage() {
     const { credentials, isLoading, fetchCredentials, addCredential, deleteCredential } = useVaultStore();
-    const { companies, fetchCompanies } = useKanbanStore();
+    const { mainCompanies, fetchMainCompanyProfiles } = useKanbanStore();
     const { currentUser } = useAuthStore();
     
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -26,17 +26,17 @@ export default function SecretVaultPage() {
     const [file, setFile] = useState<File | null>(null);
 
     useEffect(() => {
-        fetchCompanies();
-    }, [fetchCompanies]);
+        fetchMainCompanyProfiles();
+    }, [fetchMainCompanyProfiles]);
 
     useEffect(() => {
-        // Assume first company as default or fetch all if companyId is known
-        const mainCompany = companies.find(c => c.type === 'Fornecedor') || companies[0];
+        // Assume first ADM as default
+        const mainCompany = mainCompanies.find(c => c.isDefault) || mainCompanies[0];
         if (mainCompany) {
             setCompanyId(mainCompany.id);
             fetchCredentials(mainCompany.id);
         }
-    }, [companies, fetchCredentials]);
+    }, [mainCompanies, fetchCredentials]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -130,7 +130,7 @@ export default function SecretVaultPage() {
                                             <SelectValue placeholder="Selecione a empresa" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-white/10 text-white">
-                                            {companies.map(c => (
+                                            {mainCompanies.map(c => (
                                                 <SelectItem key={c.id} value={c.id}>
                                                     {c.nome_fantasia || c.razao_social} ({c.cnpj})
                                                 </SelectItem>
