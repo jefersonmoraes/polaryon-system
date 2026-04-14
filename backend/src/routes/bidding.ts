@@ -211,4 +211,34 @@ router.patch('/sessions/:id/items/bulk', requireAuth, async (req: AuthRequest | 
     }
 });
 
+// Update individual item strategy or global simulation mode
+router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id, itemId } = req.params;
+        const config = req.body;
+
+        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        const currentConfig = (session.itemsConfig as any) || {};
+        
+        // If itemId is __global__, we update the global sim mode
+        if (itemId === '__global__') {
+            currentConfig.__global__ = { ...(currentConfig.__global__ || {}), ...config };
+            // Also update the session status if needed or just sync
+        } else {
+            currentConfig[itemId] = { ...(currentConfig[itemId] || {}), ...config };
+        }
+
+        await prisma.biddingSession.update({
+            where: { id },
+            data: { itemsConfig: currentConfig }
+        });
+
+        res.json({ success: true, message: `Item ${itemId} updated successfully.` });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

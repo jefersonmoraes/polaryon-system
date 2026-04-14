@@ -309,6 +309,19 @@ export default function BiddingDashboardPage() {
                 simulationMode // Pass global simulation mode to item config
             });
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
+
+            // ⚡ NOTIFY LOCAL ENGINE (Real-time Config Sync)
+            if (isLocalRunning && (window as any).electronAPI) {
+                (window as any).electronAPI.updateLocalBiddingConfig({
+                    sessionId,
+                    config: {
+                        itemsConfig: {
+                            ...itemStrategies,
+                            [itemId]: strategy
+                        }
+                    }
+                });
+            }
         } catch (error) {
             console.error("Failed to save strategy:", error);
         }
@@ -319,11 +332,21 @@ export default function BiddingDashboardPage() {
         setSimulationMode(val);
         if (sessionId) {
             try {
-                // Update first item or a special key to sync global simulation mode
+                // Update special key to sync global simulation mode
                 await api.patch(`/bidding/sessions/${sessionId}/items/__global__`, { simulationMode: val });
+                
+                // ⚡ NOTIFY LOCAL ENGINE (Real-time Simulation Toggle)
+                if (isLocalRunning && (window as any).electronAPI) {
+                    (window as any).electronAPI.updateLocalBiddingConfig({
+                        sessionId,
+                        config: { simulationMode: val }
+                    });
+                }
+
                 import('sonner').then(({ toast }) => toast.info(`Modo ${val ? 'SIMULADO' : 'REAL'} ativado.`));
             } catch (e) {
                 console.error("Failed to sync simulation mode", e);
+                // import('sonner').then(({ toast }) => toast.error("Erro ao sincronizar modo de simulação."));
             }
         }
     };
