@@ -1687,32 +1687,43 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       </a>
                     )}
                   </div>
+                </div>
+              )}
+              
+              {/* COMBAT TERMINAL TRIGGER - ALWAYS VISIBLE */}
+              <div className="flex flex-wrap items-center gap-3 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                  <div className="flex-1 flex flex-col text-xs text-white/70">
+                      <strong className="text-emerald-500 font-bold uppercase tracking-widest text-[10px]">Polaryon Combat Terminal</strong>
+                      Acesse a máquina visual de automação de lances.
+                  </div>
                   {(() => {
-                    const parts = card.pncpId.split('-');
-                    if (parts.length >= 4) {
-                      const uasg = parts[0];
-                      const numero = parseInt(parts[2], 10).toString(); // remove leading zeros
-                      const ano = parts[3];
-                      return (
+                    let uasg = '', numero = '', ano = '';
+                    if (card.pncpId) {
+                        const parts = card.pncpId.split('-');
+                        if (parts.length >= 4) {
+                            uasg = parts[0];
+                            numero = parseInt(parts[2], 10).toString();
+                            ano = parts[3];
+                        }
+                    }
+                    return (
                         <button 
                           onClick={() => { 
                             onClose(); 
-                            window.location.href = `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`;
+                            if (uasg && numero && ano) {
+                                window.location.href = `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`;
+                            } else {
+                                window.location.href = `polaryon://combat`;
+                            }
                           }} 
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-black shadow-[0_0_15px_rgba(5,150,105,0.4)] animate-pulse-alert hover:scale-105 transition-all shrink-0" 
-                          title="Iniciar Operação no Terminal de Lances de Mesa"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded bg-emerald-600 text-white text-xs font-black shadow-[0_0_20px_rgba(5,150,105,0.6)] animate-pulse-alert hover:scale-105 transition-all shrink-0" 
+                          title="Ligar Motores e Iniciar Disputa"
                         >
-                          <Play className="h-3.5 w-3.5 fill-white" /> INICIAR LANCES
+                          <Play className="h-4 w-4 fill-white" /> LIGAR MÁQUINA DE LANCES (DESKTOP)
                         </button>
-                      );
-                    }
-                    return null;
+                    );
                   })()}
-                  <button onClick={() => { onClose(); navigate('/oportunidades/busca', { state: { openPncpId: card.pncpId } }); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0 shadow-sm" title="Abrir painel de busca do PNCP">
-                    <Building2 className="h-3.5 w-3.5" /> Explorador PNCP
-                  </button>
-                </div>
-              )}
+              </div>
 
               {/* Modular sections - reorderable */}
               <Reorder.Group axis="y" values={sectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} 
