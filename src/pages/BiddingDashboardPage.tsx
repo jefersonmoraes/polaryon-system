@@ -85,11 +85,14 @@ export default function BiddingDashboardPage() {
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
 
-    // TODO: In real app, fetch credentials dynamically
     const dummyCredentialId = 'simulated-credential-id';
 
-    const startRadar = async () => {
-        if (!uasg || !numeroPregao) {
+    const startRadar = async (overrideUasg?: string, overrideNum?: string, overrideAno?: string) => {
+        const targetUasg = overrideUasg || uasg;
+        const targetNum = overrideNum || numeroPregao;
+        const targetAno = overrideAno || anoPregao;
+
+        if (!targetUasg || !targetNum) {
             import('sonner').then(({ toast }) => toast.error("Preencha UASG e Nº do Pregão."));
             return;
         }
@@ -103,9 +106,9 @@ export default function BiddingDashboardPage() {
                 const res = await api.post('/bidding/sessions', {
                     credentialId: selectedCredentialId || dummyCredentialId,
                     portal: 'compras_gov',
-                    uasg,
-                    numeroPregao,
-                    anoPregao
+                    uasg: targetUasg,
+                    numeroPregao: targetNum,
+                    anoPregao: targetAno
                 });
 
                 if (res.data.success) {
@@ -116,9 +119,9 @@ export default function BiddingDashboardPage() {
                     if (isDesktop && (window as any).electronAPI) {
                         (window as any).electronAPI.startVisualBidding({
                             sessionId: session.id,
-                            uasg: uasg.trim(),
-                            numero: numeroPregao.trim(),
-                            ano: anoPregao.trim(),
+                            uasg: targetUasg.trim(),
+                            numero: targetNum.trim(),
+                            ano: targetAno.trim(),
                             vault: {
                                 simulationMode,
                                 itemsConfig: itemStrategies
@@ -140,9 +143,9 @@ export default function BiddingDashboardPage() {
             const res = await api.post('/bidding/sessions', {
                 credentialId: selectedCredentialId || dummyCredentialId,
                 portal: 'compras_gov',
-                uasg,
-                numeroPregao,
-                anoPregao
+                uasg: targetUasg,
+                numeroPregao: targetNum,
+                anoPregao: targetAno
             });
             
             const data = res.data;
@@ -224,13 +227,21 @@ export default function BiddingDashboardPage() {
         const uasgParam = searchParams.get('uasg');
         const numeroParam = searchParams.get('numero');
         const anoParam = searchParams.get('ano');
+        const autoStart = searchParams.get('autoStart') === 'true';
 
         if (uasgParam) setUasg(uasgParam);
         if (numeroParam) setNumeroPregao(numeroParam);
         if (anoParam) setAnoPregao(anoParam);
         
         if (uasgParam && numeroParam) {
-            import('sonner').then(({ toast }) => toast.info("Dados do Radar carregados com sucesso."));
+            if (autoStart && isDesktop) {
+                 import('sonner').then(({ toast }) => toast.success("Auto-Iniciando Máquina de Lances..."));
+                 setTimeout(() => {
+                     startRadar(uasgParam, numeroParam, anoParam || new Date().getFullYear().toString());
+                 }, 500);
+            } else {
+                 import('sonner').then(({ toast }) => toast.info("Dados do Radar carregados com sucesso."));
+            }
         }
     }, [searchParams]);
 

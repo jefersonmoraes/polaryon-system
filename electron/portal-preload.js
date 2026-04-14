@@ -27,13 +27,27 @@ function scrapeDisputeRoom() {
         const bodyText = document.body.innerText || "";
         
         // --- AUTOMAÇÃO DE LOGIN (GOV.BR) ---
-        if (bodyText.includes('Acesso Gov.br') || bodyText.includes('Identificação do Usuário')) {
-            // Tenta localizar o botão de Certificado Digital
-            const certButton = Array.from(document.querySelectorAll('button, a, div.button')).find(el => 
-                el.innerText.toUpperCase().includes('CERTIFICADO DIGITAL')
+        // Fase 1: Tela intermediária do Comprasnet ("Acesse sua Conta" -> "Entrar com Gov.br")
+        if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
+            const entrarBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
+                el.innerText.toUpperCase().includes('ENTRAR COM GOV.BR')
             );
+            if (entrarBtn) {
+                console.log("[POLARYON] Clicando em Entrar com Gov.br...");
+                entrarBtn.click();
+            }
+            return;
+        }
 
-            if (certButton) {
+        // Fase 2: Plataforma Gov.br (SSO)
+        if (bodyText.includes('Identifique-se no gov.br') || bodyText.includes('Acesso Gov.br') || bodyText.includes('Certificado digital')) {
+            // No gov.br, o botão costuma ser uma div/button contendo ícone de certificado
+            const certButton = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
+                const txt = (el.innerText || el.getAttribute('alt') || '').toUpperCase();
+                return txt.includes('CERTIFICADO DIGITAL') || txt === 'SEU CERTIFICADO DIGITAL';
+            });
+
+            if (certButton && typeof certButton.click === 'function') {
                 console.log("[POLARYON] Executando Login Automático via Certificado...");
                 certButton.click();
             }
@@ -41,7 +55,7 @@ function scrapeDisputeRoom() {
             ipcRenderer.send('portal-update', {
                 sessionId: mySessionId,
                 items: [],
-                statusMessage: "Autenticando via Certificado A1..."
+                statusMessage: "Autenticando no Gov.br via A1..."
             });
             return;
         }

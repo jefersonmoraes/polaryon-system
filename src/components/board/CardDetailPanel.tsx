@@ -1687,8 +1687,29 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       </a>
                     )}
                   </div>
+                  {(() => {
+                    const parts = card.pncpId.split('-');
+                    if (parts.length >= 4) {
+                      const uasg = parts[0];
+                      const numero = parseInt(parts[2], 10).toString(); // remove leading zeros
+                      const ano = parts[3];
+                      return (
+                        <button 
+                          onClick={() => { 
+                            onClose(); 
+                            navigate(`/bidding?uasg=${uasg}&numero=${numero}&ano=${ano}&autoStart=true`); 
+                          }} 
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-black shadow-[0_0_15px_rgba(5,150,105,0.4)] animate-pulse-alert hover:scale-105 transition-all shrink-0" 
+                          title="Iniciar Operação no Terminal de Lances"
+                        >
+                          <Play className="h-3.5 w-3.5 fill-white" /> INICIAR LANCES
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                   <button onClick={() => { onClose(); navigate('/oportunidades/busca', { state: { openPncpId: card.pncpId } }); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0 shadow-sm" title="Abrir painel de busca do PNCP">
-                    <Building2 className="h-3.5 w-3.5" /> Acessar Oportunidade no Sistema
+                    <Building2 className="h-3.5 w-3.5" /> Explorador PNCP
                   </button>
                 </div>
               )}
