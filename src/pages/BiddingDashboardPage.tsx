@@ -37,7 +37,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CertificateManager } from '@/components/terminal/CertificateManager';
 
