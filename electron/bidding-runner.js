@@ -16,7 +16,7 @@ class BiddingRunner {
     /**
      * Inicia o monitoramento de uma sala de disputa
      */
-    async start(sessionId, uasg, numero, ano, vault) {
+    async start(sessionId, uasg, numero, ano, vault, modality = '06') {
         if (this.activeSessions.has(sessionId)) return;
 
         console.log(`[LOCAL_RUNNER] Iniciando monitoramento para ${uasg}/${numero}-${ano}`);
@@ -28,7 +28,7 @@ class BiddingRunner {
         });
 
         const paddedNum = String(numero).padStart(5, '0');
-        const idCompra = `${uasg}06${paddedNum}${ano}`;
+        const idCompra = `${uasg}${modality}${paddedNum}${ano}`;
 
         let chatCounter = 0;
         let serverOffset = 0;
@@ -223,7 +223,7 @@ class BiddingRunner {
         };
 
         const timeoutId = setTimeout(runPolling, 1000);
-        this.activeSessions.set(sessionId, { timeoutId, uasg, numero, vault });
+        this.activeSessions.set(sessionId, { timeoutId, uasg, numero, vault, modality });
     }
 
     /**

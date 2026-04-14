@@ -73,6 +73,7 @@ export default function BiddingDashboardPage() {
     const [simulationMode, setSimulationMode] = useState(true);
     const { credentials, fetchCredentials: fetchVaultCredentials } = useVaultStore();
     const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
+    const [modality, setModality] = useState<string>('05'); // Default: 05 - Pregão
     const [actionLogs, setActionLogs] = useState<any[]>([]);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showRealModeWarning, setShowRealModeWarning] = useState(false);
@@ -117,10 +118,15 @@ export default function BiddingDashboardPage() {
                             if (vaultRes.data.success) {
                                 (window as any).electronAPI.startLocalBidding({
                                     sessionId: session.id,
-                                    uasg,
-                                    numero: numeroPregao,
-                                    ano: anoPregao,
-                                    vault: vaultRes.data.vault
+                                    uasg: uasg.trim(),
+                                    numero: numeroPregao.trim(),
+                                    ano: anoPregao.trim(),
+                                    vault: {
+                                        ...vaultRes.data.vault,
+                                        simulationMode,
+                                        itemsConfig: itemStrategies
+                                    },
+                                    modality
                                 });
                                 setIsLocalRunning(true);
                                 setIsListening(true);
@@ -466,11 +472,11 @@ export default function BiddingDashboardPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Nº Pregão</Label>
+                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Nº Pregão / Dispensa</Label>
                                 <Input 
                                     value={numeroPregao} 
                                     onChange={e => setNumeroPregao(e.target.value)} 
-                                    placeholder="Ex: 12" 
+                                    placeholder="Ex: 6" 
                                     disabled={isListening} 
                                     className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
                                 />
@@ -484,6 +490,22 @@ export default function BiddingDashboardPage() {
                                     className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Modalidade de Compra</Label>
+                            <Select value={modality} onValueChange={setModality} disabled={isListening}>
+                                <SelectTrigger className="bg-slate-950/50 border-white/10 text-slate-100 h-11">
+                                    <SelectValue placeholder="Selecione a modalidade" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-white/10 text-white">
+                                    <SelectItem value="05">PE - Pregão Eletrônico (05)</SelectItem>
+                                    <SelectItem value="06">DE - Dispensa Eletrônica (06 / Art. 75)</SelectItem>
+                                    <SelectItem value="01">CV - Convite (01)</SelectItem>
+                                    <SelectItem value="02">TP - Tomada de Preço (02)</SelectItem>
+                                    <SelectItem value="03">CC - Concorrência (03)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         
                         <div className="space-y-4 pt-2 border-t border-white/5 mt-4">

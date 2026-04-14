@@ -73,9 +73,9 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 });
 
 // LOCAL BIDDING IPC HANDLERS
-ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault }) => {
+ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault, modality }) => {
   if (biddingRunner) {
-    await biddingRunner.start(sessionId, uasg, numero, ano, vault);
+    await biddingRunner.start(sessionId, uasg, numero, ano, vault, modality);
     sessionStore.save(biddingRunner.activeSessions);
   }
 });
