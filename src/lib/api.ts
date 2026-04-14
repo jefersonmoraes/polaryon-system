@@ -1,9 +1,22 @@
 import axios from 'axios';
 
 // Create central Axios instance
-const isProd = import.meta.env.PROD;
+// Determine correctly the API URL to avoid 'file://' errors in Electron
+const getBaseURL = () => {
+    // If it's desktop, we MUST use the full production URL
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.isDesktop) {
+        return 'https://polaryon.com.br/api';
+    }
+    
+    if (import.meta.env.PROD) {
+        return '/api';
+    }
+    
+    return `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:3000/api`;
+};
+
 const api = axios.create({
-    baseURL: isProd ? '/api' : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:3000/api`,
+    baseURL: getBaseURL(),
     timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
