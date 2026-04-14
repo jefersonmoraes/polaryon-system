@@ -31,14 +31,13 @@ function createWindow() {
   biddingRunner = new BiddingRunner(mainWindow.webContents);
 
   // Decide what to load
-  const baseUrl = isDev 
-    ? 'http://localhost:5173' 
-    : 'https://polaryon.com.br';
-  
-  // FORCE DESKTOP TO LOAD ONLY THE ROBOT TERMINAL
-  const url = `${baseUrl}/robo-lances`;
-
-  mainWindow.loadURL(url);
+  if (isDev) {
+    // No dev, o terminal roda no servidor local do Vite
+    mainWindow.loadURL('http://localhost:5173/desktop.html');
+  } else {
+    // Em produção, carregamos os arquivos BUILIDADOS locais (Puro e Ultra-Leve)
+    mainWindow.loadFile(path.join(__dirname, '../dist/desktop.html'));
+  }
 
   // In Dev, open Developer Tools
   if (isDev) {
