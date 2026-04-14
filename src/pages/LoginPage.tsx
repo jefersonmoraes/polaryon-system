@@ -179,8 +179,11 @@ export default function LoginPage() {
                 .font-oswald { font-family: 'Oswald', sans-serif; }
             `}</style>
 
-            {/* Background Ambience */}
-            <div className="absolute inset-0 bg-[url('/polaryon_hero_bg_1774099790662.png')] bg-cover bg-center opacity-20 filter blur-sm scale-110" />
+            {/* Background Ambience - Premium Glow Fix */}
+            <div className="absolute inset-0 bg-[#020817]">
+                <div className="absolute inset-0 opacity-30 bg-grid-white/[0.02]" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 via-transparent to-blue-600/10" />
+            </div>
             <div className="absolute inset-0 bg-gradient-to-b from-black via-black/80 to-black/40" />
             
             <div className="absolute top-[20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[150px] rounded-full" />
@@ -261,23 +264,64 @@ export default function LoginPage() {
                             </label>
                         </div>
 
-                        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-                            <div className="relative group">
-                                {!isCaptchaValid && window.location.hostname !== 'localhost' && (
-                                    <div
-                                        className="absolute inset-0 z-20 cursor-not-allowed"
-                                        onClick={() => toast.error("Digite o código de segurança para liberar o acesso.")}
-                                    />
-                                )}
-                                <div className={!isCaptchaValid && window.location.hostname !== 'localhost' ? 'opacity-20 grayscale' : 'opacity-100'}>
-                                    <CustomGoogleLoginButton 
-                                        onSuccess={handleGoogleSuccess} 
-                                        onError={() => toast.error('Falha na conexão com Google.')}
-                                        disabled={!isCaptchaValid && window.location.hostname !== 'localhost'}
-                                    />
+                        {/* Autenticação - Filtro de Ambiente */}
+                        {window.electronAPI?.isDesktop ? (
+                            <div className="space-y-6 animate-in slide-in-from-bottom duration-700">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/40 block ml-2">
+                                        E-MAIL CORPORATIVO
+                                    </label>
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <Mail size={16} className="text-blue-600/50 group-focus-within:text-blue-600 transition-colors" />
+                                        </div>
+                                        <input 
+                                            type="email"
+                                            placeholder="seu@email.com"
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-anton tracking-widest outline-none focus:border-blue-600 transition-all placeholder:text-white/5"
+                                            autoComplete="email"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const email = (e.target as HTMLInputElement).value;
+                                                    if (email && isCaptchaValid) {
+                                                        const success = useAuthStore.getState().login(email, rememberMe);
+                                                        if (success) {
+                                                            toast.success("Acesso Terminal Autorizado!");
+                                                            navigate(from, { replace: true });
+                                                        } else {
+                                                            toast.error("Acesso não autorizado para este terminal.");
+                                                        }
+                                                    } else if (!isCaptchaValid) {
+                                                        toast.error("Resolva o desafio de segurança.");
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
                                 </div>
+                                <p className="text-[9px] text-white/20 text-center uppercase tracking-widest">
+                                    Pressione ENTER para validar acesso ao terminal
+                                </p>
                             </div>
-                        </GoogleOAuthProvider>
+                        ) : (
+                            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                                <div className="relative group">
+                                    {!isCaptchaValid && window.location.hostname !== 'localhost' && (
+                                        <div
+                                            className="absolute inset-0 z-20 cursor-not-allowed"
+                                            onClick={() => toast.error("Digite o código de segurança para liberar o acesso.")}
+                                        />
+                                    )}
+                                    <div className={!isCaptchaValid && window.location.hostname !== 'localhost' ? 'opacity-20 grayscale' : 'opacity-100'}>
+                                        <CustomGoogleLoginButton 
+                                            onSuccess={handleGoogleSuccess} 
+                                            onError={() => toast.error('Falha na conexão com Google.')}
+                                            disabled={!isCaptchaValid && window.location.hostname !== 'localhost'}
+                                        />
+                                    </div>
+                                </div>
+                            </GoogleOAuthProvider>
+                        )}
 
                         {["localhost", "127.0.0.1"].includes(window.location.hostname) && (
                             <button
