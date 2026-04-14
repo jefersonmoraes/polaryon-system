@@ -36,6 +36,8 @@ class BiddingRunner {
         const runPolling = async () => {
             if (!this.activeSessions.has(sessionId)) return;
 
+            try {
+
                 // 1. Busca Itens (Modo Público)
                 const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
                 const response = await axios.get(publicApiUrl, { 
@@ -214,7 +216,9 @@ class BiddingRunner {
                 console.error(`[LOCAL_RUNNER] Erro no polling: ${error.message}`);
                 this.webContents.send('bidding-error', { sessionId, error: error.message });
                 // Tenta novamente em 5s se houver erro de rede
-                this.activeSessions.get(sessionId).timeoutId = setTimeout(runPolling, 5000);
+                if (this.activeSessions.has(sessionId)) {
+                    this.activeSessions.get(sessionId).timeoutId = setTimeout(runPolling, 5000);
+                }
             }
         };
 
