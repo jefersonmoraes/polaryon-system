@@ -500,7 +500,8 @@ export default function BiddingDashboardPage() {
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-white/10 text-white">
                                     <SelectItem value="05">PE - Pregão Eletrônico (05)</SelectItem>
-                                    <SelectItem value="06">DE - Dispensa Eletrônica (06 / Art. 75)</SelectItem>
+                                    <SelectItem value="14">DE - Dispensa Eletrônica (Lei 14.133)</SelectItem>
+                                    <SelectItem value="06">DE - Dispensa Eletrônica (06 - Antiga Lei)</SelectItem>
                                     <SelectItem value="01">CV - Convite (01)</SelectItem>
                                     <SelectItem value="02">TP - Tomada de Preço (02)</SelectItem>
                                     <SelectItem value="03">CC - Concorrência (03)</SelectItem>
