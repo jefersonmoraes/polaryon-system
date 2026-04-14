@@ -37,8 +37,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/checkbox";
 import { toast } from "sonner";
+import { CertificateManager } from '@/components/terminal/CertificateManager';
 
 interface BiddingItem {
     itemId: string;
@@ -577,14 +578,16 @@ export default function BiddingDashboardPage() {
                             </div>
                         </div>
 
-                        <div className="pt-4">
+                        <div className="pt-4 space-y-4">
+                            {isDesktop && <CertificateManager />}
+                            
                             {!isListening ? (
                                 <Button onClick={startRadar} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Play className="w-4 h-4 mr-2 fill-current"/> ATIVAR ROBÔ
+                                    <Play className="w-4 h-4 mr-2 fill-current"/> INICIAR COMBATE
                                 </Button>
                             ) : (
                                 <Button onClick={stopRadar} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Square className="w-4 h-4 mr-2 fill-current"/> PARAR OPERAÇÃO
+                                    <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO
                                 </Button>
                             )}
                         </div>

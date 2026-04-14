@@ -54,7 +54,7 @@ class VisualRunner {
             win.webContents.send('init-session', { sessionId, config });
         });
 
-        win.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras');
+        win.loadURL('https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp');
     }
 
     stop(sessionId) {

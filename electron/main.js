@@ -4,6 +4,8 @@ const path = require('path');
 const isDev = !app.isPackaged;
 const BiddingRunner = require('./bidding-runner');
 const sessionStore = require('./session-store');
+const certHelper = require('./cert-helper');
+const secureProxy = require('./secure-proxy');
 
 let biddingRunner;
 let mainWindow;
@@ -56,8 +58,18 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Inicializa o Proxy Seguro para suporte a A1
+  await secureProxy.start();
+  
   createWindow();
+
+  // Habilita F12 Global para todas as janelas (Modo Debug Ativo)
+  const { globalShortcut } = require('electron');
+  globalShortcut.register('F12', () => {
+    const wins = BrowserWindow.getAllWindows();
+    wins.forEach(w => w.webContents.toggleDevTools());
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -103,11 +115,30 @@ ipcMain.on('update-local-config', (event, { sessionId, config }) => {
 const VisualRunner = require('./visual-runner');
 let visualRunner;
 
-ipcMain.on('start-visual-bidding', (event, { sessionId, uasg, numero, ano, vault, modality }) => {
+ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano, vault, modality }) => {
   if (!visualRunner) {
     visualRunner = new VisualRunner(mainWindow.webContents);
   }
+  
+  // Configura a sessão para usar o Proxy de MTLS se o certificado existir
+  if (certHelper.hasCertificate()) {
+    const ses = require('electron').session.fromPartition('persist:comprasgov');
+    await ses.setProxy({ 
+        proxyRules: secureProxy.getProxyUrl(),
+        proxyBypassRules: 'localhost, 127.0.0.1'
+    });
+  }
+
   visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
+});
+
+// GESTÃO DE CERTIFICADO A1
+ipcMain.handle('save-a1-certificate', async (event, { fileName, buffer, password }) => {
+  return certHelper.saveCertificate(fileName, Buffer.from(buffer), password);
+});
+
+ipcMain.handle('has-a1-certificate', () => {
+  return certHelper.hasCertificate();
 });
 
 ipcMain.on('stop-visual-bidding', (event, sessionId) => {
