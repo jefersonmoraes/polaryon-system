@@ -31,9 +31,12 @@ function createWindow() {
   biddingRunner = new BiddingRunner(mainWindow.webContents);
 
   // Decide what to load
-  const url = isDev 
+  const baseUrl = isDev 
     ? 'http://localhost:5173' 
     : 'https://polaryon.com.br';
+  
+  // FORCE DESKTOP TO LOAD ONLY THE ROBOT TERMINAL
+  const url = `${baseUrl}/robo-lances`;
 
   mainWindow.loadURL(url);
 
@@ -72,7 +75,7 @@ ipcMain.on('show-notification', (event, { title, body }) => {
   new Notification({ title, body }).show();
 });
 
-// LOCAL BIDDING IPC HANDLERS
+// LOCAL BIDDING IPC HANDLERS (Headless API - Deprecated for 14.133, kept for legacy)
 ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault, modality }) => {
   if (biddingRunner) {
     await biddingRunner.start(sessionId, uasg, numero, ano, vault, modality);
@@ -91,6 +94,23 @@ ipcMain.on('update-local-config', (event, { sessionId, config }) => {
   if (biddingRunner) {
     biddingRunner.updateConfig(sessionId, config);
     sessionStore.save(biddingRunner.activeSessions);
+  }
+});
+
+// VISUAL AUTOMATION IPC HANDLERS (Siga Pregão Mode)
+const VisualRunner = require('./visual-runner');
+let visualRunner;
+
+ipcMain.on('start-visual-bidding', (event, { sessionId, uasg, numero, ano, vault, modality }) => {
+  if (!visualRunner) {
+    visualRunner = new VisualRunner(mainWindow.webContents);
+  }
+  visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
+});
+
+ipcMain.on('stop-visual-bidding', (event, sessionId) => {
+  if (visualRunner) {
+    visualRunner.stop(sessionId);
   }
 });
 

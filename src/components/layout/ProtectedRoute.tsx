@@ -83,6 +83,26 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         return null;
     }
 
+    const isElectronDetect = typeof window !== 'undefined' && (!!(window as any).electronAPI?.isDesktop || navigator.userAgent.toLowerCase().includes('electron'));
+    const isElectron = isElectronDetect;
+
+    // Optional: Log once to help verify on the user's end
+    useEffect(() => {
+        if (isElectron) {
+            console.log('🛡️ POLARYON NATIVO: Modo Terminal Ativado');
+        }
+    }, [isElectron]);
+
+    if (isElectron) {
+        return (
+            <div className="h-screen flex flex-col overflow-hidden bg-[#020817] text-white">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar">
+                    {children}
+                </main>
+            </div>
+        );
+    }
+
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-background">
             <AppHeader />

@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showNotification: (payload) => ipcRenderer.send('show-notification', payload),
   startLocalBidding: (sessionData) => ipcRenderer.send('start-local-bidding', sessionData),
   stopLocalBidding: (sessionId) => ipcRenderer.send('stop-local-bidding', sessionId),
+  startVisualBidding: (sessionData) => ipcRenderer.send('start-visual-bidding', sessionData),
+  stopVisualBidding: (sessionId) => ipcRenderer.send('stop-visual-bidding', sessionId),
   updateLocalBiddingConfig: (sessionId, config) => ipcRenderer.send('update-local-config', { sessionId, config }),
   onBiddingUpdate: (callback) => ipcRenderer.on('bidding-update', (event, data) => callback(data)),
   onBiddingError: (callback) => ipcRenderer.on('bidding-error', (event, data) => callback(data)),

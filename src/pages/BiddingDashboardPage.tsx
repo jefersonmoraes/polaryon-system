@@ -111,35 +111,27 @@ export default function BiddingDashboardPage() {
                     const session = res.data.session;
                     setSessionId(session.id);
 
-                    // 2. Buscar Vault (Certificado decriptado para assinar localmente)
-                    if (selectedCredentialId && selectedCredentialId !== dummyCredentialId) {
-                        try {
-                            const vaultRes = await api.get(`/bidding/credentials/${selectedCredentialId}/vault`);
-                            if (vaultRes.data.success) {
-                                (window as any).electronAPI.startLocalBidding({
-                                    sessionId: session.id,
-                                    uasg: uasg.trim(),
-                                    numero: numeroPregao.trim(),
-                                    ano: anoPregao.trim(),
-                                    vault: {
-                                        ...vaultRes.data.vault,
-                                        simulationMode,
-                                        itemsConfig: itemStrategies
-                                    },
-                                    modality
-                                });
-                                setIsLocalRunning(true);
-                                setIsListening(true);
-                                toast.success("Radar LOCAL ativado via Desktop! 📡⚡");
-                                return;
-                            }
-                        } catch (e) {
-                            console.error("Failed to fetch vault for local usage", e);
-                        }
+                    // 2. Chamar o Motor Visual na versão Desktop
+                    if (isDesktop && (window as any).electronAPI) {
+                        (window as any).electronAPI.startVisualBidding({
+                            sessionId: session.id,
+                            uasg: uasg.trim(),
+                            numero: numeroPregao.trim(),
+                            ano: anoPregao.trim(),
+                            vault: {
+                                simulationMode,
+                                itemsConfig: itemStrategies
+                            },
+                            modality
+                        });
+                        setIsLocalRunning(true);
+                        setIsListening(true);
+                        toast.success("Modo Visual Ativado! Logue no Gov.br na nova janela. 👁️");
+                        return;
                     }
                     
                     // Fallback para modo nuvem se o vault falhar ou não houver credencial real
-                    toast.info("Iniciando via Nuvem (Backup)...");
+                    toast.info("Iniciando via Nuvem (Apenas leitura sem automação visual)...");
                 }
             }
 
@@ -177,7 +169,7 @@ export default function BiddingDashboardPage() {
         if (!sessionId) return;
         try {
             if (isLocalRunning && (window as any).electronAPI) {
-                (window as any).electronAPI.stopLocalBidding(sessionId);
+                (window as any).electronAPI.stopVisualBidding(sessionId);
                 setIsLocalRunning(false);
             } else {
                 await api.post(`/bidding/sessions/${sessionId}/stop`);
