@@ -4,6 +4,7 @@ import path from "path";
 
 // Configuração exclusiva para o Terminal Desktop (Otimizada para Robô)
 export default defineConfig({
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
