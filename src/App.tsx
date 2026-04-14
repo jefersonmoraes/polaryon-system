@@ -14,6 +14,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AppHeader from "@/components/layout/AppHeader";
 import AppSidebar from "@/components/layout/AppSidebar";
 import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
+import UpdateNotification from '@/components/layout/UpdateNotification';
 import api from '@/lib/api';
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -453,6 +454,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <ConnectionBanner />
+          <UpdateNotification />
           <AppContent />
         </BrowserRouter>
       </TooltipProvider>

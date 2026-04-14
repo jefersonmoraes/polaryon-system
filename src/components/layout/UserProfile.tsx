@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
-import { LogOut, ShieldAlert, RefreshCw } from 'lucide-react';
+import { LogOut, ShieldAlert, RefreshCw, Cpu } from 'lucide-react';
 import { toast } from 'sonner';
 import { socketService } from '@/lib/socket';
 
@@ -10,6 +10,13 @@ export default function UserProfile() {
     const { fetchKanbanData } = useKanbanStore();
     const [isOpen, setIsOpen] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [version, setVersion] = useState<string | null>(null);
+
+    useEffect(() => {
+        if ((window as any).electronAPI?.getAppVersion) {
+            (window as any).electronAPI.getAppVersion().then((v: string) => setVersion(v));
+        }
+    }, []);
 
     if (!currentUser) return null;
 
@@ -125,6 +132,15 @@ export default function UserProfile() {
                                 <LogOut className="w-4 h-4" />
                             </button>
                         </div>
+
+                        {/* App Version Footer (Desktop Only) */}
+                        {version && (
+                            <div className="px-3 py-2 bg-muted/50 border-t border-border flex items-center justify-center">
+                                <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest flex items-center gap-1.5 opacity-60">
+                                    <Cpu className="w-2.5 h-2.5" /> Polaryon Desktop v{version}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

@@ -1,12 +1,19 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const isDev = !app.isPackaged;
 const BiddingRunner = require('./bidding-runner');
 
 let biddingRunner;
+let mainWindow;
+
+// Configure autoUpdater
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
+    width: 1280,
     width: 1280,
     height: 800,
     title: "Polaryon - Robô de Lances",
@@ -21,22 +28,27 @@ function createWindow() {
   });
 
   // Initialize Bidding Runner
-  biddingRunner = new BiddingRunner(win.webContents);
+  biddingRunner = new BiddingRunner(mainWindow.webContents);
 
   // Decide what to load
   const url = isDev 
     ? 'http://localhost:5173' 
     : 'https://polaryon.com.br';
 
-  win.loadURL(url);
+  mainWindow.loadURL(url);
 
   // In Dev, open Developer Tools
   if (isDev) {
-    win.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
   }
 
   // Handle visual "Premium" touches
-  win.on('page-title-updated', (e) => e.preventDefault());
+  mainWindow.on('page-title-updated', (e) => e.preventDefault());
+
+  // Check for updates
+  if (!isDev) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
 }
 
 app.whenReady().then(() => {
@@ -71,4 +83,43 @@ ipcMain.on('stop-local-bidding', (event, sessionId) => {
   if (biddingRunner) {
     biddingRunner.stop(sessionId);
   }
+});
+
+ipcMain.on('update-local-config', (event, { sessionId, config }) => {
+  if (biddingRunner) {
+    biddingRunner.updateConfig(sessionId, config);
+  }
+});
+
+// AUTO-UPDATER EVENTS
+autoUpdater.on('checking-for-update', () => {
+  console.log('Checking for update...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  mainWindow.webContents.send('update-available', info);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  mainWindow.webContents.send('update-not-available', info);
+});
+
+autoUpdater.on('error', (err) => {
+  mainWindow.webContents.send('update-error', err.message);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  mainWindow.webContents.send('download-progress', progressObj);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  mainWindow.webContents.send('update-downloaded', info);
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
 });

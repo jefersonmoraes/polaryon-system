@@ -45,12 +45,53 @@ class BiddingRunner {
                         ganhador: item.fase === 'DISPUTA' ? 'Em Disputa' : (item.melhorLance ? 'Concorrente' : 'Aguardando'),
                         status: item.situacao || item.fase || 'Aberto',
                         descricao: item.descricao,
+                        tempoRestante: item.segundosParaEncerramento || -1
                     }));
 
-                    // 2. Enviar atualização para o Frontend (React)
+                    // 2. BUSCAR CONFIGURAÇÕES ATUALIZADAS (Simulando o que o backend faz)
+                    // No Desktop, as configs vêm do "vault" ou de uma mensagem anterior.
+                    // Para simplificar, assumimos que o Runner recebeu as configs iniciais.
+                    const itemsConfig = vault.itemsConfig || {};
+                    const simulationMode = vault.simulationMode ?? true;
+
+                    const executedActions = [];
+
+                    for (const item of items) {
+                        const config = itemsConfig[item.itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
+                        
+                        // Lógica de Decisão (Cópia da BiddingStrategyEngine para evitar problemas de import)
+                        const decision = this.evaluateStrategy(item, config);
+                        
+                        if (decision.action === 'bid') {
+                            const actionLog = { 
+                                itemId: item.itemId, 
+                                value: decision.value, 
+                                reason: decision.reason, 
+                                type: simulationMode ? 'SIMULATED' : 'REAL', 
+                                status: 'pending', 
+                                timestamp: new Date().toISOString() 
+                            };
+                            
+                            if (simulationMode) {
+                                actionLog.status = 'success';
+                            } else {
+                                try {
+                                    await this.executeRealBid(idCompra, item.itemId, decision.value, agent);
+                                    actionLog.status = 'success';
+                                } catch (e) {
+                                    actionLog.status = 'error';
+                                    actionLog.error = e.message;
+                                }
+                            }
+                            executedActions.push(actionLog);
+                        }
+                    }
+
+                    // 3. Enviar atualização para o Frontend (React)
                     this.webContents.send('bidding-update', {
                         sessionId,
                         items,
+                        actions: executedActions,
                         timestamp: new Date().toISOString(),
                         source: 'LOCAL'
                     });
@@ -76,15 +117,93 @@ class BiddingRunner {
         }
     }
 
-    async executeBid(sessionId, itemId, value) {
+    updateConfig(sessionId, config) {
         const session = this.activeSessions.get(sessionId);
-        if (!session) throw new Error('Sessão local não encontrada.');
+        if (session) {
+            session.vault = { ...session.vault, ...config };
+            console.log(`[LOCAL_RUNNER] Configuração atualizada para ${sessionId}`);
+        }
+    }
 
-        console.log(`[LOCAL_RUNNER] EXECUTANDO LANCE REAL: Item ${itemId} -> R$ ${value}`);
+    async executeRealBid(idCompra, itemId, value, agent) {
+        console.log(`[LOCAL_RUNNER] ENVIANDO LANCE REAL: Item ${itemId} -> R$ ${value}`);
         
-        // Aqui viria a lógica de POST para v1/lances usando o 'agent' mTLS
-        // Por enquanto, emitimos um log de sucesso para o frontend
-        return { success: true, value };
+        try {
+            // 1. LOGIN (mTLS) para obter JWT se necessário
+            // No Serpro, geralmente precisamos de um token. 
+            // Para simplificar no Desktop, podemos tentar o login a cada execução ou manter um cache.
+            const token = await this.getLocalLoginToken(agent);
+
+            const bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances';
+            await axios.post(bidUrl, {
+                sequencialItem: parseInt(itemId),
+                valorLance: value
+            }, {
+                httpsAgent: agent,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0'
+                }
+            });
+
+            return { success: true };
+        } catch (error) {
+            const msg = error.response?.data?.message || error.message;
+            throw new Error(msg);
+        }
+    }
+
+    async getLocalLoginToken(agent) {
+        // Cache simples no processo do Electron
+        if (this.lastToken && this.lastTokenExpiry > Date.now()) {
+            return this.lastToken;
+        }
+
+        const loginUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/login-certificado';
+        const response = await axios.post(loginUrl, {}, {
+            httpsAgent: agent,
+            headers: { 'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' }
+        });
+
+        if (response.data && response.data.token) {
+            this.lastToken = response.data.token;
+            this.lastTokenExpiry = Date.now() + 3600000; // 1h
+            return this.lastToken;
+        }
+        throw new Error("Falha na autenticação mTLS local.");
+    }
+
+    evaluateStrategy(currentItem, config) {
+        const { mode, minPrice, decrementValue, decrementType } = config;
+        
+        if (currentItem.ganhador === 'Você') return { action: 'hold' };
+        if (currentItem.valorAtual <= minPrice) return { action: 'stop' };
+
+        let nextBid = 0;
+        if (decrementType === 'fixed') {
+            nextBid = currentItem.valorAtual - decrementValue;
+        } else {
+            nextBid = currentItem.valorAtual * (1 - decrementValue / 100);
+        }
+
+        nextBid = Math.round(nextBid * 100) / 100;
+        if (nextBid < minPrice) nextBid = minPrice;
+
+        switch (mode) {
+            case 'follower': 
+                return { action: 'bid', value: nextBid, reason: 'Seguindo concorrente (Local).' };
+            case 'cover':
+                return { action: 'bid', value: nextBid, reason: 'Cobertura ativa (Local).' };
+            case 'sniper':
+                const timeLeft = currentItem.tempoRestante;
+                if (timeLeft > 0 && timeLeft <= 5) {
+                    return { action: 'bid', value: nextBid, reason: 'Sniper Local disparado.' };
+                }
+                return { action: 'hold' };
+            default:
+                return { action: 'hold' };
+        }
     }
 }
 

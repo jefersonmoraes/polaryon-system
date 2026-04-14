@@ -293,13 +293,13 @@ export default function BiddingDashboardPage() {
 
         const handleAlert = (alert: any) => {
             if (alert.type === 'BID_COVERED') {
-                const itemId = alert.message.match(/Item (\d+)/)?.[1];
-                if (itemId) {
-                    setCoveredItems(prev => new Set(prev).add(itemId));
+                const itemIdStr = alert.message.match(/Item (\d+)/)?.[1];
+                if (itemIdStr) {
+                    setCoveredItems(prev => new Set(prev).add(itemIdStr));
                     setTimeout(() => {
                         setCoveredItems(prev => {
                             const next = new Set(prev);
-                            next.delete(itemId);
+                            next.delete(itemIdStr);
                             return next;
                         });
                     }, 3000);
@@ -324,6 +324,28 @@ export default function BiddingDashboardPage() {
             socketService.off('bidding_alert', handleAlert);
         };
     }, [socketService, sessionId, isListening]);
+
+    const applyBulkStrategy = async (strategy: ItemStrategy) => {
+        if (!sessionId || selectedItems.size === 0) return;
+        try {
+            await api.patch(`/bidding/sessions/${sessionId}/items/bulk`, {
+                itemIds: Array.from(selectedItems),
+                config: strategy
+            });
+            
+            // Local state update
+            const newStrategies = { ...itemStrategies };
+            selectedItems.forEach(id => {
+                newStrategies[id] = strategy;
+            });
+            setItemStrategies(newStrategies);
+            setSelectedItems(new Set());
+            toast.success(`Estratégia aplicada a ${selectedItems.size} itens!`);
+        } catch (error) {
+            console.error("Failed to apply bulk strategy:", error);
+            toast.error("Erro ao aplicar estratégia em massa.");
+        }
+    };
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
@@ -481,25 +503,21 @@ export default function BiddingDashboardPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col h-full">
-                                {/* Bulk Actions Header */}
-                                {selectedItems.size > 0 && (
+                                                            {selectedItems.size > 0 && (
                                     <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
                                         <div className="flex items-center gap-3">
                                             <span className="text-xs font-black text-emerald-500">{selectedItems.size} ITENS SELECIONADOS</span>
-                                            <Button 
-                                                size="sm" 
-                                                variant="outline" 
-                                                className="h-7 text-[10px] font-black bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40"
-                                                onClick={() => {
-                                                    // TODO: Bulk apply modal
-                                                    toast.info("Ação em Massa iniciada...");
-                                                }}
-                                            >
-                                                APLICAR ESTRATÉGIA
-                                            </Button>
+                                            
+                                            <StrategyModal 
+                                                item={{ itemId: 'MASS' } as any}
+                                                initialStrategy={{ mode: 'follower', minPrice: 0.10, decrementValue: 0.05, decrementType: 'fixed' }}
+                                                onSave={applyBulkStrategy}
+                                                isBulk
+                                            />
                                         </div>
                                         <Button variant="ghost" size="sm" onClick={() => setSelectedItems(new Set())} className="text-xs text-slate-500">Cancelar</Button>
                                     </div>
+                                )}
                                 )}
 
                                 <div className="divide-y divide-white/5">
@@ -681,15 +699,25 @@ export default function BiddingDashboardPage() {
     );
 }
 
-function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, initialStrategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
+function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item: BiddingItem, initialStrategy: ItemStrategy, onSave: (s: ItemStrategy) => void, isBulk?: boolean }) {
     const [strategy, setStrategy] = useState<ItemStrategy>(initialStrategy);
 
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/10 transition-colors h-11 w-11 border border-white/5">
-                    <Settings2 className="w-5 h-5 text-slate-400" />
-                </Button>
+                {isBulk ? (
+                    <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-7 text-[10px] font-black bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40"
+                    >
+                        CONFIGURAR LOTE
+                    </Button>
+                ) : (
+                    <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/10 transition-colors h-11 w-11 border border-white/5">
+                        <Settings2 className="w-5 h-5 text-slate-400" />
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] bg-slate-900 border-white/10 text-slate-100">
                 <DialogHeader>
@@ -697,7 +725,7 @@ function StrategyModal({ item, initialStrategy, onSave }: { item: BiddingItem, i
                         <div className="p-2 bg-emerald-500/20 rounded-lg">
                             <Shield className="w-6 h-6 text-emerald-500" />
                         </div>
-                        ITEM {item.itemId}
+                        {isBulk ? 'ESTRATÉGIA EM MASSA' : `ITEM ${item.itemId}`}
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-6 py-6">

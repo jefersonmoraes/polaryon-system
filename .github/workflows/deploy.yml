@@ -46,7 +46,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: polaryon-installer
-          path: dist_desktop/*.exe
+          path: |
+            dist_desktop/*.exe
+            dist_desktop/latest.yml
           retention-days: 1
 
   upload-desktop:
@@ -66,6 +68,6 @@ jobs:
           username: ${{ secrets.VPS_USERNAME || 'root' }}
           password: ${{ secrets.VPS_PASSWORD }}
           port: 22
-          source: "*.exe"
+          source: "*.exe,latest.yml"
           target: "/var/www/polaryon/public/download/"
           strip_components: 0
