@@ -28,7 +28,10 @@ class BiddingRunner {
         });
 
         const paddedNum = String(numero).padStart(5, '0');
-        const idCompra = `${uasg}${modality}${paddedNum}${ano}`;
+        
+        // INTERNALLY MAP LEI 14133 (Frontend '14') TO SERPRO MODALITY '91'
+        const internalModality = modality === '14' ? '91' : modality;
+        const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
 
         let chatCounter = 0;
         let serverOffset = 0;
@@ -39,14 +42,9 @@ class BiddingRunner {
             try {
 
                 // 1. Busca Itens (Modo Público)
-                let publicApiUrl;
-                if (modality === '14') {
-                    // Nova Lei (Contratação Direta)
-                    publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa-contratacao-direta/public/v1/contratacoes/itens?uasgCod=${uasg}&numero=${numero}&ano=${ano}`;
-                } else {
-                    // Lei Antiga ou Pregão
-                    publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
-                }
+                // Usamos o endpoint padrão (fase-externa) pois o 'contratacao-direta'
+                // muitas vezes não retorna processos com sala de disputa (91/06)
+                const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
 
                 const response = await axios.get(publicApiUrl, { 
                     timeout: 5000,
@@ -73,12 +71,7 @@ class BiddingRunner {
                         chatCounter = 0;
                         try {
                             const token = await this.getLocalLoginToken(agent);
-                            let chatUrl;
-                            if (modality === '14') {
-                                chatUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagens/api/v1/mensagens/contratacao-direta?uasgCod=${uasg}&numero=${numero}&ano=${ano}`;
-                            } else {
-                                chatUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagens/api/v1/mensagens/compra/${idCompra}`;
-                            }
+                            const chatUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagens/api/v1/mensagens/compra/${idCompra}`;
 
                             const chatRes = await axios.get(chatUrl, {
                                 httpsAgent: agent,
@@ -121,12 +114,7 @@ class BiddingRunner {
                         if (myPosition === 0 && !simulationMode) {
                             try {
                                 const token = await this.getLocalLoginToken(agent);
-                                let rankingUrl;
-                                if (modality === '14') {
-                                    rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/contratacao-direta/item/${itemId}?uasgCod=${uasg}&numero=${numero}&ano=${ano}`;
-                                } else {
-                                    rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${idCompra}/item/${itemId}`;
-                                }
+                                const rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${idCompra}/item/${itemId}`;
                                 
                                 const rankingRes = await axios.get(rankingUrl, {
                                     httpsAgent: agent,
@@ -267,30 +255,16 @@ class BiddingRunner {
     }
 
     async executeRealBid({ idCompra, itemId, value, agent, modality, uasg, numero, ano }) {
-        console.log(`[LOCAL_RUNNER] ENVIANDO LANCE REAL: Item ${itemId} -> R$ ${value} (Modality: ${modality})`);
+        console.log(`[LOCAL_RUNNER] ENVIANDO LANCE REAL: Item ${itemId} -> R$ ${value}`);
         
         try {
             const token = await this.getLocalLoginToken(agent);
 
-            let bidUrl;
-            let payload;
-
-            if (modality === '14') {
-                bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/contratacao-direta';
-                payload = {
-                    uasgCod: parseInt(uasg),
-                    numero: parseInt(numero),
-                    ano: parseInt(ano),
-                    sequencialItem: parseInt(itemId),
-                    valorLance: value
-                };
-            } else {
-                bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances';
-                payload = {
-                    sequencialItem: parseInt(itemId),
-                    valorLance: value
-                };
-            }
+            const bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances';
+            const payload = {
+                sequencialItem: parseInt(itemId),
+                valorLance: value
+            };
 
             await axios.post(bidUrl, payload, {
                 httpsAgent: agent,
