@@ -184,6 +184,18 @@ export default function BiddingDashboardPage() {
         }
     };
 
+    const focusBiddingWindow = () => {
+        if (isDesktop && (window as any).electronAPI && sessionId) {
+            (window as any).electronAPI.focusVisualBidding(sessionId);
+        }
+    };
+
+    const navigateToRoom = () => {
+        if (isDesktop && (window as any).electronAPI && sessionId) {
+            (window as any).electronAPI.navigateVisualBidding(sessionId);
+        }
+    };
+
     useEffect(() => {
         const syncVault = async () => {
             try {
@@ -615,6 +627,14 @@ export default function BiddingDashboardPage() {
                             <div className="flex flex-col h-full">
                                                             {selectedItems.size > 0 && (
                                     <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={focusBiddingWindow} className="bg-slate-900 border-white/10 text-xs font-bold h-7">
+                                                <Target className="w-3 h-3 mr-1" /> FOCAR JANELA
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={navigateToRoom} className="bg-slate-900 border-white/10 text-xs font-bold h-7">
+                                                <RefreshCw className="w-3 h-3 mr-1" /> VOLTAR P/ SALA
+                                            </Button>
+                                        </div>
                                         <div className="flex items-center gap-3">
                                             <span className="text-xs font-black text-emerald-500">{selectedItems.size} ITENS SELECIONADOS</span>
                                             

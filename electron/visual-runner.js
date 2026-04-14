@@ -13,6 +13,8 @@ class VisualRunner {
                 this.dashboardWebContents.send('bidding-update', data);
             }
         });
+
+        this.setupIpc();
     }
 
     startVisualSession(sessionId, config) {
@@ -63,6 +65,24 @@ class VisualRunner {
             if (session.window) session.window.close();
             this.sessions.delete(sessionId);
         }
+    }
+
+    // --- NOVOS MÉTODOS PARA PARIDADE SIGA PREGÃO ---
+    setupIpc() {
+        ipcMain.on('visual-focus', (event, sessionId) => {
+            const session = this.sessions.get(sessionId);
+            if (session && session.window) {
+                session.window.show();
+                session.window.focus();
+            }
+        });
+
+        ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
+            const session = this.sessions.get(sessionId);
+            if (session && session.window) {
+                session.window.loadURL(url || 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp');
+            }
+        });
     }
 }
 

@@ -9,6 +9,12 @@ let currentVault = {
     itemsConfig: {}
 };
 let mySessionId = null;
+let currentConfig = {
+    uasg: '',
+    numero: '',
+    ano: '',
+    modality: '05'
+};
 
 /**
  * Esta função lê o HTML da página do Portal Comprasnet atual 
@@ -40,41 +46,74 @@ function scrapeDisputeRoom() {
             return;
         }
 
-        // Se encontrou a tabela ou lista de itens da Dispensa (Adapte a classe baseado no HTML da Serpro)
+        // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR) ---
+        if (bodyText.includes('Área de Trabalho do Fornecedor Brasileira') || bodyText.includes('redirecionado ao módulo de Dispensas')) {
+             // Tenta encontrar o link de "Compras" -> "Dispensa/Licitação Eletrônica"
+             const comprasLink = Array.from(document.querySelectorAll('a, button, .menu-item')).find(el => 
+                el.innerText.toUpperCase().includes('COMPRAS') || el.innerText.toUpperCase().includes('DISPENSA/LICITAÇÃO')
+             );
+             if (comprasLink) {
+                console.log("[POLARYON] Navegando para Módulo de Compras...");
+                comprasLink.click();
+             }
+             return;
+        }
+
+        // Se estiver na tela de busca de lances, tenta encontrar o pregão solicitado
+        if (bodyText.includes('Pesquisar') && bodyText.includes('Lances')) {
+            const uasgInput = document.querySelector('input[name="uasg"], #uasg');
+            if (uasgInput && currentConfig.uasg) {
+                // Preenche e busca se necessário (Lógica complexa de preenchimento de formulário legado)
+                // Por enquanto assumimos que o link virá via URL ou clique manual, 
+                // mas podemos automatizar o filtro aqui se necessário.
+            }
+        }
         // Esta é uma leitura genérica baseada nos elementos React/Angular do portal fase-externa
         const items = [];
         let hasItemsInDispute = false;
 
-        // EXEMPLO DE INJEÇÃO V2: Suporte ao novo layout Compras.gov.br (Angular/Material)
-        const itemCards = document.querySelectorAll('mat-card, .br-card, .item-container, tr[role="row"]'); 
+        // EXEMPLO DE INJEÇÃO V3: Motor de Identificação de Precisão (Siga Pregão Style)
+        const rowSelector = 'mat-row, tr[role="row"], .br-item, .card-item';
+        const itemCards = document.querySelectorAll(rowSelector); 
         
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
                 const text = card.innerText;
                 
-                // Ignora cabeçalhos
-                if (text.includes('Valor do Lance') || text.includes('Mínimo')) {
+                // Critério de identificação de linha de item: deve ter "R$" e um número de item
+                if (text.includes('R$') && (text.includes('Item') || text.match(/^\d+/))) {
                     const isDispute = text.toUpperCase().includes('EM DISPUTA') || 
-                                     text.toUpperCase().includes('DISPUTA ABERTA') ||
-                                     text.toUpperCase().includes('EM SELEÇÃO');
+                                     text.toUpperCase().includes('ABERTO') ||
+                                     text.toUpperCase().includes('IMINÊNCIA');
 
                     if (isDispute) hasItemsInDispute = true;
                     
-                    const valorMatch = text.match(/R\$\s*([\d,.]+)/);
-                    const valorAtual = valorMatch ? parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
+                    // Regex mais poderosa para valores em Real (ex: 1.300,00)
+                    const matches = text.match(/R\$\s*([\d,.]+)/g);
+                    let valorAtual = 0;
+                    let meuValor = 0;
 
-                    const idMatch = text.match(/Item\s*(\d+)/i);
-                    const itemId = idMatch ? `Item ${idMatch[1]}` : (card.getAttribute('id') || "Item Ativo");
+                    if (matches && matches.length >= 1) {
+                         valorAtual = parseFloat(matches[0].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
+                         if (matches.length >= 2) {
+                            meuValor = parseFloat(matches[1].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
+                         }
+                    }
 
-                    const ganhador = text.toUpperCase().includes('MELHOR LANCE') ? 'Você' : 'Outro';
+                    // Extração de ID
+                    const idMatch = text.match(/(?:Item)\s*(\d+)/i) || text.match(/^(\d+)/);
+                    const itemId = idMatch ? idMatch[1] : "1";
+
+                    const ganhador = text.toUpperCase().includes('MELHOR LANCE') || (meuValor > 0 && meuValor <= valorAtual) ? 'Você' : 'Outro';
 
                     items.push({
                         itemId: itemId,
                         valorAtual: valorAtual,
+                        meuValor: meuValor,
                         ganhador: ganhador,
                         status: isDispute ? 'Disputa' : 'Aguardando',
                         tempoRestante: -1, 
-                        position: text.includes('1º') ? 1 : 0
+                        position: ganhador === 'Você' ? 1 : 0
                     });
                 }
             });
@@ -111,7 +150,13 @@ window.addEventListener('load', () => {
 ipcRenderer.on('init-session', (event, { sessionId, config }) => {
     mySessionId = sessionId;
     currentVault = config.vault || currentVault;
-    console.log("[POLARYON] Sessão Local Inicializada:", sessionId);
+    currentConfig = {
+        uasg: config.uasg,
+        numero: config.numero,
+        ano: config.ano,
+        modality: config.modality
+    };
+    console.log("[POLARYON] Sessão Local Inicializada:", sessionId, currentConfig);
 });
 
 ipcRenderer.on('update-config', (event, config) => {
