@@ -61,6 +61,7 @@ export default function BiddingDashboardPage() {
     const [uasg, setUasg] = useState('');
     const [numeroPregao, setNumeroPregao] = useState('');
     const [anoPregao, setAnoPregao] = useState(new Date().getFullYear().toString());
+    const [turbo, setTurbo] = useState<boolean>(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
     const [items, setItems] = useState<BiddingItem[]>([]);
@@ -226,7 +227,7 @@ export default function BiddingDashboardPage() {
                 if (data.sessionId === sessionId) {
                     setItems(data.items);
                     setLastUpdate(data.timestamp);
-                    // Aqui os logs locais podem ser injetados se necessário
+                    if (data.turbo !== undefined) setTurbo(data.turbo);
                 }
             };
             
@@ -424,9 +425,17 @@ export default function BiddingDashboardPage() {
                     </div>
                 </div>
                 {isListening && (
-                    <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                        <span className="text-sm font-bold uppercase tracking-widest">Radar Ativo</span>
+                    <div className="flex items-center gap-4">
+                        {turbo && (
+                            <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full border border-red-500/20 animate-pulse">
+                                <Zap className="w-3 h-3 fill-current" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Modo Turbo</span>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                            <span className="text-sm font-bold uppercase tracking-widest">Radar Ativo</span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -611,6 +620,24 @@ export default function BiddingDashboardPage() {
                                                             }`}>
                                                                 {strategy.mode === 'shadow' ? 'SOMBRA (2º)' : strategy.mode.toUpperCase()}
                                                             </span>
+                                                            
+                                                            {/* MARGIN INDICATOR */}
+                                                            {strategy.minPrice > 0 && item.valorAtual <= strategy.minPrice ? (
+                                                                <span className="text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse">
+                                                                    LIMITE ATINGIDO
+                                                                </span>
+                                                            ) : strategy.minPrice > 0 ? (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                                                        <div 
+                                                                            className="h-full bg-emerald-500" 
+                                                                            style={{ width: `${Math.min(100, Math.max(0, ((item.valorAtual - strategy.minPrice) / item.valorAtual) * 100))}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                    <span className="text-[8px] text-slate-500 font-bold uppercase">Margem OK</span>
+                                                                </div>
+                                                            ) : null}
+
                                                             {item.tempoRestante > 0 && (
                                                                 <span className="text-[9px] font-black text-red-500 flex items-center gap-1">
                                                                     <Activity className="w-2.5 h-2.5 animate-spin"/> {item.tempoRestante}s
@@ -619,8 +646,21 @@ export default function BiddingDashboardPage() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                
-                                                <div className="flex items-center gap-8">
+                                                       <div className="flex items-center gap-6">
+                                                    {/* INPUT DE VALOR MÍNIMO (FLOOR PRICE) */}
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">LIMITE (R$)</span>
+                                                        <Input 
+                                                            type="number"
+                                                            value={strategy.minPrice}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value) || 0;
+                                                                saveStrategy(item.itemId, { ...strategy, minPrice: val });
+                                                            }}
+                                                            className="w-24 h-9 bg-slate-950/50 border-white/5 text-xs font-bold text-emerald-500 focus:ring-emerald-500/50"
+                                                        />
+                                                    </div>
+
                                                     <div className="text-right flex flex-col items-end">
                                                         <div className={`text-xl font-black tabular-nums tracking-tighter ${
                                                             item.ganhador === 'Você' ? 'text-emerald-400' : 'text-amber-500 font-bold'
@@ -637,6 +677,7 @@ export default function BiddingDashboardPage() {
                                                     />
                                                 </div>
                                             </div>
+                                     </div>
                                         );
                                     })}
                                 </div>

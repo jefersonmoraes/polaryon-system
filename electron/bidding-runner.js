@@ -33,8 +33,9 @@ class BiddingRunner {
         let chatCounter = 0;
         let serverOffset = 0;
 
-        const intervalId = setInterval(async () => {
-            try {
+        const runPolling = async () => {
+            if (!this.activeSessions.has(sessionId)) return;
+
                 // 1. Busca Itens (Modo Público)
                 const publicApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${idCompra}/itens`;
                 const response = await axios.get(publicApiUrl, { 
@@ -42,13 +43,15 @@ class BiddingRunner {
                     headers: { 'User-Agent': 'Mozilla/5.0 Polaryon-Desktop/1.0' }
                 });
 
-                // SYNC CLOCK (Header Date)
-                if (response.headers.date) {
-                    const serverTime = new Date(response.headers.date).getTime();
-                    serverOffset = serverTime - Date.now();
-                }
-
                 if (response.data && Array.isArray(response.data)) {
+                    let hasItemsInDispute = false;
+
+                    // SYNC CLOCK (Header Date)
+                    if (response.headers.date) {
+                        const serverTime = new Date(response.headers.date).getTime();
+                        serverOffset = serverTime - Date.now();
+                    }
+
                     // 2. BUSCAR RANKING REAL (Se estiver logado no modo real)
                     const simulationMode = vault.simulationMode ?? true;
                     const itemsConfig = vault.itemsConfig || {};
@@ -90,6 +93,12 @@ class BiddingRunner {
                     const items = [];
                     for (const item of response.data) {
                         const itemId = String(item.numeroItem || item.sequencial);
+                        
+                        // Detectar se há itens em disputa para o Modo Turbo
+                        if (item.fase === 'DISPUTA' || item.fase === 'IMINENTE') {
+                            hasItemsInDispute = true;
+                        }
+
                         let myPosition = item.melhorLance === item.valorLanceProposta ? 1 : 0;
 
                         // Se não estiver em 1º lugar e tiver certificado, tenta buscar ranking exato
@@ -147,12 +156,21 @@ class BiddingRunner {
                         items.push(currentItem);
 
                         const config = itemsConfig[itemId] || { mode: 'follower', minPrice: 0.10, decrementValue: 0.01, decrementType: 'fixed' };
+                        
+                        // SEGURANÇA MÁXIMA: Recusar lance se já estivermos no limite
+                        if (currentItem.valorAtual <= config.minPrice) {
+                            continue; 
+                        }
+
                         const decision = this.evaluateStrategy(currentItem, config);
                         
                         if (decision.action === 'bid') {
+                            // Garantir que o valor decidido nunca seja inferior ao mínimo
+                            const finalBidValue = Math.max(decision.value, config.minPrice);
+                            
                             const actionLog = { 
                                 itemId: itemId, 
-                                value: decision.value, 
+                                value: finalBidValue, 
                                 reason: decision.reason, 
                                 type: simulationMode ? 'SIMULATED' : 'REAL', 
                                 status: 'pending', 
@@ -163,7 +181,7 @@ class BiddingRunner {
                                 actionLog.status = 'success';
                             } else {
                                 try {
-                                    await this.executeRealBid(idCompra, itemId, decision.value, agent);
+                                    await this.executeRealBid(idCompra, itemId, finalBidValue, agent);
                                     actionLog.status = 'success';
                                 } catch (e) {
                                     actionLog.status = 'error';
@@ -184,16 +202,24 @@ class BiddingRunner {
                         actions: executedActions,
                         timestamp: new Date(Date.now() + serverOffset).toISOString(),
                         source: 'LOCAL',
-                        serverOffset
+                        serverOffset,
+                        turbo: hasItemsInDispute
                     });
+
+                    // Agendar próxima execução
+                    const nextInterval = hasItemsInDispute ? 1000 : 3000;
+                    this.activeSessions.get(sessionId).timeoutId = setTimeout(runPolling, nextInterval);
                 }
             } catch (error) {
                 console.error(`[LOCAL_RUNNER] Erro no polling: ${error.message}`);
                 this.webContents.send('bidding-error', { sessionId, error: error.message });
+                // Tenta novamente em 5s se houver erro de rede
+                this.activeSessions.get(sessionId).timeoutId = setTimeout(runPolling, 5000);
             }
-        }, 3000);
+        };
 
-        this.activeSessions.set(sessionId, { intervalId, uasg, numero, vault });
+        const timeoutId = setTimeout(runPolling, 1000);
+        this.activeSessions.set(sessionId, { timeoutId, uasg, numero, vault });
     }
 
     /**
@@ -202,7 +228,7 @@ class BiddingRunner {
     stop(sessionId) {
         const session = this.activeSessions.get(sessionId);
         if (session) {
-            clearInterval(session.intervalId);
+            if (session.timeoutId) clearTimeout(session.timeoutId);
             this.activeSessions.delete(sessionId);
             console.log(`[LOCAL_RUNNER] Monitoramento parado para ${sessionId}`);
         }
