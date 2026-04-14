@@ -29,6 +29,24 @@ export default function DesktopCombatTerminal() {
     const [newNumero, setNewNumero] = useState('');
     const [newAno, setNewAno] = useState(new Date().getFullYear().toString());
     const [isElectron] = useState(!!(window as any).electronAPI);
+    const [kanbanCards, setKanbanCards] = useState<any[]>([]);
+
+    // Faz um preload das oportunidades do Kanban
+    useEffect(() => {
+        if (isAddOpen) {
+            api.get('/kanban/board').then(res => {
+                if (res.data.success && res.data.board) {
+                    const cards: any[] = [];
+                    res.data.board.lists.forEach((l: any) => {
+                        l.cards.forEach((c: any) => {
+                            if (c.pncpId) cards.push(c);
+                        });
+                    });
+                    setKanbanCards(cards);
+                }
+            }).catch(console.error);
+        }
+    }, [isAddOpen]);
 
     // Conexão com o Motor Visual do Electron
     useEffect(() => {
@@ -107,6 +125,31 @@ export default function DesktopCombatTerminal() {
             }
         } catch (e) {
             toast.error("Erro ao criar sala de combate");
+        }
+    };
+
+    const startFromCard = (pncpId: string) => {
+        const parts = pncpId.split('-');
+        if (parts.length >= 4) {
+            setNewUasg(parts[0]);
+            setNewNumero(parseInt(parts[2], 10).toString());
+            setNewAno(parts[3]);
+            // Pequeno delay para os estados atualizarem e a função addSession pegar
+            setTimeout(() => {
+                // We must pass directly to electron here to avoid async state issues
+                const pUasg = parts[0];
+                const pNum = parseInt(parts[2], 10).toString();
+                const pAno = parts[3];
+                const tmpId = 'km-' + Date.now();
+                setActiveSessions(prev => ({ ...prev, [tmpId]: { sessionId: tmpId, uasg: pUasg, numero: pNum, ano: pAno, items: [], status: 'syncing' } }));
+                if (isElectron) {
+                    (window as any).electronAPI.startVisualBidding({
+                        sessionId: tmpId, uasg: pUasg, numero: pNum, ano: pAno, vault: {}
+                    });
+                }
+                setIsAddOpen(false);
+                toast.success("Sala de Combate Inicializada! 🚀");
+            }, 100);
         }
     };
 
@@ -217,11 +260,41 @@ export default function DesktopCombatTerminal() {
 
                     {/* Empty State / Add Card */}
                     {Object.keys(activeSessions).length === 0 && (
-                        <div className="col-span-full h-80 flex flex-col items-center justify-center border-2 border-dashed border-emerald-900/30 rounded-lg group hover:border-emerald-500/30 transition-all cursor-pointer" onClick={() => setIsAddOpen(true)}>
-                            <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                <Plus className="w-8 h-8 opacity-40 group-hover:opacity-100" />
+                        <div className="col-span-full flex flex-col gap-6">
+                            <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-emerald-900/30 rounded-lg group hover:border-emerald-500/30 transition-all cursor-pointer" onClick={() => setIsAddOpen(true)}>
+                                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                    <Plus className="w-6 h-6 opacity-40 group-hover:opacity-100" />
+                                </div>
+                                <p className="text-[10px] uppercase tracking-[0.2em] opacity-40">Engajamento Manual. Clique para adicionar.</p>
                             </div>
-                            <p className="text-xs uppercase tracking-[0.2em] opacity-40">Nenhum combate ativo. Clique para adicionar.</p>
+
+                            {kanbanCards.length > 0 && (
+                                <div className="space-y-4">
+                                    <h3 className="text-[10px] font-black uppercase text-emerald-500/60 tracking-widest flex items-center gap-2">
+                                        <Target className="w-3 h-3" /> Objetivos Sincronizados (Kanban)
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {kanbanCards.map(c => (
+                                            <div 
+                                                key={c.id} 
+                                                onClick={() => startFromCard(c.pncpId)}
+                                                className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-lg cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all group/card flex flex-col gap-2 relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 p-3 opacity-5 group-hover/card:opacity-20 transition-opacity">
+                                                    <Zap className="w-8 h-8" />
+                                                </div>
+                                                <div className="flex justify-between items-start">
+                                                    <div className="text-white font-bold text-sm uppercase truncate pr-8">{c.title}</div>
+                                                </div>
+                                                <div className="flex items-center justify-between mt-auto">
+                                                    <div className="text-emerald-500 font-mono text-[9px] truncate">PNCP: {c.pncpId}</div>
+                                                    <Button className="h-6 px-3 bg-emerald-600 hover:bg-emerald-500 text-black font-black text-[9px] rounded uppercase shadow-[0_0_10px_rgba(16,185,129,0.2)]">Engajar</Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -297,8 +370,26 @@ export default function DesktopCombatTerminal() {
                                 onClick={addSession}
                                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-bold h-12 uppercase tracking-widest mt-4"
                             >
-                                Carregar Sala de Lances
+                                Carregar Sala de Lances Manual
                             </Button>
+
+                            {kanbanCards.length > 0 && (
+                                <div className="mt-6 border-t border-emerald-500/20 pt-4">
+                                    <label className="text-[10px] uppercase font-bold text-emerald-500 mb-3 block text-center">Ou escolha do seu Planejamento (Kanban)</label>
+                                    <div className="max-h-[200px] overflow-y-auto space-y-2 custom-scrollbar pr-2">
+                                        {kanbanCards.map(c => (
+                                            <div 
+                                                key={c.id} 
+                                                onClick={() => startFromCard(c.pncpId)}
+                                                className="bg-black/30 border border-emerald-500/10 p-3 rounded cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-colors"
+                                            >
+                                                <div className="text-white text-xs font-bold truncate">{c.title}</div>
+                                                <div className="text-white/40 text-[9px] mt-1 uppercase truncate font-mono">PNCP: {c.pncpId}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 </div>

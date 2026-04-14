@@ -101,11 +101,11 @@ function handleDeepLink(url) {
       
       // Inicia combate diretamente
       if (uasg && numero && mainWindow) {
-        // Usa sessionId fake/temporário para visual-only se não houver backend (ou podemos gerar um UUID)
         const sessionId = require('crypto').randomUUID();
         
         if (!visualRunner) {
-            visualRunner = require('./visual-runner')(mainWindow.webContents);
+            const VisualRunner = require('./visual-runner');
+            visualRunner = new VisualRunner(mainWindow.webContents);
         }
         
         visualRunner.startVisualSession(sessionId, { uasg, numero, ano: ano || new Date().getFullYear().toString(), modality: '05', vault: {} });
