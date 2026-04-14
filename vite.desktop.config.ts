@@ -17,16 +17,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "desktop.html"),
-      },
-      output: {
-        // Chunks agressivos para performance
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react')) return 'react-core';
-            if (id.includes('lucide')) return 'icons';
-            return 'vendor-desktop';
-          }
-        }
       }
     }
   },
