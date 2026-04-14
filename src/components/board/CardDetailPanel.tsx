@@ -1686,6 +1686,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
+                  </div>
                 </div>
               )}
 
