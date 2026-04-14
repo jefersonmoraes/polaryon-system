@@ -122,6 +122,12 @@ app.whenReady().then(async () => {
   
   createWindow();
 
+  // Handle Windows Deep Link on First Launch
+  const urlArg = process.argv.find(arg => arg.startsWith('polaryon://'));
+  if (urlArg) {
+      setTimeout(() => { handleDeepLink(urlArg); }, 2000);
+  }
+
   // Habilita F12 Global para todas as janelas (Modo Debug Ativo)
   const { globalShortcut } = require('electron');
   globalShortcut.register('F12', () => {
