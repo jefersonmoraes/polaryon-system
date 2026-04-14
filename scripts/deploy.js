@@ -34,9 +34,9 @@ function deploy() {
         console.log(`uploading latest.yml...`);
         execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
 
-        // 4. Sync Git e Restart no VPS
-        console.log(`Sincronizando código e reiniciando backend no VPS...`);
-        const remoteCmd = `cd /var/www/polaryon && git pull origin main && pm2 restart polaryon-backend`;
+        // 4. Sync Git, Build Web e Restart no VPS
+        console.log(`Sincronizando código, gerando build web e reiniciando backend no VPS...`);
+        const remoteCmd = `cd /var/www/polaryon && git pull origin main && npm run build && pm2 restart polaryon-backend`;
         execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
 
         console.log('\n✅ DEPLOY COMPLETO! A versão v' + version + ' está ao vivo e pronta para download/update.');

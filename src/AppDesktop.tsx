@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import UpdateNotification from '@/components/layout/UpdateNotification';
 
 // Carregamento exclusivo das páginas de combate
@@ -60,10 +60,10 @@ const AppDesktop = () => (
         <TooltipProvider>
             <Toaster />
             <Sonner position="top-right" theme="dark" />
-            <BrowserRouter>
+            <HashRouter>
                 <UpdateNotification />
                 <AppDesktopContent />
-            </BrowserRouter>
+            </HashRouter>
         </TooltipProvider>
     </QueryClientProvider>
 );

@@ -23,9 +23,12 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    backgroundColor: '#020817',
+    backgroundColor: '#020817', // Mantemos escuro mas podemos usar #064e3b para debug
     autoHideMenuBar: true,
   });
+
+  // EM PRODUÇÃO: Permitimos abrir o DevTools para diagnosticar a tela preta
+  mainWindow.webContents.openDevTools();
 
   // Initialize Bidding Runner
   biddingRunner = new BiddingRunner(mainWindow.webContents);
