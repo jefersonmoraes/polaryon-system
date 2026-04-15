@@ -15,6 +15,9 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     minify: "esbuild", 
+    target: "chrome100",
+    cssCodeSplit: true,
+    assetsInlineLimit: 4096,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "desktop.html"),

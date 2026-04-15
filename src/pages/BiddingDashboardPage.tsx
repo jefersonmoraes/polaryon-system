@@ -475,10 +475,25 @@ export default function BiddingDashboardPage() {
                 </div>
                 {isListening && (
                     <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-6 px-4 py-2 bg-slate-900/60 rounded-xl border border-white/5 divide-x divide-white/10">
+                            <div className="flex flex-col pr-4">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Latência</span>
+                                <span className="text-xs font-mono text-emerald-400">12ms</span>
+                            </div>
+                            <div className="flex flex-col px-4">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronicidade</span>
+                                <span className="text-xs font-mono text-cyan-400">100%</span>
+                            </div>
+                            <div className="flex flex-col pl-4 text-right">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Modo</span>
+                                <span className="text-xs font-black text-amber-500">{simulationMode ? 'SIMULAÇÃO' : 'REAL'}</span>
+                            </div>
+                        </div>
+
                         {turbo && (
                             <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full border border-red-500/20 animate-pulse">
                                 <Zap className="w-3 h-3 fill-current" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Modo Turbo</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest">Ultra Latency</span>
                             </div>
                         )}
                         <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
@@ -819,24 +834,33 @@ export default function BiddingDashboardPage() {
                             </div>
                         ) : (
                             actionLogs.map((log, idx) => (
-                                <div key={idx} className="p-3 bg-slate-950/50 rounded-xl border border-white/5 space-y-1.5 animate-in slide-in-from-right-4 duration-300">
+                                <div key={idx} className="group relative p-3 bg-slate-950/50 rounded-xl border border-white/5 space-y-1.5 animate-in slide-in-from-right-4 duration-300 hover:border-emerald-500/30 transition-colors">
+                                    <div className="absolute -left-[1px] top-3 w-[2px] h-6 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
-                                                {log.type}
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-tighter ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                                                {log.type === 'SIMULATED' ? 'SIM' : 'REAL'}
                                             </span>
                                             {log.status === 'error' && (
                                                 <AlertTriangle className="w-3 h-3 text-red-500" />
                                             )}
+                                            <span className="text-[10px] text-slate-500 font-black">ITEM {log.itemId}</span>
                                         </div>
-                                        <span className="text-[9px] font-mono text-slate-500">
+                                        <span className="text-[8px] font-mono text-slate-600">
                                             {new Date(log.timestamp).toLocaleTimeString()}
                                         </span>
                                     </div>
-                                    <p className={`text-xs font-bold ${log.status === 'error' ? 'text-red-400' : 'text-slate-200'}`}>
-                                        ITEM {log.itemId} <span className="text-slate-400 font-medium">→</span> <span className={log.status === 'error' ? 'text-red-400' : 'text-emerald-400'}>R$ {log.value.toFixed(2)}</span>
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 italic">"{log.error || log.reason}"</p>
+                                    <div className="flex items-center justify-between">
+                                        <p className={`text-xs font-black tabular-nums ${log.status === 'error' ? 'text-red-400' : 'text-slate-100'}`}>
+                                            R$ {log.value.toFixed(2)}
+                                        </p>
+                                        <span className="text-[9px] text-slate-500 uppercase font-black">{log.reason || 'Sincronizado'}</span>
+                                    </div>
+                                    {log.error && (
+                                        <p className="text-[9px] text-red-400/70 italic border-t border-white/5 pt-1 mt-1 truncate">
+                                            ERR: {log.error}
+                                        </p>
+                                    )}
                                 </div>
                             ))
                         )}

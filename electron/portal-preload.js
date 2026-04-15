@@ -246,13 +246,19 @@ function scrapeDisputeRoom() {
         const items = [];
         let hasItemsInDispute = false;
 
-        // Monitor de mudanças para extração instantânea
-        if (!window.polaryonObserver) {
+        // Monitor de mudanças para extração instantânea (Competition Grade)
+        if (!window.polaryonObserver && document.body) {
+            let lastMutationTime = 0;
             window.polaryonObserver = new MutationObserver(() => {
-                // A própria função scrape será chamada novamente pelo timer global, 
-                // mas podemos forçar uma execução aqui se quisermos latência zero.
+                const now = Date.now();
+                // Throttle de 250ms para evitar explosão de processamento em telas com muita animação
+                if (now - lastMutationTime > 250) {
+                    lastMutationTime = now;
+                    scrapeDisputeRoom();
+                }
             });
-            window.polaryonObserver.observe(document.body, { childList: true, subtree: true });
+            window.polaryonObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+            console.log("[POLARYON] Motor de Latência Zero Ativado.");
         }
 
         // EXEMPLO DE INJEÇÃO V4: Motor de Identificação de Precisão "Leaf-Node" (Imune a trocas de Classes/Frameworks)
