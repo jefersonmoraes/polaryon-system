@@ -1705,9 +1705,22 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                     />
                     {customLink && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <a href={customLink?.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors" title="Abrir Link Externo">
+                        {/* Explorador Interno (O que o usuário pediu) */}
+                        <button 
+                          onClick={() => { 
+                            onClose(); 
+                            navigate('/oportunidades/busca', { state: { openPncpId: card.pncpId } }); 
+                          }} 
+                          className="p-1.5 rounded hover:bg-blue-500/20 bg-blue-500/10 text-blue-500 transition-all" 
+                          title="Explorar Oportunidade no Sistema"
+                        >
+                          <Building2 className="h-3.5 w-3.5" />
+                        </button>
+
+                        <a href={customLink?.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors" title="Abrir Link Externo (PNCP Oficial)">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
+                        
                         <button 
                           onClick={() => {
                             let uasg = '', numero = '', ano = '';
@@ -1725,10 +1738,10 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                             window.location.href = url;
                           }}
                           className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all text-[10px] font-black uppercase"
-                          title="Iniciar Combate via Link"
+                          title="Iniciar Combate via Robô"
                         >
                           <Zap className="h-3 w-3" />
-                          <span>ABRIR NO ROBÔ</span>
+                          <span>ROBÔ</span>
                         </button>
                       </div>
                     )}
