@@ -159,13 +159,25 @@ app.on('window-all-closed', () => {
   }
 });
 
+
 // Bypass de erro de certificado para portais do governo
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-  if (url.includes('comprasnet.gov.br') || url.includes('gov.br')) {
+  if (url.includes('comprasnet.gov.br') || url.includes('gov.br') || url.includes('serpro.gov.br')) {
     event.preventDefault();
     callback(true);
   } else {
     callback(false);
+  }
+});
+
+// Auto-seleção nativa de Certificado Digital (A1/A3) instalado no Windows
+app.on('select-client-certificate', (event, webContents, url, list, callback) => {
+  event.preventDefault();
+  if (list && list.length > 0) {
+    console.log('[POLARYON] Certificado Auto-Selecionado:', list[0].subjectName);
+    callback(list[0]);
+  } else {
+    callback();
   }
 });
 
@@ -214,14 +226,8 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
     visualRunner = new VisualRunner(mainWindow.webContents);
   }
   
-  // Configura a sessão para usar o Proxy de MTLS se o certificado existir
-  if (certHelper.hasCertificate()) {
-    const ses = require('electron').session.fromPartition('persist:comprasgov');
-    await ses.setProxy({ 
-        proxyRules: secureProxy.getProxyUrl(),
-        proxyBypassRules: 'localhost, 127.0.0.1'
-    });
-  }
+  // REMOVIDO: O secure-proxy não suporta HTTP CONNECT e causava a Tela Branca.
+  // Em vez disso, usaremos o gerenciamento nativo do Electron e o bypass de certificado.
 
   visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
 });

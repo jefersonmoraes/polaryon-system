@@ -42,6 +42,9 @@ class VisualRunner {
 
         this.sessions.set(sessionId, { window: win, config });
 
+        // Habilita o Console (DevTools) automaticamente para o usuário monitorar os erros
+        win.webContents.openDevTools();
+
         win.on('closed', () => {
             this.sessions.delete(sessionId);
             
@@ -58,7 +61,21 @@ class VisualRunner {
             win.webContents.send('init-session', { sessionId, config });
         });
 
-        win.loadURL('https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp');
+        // --- CONSTRUÇÃO DO LINK DE DISPUTA DIRETO ---
+        // Ex: UASG(6) + Mod(06) + Num(5) + Ano(4) => 15000206000672026
+        const uasgStr = (config.uasg || "").toString().padStart(6, '0');
+        const numStr = (config.numero || "").toString().padStart(5, '0');
+        const anoStr = (config.ano || "").toString();
+        const modStr = "06"; // Padrão Dispensa Eletrônica
+        
+        const compraCode = `${uasgStr}${modStr}${numStr}${anoStr}`;
+        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
+
+        console.log(`[VISUAL RUNNER] Navegando Direto para: ${targetUrl}`);
+        
+        // Se o usuário não estiver logado, o Serpro redirecionará automaticamente para o Gov.br 
+        // e depois de logar via certificado, voltará para esta URL.
+        win.loadURL(targetUrl);
     }
 
     stop(sessionId) {
@@ -95,7 +112,16 @@ class VisualRunner {
         ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window) {
-                session.window.loadURL(url || 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp');
+                if (url) {
+                    session.window.loadURL(url);
+                } else {
+                    const config = session.config;
+                    const uasgStr = (config.uasg || "").toString().padStart(6, '0');
+                    const numStr = (config.numero || "").toString().padStart(5, '0');
+                    const anoStr = (config.ano || "").toString();
+                    const compraCode = `${uasgStr}06${numStr}${anoStr}`;
+                    session.window.loadURL(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`);
+                }
             }
         });
     }
