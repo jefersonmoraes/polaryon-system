@@ -1586,6 +1586,28 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {card.pncpId && (
+                    <button 
+                      onClick={() => {
+                        let uasg = '', numero = '', ano = '';
+                        const parts = card.pncpId.split('-');
+                        if (parts.length >= 4) {
+                            uasg = parts[0];
+                            numero = parseInt(parts[2], 10).toString();
+                            ano = parts[3];
+                        }
+                        const url = uasg && numero && ano 
+                          ? `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`
+                          : `polaryon://combat`;
+                        window.location.href = url;
+                        toast.success("Iniciando Terminal de Combate...");
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-500 transition-all font-black text-[10px] uppercase shadow-lg shadow-emerald-500/20 active:scale-95"
+                    >
+                      <Zap className="h-3.5 w-3.5 fill-white" />
+                      <span>ACESSAR DISPUTA</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => updateCard(cardId, { completed: !card.completed })} 
                     className={cn(
@@ -1682,9 +1704,33 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                       className="w-full bg-transparent text-xs outline-none border-b border-transparent focus:border-primary disabled:opacity-80 disabled:cursor-not-allowed"
                     />
                     {customLink && (
-                      <a href={customLink?.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors shrink-0" title="Abrir Link Externo">
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a href={customLink?.startsWith('http') ? customLink : `https://${customLink}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-primary/20 bg-primary/10 text-primary transition-colors" title="Abrir Link Externo">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        <button 
+                          onClick={() => {
+                            let uasg = '', numero = '', ano = '';
+                            if (card.pncpId) {
+                                const parts = card.pncpId.split('-');
+                                if (parts.length >= 4) {
+                                    uasg = parts[0];
+                                    numero = parseInt(parts[2], 10).toString();
+                                    ano = parts[3];
+                                }
+                            }
+                            const url = uasg && numero && ano 
+                              ? `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`
+                              : `polaryon://combat`;
+                            window.location.href = url;
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all text-[10px] font-black uppercase"
+                          title="Iniciar Combate via Link"
+                        >
+                          <Zap className="h-3 w-3" />
+                          <span>ABRIR NO ROBÔ</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
