@@ -205,30 +205,49 @@ function scrapeDisputeRoom() {
             window.polaryonObserver.observe(document.body, { childList: true, subtree: true });
         }
 
-        // EXEMPLO DE INJEÇÃO V3: Motor de Identificação de Precisão (Dispensa 14.133 e Siga Pregão Style)
-        const rowSelector = 'mat-expansion-panel, mat-row, tr[role="row"], .br-item, .card-item';
-        const itemCards = document.querySelectorAll(rowSelector); 
+        // EXEMPLO DE INJEÇÃO V4: Motor de Identificação de Precisão "Leaf-Node" (Imune a trocas de Classes/Frameworks)
+        const possibleRows = Array.from(document.querySelectorAll('div, tr, li, article, mat-expansion-panel'));
+        
+        let itemCards = possibleRows.filter(el => {
+            const txt = (el.innerText || "").trim();
+            // Verifica se o texto tem a sintaxe de dispensa de lances
+            const isBiddingArea = (txt.includes('Melhor valor') || txt.includes('Meu valor') || txt.includes('Valor final')) && txt.includes('R$');
+            // Verifica se começa com um número de item longo isolado ou "Item [x]"
+            const hasId = txt.match(/^\s*(\d+)\s+/) || txt.match(/(?:Item)\s*(\d+)/i);
+            
+            // Rejeita containers enormes de página (se tiver mais de 2000 caracteres, provavelmente é o body)
+            return isBiddingArea && hasId && txt.length < 3000;
+        });
+
+        // Filtragem Folha (Garante que não pegamos o pai e o filho duplicados, só o container exato do item)
+        itemCards = itemCards.filter(el => {
+             const children = Array.from(el.querySelectorAll('*'));
+             const hasNestedCard = children.some(child => itemCards.includes(child));
+             return !hasNestedCard;
+        });
         
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
-                const text = card.innerText;
+                const text = card.innerText.trim();
                 
-                // Dispensa 14.133 layout: Has "Melhor valor" or "Meu valor" and an item number
+                // Dispensa 14.133 layout
                 const isDispensaItem = text.includes('Melhor valor') || text.includes('Meu valor') || text.includes('Valor final');
-                // General layout: Has "R$" and "Item"
-                const isGeneralItem = text.includes('R$') && (text.includes('Item') || text.match(/^\d+/));
+                const isGeneralItem = text.includes('R$');
 
                 if (isDispensaItem || isGeneralItem) {
+                    // Dispensa nova Serpro: "Fase de lances aberta" ou "Em disputa". 
+                    // Se a aba é 'Em disputa', assumimos aberto.
                     const isDispute = text.toUpperCase().includes('EM DISPUTA') || 
                                      text.toUpperCase().includes('ABERTO') ||
-                                     text.toUpperCase().includes('IMINÊNCIA');
+                                     text.toUpperCase().includes('IMINÊNCIA') ||
+                                     text.toUpperCase().includes('FASE DE LANCES ABERTA');
 
                     if (isDispute) hasItemsInDispute = true;
                     
                     let valorAtual = 0;
                     let meuValor = 0;
 
-                    // Extração Dispensa 14.133 explícita
+                    // Extração Dispensa explícita (Melhor valor unitário / global)
                     if (isDispensaItem) {
                         const melhorMatch = text.match(/Melhor valor[^\d]+([\d,.]+)/i);
                         const meuMatch = text.match(/Meu valor[^\d]+([\d,.]+)/i);
@@ -236,7 +255,7 @@ function scrapeDisputeRoom() {
                         if (melhorMatch) valorAtual = parseFloat(melhorMatch[1].replace(/\./g, '').replace(',', '.'));
                         if (meuMatch) meuValor = parseFloat(meuMatch[1].replace(/\./g, '').replace(',', '.'));
                     } else {
-                        // Regex genérica
+                        // Regex genérica fallback
                         const matches = text.match(/R\$\s*([\d,.]+)/g);
                         if (matches && matches.length >= 1) {
                              valorAtual = parseFloat(matches[0].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
@@ -246,13 +265,13 @@ function scrapeDisputeRoom() {
                         }
                     }
 
-                    // Se não achou nenhum valor limpo, ignora
                     if (valorAtual === 0 && !text.includes('R$')) return;
 
-                    // Extração de ID - Pega o primeiro número antes de espaço ou descritivo
-                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i) || text.match(/^(\d+)/);
+                    // Extração de ID (agora sabemos que a card inteira começa com o ID)
+                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i);
                     const itemId = idMatch ? idMatch[1] : "1";
 
+                    // No novo Serpro tem o iconezinho de Thumbs Down para perdendo. Ou Thumbs Up.
                     const ganhador = text.toUpperCase().includes('MELHOR LANCE') || (meuValor > 0 && meuValor <= valorAtual) ? 'Você' : 'Outro';
 
                     items.push({
@@ -511,8 +530,19 @@ function renderBiddingPanel(items) {
 // -------------- ROTINA DE DISPARO VISUAL --------------
 function enviarLanceVisual(itemId, valorStr) {
     try {
-        const rows = Array.from(document.querySelectorAll('tr, div[class*="item"], div[class*="card"]'));
-        const itemRow = rows.find(r => r.innerText.includes('Item ' + itemId) || r.innerText.match(new RegExp(`^\\s*${itemId}\\s+`)));
+        const possibleRows = Array.from(document.querySelectorAll('div, tr, li, article'));
+        let itemCards = possibleRows.filter(el => {
+            const txt = (el.innerText || "").trim();
+            const hasId = txt.match(new RegExp(`^\\s*${itemId}\\s+`)) || txt.match(new RegExp(`(?:Item)\\s*${itemId}`, 'i'));
+            return hasId && txt.includes('R$') && txt.length < 3000;
+        });
+
+        itemCards = itemCards.filter(el => {
+             const children = Array.from(el.querySelectorAll('*'));
+             return !children.some(child => itemCards.includes(child));
+        });
+        
+        const itemRow = itemCards.length > 0 ? itemCards[0] : null;
         
         if (itemRow) {
             // Acha todos os inputs texto dentro do Container do Item
