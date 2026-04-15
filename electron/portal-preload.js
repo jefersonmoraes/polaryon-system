@@ -118,34 +118,40 @@ function scrapeDisputeRoom() {
             const searchAndClickMenu = (win) => {
                 if (foundMenu) return;
                 try {
-                    // 1. Tenta achar o link DIRETO da Licitação e Dispensa (Pode estar oculto mas clicável)
-                    const elements = Array.from(win.document.querySelectorAll('a, td, div, span'));
-                    const targetLink = elements.find(el => {
+                    // 1. Tenta achar o elemento que contém o texto alvo
+                    const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li'));
+                    const match = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        // Ignora espaços extras ou quebras de linha
                         const normalizedTxt = txt.replace(/\s+/g, ' ');
                         return normalizedTxt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
-                               normalizedTxt.includes('LICITAÇÕES E DISPENSAS (NOVO)') ||
-                               normalizedTxt.includes('DISPENDA (NOVO)'); // Typos do governo
+                               normalizedTxt.includes('LICITAÇÕES E DISPENSAS (NOVO)');
                     });
 
-                    if (targetLink && typeof targetLink.click === 'function') {
-                        console.log(`[POLARYON v1.3.3] Engajando alvo: ${targetLink.innerText || 'Menu'}`);
+                    if (match) {
+                        // Se achamos o texto, mas não é um link, tenta achar um link DENTRO ou o próprio elemento se for link
+                        const targetLink = (match.tagName === 'A' ? match : match.querySelector('a')) || match;
+                        
+                        console.log(`[POLARYON v1.3.5] Alvo Detectado: ${targetLink.innerText || 'Menu'}. Engajando...`);
+                        
                         const opts = { bubbles: true, cancelable: true, view: win };
                         
-                        // Sequência completa para "acordar" menus DHTML/JavaScript
+                        // "Acorda" o Menu (Essencial para menus DHTML que esperam interação)
                         targetLink.dispatchEvent(new MouseEvent('mouseover', opts));
                         targetLink.dispatchEvent(new MouseEvent('mousedown', opts));
-                        targetLink.dispatchEvent(new MouseEvent('mouseup', opts));
                         
-                        try {
+                        // Algumas sistemas pedem focus para disparar o evento de click
+                        if (typeof targetLink.focus === 'function') targetLink.focus();
+                        
+                        setTimeout(() => {
+                            targetLink.dispatchEvent(new MouseEvent('mouseup', opts));
                             targetLink.click();
-                        } catch(e) {
-                            // Se o click falhar, tenta navegar pelo href se existir
-                            if (targetLink.href && !targetLink.href.includes('javascript')) {
+                            
+                            // Fallback de Navegação Direta (Se o click falhar e houver um href válido)
+                            if (targetLink.href && !targetLink.href.includes('javascript') && targetLink.href !== '#') {
+                                console.log("[POLARYON] Fallback: Navegação direta via HREF");
                                 win.location.href = targetLink.href;
                             }
-                        }
+                        }, 50); // Delay tático para o menu processar o mouseover
                         
                         foundMenu = true;
                         return;
