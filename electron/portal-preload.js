@@ -176,11 +176,11 @@ function scrapeDisputeRoom() {
             }
             window.polaryonJumpAttempted++;
 
-            if (window.polaryonJumpAttempted > 6 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                 console.log("[POLARYON-WAR] Detecção de estagnação prolongada. Tentando refresh de frames ou navegação alternativa...");
-                 // Em vez de um JUMP cego que pode dar 404, tentamos recarregar o frame de serviço ou ir para a raiz segura
-                 if (window.polaryonJumpAttempted === 7) {
-                    window.location.href = 'https://www.comprasnet.gov.br/seguro/index_f.asp'; // Refresh base
+            if (window.polaryonJumpAttempted > 12 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                 console.log("[POLARYON-WAR] Detecção de estagnação prolongada. Solicitando intervenção ou aguardando menus...");
+                 // Em vez de redirecionar para links mortos, tentamos apenas um refresh suave da página para reativar os menus
+                 if (window.polaryonJumpAttempted === 13) {
+                    window.location.reload();
                  }
                  return;
             }
@@ -197,8 +197,8 @@ function scrapeDisputeRoom() {
             const uasgStr = (currentConfig.uasg || "150002").toString().padStart(6, '0');
             const numStr = (currentConfig.numero || "67").toString().padStart(5, '0');
             const anoStr = (currentConfig.ano || "2026").toString();
-            // Assumimos 06 para Dispensa Eletrônica
-            const compraCode = `${uasgStr}06${numStr}${anoStr}`;
+            const modalityCode = (currentConfig.modality || "06").toString().padStart(2, '0');
+            const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
             const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
 
             console.log(`[POLARYON] Handoff Concluído! Saltando direto para a sala de combate: ${targetUrl}`);
