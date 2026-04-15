@@ -170,15 +170,18 @@ function scrapeDisputeRoom() {
                 } catch(err) {}
             };
             
-            // BYPASS DE SEGURANÇA: Se ficarmos presos na home por mais de 8 segundos, tentamos o pulo direto
+            // BYPASS DE SEGURANÇA: Se ficarmos presos na home por mais de 10 segundos, tentamos o pulo direto ou refresh
             if (!window.polaryonJumpAttempted) {
                 window.polaryonJumpAttempted = 0;
             }
             window.polaryonJumpAttempted++;
 
-            if (window.polaryonJumpAttempted > 4 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                 console.log("[POLARYON-WAR] Detecção de estagnação. Iniciando JUMP DIRETO para ambiente SERPRO...");
-                 window.location.href = 'https://www.comprasnet.gov.br/seguro/index_f.asp?servico=226';
+            if (window.polaryonJumpAttempted > 6 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                 console.log("[POLARYON-WAR] Detecção de estagnação prolongada. Tentando refresh de frames ou navegação alternativa...");
+                 // Em vez de um JUMP cego que pode dar 404, tentamos recarregar o frame de serviço ou ir para a raiz segura
+                 if (window.polaryonJumpAttempted === 7) {
+                    window.location.href = 'https://www.comprasnet.gov.br/seguro/index_f.asp'; // Refresh base
+                 }
                  return;
             }
             

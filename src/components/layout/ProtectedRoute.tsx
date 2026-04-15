@@ -95,8 +95,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
     if (isElectron) {
         return (
-            <div className="h-screen flex flex-col overflow-hidden bg-[#020817] text-white">
-                <main className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar">
+            <div className="min-h-screen flex flex-col bg-[#020817] text-white overflow-y-auto custom-scrollbar">
+                <main className="flex-1 relative">
                     {children}
                 </main>
             </div>
