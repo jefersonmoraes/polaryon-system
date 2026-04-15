@@ -525,16 +525,25 @@ function renderBiddingPanel(items) {
                         <div style="position:relative; flex:1;">
                            <span style="position:absolute; left:6px; top:5px; font-size:10px; color:rgba(255,255,255,0.4); font-weight:bold;">R$</span>
                            <input type="text" placeholder="Meu Limite Mínimo" value="${limit.price}" 
-                               onchange="window.polaryonUpdateLimit('${it.itemId}', this.value)"
+                            <input type="text" placeholder="Meu Limite Mínimo" value="${limit.price}" 
+                               class="polaryon-limit-input"
                                style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:6px 6px 6px 22px; color:#fff; font-size:11px; outline:none; font-weight:bold;" />
                         </div>
-                        <select onchange="window.polaryonUpdateMode('${it.itemId}', this.value)"
+                        <select class="polaryon-mode-select"
                             style="width: 85px; background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:4px; color:#10b981; font-size:10px; font-weight:bold; outline:none; cursor:pointer;">
                             <option value="follower" ${limit.mode === 'follower' ? 'selected' : ''}>SEGUIDOR</option>
                             <option value="sniper" ${limit.mode === 'sniper' ? 'selected' : ''}>SNIPER</option>
                         </select>
                     </div>
                 `;
+                
+                // Anexa os eventos via Isolated context (addEventListener funciona aqui)
+                const inputEl = itemDiv.querySelector('.polaryon-limit-input');
+                const selectEl = itemDiv.querySelector('.polaryon-mode-select');
+                
+                if (inputEl) inputEl.addEventListener('change', (e) => window.polaryonUpdateLimit(it.itemId, e.target.value));
+                if (selectEl) selectEl.addEventListener('change', (e) => window.polaryonUpdateMode(it.itemId, e.target.value));
+                
                 list.appendChild(itemDiv);
             } else {
                 // Atualiza apenas os valores visuais do span (sem tocar no input para o usuário não perder o foco)
