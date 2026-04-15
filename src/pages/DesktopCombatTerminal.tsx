@@ -154,7 +154,7 @@ export default function DesktopCombatTerminal() {
     }, [activeSessions]);
 
     return (
-        <div className="h-screen w-full bg-[#020617] text-emerald-500 font-mono flex flex-col p-4 select-none overflow-hidden">
+        <div className="min-h-screen w-full bg-[#020617] text-emerald-500 font-mono flex flex-col p-4 select-none overflow-y-auto custom-scrollbar">
             {/* GRID PRINCIPAL: TRÍADE TÁTICA */}
             <div className="flex-1 flex gap-4 overflow-hidden">
                 
@@ -270,7 +270,7 @@ export default function DesktopCombatTerminal() {
                 </div>
 
                 {/* COLUNA DIREITA: TELEMETRIA & LOGS (380px) */}
-                <div className="w-[380px] flex flex-col gap-4 overflow-hidden">
+                <div className="w-[380px] flex flex-col gap-4 overflow-y-auto custom-scrollbar">
                     <div className="flex-[2] overflow-hidden">
                         <TacticalLog logs={logs} />
                     </div>
@@ -352,10 +352,6 @@ export default function DesktopCombatTerminal() {
                     </motion.div>
                 </div>
             )}
-        </div>
-    );
-}
-
         </div>
     );
 }
