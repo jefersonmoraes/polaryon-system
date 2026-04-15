@@ -6,7 +6,7 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
 import path from 'path';
-import { PORT } from './config';
+const PORT = process.env.PORT || 3000;
 import { prisma } from './lib/prisma';
 
 
