@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Zap, Target, Activity, Monitor, Plus, X, 
-    Maximize2, Shield, Lock, Power, LayoutGrid, 
-    ListFilter, AlertCircle, TrendingDown, Clock
+    Shield, Power, ListFilter, TrendingDown, Clock,
+    Terminal as TerminalIcon, DollarSign, Cpu, BarChart3,
+    AlertCircle, Radar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
@@ -11,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { CombatItemCard } from '@/components/combat/CombatItemCard';
+import { TacticalLog } from '@/components/combat/TacticalLog';
 
 interface SessionData {
     sessionId: string;
@@ -22,8 +25,17 @@ interface SessionData {
     lastUpdate?: string;
 }
 
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'action' | 'threat' | 'success';
+  message: string;
+  source?: string;
+}
+
 export default function DesktopCombatTerminal() {
     const [activeSessions, setActiveSessions] = useState<Record<string, SessionData>>({});
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [newUasg, setNewUasg] = useState('');
     const [newNumero, setNewNumero] = useState('');
@@ -31,7 +43,18 @@ export default function DesktopCombatTerminal() {
     const [isElectron] = useState(!!(window as any).electronAPI);
     const [kanbanCards, setKanbanCards] = useState<any[]>([]);
 
-    // Faz um preload das oportunidades do Kanban
+    const addLog = (message: string, level: LogEntry['level'] = 'info', source?: string) => {
+      const newLog: LogEntry = {
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date().toLocaleTimeString(),
+        level,
+        message,
+        source
+      };
+      setLogs(prev => [...prev.slice(-49), newLog]);
+    };
+
+    // Preload Kanban Changes
     useEffect(() => {
         if (isAddOpen) {
             api.get('/kanban/board').then(res => {
@@ -48,7 +71,7 @@ export default function DesktopCombatTerminal() {
         }
     }, [isAddOpen]);
 
-    // Conexão com o Motor Visual do Electron
+    // Electron IPC Handling
     useEffect(() => {
         if (isElectron && (window as any).electronAPI) {
             const handleUpdate = (data: any) => {
@@ -61,21 +84,22 @@ export default function DesktopCombatTerminal() {
                         status: 'running'
                     }
                 }));
+                
+                // Inteligência de Log Analítica
+                data.items.forEach((it: any) => {
+                   if (it.ganhador === 'Você') {
+                      addLog(`ITEM ${it.itemId}: Você assumiu o primeiro lugar!`, 'success', `SALA ${data.uasg}`);
+                   }
+                });
             };
 
             const handleError = (data: any) => {
-                setActiveSessions(prev => ({
-                    ...prev,
-                    [data.sessionId]: {
-                        ...prev[data.sessionId],
-                        status: 'error'
-                    }
-                }));
+                setActiveSessions(prev => ({ ...prev, [data.sessionId]: { ...prev[data.sessionId], status: 'error' } }));
+                addLog(`ERRO NA SESSÃO ${data.sessionId}: ${data.error}`, 'threat', 'SYSTEM');
                 toast.error(`Falha na sessão ${data.sessionId}: ${data.error}`);
             };
 
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
-            // (window as any).electronAPI.onBiddingError(handleError);
         }
     }, [isElectron]);
 
@@ -86,75 +110,27 @@ export default function DesktopCombatTerminal() {
         }
 
         try {
-            // No Desktop, criamos a sessão e já disparamos o motor visual
-            const res = await api.post('/bidding/sessions', {
-                uasg: newUasg,
-                numeroPregao: newNumero,
-                anoPregao: newAno,
-                portal: 'compras_gov'
-            });
-
+            const res = await api.post('/bidding/sessions', { uasg: newUasg, numeroPregao: newNumero, anoPregao: newAno, portal: 'compras_gov' });
             if (res.data.success) {
                 const session = res.data.session;
-                
-                const newSess: SessionData = {
-                    sessionId: session.id,
-                    uasg: newUasg,
-                    numero: newNumero,
-                    ano: newAno,
-                    items: [],
-                    status: 'syncing'
-                };
-
+                const newSess: SessionData = { sessionId: session.id, uasg: newUasg, numero: newNumero, ano: newAno, items: [], status: 'syncing' };
                 setActiveSessions(prev => ({ ...prev, [session.id]: newSess }));
-                
                 if (isElectron) {
-                    (window as any).electronAPI.startVisualBidding({
-                        sessionId: session.id,
-                        uasg: newUasg,
-                        numero: newNumero,
-                        ano: newAno,
-                        vault: {} // Estratégia padrão
-                    });
+                    (window as any).electronAPI.startVisualBidding({ sessionId: session.id, uasg: newUasg, numero: newNumero, ano: newAno, vault: {} });
                 }
-
+                addLog(`Iniciando combate na UASG ${newUasg} - Edital ${newNumero}/${newAno}`, 'action', 'DEPLOY');
                 setIsAddOpen(false);
                 setNewUasg('');
                 setNewNumero('');
-                toast.success("Sala de Combate Inicializada! 🚀");
             }
         } catch (e) {
             toast.error("Erro ao criar sala de combate");
         }
     };
 
-    const startFromCard = (pncpId: string) => {
-        const parts = pncpId.split('-');
-        if (parts.length >= 4) {
-            setNewUasg(parts[0]);
-            setNewNumero(parseInt(parts[2], 10).toString());
-            setNewAno(parts[3]);
-            // Pequeno delay para os estados atualizarem e a função addSession pegar
-            setTimeout(() => {
-                // We must pass directly to electron here to avoid async state issues
-                const pUasg = parts[0];
-                const pNum = parseInt(parts[2], 10).toString();
-                const pAno = parts[3];
-                const tmpId = 'km-' + Date.now();
-                setActiveSessions(prev => ({ ...prev, [tmpId]: { sessionId: tmpId, uasg: pUasg, numero: pNum, ano: pAno, items: [], status: 'syncing' } }));
-                if (isElectron) {
-                    (window as any).electronAPI.startVisualBidding({
-                        sessionId: tmpId, uasg: pUasg, numero: pNum, ano: pAno, vault: {}
-                    });
-                }
-                setIsAddOpen(false);
-                toast.success("Sala de Combate Inicializada! 🚀");
-            }, 100);
-        }
-    };
-
     const stopSession = (sid: string) => {
         if (isElectron) (window as any).electronAPI.stopVisualBidding(sid);
+        addLog(`Sessão ${sid} encerrada pelo operador.`, 'info', 'SYSTEM');
         setActiveSessions(prev => {
             const copy = { ...prev };
             delete copy[sid];
@@ -162,250 +138,224 @@ export default function DesktopCombatTerminal() {
         });
     };
 
+    // Métricas Globais
+    const globalStats = useMemo(() => {
+      let winning = 0;
+      let totalValue = 0;
+      Object.values(activeSessions).forEach(s => {
+        s.items.forEach(it => {
+          if (it.ganhador === 'Você') {
+            winning++;
+            totalValue += it.valorAtual;
+          }
+        });
+      });
+      return { winning, totalValue };
+    }, [activeSessions]);
+
     return (
-        <div className="h-screen w-full bg-[#020817] text-emerald-500 font-mono flex flex-col p-4 select-none">
-            {/* HUD HEADER */}
-            <div className="flex items-center justify-between border-b border-emerald-900/50 pb-4 mb-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
-                        <Zap className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold tracking-tighter uppercase font-['Anton'] text-white">Polaryon <span className="text-emerald-500">Terminal</span></h1>
-                        <div className="text-[10px] opacity-70 flex items-center gap-2">
-                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                             SISTEMA OPERACIONAL ATIVO | V1.2.28-COMBAT-MODE
+        <div className="h-screen w-full bg-[#020617] text-emerald-500 font-mono flex flex-col p-4 select-none overflow-hidden">
+            {/* GRID PRINCIPAL: TRÍADE TÁTICA */}
+            <div className="flex-1 flex gap-4 overflow-hidden">
+                
+                {/* COLUNA ESQUERDA: CONFIG & HUD (300px) */}
+                <div className="w-[320px] flex flex-col gap-4 overflow-y-auto custom-scrollbar">
+                    {/* HUB BRANDING */}
+                    <div className="p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-xl relative overflow-hidden group">
+                        <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Radar className="w-24 h-24" />
+                        </div>
+                        <h1 className="text-2xl font-['Anton'] tracking-tighter text-white uppercase italic">Polaryon <span className="text-emerald-500">Combat</span></h1>
+                        <div className="flex items-center gap-2 mt-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[9px] font-black tracking-widest text-emerald-500 opacity-60">WAR-ROOM TERMINAL v1.3.0</span>
                         </div>
                     </div>
-                </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="flex flex-col items-end text-[10px] opacity-60">
-                         <span>CPU: 12%</span>
-                         <span>LATÊNCIA: 45ms</span>
+                    {/* QUICK METRICS */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                            <div className="text-[8px] opacity-40 uppercase font-black mb-1">Itens Vencendo</div>
+                            <div className="text-2xl font-['Anton'] text-white">{globalStats.winning}</div>
+                        </div>
+                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                            <div className="text-[8px] opacity-40 uppercase font-black mb-1">Economia Estimada</div>
+                            <div className="text-xl font-['Anton'] text-emerald-400">R$ {globalStats.totalValue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+                        </div>
                     </div>
-                    <Button 
-                        onClick={() => setIsAddOpen(true)}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold uppercase py-1 px-4 text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
-                    >
-                        <Plus className="w-4 h-4" /> Novo Combate
-                    </Button>
-                </div>
-            </div>
 
-            {/* MAIN CONTENT AREA */}
-            <div className="flex-1 flex gap-4 overflow-hidden">
-                {/* LEFT: SESSION GRID */}
-                <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto custom-scrollbar p-1">
-                    <AnimatePresence>
-                        {Object.values(activeSessions).map((session) => (
-                            <motion.div
-                                key={session.sessionId}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                className="relative group"
-                            >
-                                <Card className="bg-black/40 border-emerald-500/20 backdrop-blur-md border hover:border-emerald-500/50 transition-all flex flex-col overflow-hidden">
-                                    {/* Session Header */}
-                                    <div className="p-3 bg-emerald-500/5 border-b border-emerald-500/10 flex justify-between items-center">
-                                        <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400">
-                                                UASG {session.uasg}
-                                            </Badge>
-                                            <span className="text-xs font-bold text-white uppercase">{session.numero}/{session.ano}</span>
-                                        </div>
-                                        <button onClick={() => stopSession(session.sessionId)} className="text-red-500/60 hover:text-red-500 transition-colors">
-                                            <Power className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                    {/* CONFIG PANEL */}
+                    <Card className="bg-black/40 border-emerald-500/20 p-5 flex flex-col gap-4">
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 mb-2 flex items-center gap-2">
+                            <Shield className="w-3 h-3" /> Parâmetros de Missão
+                        </h2>
+                        
+                        <Button 
+                            onClick={() => setIsAddOpen(true)}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-black uppercase text-[10px] h-10 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                        >
+                            <Plus className="w-4 h-4 mr-2" /> Novo Engajamento
+                        </Button>
 
-                                    {/* Items Summary - List View */}
-                                    <div className="p-3 space-y-2 min-h-[140px] max-h-[220px] overflow-y-auto custom-scrollbar">
-                                        {session.items.length === 0 ? (
-                                            <div className="h-32 flex flex-col items-center justify-center opacity-30 gap-2">
-                                                <Monitor className="w-8 h-8" />
-                                                <span className="text-[10px] uppercase">Aguardando dados...</span>
-                                            </div>
-                                        ) : (
-                                            session.items.map((item: any, idx) => (
-                                                <div key={idx} className="flex items-center justify-between text-[11px] bg-emerald-500/5 p-2 rounded border border-emerald-500/5">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-white/60 uppercase">Item {item.itemId}</span>
-                                                        <span className="font-bold text-white text-xs">R$ {item.valorAtual.toLocaleString('pt-BR')}</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-end">
-                                                        <Badge className={item.ganhador === 'Você' ? 'bg-emerald-500 text-black border-none' : 'bg-red-900/50 text-red-500 border border-red-500/20'}>
-                                                            {item.ganhador === 'Você' ? 'MEU LANCE' : 'PERDENDO'}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-
-                                    {/* Bottom Controls */}
-                                    <div className="p-2 bg-emerald-500/5 border-t border-emerald-500/10 grid grid-cols-2 gap-2">
-                                        <Button variant="outline" className="h-7 text-[10px] border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-black">
-                                            <Monitor className="w-3 h-3 mr-1" /> Focar
-                                        </Button>
-                                        <Button className="h-7 text-[10px] bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white">
-                                            <LayoutGrid className="w-3 h-3 mr-1" /> Sala
-                                        </Button>
-                                    </div>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-
-                    {/* Empty State / Add Card */}
-                    {Object.keys(activeSessions).length === 0 && (
-                        <div className="col-span-full flex flex-col gap-6">
-                            <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-emerald-900/30 rounded-lg group hover:border-emerald-500/30 transition-all cursor-pointer" onClick={() => setIsAddOpen(true)}>
-                                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                                    <Plus className="w-6 h-6 opacity-40 group-hover:opacity-100" />
-                                </div>
-                                <p className="text-[10px] uppercase tracking-[0.2em] opacity-40">Engajamento Manual. Clique para adicionar.</p>
+                        <div className="pt-4 border-t border-white/5 space-y-4">
+                            <div className="flex justify-between items-center text-[9px] opacity-60">
+                                <span>Status do Robô</span>
+                                <span className="text-emerald-500 font-bold">CALIBRADO</span>
                             </div>
+                            <div className="flex justify-between items-center text-[9px] opacity-60">
+                                <span>Latência Gateway</span>
+                                <span className="text-white">42ms</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] opacity-60">
+                                <span>Criptografia A1</span>
+                                <span className="text-blue-400">ATIVA</span>
+                            </div>
+                        </div>
+                    </Card>
 
-                            {kanbanCards.length > 0 && (
-                                <div className="space-y-4">
-                                    <h3 className="text-[10px] font-black uppercase text-emerald-500/60 tracking-widest flex items-center gap-2">
-                                        <Target className="w-3 h-3" /> Objetivos Sincronizados (Kanban)
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {kanbanCards.map(c => (
-                                            <div 
-                                                key={c.id} 
-                                                onClick={() => startFromCard(c.pncpId)}
-                                                className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-lg cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all group/card flex flex-col gap-2 relative overflow-hidden"
-                                            >
-                                                <div className="absolute top-0 right-0 p-3 opacity-5 group-hover/card:opacity-20 transition-opacity">
-                                                    <Zap className="w-8 h-8" />
-                                                </div>
-                                                <div className="flex justify-between items-start">
-                                                    <div className="text-white font-bold text-sm uppercase truncate pr-8">{c.title}</div>
-                                                </div>
-                                                <div className="flex items-center justify-between mt-auto">
-                                                    <div className="text-emerald-500 font-mono text-[9px] truncate">PNCP: {c.pncpId}</div>
-                                                    <Button className="h-6 px-3 bg-emerald-600 hover:bg-emerald-500 text-black font-black text-[9px] rounded uppercase shadow-[0_0_10px_rgba(16,185,129,0.2)]">Engajar</Button>
-                                                </div>
-                                            </div>
-                                        ))}
+                    {/* KANBAN OBJECTIVES QUICK LIST */}
+                    {kanbanCards.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                             <h3 className="text-[9px] font-black uppercase text-emerald-500/40 px-2 tracking-widest">Alvos do Planejamento</h3>
+                             <div className="space-y-1.5">
+                                {kanbanCards.slice(0, 4).map(c => (
+                                    <div key={c.id} onClick={() => startFromCard(c.pncpId)} className="p-2 bg-white/5 border border-white/5 rounded hover:border-emerald-500/40 cursor-pointer transition-all">
+                                        <div className="text-[10px] font-bold text-white/80 truncate uppercase">{c.title}</div>
+                                        <div className="text-[7px] opacity-30 font-mono mt-0.5">{c.pncpId}</div>
                                     </div>
-                                </div>
-                            )}
+                                ))}
+                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* RIGHT: GLOBAL COMBAT FEED */}
-                <div className="w-80 border-l border-emerald-900/30 flex flex-col pl-4 hidden xl:flex">
-                    <div className="flex items-center gap-2 mb-4">
-                        <ListFilter className="w-4 h-4 text-emerald-500" />
-                        <h2 className="text-[10px] font-bold uppercase tracking-widest text-white/50">Feed Global de Operações</h2>
+                {/* COLUNA CENTRAL: MAPA DE COMBATE (GRID DE ITENS) */}
+                <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                    <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <Target className="w-5 h-5 text-red-500" />
+                            <h2 className="text-sm font-black uppercase tracking-widest text-white">Interface de Disputa Ativa</h2>
+                         </div>
+                         <div className="flex gap-2">
+                            <Badge variant="outline" className="border-white/10 text-white/40">SESSÕES: {Object.keys(activeSessions).length}</Badge>
+                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 opacity-80">
-                        <div className="text-[9px] border-l-2 border-emerald-500 pl-2 py-1">
-                             <div className="text-emerald-500 font-bold">[14:52:10] SISTEMA ANTIGRAVIDADE</div>
-                             <div className="text-white">Motor Visual Polaryon inicializado com sucesso.</div>
-                        </div>
-                        {Object.values(activeSessions).map(s => (
-                            <div key={s.sessionId} className="text-[9px] border-l-2 border-white/20 pl-2 py-1">
-                             <div className="text-white/40 font-bold">[{new Date().toLocaleTimeString()}] SALA {s.uasg}</div>
-                             <div className="text-white/60">Monitorando {s.items.length} itens em tempo real.</div>
-                        </div>
-                        ))}
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
+                        {Object.keys(activeSessions).length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl opacity-20">
+                                <Radar className="w-20 h-20 mb-4 animate-[spin_10s_linear_infinite]" />
+                                <span className="text-xs font-black uppercase tracking-[0.5em]">Nenhum Alvo Detectado</span>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                                {Object.values(activeSessions).flatMap(s => 
+                                    s.items.map(it => (
+                                        <CombatItemCard 
+                                            key={s.sessionId + it.itemId} 
+                                            item={{
+                                                ...it,
+                                                limite: 150.00, // mock ou virá do store
+                                                status: s.status === 'running' ? 'Disputa' : 'Aguardando'
+                                            }}
+                                            onFocus={() => {
+                                                addLog(`Focando item ${it.itemId} da sala ${s.uasg}`, 'action', 'OPERATOR');
+                                            }}
+                                        />
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </div>
+                </div>
+
+                {/* COLUNA DIREITA: TELEMETRIA & LOGS (380px) */}
+                <div className="w-[380px] flex flex-col gap-4 overflow-hidden">
+                    <div className="flex-[2] overflow-hidden">
+                        <TacticalLog logs={logs} />
+                    </div>
+                    
+                    {/* HARDWARE TELEMETRY */}
+                    <div className="flex-1 bg-black/40 border border-emerald-900/20 rounded-lg p-4 flex flex-col gap-3">
+                         <div className="flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-widest">
+                            <Cpu className="w-3 h-3" /> Telemetria do Hardware
+                         </div>
+                         <div className="space-y-4">
+                            <div>
+                                <div className="flex justify-between text-[8px] text-emerald-500 mb-1">
+                                    <span>CARGA DO PROCESSADOR</span>
+                                    <span>{Math.floor(Math.random() * 15 + 10)}%</span>
+                                </div>
+                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                     <motion.div initial={{ width: 0 }} animate={{ width: '22%' }} className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between text-[8px] text-emerald-400 mb-1">
+                                    <span>USO DE MEMÓRIA (POLARYON)</span>
+                                    <span>2.4 GB</span>
+                                </div>
+                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                     <motion.div initial={{ width: 0 }} animate={{ width: '45%' }} className="h-full bg-emerald-400 shadow-[0_0_10px_#10b981]" />
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* STATUS BAR FINAL */}
+            <div className="h-8 border-t border-white/5 mt-4 flex items-center justify-between px-2">
+                <div className="flex items-center gap-6 text-[8px] font-black uppercase text-emerald-500/40 tracking-widest">
+                    <span className="flex items-center gap-1"><div className="w-1 h-1 bg-emerald-500 rounded-full" /> SINAL: EXCELENTE</span>
+                    <span>ENCRYPT: RSA-4096</span>
+                    <span>SESSION RECOVERY: ON</span>
+                </div>
+                <div className="text-[10px] text-white/20 font-mono">
+                    [{new Date().toLocaleDateString()}] -- {new Date().toLocaleTimeString()}
                 </div>
             </div>
 
             {/* MODAL NOVO COMBATE */}
             {isAddOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-[#0b101e] border border-emerald-500/30 p-6 rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.5)] w-full max-w-md"
-                    >
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-white font-bold text-lg flex items-center gap-2">
-                                <Activity className="w-5 h-5 text-emerald-500" /> INICIAR OPERAÇÃO
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl flex items-center justify-center z-50 p-4">
+                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#0b1224] border border-emerald-500/30 p-8 rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.8)] w-full max-w-md relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
+                        
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-white font-['Anton'] text-xl tracking-tighter flex items-center gap-3">
+                                <Zap className="w-5 h-5 text-emerald-500" /> DEPLOY DE OPERAÇÃO
                             </h2>
-                            <button onClick={() => setIsAddOpen(false)}><X className="w-5 h-5 opacity-40" /></button>
+                            <button onClick={() => setIsAddOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X className="w-5 h-5 opacity-40" /></button>
                         </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] uppercase opacity-60 mb-1 block">UASG / Órgão</label>
-                                <Input 
-                                    value={newUasg} 
-                                    onChange={e => setNewUasg(e.target.value)}
-                                    placeholder="Ex: 160001" 
-                                    className="bg-black/50 border-emerald-500/20 text-white font-mono h-10"
-                                />
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-500/60">UASG / CÓDIGO DO ÓRGÃO</label>
+                                <Input value={newUasg} onChange={e => setNewUasg(e.target.value)} placeholder="Ex: 160001" className="bg-black/50 border-emerald-500/20 text-white font-mono h-12 focus:border-emerald-500 transition-colors" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] uppercase opacity-60 mb-1 block">Número do Edital</label>
-                                    <Input 
-                                        value={newNumero} 
-                                        onChange={e => setNewNumero(e.target.value)}
-                                        placeholder="Ex: 90001" 
-                                        className="bg-black/50 border-emerald-500/20 text-white font-mono h-10"
-                                    />
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-500/60">Nº PREGÃO</label>
+                                    <Input value={newNumero} onChange={e => setNewNumero(e.target.value)} placeholder="0001" className="bg-black/50 border-emerald-500/20 text-white font-mono h-12" />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] uppercase opacity-60 mb-1 block">Ano</label>
-                                    <Input 
-                                        value={newAno} 
-                                        onChange={e => setNewAno(e.target.value)}
-                                        placeholder="2026" 
-                                        className="bg-black/50 border-emerald-500/20 text-white font-mono h-10"
-                                    />
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-500/60">ANO</label>
+                                    <Input value={newAno} onChange={e => setNewAno(e.target.value)} placeholder="2026" className="bg-black/50 border-emerald-500/20 text-white font-mono h-12" />
                                 </div>
                             </div>
 
-                            <Button 
-                                onClick={addSession}
-                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-bold h-12 uppercase tracking-widest mt-4"
-                            >
-                                Carregar Sala de Lances Manual
+                            <Button onClick={addSession} className="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-black h-14 uppercase tracking-[0.2em] mt-2 shadow-[0_10px_30px_rgba(16,185,129,0.2)]">
+                                Iniciar Combate Visual
                             </Button>
-
-                            {kanbanCards.length > 0 && (
-                                <div className="mt-6 border-t border-emerald-500/20 pt-4">
-                                    <label className="text-[10px] uppercase font-bold text-emerald-500 mb-3 block text-center">Ou escolha do seu Planejamento (Kanban)</label>
-                                    <div className="max-h-[200px] overflow-y-auto space-y-2 custom-scrollbar pr-2">
-                                        {kanbanCards.map(c => (
-                                            <div 
-                                                key={c.id} 
-                                                onClick={() => startFromCard(c.pncpId)}
-                                                className="bg-black/30 border border-emerald-500/10 p-3 rounded cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-colors"
-                                            >
-                                                <div className="text-white text-xs font-bold truncate">{c.title}</div>
-                                                <div className="text-white/40 text-[9px] mt-1 uppercase truncate font-mono">PNCP: {c.pncpId}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </motion.div>
                 </div>
             )}
+        </div>
+    );
+}
 
-            {/* STATUS BAR FOOTER */}
-            <div className="h-6 border-t border-emerald-900/50 mt-4 flex items-center justify-between text-[9px] opacity-40 uppercase tracking-tighter">
-                <div className="flex gap-4">
-                    <span>POLARYON ENGINE: v1.2.28</span>
-                    <span>SECURE TUNNEL: ACTIVE</span>
-                    <span>GOV.BR BRIDGE: STANDBY</span>
-                </div>
-                <div>
-                     SYSTEM TIME: {new Date().toLocaleTimeString()}
-                </div>
-            </div>
         </div>
     );
 }
