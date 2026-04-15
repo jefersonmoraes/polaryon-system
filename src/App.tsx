@@ -420,7 +420,17 @@ const AppContent = () => {
       <Route path="/oportunidades/busca" element={<ProtectedRoute><OportunidadesSearch /></ProtectedRoute>} />
       <Route path="/oportunidades/radar" element={<ProtectedRoute><RadarScannerPage /></ProtectedRoute>} />
       <Route path="/oportunidades/preditivo" element={<ProtectedRoute><InteligenciaPreditiva /></ProtectedRoute>} />
-      <Route path="/robo-lances" element={<ProtectedRoute><BiddingDashboardPage /></ProtectedRoute>} />
+      <Route 
+        path="/robo-lances" 
+        element={
+          <ProtectedRoute>
+            {typeof window !== 'undefined' && (!!(window as any).electronAPI?.isDesktop || navigator.userAgent.toLowerCase().includes('electron'))
+              ? <BiddingDashboardPage /> 
+              : <Navigate to="/desktop" replace />
+            }
+          </ProtectedRoute>
+        } 
+      />
       <Route path="/transparencia" element={<ProtectedRoute><TransparencySearchPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><GlobalCalendarPage /></ProtectedRoute>} />
       <Route path="/team" element={<ProtectedRoute><TeamWorkloadPage /></ProtectedRoute>} />

@@ -34,7 +34,7 @@ const AppDesktopContent = () => {
 
         document.documentElement.classList.add('dark');
         document.body.classList.add('bg-[#020817]');
-        document.body.style.overflow = 'hidden';
+        document.body.style.overflow = 'auto';
     }, []);
 
     return (

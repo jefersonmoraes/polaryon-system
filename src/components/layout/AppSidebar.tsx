@@ -19,6 +19,7 @@ const AppSidebar = () => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+  const isElectron = typeof window !== 'undefined' && (!!(window as any).electronAPI?.isDesktop || navigator.userAgent.toLowerCase().includes('electron'));
   
   const [currencyQuotes, setCurrencyQuotes] = useState<{ usd: string; eur: string } | null>(null);
 
@@ -421,18 +422,20 @@ const AppSidebar = () => {
           )
         }
 
-        <div className={`mt-2 border-t border-sidebar-border/30 pt-4 px-3 mb-2`}>
-          {!isCollapsed && <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2">Desktop Bot</h3>}
-          <Link
-            to="/desktop"
-            className={`flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-semibold hover:bg-emerald-500/10 hover:text-emerald-500 transition-all group ${location.pathname === '/desktop' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'text-sidebar-foreground'}`}
-            title="Central do Desktop"
-          >
-            <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
-            {!isCollapsed && <span>CENTRAL DO BOT</span>}
-            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.3.8 WAR-ROOM</div>}
-          </Link>
-        </div>
+        {isElectron && (
+          <div className="px-3 py-4 border-t border-white/5 bg-slate-900/40">
+            <Link 
+              to="/robo-lances"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 group hover:bg-emerald-500/10 hover:shadow-[0_0_15px_rgba(16,185,129,0.1)] border border-transparent hover:border-emerald-500/20 ${
+                location.pathname === '/robo-lances' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'text-slate-400'
+              }`}
+            >
+              <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
+              {!isCollapsed && <span>CENTRAL DO BOT</span>}
+              {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.3.9 WAR-ROOM</div>}
+            </Link>
+          </div>
+        )}
 
         {/* SEGURANÇA E CREDENCIAIS */}
         <div className={`mt-0 border-t border-sidebar-border/30 pt-4 px-3 mb-4`}>
