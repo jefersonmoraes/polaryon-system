@@ -182,6 +182,7 @@ export default function BiddingDashboardPage() {
                 }
             }
             setIsListening(false);
+            setSessionId(null);
         } catch (error) {
             console.error("Failed to stop radar:", error);
         }
@@ -605,11 +606,11 @@ export default function BiddingDashboardPage() {
                             {isDesktop && <CertificateManager />}
                             
                             {!isListening ? (
-                                <Button onClick={startRadar} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+                                <Button onClick={() => startRadar()} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
                                     <Play className="w-4 h-4 mr-2 fill-current"/> INICIAR COMBATE
                                 </Button>
                             ) : (
-                                <Button onClick={stopRadar} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+                                <Button onClick={() => stopRadar()} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
                                     <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO
                                 </Button>
                             )}
