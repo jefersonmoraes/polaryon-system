@@ -156,10 +156,10 @@ export default function DesktopCombatTerminal() {
     return (
         <div className="min-h-screen w-full bg-[#020617] text-emerald-500 font-mono flex flex-col p-4 select-none overflow-y-auto custom-scrollbar">
             {/* GRID PRINCIPAL: TRÍADE TÁTICA */}
-            <div className="flex-1 flex gap-4 overflow-hidden">
+            <div className="flex-1 flex gap-4">
                 
                 {/* COLUNA ESQUERDA: CONFIG & HUD (300px) */}
-                <div className="w-[320px] flex flex-col gap-4 overflow-y-auto custom-scrollbar">
+                <div className="w-[320px] flex flex-col gap-4">
                     {/* HUB BRANDING */}
                     <div className="p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-xl relative overflow-hidden group">
                         <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
