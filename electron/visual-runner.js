@@ -73,6 +73,14 @@ class VisualRunner {
         // Habilita o Console (DevTools) automaticamente para o usuário monitorar os erros
         win.webContents.openDevTools();
 
+        // Atalho F12 para alternar o console
+        win.webContents.on('before-input-event', (event, input) => {
+            if (input.key === 'F12' && input.type === 'keyDown') {
+                win.webContents.toggleDevTools();
+                event.preventDefault();
+            }
+        });
+
         win.on('closed', () => {
             this.sessions.delete(sessionId);
             

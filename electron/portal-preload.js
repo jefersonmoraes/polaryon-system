@@ -118,72 +118,69 @@ function scrapeDisputeRoom() {
             const searchAndClickMenu = (win) => {
                 if (foundMenu) return;
                 try {
-                    // 1. Tenta achar o elemento que contém o texto alvo
-                    const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li'));
-                    const match = allElements.find(el => {
+                    const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li, button'));
+                    
+                    // 1. TENTA O CLIQUE DIRETO NO SUBMENU SE ESTIVER VISÍVEL
+                    const submenuMatch = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        const normalizedTxt = txt.replace(/\s+/g, ' ');
-                        return normalizedTxt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
-                               normalizedTxt.includes('LICITAÇÕES E DISPENSAS (NOVO)');
+                        return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || txt.includes('LICITAÇÕES E DISPENSAS (NOVO)');
                     });
 
-                    if (match) {
-                        // Se achamos o texto, mas não é um link, tenta achar um link DENTRO ou o próprio elemento se for link
-                        const targetLink = (match.tagName === 'A' ? match : match.querySelector('a')) || match;
-                        
-                        console.log(`[POLARYON v1.3.5] Alvo Detectado: ${targetLink.innerText || 'Menu'}. Engajando...`);
+                    if (submenuMatch && submenuMatch.offsetParent !== null) { // Garante que está visível
+                        const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
+                        console.log(`[POLARYON v1.3.7] Submenu Detectado! Disparando navegação...`);
                         
                         const opts = { bubbles: true, cancelable: true, view: win };
-                        
-                        // "Acorda" o Menu (Essencial para menus DHTML que esperam interação)
-                        targetLink.dispatchEvent(new MouseEvent('mouseover', opts));
-                        targetLink.dispatchEvent(new MouseEvent('mousedown', opts));
-                        
-                        // Algumas sistemas pedem focus para disparar o evento de click
-                        if (typeof targetLink.focus === 'function') targetLink.focus();
+                        target.dispatchEvent(new MouseEvent('mouseover', opts));
+                        target.dispatchEvent(new MouseEvent('mousedown', opts));
+                        if (typeof target.focus === 'function') target.focus();
                         
                         setTimeout(() => {
-                            targetLink.dispatchEvent(new MouseEvent('mouseup', opts));
-                            targetLink.click();
-                            
-                            // Fallback de Navegação Direta (Se o click falhar e houver um href válido)
-                            if (targetLink.href && !targetLink.href.includes('javascript') && targetLink.href !== '#') {
-                                console.log("[POLARYON] Fallback: Navegação direta via HREF");
-                                win.location.href = targetLink.href;
+                            target.dispatchEvent(new MouseEvent('mouseup', opts));
+                            target.click();
+                            // Fallback redundante
+                            if (target.href && !target.href.includes('javascript') && target.href !== '#') {
+                                win.location.href = target.href;
                             }
-                        }, 50); // Delay tático para o menu processar o mouseover
-                        
+                        }, 100);
                         foundMenu = true;
                         return;
                     }
 
-                    // 2. Se não achou direto, tenta achar o botão COMPRAS e clicar para ver se o submenu abre
-                    const comprasBtn = elements.find(el => {
+                    // 2. SE NÃO ACHOU SUBMENU, TENTA ABRIR O MENU PAI "COMPRAS"
+                    const mainBtn = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        return txt === 'COMPRAS';
+                        return txt === 'COMPRAS' || txt === 'MENU COMPRAS';
                     });
-                    
-                    if (comprasBtn && typeof comprasBtn.click === 'function') {
-                        // Clica em Compras se ainda não clicamos neste ciclo (evita flood)
-                        if (!win.polaryonMenuClicked) {
-                            console.log("[POLARYON] Abrindo Aba COMPRAS...");
-                            comprasBtn.click();
-                            // Dispara um mouseover também por garantia (menus DHTML antigos)
-                            comprasBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}));
-                            win.polaryonMenuClicked = true;
-                        }
+
+                    if (mainBtn && !win.polaryonMenuClicked) {
+                        console.log("[POLARYON] Abrindo aba de comando COMPRAS...");
+                        mainBtn.click();
+                        mainBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}));
+                        win.polaryonMenuClicked = true;
+                        // Não marca foundMenu=true aqui pois queremos que no próximo ciclo ele ache o submenu
                     }
 
-                    // Busca recursiva nos filhos
+                    // 3. RECURSÃO DE SEGURANÇA (BUSCA EM TODOS OS FRAMES DO PORTAL)
                     if (win.frames && win.frames.length > 0) {
                         for (let i = 0; i < win.frames.length; i++) {
-                            searchAndClickMenu(win.frames[i]);
+                            try { searchAndClickMenu(win.frames[i]); } catch(e) {}
                         }
                     }
-                } catch(err) {
-                    // Ignora erros de permissão de cross-origin em frames de login, se houver
-                }
+                } catch(err) {}
             };
+            
+            // BYPASS DE SEGURANÇA: Se ficarmos presos na home por mais de 8 segundos, tentamos o pulo direto
+            if (!window.polaryonJumpAttempted) {
+                window.polaryonJumpAttempted = 0;
+            }
+            window.polaryonJumpAttempted++;
+
+            if (window.polaryonJumpAttempted > 4 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                 console.log("[POLARYON-WAR] Detecção de estagnação. Iniciando JUMP DIRETO para ambiente SERPRO...");
+                 window.location.href = 'https://www.comprasnet.gov.br/seguro/index_f.asp?servico=226';
+                 return;
+            }
             
             // Só roda a busca profunda se estivermos no topo para evitar processamento duplicado
             if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
