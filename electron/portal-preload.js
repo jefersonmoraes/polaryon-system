@@ -136,13 +136,16 @@ function scrapeDisputeRoom() {
                         return;
                     } else if (targetLink && typeof targetLink.click === 'function') {
                          // Evita clicar repetidamente se já disparou o handoff ou se o banner está visível
-                         if (window.top.polaryonHandoffActive) return;
+                         if (window.top.polaryonHandoffActive) {
+                             console.log("[POLARYON] Handoff já ativo. Ignorando clique automático.");
+                             return;
+                         }
 
                          console.log("[POLARYON] Elemento do Handoff encontrado. Forçando Clique...");
+                         // Marca como ativo IMEDIATAMENTE antes do clique para evitar race condition
+                         window.top.polaryonHandoffActive = true; 
                          targetLink.click();
                          foundMenu = true;
-                         // Marca como ativo para evitar o loop
-                         window.top.polaryonHandoffActive = true; 
                          return;
                     }
 
@@ -636,119 +639,162 @@ ipcRenderer.on('handoff-requested', (event, { url }) => {
 });
 
 function renderHandoffBanner(url) {
-    // Busca o documento do TOPO para garantir visibilidade sobre Framesets
-    const targetDoc = window.top.document;
+    console.log("[POLARYON] Iniciando renderização do banner para:", url);
     
-    // Evita duplicatas
-    if (targetDoc.getElementById('polaryon-handoff-banner')) return;
+    // Busca o documento do TOPO e do Frame Atual
+    const targets = [window.top.document, document];
+    
+    targets.forEach((targetDoc, index) => {
+        try {
+            if (targetDoc.getElementById('polaryon-handoff-banner')) {
+                console.log(`[POLARYON] Banner já existe no alvo ${index}.`);
+                return;
+            }
 
-    const banner = targetDoc.createElement('div');
-    banner.id = 'polaryon-handoff-banner';
-    banner.innerHTML = `
-        <div class="handoff-content">
-            <div class="handoff-icon">📡</div>
-            <div class="handoff-text">
-                <div class="handoff-title">SALA DE DISPUTA DETECTADA</div>
-                <div class="handoff-desc">O Portal tentou abrir uma nova aba. Deseja autorizar o redirecionamento e manter o robô ativo?</div>
-            </div>
-            <button id="polaryon-authorize-btn">AUTORIZAR ENTRADA</button>
-            <button id="polaryon-cancel-btn">CANCELAR</button>
-        </div>
-        <style>
-            #polaryon-handoff-banner {
-                position: fixed;
-                top: 40px;
-                left: 50%;
-                transform: translateX(-50%);
-                z-index: 2147483647 !important; /* Valor máximo de z-index */
-                background: rgba(10, 20, 30, 0.98);
-                border: 2px solid #00ffc8;
-                border-radius: 12px;
-                padding: 20px 30px;
-                box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 255, 200, 0.4);
-                backdrop-filter: blur(15px);
-                color: white;
-                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                min-width: 550px;
-                animation: bannerFadeDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            .handoff-content {
-                display: flex;
-                align-items: center;
-                gap: 25px;
-            }
-            .handoff-icon {
-                font-size: 32px;
-                filter: drop-shadow(0 0 8px #00ffc8);
-            }
-            .handoff-title {
-                font-size: 16px;
-                font-weight: 900;
-                letter-spacing: 2px;
-                color: #00ffc8;
-                text-shadow: 0 0 10px rgba(0, 255, 200, 0.5);
-            }
-            .handoff-desc {
-                font-size: 12px;
-                color: #88c0d0;
-                margin-top: 4px;
-            }
-            #polaryon-authorize-btn {
-                background: linear-gradient(135deg, #00ffc8 0%, #008f7a 100%);
-                border: none;
-                padding: 12px 25px;
-                border-radius: 8px;
-                color: #050a0f;
-                font-weight: 900;
-                font-size: 13px;
-                cursor: pointer;
-                transition: all 0.3s;
-                white-space: nowrap;
-                box-shadow: 0 4px 15px rgba(0, 255, 200, 0.3);
-                text-transform: uppercase;
-            }
-            #polaryon-authorize-btn:hover {
-                transform: translateY(-3px) scale(1.05);
-                box-shadow: 0 8px 25px rgba(0, 255, 200, 0.6);
-            }
-            #polaryon-cancel-btn {
-                background: transparent;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                padding: 10px 20px;
-                border-radius: 8px;
-                color: #aaa;
-                font-size: 12px;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            #polaryon-cancel-btn:hover {
-                background: rgba(255, 0, 0, 0.2);
-                border-color: rgba(255, 0, 0, 0.5);
-                color: #ff4d4d;
-            }
-            @keyframes bannerFadeDown {
-                from { opacity: 0; transform: translate(-50%, -100px); }
-                to { opacity: 1; transform: translate(-50%, 0); }
-            }
-        </style>
-    `;
+            const banner = targetDoc.createElement('div');
+            banner.id = 'polaryon-handoff-banner';
+            banner.className = 'polaryon-handoff-layer';
+            banner.innerHTML = `
+                <div class="handoff-content">
+                    <div class="handoff-icon">📡</div>
+                    <div class="handoff-text">
+                        <div class="handoff-title">SALA DE DISPUTA DETECTADA</div>
+                        <div class="handoff-desc">O Portal tentou abrir uma nova aba. Deseja autorizar o redirecionamento e manter o robô ativo?</div>
+                    </div>
+                    <div class="handoff-actions">
+                        <button id="polaryon-authorize-btn">AUTORIZAR ENTRADA</button>
+                        <button id="polaryon-cancel-btn">CANCELAR</button>
+                    </div>
+                </div>
+                <style>
+                    .polaryon-handoff-layer {
+                        position: fixed !important;
+                        top: 50px !important;
+                        left: 50% !important;
+                        transform: translateX(-50%) !important;
+                        z-index: 2147483647 !important;
+                        background: rgba(10, 20, 30, 0.98) !important;
+                        border: 2px solid #00ffc8 !important;
+                        border-radius: 12px !important;
+                        padding: 25px 35px !important;
+                        box-shadow: 0 0 60px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 255, 200, 0.5) !important;
+                        backdrop-filter: blur(20px) !important;
+                        color: white !important;
+                        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+                        min-width: 600px !important;
+                        animation: bannerFadeDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+                    .handoff-content {
+                        display: flex !important;
+                        align-items: center !important;
+                        gap: 30px !important;
+                        width: 100% !important;
+                    }
+                    .handoff-actions {
+                        display: flex !important;
+                        gap: 15px !important;
+                    }
+                    .handoff-icon {
+                        font-size: 36px !important;
+                        filter: drop-shadow(0 0 10px #00ffc8) !important;
+                    }
+                    .handoff-title {
+                        font-size: 18px !important;
+                        font-weight: 900 !important;
+                        letter-spacing: 2px !important;
+                        color: #00ffc8 !important;
+                        text-align: left !important;
+                    }
+                    .handoff-desc {
+                        font-size: 12px !important;
+                        color: #88c0d0 !important;
+                        margin-top: 5px !important;
+                        text-align: left !important;
+                    }
+                    #polaryon-authorize-btn {
+                        background: linear-gradient(135deg, #00ffc8 0%, #008f7a 100%) !important;
+                        border: none !important;
+                        padding: 14px 30px !important;
+                        border-radius: 8px !important;
+                        color: #050a0f !important;
+                        font-weight: 900 !important;
+                        font-size: 14px !important;
+                        cursor: pointer !important;
+                        transition: all 0.3s !important;
+                        white-space: nowrap !important;
+                        text-transform: uppercase !important;
+                        box-shadow: 0 5px 15px rgba(0, 255, 200, 0.3) !important;
+                    }
+                    #polaryon-authorize-btn:hover {
+                        transform: translateY(-3px) !important;
+                        box-shadow: 0 8px 25px rgba(0, 255, 200, 0.6) !important;
+                    }
+                    #polaryon-cancel-btn {
+                        background: rgba(255, 255, 255, 0.05) !important;
+                        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                        padding: 12px 20px !important;
+                        border-radius: 8px !important;
+                        color: #ccc !important;
+                        font-size: 13px !important;
+                        cursor: pointer !important;
+                        transition: all 0.2s !important;
+                    }
+                    #polaryon-cancel-btn:hover {
+                        background: rgba(255, 0, 0, 0.2) !important;
+                        border-color: rgba(255, 0, 0, 0.5) !important;
+                        color: #ff4d4d !important;
+                    }
+                    @keyframes bannerFadeDown {
+                        from { opacity: 0; transform: translate(-50%, -100px); }
+                        to { opacity: 1; transform: translate(-50%, 0); }
+                    }
+                </style>
+            `;
 
-    // Para Framesets, o body do top às vezes não funciona bem. Tentamos injetar no documentElement se falhar.
-    if (targetDoc.body) {
-        targetDoc.body.appendChild(banner);
-    } else {
-        targetDoc.documentElement.appendChild(banner);
-    }
+            // Injeção ultra-agressiva: tenta body, se não existir (frameset), tenta o documentElement (html)
+            const targetElement = targetDoc.body || targetDoc.documentElement;
+            if (targetElement) {
+                targetElement.appendChild(banner);
+                console.log(`[POLARYON] Banner injetado com sucesso no alvo ${index}.`);
+            }
 
-    targetDoc.getElementById('polaryon-authorize-btn').onclick = () => {
-        console.log("[POLARYON] Handoff autorizado manualmente pelo usuário. Navegando para:", url);
-        window.top.location.href = url;
-        window.top.polaryonHandoffActive = false;
-        banner.remove();
-    };
+            const authorizeBtn = targetDoc.getElementById('polaryon-authorize-btn');
+            if (authorizeBtn) {
+                authorizeBtn.onclick = () => {
+                    console.log("[POLARYON] Handoff autorizado manualmente. Navegando...");
+                    window.top.location.href = url;
+                    window.top.polaryonHandoffActive = false;
+                    // Remove de todos os documentos
+                    targets.forEach(d => {
+                        const b = d.getElementById('polaryon-handoff-banner');
+                        if (b) b.remove();
+                    });
+                };
+            }
 
-    targetDoc.getElementById('polaryon-cancel-btn').onclick = () => {
-        window.top.polaryonHandoffActive = false;
-        banner.remove();
-    };
+            const cancelBtn = targetDoc.getElementById('polaryon-cancel-btn');
+            if (cancelBtn) {
+                cancelBtn.onclick = () => {
+                    console.log("[POLARYON] Handoff cancelado.");
+                    window.top.polaryonHandoffActive = false;
+                    targets.forEach(d => {
+                        const b = d.getElementById('polaryon-handoff-banner');
+                        if (b) b.remove();
+                    });
+                };
+            }
+        } catch (err) {
+            console.error(`[POLARYON] Erro ao injetar no alvo ${index}:`, err);
+        }
+    });
+
+    // Fallback de segurança: se após 5 segundos o usuário não clicou e o banner sumiu, reseta o flag
+    setTimeout(() => {
+        if (window.top.polaryonHandoffActive) {
+            console.log("[POLARYON] Timeout de segurança do banner. Resetando flag.");
+            window.top.polaryonHandoffActive = false;
+        }
+    }, 30000); // 30 segundos
 }
