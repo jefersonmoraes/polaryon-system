@@ -48,8 +48,9 @@ class VisualRunner {
         // Nós interceptamos esse "PopUp" e forçamos a abrir na *mesma janela*,
         // assim o Robô nunca desgruda da sessão.
         win.webContents.setWindowOpenHandler(({ url }) => {
-            console.log(`[VISUAL RUNNER] Bloqueando Popup e forçando na mesma janela: ${url}`);
-            win.loadURL(url);
+            console.log(`[VISUAL RUNNER] Handoff detectado: ${url}. Aguardando autorização do usuário no Terminal...`);
+            // Notifica o Preload da página para mostrar o banner de autorização
+            win.webContents.send('handoff-requested', { url });
             return { action: 'deny' };
         });
 

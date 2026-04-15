@@ -620,7 +620,114 @@ function enviarLanceVisual(itemId, valorStr) {
                 }
             }
         }
-    } catch (e) {
-        console.error("Polaryon Combat Error:", e);
-    }
+// -------------- INTERCEPTADOR DE HANDOFF COM AUTORIZAÇÃO --------------
+ipcRenderer.on('handoff-requested', (event, { url }) => {
+    console.log("[POLARYON] Solicitação de Handoff recebida. Renderizando banner de autorização...");
+    renderHandoffBanner(url);
+});
+
+function renderHandoffBanner(url) {
+    // Evita duplicatas
+    if (document.getElementById('polaryon-handoff-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'polaryon-handoff-banner';
+    banner.innerHTML = `
+        <div class="handoff-content">
+            <div class="handoff-icon">📡</div>
+            <div class="handoff-text">
+                <div class="handoff-title">SALA DE DISPUTA DETECTADA</div>
+                <div class="handoff-desc">O Portal tentou abrir uma nova janela. Deseja autorizar o redirecionamento e manter o robô ativo?</div>
+            </div>
+            <button id="polaryon-authorize-btn">AUTORIZAR ENTRADA</button>
+            <button id="polaryon-cancel-btn">CANCELAR</button>
+        </div>
+        <style>
+            #polaryon-handoff-banner {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 9999999;
+                background: rgba(10, 20, 30, 0.95);
+                border: 1px solid rgba(0, 255, 200, 0.3);
+                border-radius: 12px;
+                padding: 15px 25px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 255, 200, 0.1);
+                backdrop-filter: blur(10px);
+                color: white;
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                min-width: 500px;
+                animation: bannerFadeDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            .handoff-content {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+            }
+            .handoff-icon {
+                font-size: 24px;
+                filter: drop-shadow(0 0 5px #00ffc8);
+            }
+            .handoff-title {
+                font-size: 14px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                color: #00ffc8;
+            }
+            .handoff-desc {
+                font-size: 11px;
+                color: #88c0d0;
+                margin-top: 2px;
+            }
+            #polaryon-authorize-btn {
+                background: linear-gradient(135deg, #00ffc8 0%, #008f7a 100%);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                color: #050a0f;
+                font-weight: 900;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
+                white-space: nowrap;
+                box-shadow: 0 4px 10px rgba(0, 255, 200, 0.2);
+            }
+            #polaryon-authorize-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 15px rgba(0, 255, 200, 0.4);
+            }
+            #polaryon-cancel-btn {
+                background: transparent;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                padding: 10px 15px;
+                border-radius: 6px;
+                color: #aaa;
+                font-size: 11px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            #polaryon-cancel-btn:hover {
+                background: rgba(255, 0, 0, 0.1);
+                border-color: rgba(255, 0, 0, 0.3);
+                color: #ff4d4d;
+            }
+            @keyframes bannerFadeDown {
+                from { opacity: 0; transform: translate(-50%, -40px); }
+                to { opacity: 1; transform: translate(-50%, 0); }
+            }
+        </style>
+    `;
+
+    document.body.appendChild(banner);
+
+    document.getElementById('polaryon-authorize-btn').onclick = () => {
+        console.log("[POLARYON] Handoff autorizado manualmente pelo usuário. Navegando para:", url);
+        window.location.href = url;
+        banner.remove();
+    };
+
+    document.getElementById('polaryon-cancel-btn').onclick = () => {
+        banner.remove();
+    };
 }
