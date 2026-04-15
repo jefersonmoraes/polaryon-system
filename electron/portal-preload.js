@@ -37,18 +37,39 @@ let currentConfig = {
 function scrapeDisputeRoom() {
     if (!mySessionId) return; // Aguarda inicialização
 
+    // --- SILENCIADOR DE DIÁLOGOS BLOQUEANTES ---
+    window.alert = () => { console.log("[POLARYON] Alert silenciado"); };
+    window.confirm = () => { console.log("[POLARYON] Confirm silenciado"); return true; };
+    window.prompt = () => { console.log("[POLARYON] Prompt silenciado"); return null; };
+
     try {
         const bodyText = document.body.innerText || "";
+        const currentUrl = window.location.href;
         
         // --- BYPASS DE AVISOS/COMUNICADOS (SICAF/GOV) ---
-        if (bodyText.includes('A Secretaria de Gestão e Inovação informa') || bodyText.includes('Comunicado') || bodyText.includes('Aviso Importante')) {
-            const skipBtns = Array.from(document.querySelectorAll('button, a, input[type="button"]')).find(el => {
+        if (bodyText.includes('A Secretaria de Gestão e Inovação informa') || 
+            bodyText.includes('Comunicado') || 
+            bodyText.includes('Aviso Importante') ||
+            currentUrl.includes('AvisoPortal')) {
+            
+            const skipBtns = Array.from(document.querySelectorAll('button, a, input[type="button"], tr, td')).find(el => {
                 const txt = (el.innerText || el.value || "").toUpperCase();
-                return txt.includes('PROSSEGUIR') || txt.includes('CONTINUAR') || txt.includes('FECHAR') || txt.includes('OK') || txt.includes('ENTENDI');
+                return txt.includes('PROSSEGUIR') || txt.includes('CONTINUAR') || txt.includes('FECHAR') || 
+                       txt.includes('OK') || txt.includes('ENTENDI') || txt.includes('CLIQUE AQUI');
             });
+
             if (skipBtns) {
                 console.log("[POLARYON] Pulando Aviso de Comunicado do Governo...");
-                skipBtns.click();
+                if (typeof skipBtns.click === 'function') skipBtns.click();
+                else window.location.href = skipBtns.href || window.location.href;
+                return;
+            }
+
+            // Fallback Agressivo: Se detectamos o aviso mas não achamos o botão, 
+            // tentamos saltar direto para a página pós-login (intro.htm)
+            if (currentUrl.includes('Aviso') || currentUrl.includes('Comunicado')) {
+                console.log("[POLARYON] Aviso detectado sem botões. Forçando salto para Intro...");
+                window.location.href = 'https://www.comprasnet.gov.br/intro.htm';
                 return;
             }
         }
