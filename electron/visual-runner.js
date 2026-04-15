@@ -33,6 +33,8 @@ class VisualRunner {
                 preload: path.join(__dirname, 'portal-preload.js'),
                 nodeIntegration: false,
                 contextIsolation: true,
+                webSecurity: false,
+                allowRunningInsecureContent: true,
                 // Partição única por sessão para permitir multilocação ou particionamento persistente padrão
                 partition: 'persist:comprasgov' 
             }

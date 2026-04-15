@@ -159,6 +159,16 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Bypass de erro de certificado para portais do governo
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  if (url.includes('comprasnet.gov.br') || url.includes('gov.br')) {
+    event.preventDefault();
+    callback(true);
+  } else {
+    callback(false);
+  }
+});
+
 // Handling macOS deep links
 app.on('open-url', (event, url) => {
   event.preventDefault();
