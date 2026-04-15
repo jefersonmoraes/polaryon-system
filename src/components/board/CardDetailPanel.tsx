@@ -1592,7 +1592,9 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                         let uasg = '', numero = '', ano = '';
                         const parts = card.pncpId.split('-');
                         if (parts.length >= 4) {
-                            uasg = parts[0];
+                            // Extract UASG: If parts[0] is CNPJ (14 digits), take first 6.
+                            const rawUasg = parts[0];
+                            uasg = (rawUasg.length === 14) ? rawUasg.substring(0, 6) : rawUasg;
                             numero = parseInt(parts[2], 10).toString();
                             ano = parts[3];
                         }
@@ -1721,28 +1723,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                         
-                        <button 
-                          onClick={() => {
-                            let uasg = '', numero = '', ano = '';
-                            if (card.pncpId) {
-                                const parts = card.pncpId.split('-');
-                                if (parts.length >= 4) {
-                                    uasg = parts[0];
-                                    numero = parseInt(parts[2], 10).toString();
-                                    ano = parts[3];
-                                }
-                            }
-                            const url = uasg && numero && ano 
-                              ? `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`
-                              : `polaryon://combat`;
-                            window.location.href = url;
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all text-[10px] font-black uppercase"
-                          title="Iniciar Combate via Robô"
-                        >
-                          <Zap className="h-3 w-3" />
-                          <span>ROBÔ</span>
-                        </button>
+                        {/* Botão Robô redundante removido como solicitado pela v1.2.20 */}
                       </div>
                     )}
                   </div>
@@ -1750,58 +1731,7 @@ const CardDetailPanel = ({ cardId, onClose }: Props) => {
               )}
 
               {/* COMBAT TERMINAL TRIGGER - ALWAYS VISIBLE OUTSIDE CONDITIONAL */}
-              <div className="mt-4 flex flex-col gap-3 bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.15)] overflow-hidden relative group/combat">
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover/combat:opacity-30 transition-opacity">
-                      <Zap className="h-12 w-12 text-emerald-500" />
-                  </div>
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-2 mb-1">
-                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                         <strong className="text-emerald-500 font-black uppercase tracking-[0.2em] text-[10px]">Polaryon Combat Tactical</strong>
-                      </div>
-                      <p className="text-[11px] text-white/60 mb-3">Engajamento imediato com o Compras.gov.br via Terminal Militar.</p>
-                      
-                      <div className="flex gap-2">
-                        {(() => {
-                          let uasg = '', numero = '', ano = '';
-                          if (card.pncpId) {
-                              const parts = card.pncpId.split('-');
-                              if (parts.length >= 4) {
-                                  uasg = parts[0];
-                                  numero = parseInt(parts[2], 10).toString();
-                                  ano = parts[3];
-                              }
-                          }
-                          return (
-                              <button 
-                                onClick={() => { 
-                                  const url = uasg && numero && ano 
-                                    ? `polaryon://combat?uasg=${uasg}&numero=${numero}&ano=${ano}`
-                                    : `polaryon://combat`;
-                                  
-                                  // Abre o link
-                                  window.location.href = url;
-                                  
-                                  // Fallback se não abrir em 2 segundos
-                                  setTimeout(() => {
-                                      if (document.hasFocus()) {
-                                          toast.error("O Terminal Desktop não respondeu. Certifique-se de que a V1.2.16+ está instalada.");
-                                      }
-                                  }, 2500);
-                                }} 
-                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 text-white text-xs font-black shadow-[0_0_20px_rgba(5,150,105,0.4)] hover:bg-emerald-500 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-tighter"
-                              >
-                                <Play className="h-4 w-4 fill-white" /> INICIAR LANCES AGORA
-                              </button>
-                          );
-                        })()}
-                        
-                        <button onClick={() => { onClose(); navigate('/oportunidades/busca', { state: { openPncpId: card.pncpId } }); }} className="p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white/50 hover:text-white transition-all" title="Ver no Explorador PNCP">
-                          <Building2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                  </div>
-              </div>
+
 
               {/* Modular sections - reorderable */}
               <Reorder.Group axis="y" values={sectionOrder.filter(s => s !== 'comments' && s !== 'budgets')} 

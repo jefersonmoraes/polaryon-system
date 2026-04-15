@@ -24,6 +24,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
+      allowRunningInsecureContent: true
     },
     backgroundColor: '#020817', // Mantemos escuro mas podemos usar #064e3b para debug
     autoHideMenuBar: true,

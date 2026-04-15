@@ -55,15 +55,18 @@ function scrapeDisputeRoom() {
 
         // Fase 2: Plataforma Gov.br (SSO)
         if (bodyText.includes('Identifique-se no gov.br') || bodyText.includes('Acesso Gov.br') || bodyText.includes('Certificado digital')) {
-            // No gov.br, o botão costuma ser uma div/button contendo ícone de certificado
-            const certButton = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
+            // Tentativa rápida e direta no botão de certificado
+            const certButton = document.querySelector('button#login-certificate, .cert-login-button, [alt="Certificado Digital"], #label-certificate');
+            const certLink = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
                 const txt = (el.innerText || el.getAttribute('alt') || '').toUpperCase();
                 return txt.includes('CERTIFICADO DIGITAL') || txt === 'SEU CERTIFICADO DIGITAL';
             });
 
-            if (certButton && typeof certButton.click === 'function') {
+            const finalBtn = certButton || certLink;
+
+            if (finalBtn && typeof finalBtn.click === 'function') {
                 console.log("[POLARYON] Executando Login Automático via Certificado...");
-                certButton.click();
+                finalBtn.click();
             }
 
             ipcRenderer.send('portal-update', {
