@@ -90,18 +90,54 @@ function scrapeDisputeRoom() {
              return;
         }
 
-        // Se estiver na tela de busca de lances, tenta encontrar o pregão solicitado
-        if (bodyText.includes('Pesquisar') && bodyText.includes('Lances')) {
-            const uasgInput = document.querySelector('input[name="uasg"], #uasg');
-            if (uasgInput && currentConfig.uasg) {
-                // Preenche e busca se necessário (Lógica complexa de preenchimento de formulário legado)
-                // Por enquanto assumimos que o link virá via URL ou clique manual, 
-                // mas podemos automatizar o filtro aqui se necessário.
+        // --- AUTOMOÇÃO DE PESQUISA (MODALIDADE DISPENSA 14.133) ---
+        if (bodyText.includes('Pesquisa de Dispensa') || bodyText.includes('Pesquisar Dispensa')) {
+            const uasgInput = document.querySelector('input[name="uasg"], #uasg, [placeholder*="UASG"]');
+            const numInput = document.querySelector('input[name="numero"], #numero, [placeholder*="Número"]');
+            const searchBtn = document.querySelector('button.btn-pesquisar, #btnPesquisar, .br-button.primary');
+
+            if (uasgInput && numInput && currentConfig?.uasg) {
+                if (uasgInput.value !== currentConfig.uasg) {
+                    console.log("[POLARYON] Preenchendo UASG...");
+                    uasgInput.value = currentConfig.uasg;
+                    uasgInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (numInput.value !== currentConfig.numero) {
+                    console.log("[POLARYON] Preenchendo Número...");
+                    numInput.value = currentConfig.numero;
+                    numInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                
+                if (searchBtn && uasgInput.value === currentConfig.uasg) {
+                    console.log("[POLARYON] Disparando Busca...");
+                    searchBtn.click();
+                }
             }
         }
-        // Esta é uma leitura genérica baseada nos elementos React/Angular do portal fase-externa
+
+        // --- ENTRADA AUTOMÁTICA NA SALA ENCONTRADA ---
+        if (bodyText.includes('Resultado da Pesquisa')) {
+            const disputeLink = Array.from(document.querySelectorAll('a, button')).find(el => {
+                const txt = el.innerText.toUpperCase();
+                return txt.includes('ACESSAR SALA') || txt.includes('DETALHES') || txt.includes(currentConfig?.numero);
+            });
+            if (disputeLink) {
+                console.log("[POLARYON] Entrando na Sala de Lances...");
+                disputeLink.click();
+            }
+        }
+
         const items = [];
         let hasItemsInDispute = false;
+
+        // Monitor de mudanças para extração instantânea
+        if (!window.polaryonObserver) {
+            window.polaryonObserver = new MutationObserver(() => {
+                // A própria função scrape será chamada novamente pelo timer global, 
+                // mas podemos forçar uma execução aqui se quisermos latência zero.
+            });
+            window.polaryonObserver.observe(document.body, { childList: true, subtree: true });
+        }
 
         // EXEMPLO DE INJEÇÃO V3: Motor de Identificação de Precisão (Dispensa 14.133 e Siga Pregão Style)
         const rowSelector = 'mat-expansion-panel, mat-row, tr[role="row"], .br-item, .card-item';

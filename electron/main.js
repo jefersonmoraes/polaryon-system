@@ -74,23 +74,25 @@ const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
 } else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Alguém tentou abrir uma segunda instância (ex: clicou num link polaryon://)
+  app.on('second-instance', (event, commandLine) => {
     if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
     
-    // Processa a URL vinda da linha de comando no Windows
-    const url = commandLine.pop();
-    handleDeepLink(url);
-  })
+    // Windows: o link polaryon:// pode estar em qualquer posição da commandLine
+    const url = commandLine.find(arg => arg.startsWith('polaryon://'));
+    if (url) {
+        handleDeepLink(url);
+    }
+  });
 }
 
 function handleDeepLink(url) {
   if (!url || typeof url !== 'string' || !url.startsWith('polaryon://')) return;
   
-  // url format: polaryon://combat?uasg=160001&numero=90001&ano=2026
+  console.log(`[MAIN] Processando Deep Link: ${url}`);
+  
   try {
     const rawUrl = url.replace('polaryon://', 'http://localhost/');
     const parsedUrl = new URL(rawUrl);
@@ -101,16 +103,23 @@ function handleDeepLink(url) {
       const numero = parsedUrl.searchParams.get('numero');
       const ano = parsedUrl.searchParams.get('ano');
       
-      // Inicia combate diretamente
       if (uasg && numero && mainWindow) {
         const sessionId = require('crypto').randomUUID();
         
+        // Garante que o visualRunner está pronto
         if (!visualRunner) {
             const VisualRunner = require('./visual-runner');
             visualRunner = new VisualRunner(mainWindow.webContents);
         }
         
-        visualRunner.startVisualSession(sessionId, { uasg, numero, ano: ano || new Date().getFullYear().toString(), modality: '05', vault: {} });
+        console.log(`[MAIN] Disparando Sessão Visual: UASG=${uasg}, Nº=${numero}`);
+        visualRunner.startVisualSession(sessionId, { 
+            uasg, 
+            numero, 
+            ano: ano || new Date().getFullYear().toString(), 
+            modality: '05', 
+            vault: {} 
+        });
       }
     }
   } catch (e) {
