@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, FileText, User, Timer, AlignLeft,
   Paperclip, GripVertical, Bold, Italic, Underline, List, Table, Link2,
   Archive, Undo2, Image, Calculator, Building2, ExternalLink, Truck, MapPin, Check,
-  ShoppingCart, Package, RefreshCw, Search, Download
+  ShoppingCart, Package, RefreshCw, Search, Download, Zap
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
