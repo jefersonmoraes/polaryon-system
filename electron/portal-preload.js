@@ -77,23 +77,70 @@ function scrapeDisputeRoom() {
             return;
         }
 
-        // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR / INTRO.HTM) ---
-        if (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor Brasileira') || bodyText.includes('Área de trabalho do fornecedor')) {
-             // "Licitação e Dispensa (novo)" it's the new module handoff link
-             const modNovoLink = Array.from(document.querySelectorAll('a, button, div, span, p')).find(el => {
-                const txt = (el.innerText || "").toUpperCase();
-                return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
-                       txt.includes('LICITAÇÕES E DISPENSAS (NOVO)') || 
-                       txt === 'COMPRAS';
-             });
-             if (modNovoLink && typeof modNovoLink.click === 'function') {
-                console.log("[POLARYON] Navegando via Handoff SSO para Módulo de Compras (Serpro Estaleiro)...");
-                modNovoLink.click();
-             } else if (bodyText.includes('redirecionado ao módulo de Dispensas')) {
-                const legacyLink = Array.from(document.querySelectorAll('a')).find(el => el.innerText.toUpperCase().includes('DISPENSA'));
-                if (legacyLink) legacyLink.click();
-             }
-        }
+        // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR / INTRO.HTM COM FRAMES) ---
+        // O Compras.gov.br antigo usa Framesets. Precisamos procurar em todos os frames usando recursão.
+        let foundMenu = false;
+        try {
+            const searchAndClickMenu = (win) => {
+                if (foundMenu) return;
+                try {
+                    // 1. Tenta achar o link DIRETO da Licitação e Dispensa (Pode estar oculto mas clicável)
+                    const elements = Array.from(win.document.querySelectorAll('a, td, div, span'));
+                    const targetLink = elements.find(el => {
+                        const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
+                        // Ignora espaços extras ou quebras de linha
+                        const normalizedTxt = txt.replace(/\s+/g, ' ');
+                        return normalizedTxt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
+                               normalizedTxt.includes('LICITAÇÕES E DISPENSAS (NOVO)') ||
+                               normalizedTxt.includes('DISPENDA (NOVO)'); // Typos do governo
+                    });
+
+                    if (targetLink && targetLink.href) {
+                        console.log("[POLARYON] Link do Handoff encontrado. Navegando Top Window...", targetLink.href);
+                        window.top.location.href = targetLink.href;
+                        foundMenu = true;
+                        return;
+                    } else if (targetLink && typeof targetLink.click === 'function') {
+                         console.log("[POLARYON] Elemento do Handoff encontrado. Forçando Clique...");
+                         targetLink.click();
+                         foundMenu = true;
+                         return;
+                    }
+
+                    // 2. Se não achou direto, tenta achar o botão COMPRAS e clicar para ver se o submenu abre
+                    const comprasBtn = elements.find(el => {
+                        const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
+                        return txt === 'COMPRAS';
+                    });
+                    
+                    if (comprasBtn && typeof comprasBtn.click === 'function') {
+                        // Clica em Compras se ainda não clicamos neste ciclo (evita flood)
+                        if (!win.polaryonMenuClicked) {
+                            console.log("[POLARYON] Abrindo Aba COMPRAS...");
+                            comprasBtn.click();
+                            // Dispara um mouseover também por garantia (menus DHTML antigos)
+                            comprasBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}));
+                            win.polaryonMenuClicked = true;
+                        }
+                    }
+
+                    // Busca recursiva nos filhos
+                    if (win.frames && win.frames.length > 0) {
+                        for (let i = 0; i < win.frames.length; i++) {
+                            searchAndClickMenu(win.frames[i]);
+                        }
+                    }
+                } catch(err) {
+                    // Ignora erros de permissão de cross-origin em frames de login, se houver
+                }
+            };
+            
+            // Só roda a busca profunda se estivermos no topo para evitar processamento duplicado
+            if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                searchAndClickMenu(window.top);
+            }
+        } catch(e) {}
+
 
         // --- AUTO-DIRECIONAMENTO DIRETO PARA A SALA LOGO APÓS O HANDOFF ---
         if (window.location.href.includes('cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras')) {
