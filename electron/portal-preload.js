@@ -620,6 +620,10 @@ function enviarLanceVisual(itemId, valorStr) {
                 }
             }
         }
+    } catch (e) {
+        console.error("Polaryon Combat Error:", e);
+    }
+}
 // -------------- INTERCEPTADOR DE HANDOFF COM AUTORIZAÇÃO --------------
 ipcRenderer.on('handoff-requested', (event, { url }) => {
     console.log("[POLARYON] Solicitação de Handoff recebida. Renderizando banner de autorização...");
