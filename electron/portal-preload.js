@@ -40,6 +40,19 @@ function scrapeDisputeRoom() {
     try {
         const bodyText = document.body.innerText || "";
         
+        // --- BYPASS DE AVISOS/COMUNICADOS (SICAF/GOV) ---
+        if (bodyText.includes('A Secretaria de Gestão e Inovação informa') || bodyText.includes('Comunicado') || bodyText.includes('Aviso Importante')) {
+            const skipBtns = Array.from(document.querySelectorAll('button, a, input[type="button"]')).find(el => {
+                const txt = (el.innerText || el.value || "").toUpperCase();
+                return txt.includes('PROSSEGUIR') || txt.includes('CONTINUAR') || txt.includes('FECHAR') || txt.includes('OK') || txt.includes('ENTENDI');
+            });
+            if (skipBtns) {
+                console.log("[POLARYON] Pulando Aviso de Comunicado do Governo...");
+                skipBtns.click();
+                return;
+            }
+        }
+
         // --- AUTOMAÇÃO DE LOGIN (GOV.BR) ---
         // Fase 1: Tela intermediária do Comprasnet ("Acesse sua Conta" -> "Entrar com Gov.br")
         if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
