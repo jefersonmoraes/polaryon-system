@@ -47,11 +47,27 @@ class VisualRunner {
         // o que faria o Electron abrir uma janela limpa sem o nosso `preload`.
         // Nós interceptamos esse "PopUp" e forçamos a abrir na *mesma janela*,
         // assim o Robô nunca desgruda da sessão.
+        // RECONSTRUÇÃO v1.2.50: Redirecionamento Automático e Silencioso (Competition Grade)
         win.webContents.setWindowOpenHandler(({ url }) => {
-            console.log(`[VISUAL RUNNER] Handoff detectado: ${url}. Aguardando autorização do usuário no Terminal...`);
-            // Notifica o Preload da página para mostrar o banner de autorização
-            win.webContents.send('handoff-requested', { url });
-            return { action: 'deny' };
+            // Se o portal tentar abrir uma nova aba (Disputa), forçamos na mesma janela
+            if (url.includes('comprasnet-web') || url.includes('disputa')) {
+                console.log('[POLARYON-NAV] Transição automática detectada para:', url);
+                // Carregamos na janela atual sem perguntar
+                win.loadURL(url);
+                return { action: 'deny' }; // Bloqueia a abertura da nova janela física
+            }
+            
+            // Links externos (ajuda, legislação) continuam abrindo fora
+            return { action: 'allow' };
+        });
+
+        // Injetor de Silenciador de Diálogos Global
+        win.webContents.on('did-start-navigation', () => {
+            win.webContents.executeJavaScript(`
+                window.alert = () => { console.log("Alert silenciado") };
+                window.confirm = () => { return true };
+                window.prompt = () => { return null };
+            `);
         });
 
         // Habilita o Console (DevTools) automaticamente para o usuário monitorar os erros
