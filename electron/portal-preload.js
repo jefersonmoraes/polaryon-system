@@ -129,13 +129,22 @@ function scrapeDisputeRoom() {
                                normalizedTxt.includes('DISPENDA (NOVO)'); // Typos do governo
                     });
 
-                    if (targetLink && targetLink.href) {
+                    if (targetLink && targetLink.href && targetLink.href.includes('javascript')) {
+                        console.log("[POLARYON] Forçando entrada automática na Sala de Disputa via Mouse Sequence...");
+                        const opts = { bubbles: true, cancelable: true, view: win };
+                        targetLink.dispatchEvent(new MouseEvent('mouseover', opts));
+                        targetLink.dispatchEvent(new MouseEvent('mousedown', opts));
+                        targetLink.dispatchEvent(new MouseEvent('mouseup', opts));
+                        targetLink.click();
+                        foundMenu = true;
+                        return;
+                    } else if (targetLink && targetLink.href) {
                         console.log("[POLARYON] Link do Handoff encontrado. Navegando Top Window...", targetLink.href);
                         window.top.location.href = targetLink.href;
                         foundMenu = true;
                         return;
                     } else if (targetLink && typeof targetLink.click === 'function') {
-                         console.log("[POLARYON] Forçando entrada automática na Sala de Disputa...");
+                         console.log("[POLARYON] Forçando entrada automática via Click Simples...");
                          targetLink.click();
                          foundMenu = true;
                          return;
