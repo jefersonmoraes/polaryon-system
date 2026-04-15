@@ -8,7 +8,7 @@ import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import UpdateNotification from '@/components/layout/UpdateNotification';
 
 // IMPORTAÇÃO ESTÁTICA - Essencial para evitar falha de chunks no Electron file://
-import DesktopCombatTerminal from "./pages/DesktopCombatTerminal";
+import BiddingDashboardPage from "./pages/BiddingDashboardPage";
 import LoginPage from "./pages/LoginPage";
 
 const queryClient = new QueryClient({
@@ -44,7 +44,7 @@ const AppDesktopContent = () => {
                 path="*" 
                 element={
                     isAuthenticated 
-                        ? <DesktopCombatTerminal /> 
+                        ? <BiddingDashboardPage /> 
                         : <Navigate to="/login" replace />
                 } 
             />

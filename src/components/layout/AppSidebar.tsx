@@ -265,6 +265,10 @@ const AppSidebar = () => {
                     title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
                   >
                     <div className="flex items-center gap-2 truncate">
+                      <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                        <Terminal className="w-3 h-3 text-emerald-500" />
+                        v1.2.28-COMBAT
+                      </div>
                       <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
                       {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
                     </div>
@@ -426,7 +430,7 @@ const AppSidebar = () => {
           >
             <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
             {!isCollapsed && <span>CENTRAL DO BOT</span>}
-            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.2.28</div>}
+            {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V1.2.29</div>}
           </Link>
         </div>
 
