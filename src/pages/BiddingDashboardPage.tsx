@@ -328,15 +328,15 @@ export default function BiddingDashboardPage() {
 
             // ⚡ NOTIFY LOCAL ENGINE (Real-time Config Sync)
             if (isLocalRunning && (window as any).electronAPI) {
-                (window as any).electronAPI.updateLocalBiddingConfig({
+                (window as any).electronAPI.updateLocalBiddingConfig(
                     sessionId,
-                    config: {
+                    {
                         itemsConfig: {
                             ...itemStrategies,
                             [itemId]: strategy
                         }
                     }
-                });
+                );
             }
         } catch (error) {
             console.error("Failed to save strategy:", error);
@@ -353,10 +353,10 @@ export default function BiddingDashboardPage() {
                 
                 // ⚡ NOTIFY LOCAL ENGINE (Real-time Simulation Toggle)
                 if (isLocalRunning && (window as any).electronAPI) {
-                    (window as any).electronAPI.updateLocalBiddingConfig({
+                    (window as any).electronAPI.updateLocalBiddingConfig(
                         sessionId,
-                        config: { simulationMode: val }
-                    });
+                        { simulationMode: val }
+                    );
                 }
 
                 import('sonner').then(({ toast }) => toast.info(`Modo ${val ? 'SIMULADO' : 'REAL'} ativado.`));

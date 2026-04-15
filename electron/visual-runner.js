@@ -67,6 +67,16 @@ class VisualRunner {
         }
     }
 
+    updateConfig(sessionId, config) {
+        if (this.sessions.has(sessionId)) {
+            const session = this.sessions.get(sessionId);
+            if (session.window) {
+                // Send IPC to the injected preload script
+                session.window.webContents.send('update-config', config);
+            }
+        }
+    }
+
     // --- NOVOS MÉTODOS PARA PARIDADE SIGA PREGÃO ---
     setupIpc() {
         ipcMain.on('visual-focus', (event, sessionId) => {

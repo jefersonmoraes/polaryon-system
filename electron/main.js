@@ -179,6 +179,9 @@ ipcMain.on('update-local-config', (event, { sessionId, config }) => {
     biddingRunner.updateConfig(sessionId, config);
     sessionStore.save(biddingRunner.activeSessions);
   }
+  if (visualRunner) {
+    visualRunner.updateConfig(sessionId, config);
+  }
 });
 
 // VISUAL AUTOMATION IPC HANDLERS (Siga Pregão Mode)

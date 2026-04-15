@@ -236,8 +236,28 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
 });
 
 ipcRenderer.on('update-config', (event, config) => {
-    currentVault = config;
-    console.log("[POLARYON] Estratégia atualizada no navegador injetado:", currentVault);
+    currentVault = { ...currentVault, ...config };
+    if (config.itemsConfig) {
+        Object.keys(config.itemsConfig).forEach(itemId => {
+            const strat = config.itemsConfig[itemId];
+            const priceStr = strat.minPrice.toFixed(2).replace('.', ',');
+            if (!itemLimits[itemId]) {
+                itemLimits[itemId] = { price: priceStr, mode: strat.mode };
+            } else {
+                itemLimits[itemId].price = priceStr;
+                itemLimits[itemId].mode = strat.mode;
+            }
+            
+            // Tenta atualizar a UI do Painel se existir
+            try {
+                const ipt = document.querySelector(`input[onchange*="'${itemId}'"]`);
+                if (ipt) ipt.value = priceStr;
+                const sel = document.querySelector(`select[onchange*="'${itemId}'"]`);
+                if (sel) sel.value = strat.mode;
+            } catch (e) { }
+        });
+    }
+    console.log("[POLARYON] Estratégia atualizada no navegador injetado:", currentVault, itemLimits);
 });
 
 // -------------- FUNÇÕES DO PAINEL CIBERNÉTICO --------------
@@ -378,6 +398,11 @@ function renderBiddingPanel(items) {
                         statusSpan.style.color = '#fff';
                     }
                 }
+            }
+        });
+    }
+}
+
 // -------------- ROTINA DE DISPARO VISUAL --------------
 function enviarLanceVisual(itemId, valorStr) {
     try {
