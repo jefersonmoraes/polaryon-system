@@ -26,16 +26,22 @@ function deploy() {
     }
 
     try {
-        // 2. Upload EXE
+        // 2. Git Push local antes de tudo
+        console.log('Sincronizando mudanças locais com o GitHub...');
+        execSync('git add .', { stdio: 'inherit', cwd: rootDir });
+        execSync('git commit -m "chore(deploy): release v' + version + '"', { stdio: 'inherit', cwd: rootDir });
+        execSync('git push origin main', { stdio: 'inherit', cwd: rootDir });
+
+        // 3. Upload EXE
         console.log(`uploading ${exeName} para o servidor...`);
         execSync(`scp dist_desktop/${exeName} root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
 
-        // 3. Upload latest.yml
+        // 4. Upload latest.yml
         console.log(`uploading latest.yml...`);
         execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
 
-        // 4. Sync Git, Build Web e Restart no VPS
-        console.log(`Sincronizando código, gerando build web e reiniciando backend no VPS...`);
+        // 5. Sync Git, Build Web e Restart no VPS
+        console.log(`Puxando código no VPS e gerando build web...`);
         const remoteCmd = `cd /var/www/polaryon && git pull origin main && npm run build && pm2 restart polaryon-backend`;
         execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
 

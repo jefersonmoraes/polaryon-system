@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>POLARYON MOCK PORTAL (FRAMESET TEST)</title>
+</head>
+<frameset rows="100,*" frameborder="1" border="5" framespacing="0">
+    <frame name="header" src="about:blank" scrolling="no" noresize>
+    <frameset cols="200,*">
+        <frame name="menu" src="about:blank">
+        <frame name="main" id="mainFrame" srcdoc="
+            <html>
+            <body style='background:#eee; font-family:sans-serif; padding:20px;'>
+                <h1>Área do Fornecedor (Simulada)</h1>
+                <p>Estrutura de Framesets detectada.</p>
+                <button id='simular-popup' style='padding:10px 20px; background:#007bff; color:white; border:none; border-radius:4px; cursor:pointer;'>
+                    SIMULAR CLIQUE EM LICITAÇÃO
+                </button>
+                <script>
+                    document.getElementById('simular-popup').onclick = () => {
+                        console.log('Botão clicado no frame interno');
+                        // No Portal real, isso dispararia o window.open interceptado
+                        // Aqui vamos apenas disparar o evento simulado para o banner
+                        parent.postMessage({ type: 'trigger-handoff', url: 'https://exemplo.com/disputa' }, '*');
+                    };
+                </script>
+            </body>
+            </html>
+        ">
+    </frameset>
+</frameset>
+</html>

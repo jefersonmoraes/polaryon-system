@@ -253,31 +253,54 @@ ipcMain.handle('get-restored-sessions', () => {
 
 // AUTO-UPDATER EVENTS
 autoUpdater.on('checking-for-update', () => {
-  console.log('Checking for update...');
+    console.log('[POLARYON-UPDATE] Verificando se há atualizações...');
 });
 
 autoUpdater.on('update-available', (info) => {
-  mainWindow.webContents.send('update-available', info);
+    console.log('[POLARYON-UPDATE] Atualização disponível v' + info.version);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', info);
+    }
+    new Notification({
+        title: 'Polaryon - Atualização detectada',
+        body: 'Uma nova versão (' + info.version + ') está sendo baixada automaticamente.'
+    }).show();
 });
 
 autoUpdater.on('update-not-available', (info) => {
-  mainWindow.webContents.send('update-not-available', info);
+    console.log('[POLARYON-UPDATE] Nenhuma atualização pendente (v' + app.getVersion() + ')');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-not-available', info);
+    }
 });
 
 autoUpdater.on('error', (err) => {
-  mainWindow.webContents.send('update-error', err.message);
+    console.error('[POLARYON-UPDATE] Erro no atualizador:', err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-error', err.message);
+    }
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
-  mainWindow.webContents.send('download-progress', progressObj);
+    console.log(`[POLARYON-UPDATE] Baixando: ${Math.round(progressObj.percent)}%`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-progress', progressObj);
+    }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  mainWindow.webContents.send('update-downloaded', info);
+    console.log('[POLARYON-UPDATE] Atualização v' + info.version + ' baixada.');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded', info);
+    }
+    new Notification({
+        title: 'Polaryon - Tudo pronto!',
+        body: 'A nova versão foi baixada. O robô será atualizado ao fechar.'
+    }).show();
 });
 
 ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall();
 });
 
 ipcMain.handle('get-app-version', () => {
