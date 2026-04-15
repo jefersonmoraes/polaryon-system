@@ -42,6 +42,17 @@ class VisualRunner {
 
         this.sessions.set(sessionId, { window: win, config });
 
+        // --- INTERCEPTADOR DE POPUPS ---
+        // O Serpro costuma abrir o módulo de Disputa em nova aba/janela (`target="_blank"`),
+        // o que faria o Electron abrir uma janela limpa sem o nosso `preload`.
+        // Nós interceptamos esse "PopUp" e forçamos a abrir na *mesma janela*,
+        // assim o Robô nunca desgruda da sessão.
+        win.webContents.setWindowOpenHandler(({ url }) => {
+            console.log(`[VISUAL RUNNER] Bloqueando Popup e forçando na mesma janela: ${url}`);
+            win.loadURL(url);
+            return { action: 'deny' };
+        });
+
         // Habilita o Console (DevTools) automaticamente para o usuário monitorar os erros
         win.webContents.openDevTools();
 
