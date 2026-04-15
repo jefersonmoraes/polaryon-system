@@ -174,7 +174,7 @@ export default function DesktopCombatTerminal() {
                         <h1 className="text-xl font-bold tracking-tighter uppercase font-['Anton'] text-white">Polaryon <span className="text-emerald-500">Terminal</span></h1>
                         <div className="text-[10px] opacity-70 flex items-center gap-2">
                              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                             SISTEMA OPERACIONAL ATIVO | V1.1.0-COMBAT-MODE
+                             SISTEMA OPERACIONAL ATIVO | V1.2.22-COMBAT-MODE
                         </div>
                     </div>
                 </div>
@@ -398,7 +398,7 @@ export default function DesktopCombatTerminal() {
             {/* STATUS BAR FOOTER */}
             <div className="h-6 border-t border-emerald-900/50 mt-4 flex items-center justify-between text-[9px] opacity-40 uppercase tracking-tighter">
                 <div className="flex gap-4">
-                    <span>POLARYON ENGINE: v1.1.0</span>
+                    <span>POLARYON ENGINE: v1.2.22</span>
                     <span>SECURE TUNNEL: ACTIVE</span>
                     <span>GOV.BR BRIDGE: STANDBY</span>
                 </div>
