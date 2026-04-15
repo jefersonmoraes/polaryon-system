@@ -26,6 +26,12 @@ const AppDesktopContent = () => {
     // No desktop, forçamos o tema dark para estética de terminal
     useEffect(() => {
         console.log("[POLARYON] Sistema Operacional Iniciado.");
+        
+        // Desarma o alarme de segurança (A carga foi um sucesso!)
+        if ((window as any).WATCHDOG_TIMER) {
+            clearTimeout((window as any).WATCHDOG_TIMER);
+        }
+
         document.documentElement.classList.add('dark');
         document.body.classList.add('bg-[#020817]');
         document.body.style.overflow = 'hidden';

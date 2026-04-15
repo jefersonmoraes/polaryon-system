@@ -14,14 +14,14 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    chunkSizeWarningLimit: 2000,
+    minify: "esbuild", 
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "desktop.html"),
       },
       output: {
-        // Força o bundle a ser o mais monolítico possível para evitar problemas de carregamento no file://
-        manualChunks: undefined,
+        format: 'iife', 
+        inlineDynamicImports: true, 
         entryFileNames: `assets/[name].js`,
         chunkFileNames: `assets/[name].js`,
         assetFileNames: `assets/[name].[ext]`
