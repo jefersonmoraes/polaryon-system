@@ -61,21 +61,13 @@ class VisualRunner {
             win.webContents.send('init-session', { sessionId, config });
         });
 
-        // --- CONSTRUÇÃO DO LINK DE DISPUTA DIRETO ---
-        // Ex: UASG(6) + Mod(06) + Num(5) + Ano(4) => 15000206000672026
-        const uasgStr = (config.uasg || "").toString().padStart(6, '0');
-        const numStr = (config.numero || "").toString().padStart(5, '0');
-        const anoStr = (config.ano || "").toString();
-        const modStr = "06"; // Padrão Dispensa Eletrônica
+        // --- CONSTRUÇÃO DO LINK DE DISPUTA DIRETO NA AUTOMAÇÃO ---
+        // O inject (portal-preload.js) vai cuidar de passar pelo gov.br, 
+        // aceitar certificado, pular a intro e forçar a URL direta
+        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
+        console.log(`[VISUAL RUNNER] Navegando Inicialmente para: ${startUrl}`);
         
-        const compraCode = `${uasgStr}${modStr}${numStr}${anoStr}`;
-        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
-
-        console.log(`[VISUAL RUNNER] Navegando Direto para: ${targetUrl}`);
-        
-        // Se o usuário não estiver logado, o Serpro redirecionará automaticamente para o Gov.br 
-        // e depois de logar via certificado, voltará para esta URL.
-        win.loadURL(targetUrl);
+        win.loadURL(startUrl);
     }
 
     stop(sessionId) {

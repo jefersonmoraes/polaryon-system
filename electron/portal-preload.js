@@ -77,17 +77,36 @@ function scrapeDisputeRoom() {
             return;
         }
 
-        // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR) ---
-        if (bodyText.includes('Área de Trabalho do Fornecedor Brasileira') || bodyText.includes('redirecionado ao módulo de Dispensas')) {
-             // Tenta encontrar o link de "Compras" -> "Dispensa/Licitação Eletrônica"
-             const comprasLink = Array.from(document.querySelectorAll('a, button, .menu-item')).find(el => 
-                el.innerText.toUpperCase().includes('COMPRAS') || el.innerText.toUpperCase().includes('DISPENSA/LICITAÇÃO')
-             );
-             if (comprasLink) {
-                console.log("[POLARYON] Navegando para Módulo de Compras...");
-                comprasLink.click();
+        // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR / INTRO.HTM) ---
+        if (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor Brasileira') || bodyText.includes('Área de trabalho do fornecedor')) {
+             // "Licitação e Dispensa (novo)" it's the new module handoff link
+             const modNovoLink = Array.from(document.querySelectorAll('a, button, div, span, p')).find(el => {
+                const txt = (el.innerText || "").toUpperCase();
+                return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
+                       txt.includes('LICITAÇÕES E DISPENSAS (NOVO)') || 
+                       txt === 'COMPRAS';
+             });
+             if (modNovoLink && typeof modNovoLink.click === 'function') {
+                console.log("[POLARYON] Navegando via Handoff SSO para Módulo de Compras (Serpro Estaleiro)...");
+                modNovoLink.click();
+             } else if (bodyText.includes('redirecionado ao módulo de Dispensas')) {
+                const legacyLink = Array.from(document.querySelectorAll('a')).find(el => el.innerText.toUpperCase().includes('DISPENSA'));
+                if (legacyLink) legacyLink.click();
              }
-             return;
+        }
+
+        // --- AUTO-DIRECIONAMENTO DIRETO PARA A SALA LOGO APÓS O HANDOFF ---
+        if (window.location.href.includes('cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras')) {
+            const uasgStr = (currentConfig.uasg || "150002").toString().padStart(6, '0');
+            const numStr = (currentConfig.numero || "67").toString().padStart(5, '0');
+            const anoStr = (currentConfig.ano || "2026").toString();
+            // Assumimos 06 para Dispensa Eletrônica
+            const compraCode = `${uasgStr}06${numStr}${anoStr}`;
+            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
+
+            console.log(`[POLARYON] Handoff Concluído! Saltando direto para a sala de combate: ${targetUrl}`);
+            window.location.href = targetUrl;
+            return;
         }
 
         // --- AUTOMOÇÃO DE PESQUISA (MODALIDADE DISPENSA 14.133) ---
