@@ -131,6 +131,24 @@ app.whenReady().then(async () => {
   // Inicializa o Proxy Seguro para suporte a A1
   await secureProxy.start();
   
+  // EQUIPAMENTO DE ELITE: Hijacker de Sessão (Referer/Origin Persistence)
+  // Isso garante que o portal aceite o salto direto para o 'servico=226'
+  const filter = {
+    urls: ['*://*.comprasnet.gov.br/*', '*://*.serpro.gov.br/*']
+  };
+
+  const { session } = require('electron');
+  session.fromPartition('persist:comprasgov').webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+    // Se a requisição for de handoff ou login, injetamos a autoridade necessária
+    if (details.url.includes('servico=226') || details.url.includes('login_f.asp')) {
+      details.requestHeaders['Referer'] = 'https://www.comprasnet.gov.br/seguro/intro.htm';
+      details.requestHeaders['Origin'] = 'https://www.comprasnet.gov.br';
+      details.requestHeaders['Sec-Fetch-Mode'] = 'navigate';
+      details.requestHeaders['Sec-Fetch-Site'] = 'same-origin';
+    }
+    callback({ requestHeaders: details.requestHeaders });
+  });
+
   createWindow();
 
   // Handle Windows Deep Link on First Launch

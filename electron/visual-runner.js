@@ -14,29 +14,23 @@ class VisualRunner {
             }
         });
 
-        // Listener para Cliques Nativos (Competition Grade)
+        // Listener para Cliques Nativos de Elite (v2)
         ipcMain.on('portal-native-click', (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window) {
-                console.log(`[POLARYON-WAR] Disparando CLIQUE NATIVO em: X=${x}, Y=${y}`);
+                console.log(`[POLARYON-WAR] Executando CLIQUE ELITE (v2) em: X=${Math.round(x)}, Y=${Math.round(y)}`);
                 
-                // Sequência: Mousedown -> Mouseup (Clique Físico)
-                session.window.webContents.sendInputEvent({
-                    type: 'mouseDown',
-                    x: Math.round(x),
-                    y: Math.round(y),
-                    button: 'left',
-                    clickCount: 1
-                });
+                const wc = session.window.webContents;
+                const pos = { x: Math.round(x), y: Math.round(y) };
+
+                // Sequência de Elite: Move -> Down -> Up
+                wc.sendInputEvent({ type: 'mouseMove', ...pos });
                 
                 setTimeout(() => {
-                    session.window.webContents.sendInputEvent({
-                        type: 'mouseUp',
-                        x: Math.round(x),
-                        y: Math.round(y),
-                        button: 'left',
-                        clickCount: 1
-                    });
+                    wc.sendInputEvent({ type: 'mouseDown', ...pos, button: 'left', clickCount: 1 });
+                    setTimeout(() => {
+                        wc.sendInputEvent({ type: 'mouseUp', ...pos, button: 'left', clickCount: 1 });
+                    }, 50);
                 }, 50);
             }
         });
@@ -124,9 +118,20 @@ class VisualRunner {
             win.webContents.send('init-session', { sessionId, config });
         });
 
-        // --- CONSTRUÇÃO DO LINK DE DISPUTA DIRETO NA AUTOMAÇÃO ---
-        // O inject (portal-preload.js) vai cuidar de passar pelo gov.br, 
-        // aceitar certificado, pular a intro e forçar a URL direta
+        // TENTATIVA DE SALTO AUTOMÁTICO (Elite Gateway)
+        // Se após 3 segundos o robô detectar que parou na intro, ele força o salto SSO
+        win.webContents.on('did-finish-load', () => {
+            const currentUrl = win.webContents.getURL();
+            if (currentUrl.includes('intro.htm')) {
+                console.log('[POLARYON-WAR] Detectada Estagnação na Intro. Aplicando ' + '"' + 'Salto de Elite' + '"' + '...');
+                setTimeout(() => {
+                    // Força o carregamento do serviço 226 (Handoff SSO)
+                    // O Hijacker no main.js cuidará dos cabeçalhos.
+                    win.loadURL('https://www.comprasnet.gov.br/seguro/index_f.asp?servico=226');
+                }, 1500);
+            }
+        });
+
         const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
         console.log(`[VISUAL RUNNER] Navegando Inicialmente para: ${startUrl}`);
         
