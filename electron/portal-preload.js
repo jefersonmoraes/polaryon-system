@@ -20,21 +20,29 @@ window.addEventListener("message", (event) => {
         }
 
         if (payload.action === 'API_DUMP' && payload.url) {
-             // FILTRO CIRÚRGICO: Detecta a lista de itens/disputa por padrões de URL
+             // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.21)
+             // Tenta extrair o ID longo (13 dígitos) de qualquer requisição à API
+             const idMatch = payload.url.match(/\/v1\/compras\/(\d{10,})/);
+             if (idMatch) {
+                  const fullId = idMatch[1];
+                  const yearMatch = payload.url.match(/\/v1\/compras\/\d+\/(\d{4})/);
+                  const year = yearMatch ? yearMatch[1] : '2026';
+                  
+                  window.polaryonContext_PurchaseId = fullId;
+                  window.polaryonContext_Year = year;
+
+                  // Se ainda não temos a URL de itens, construímos a partir do ID capturado
+                  if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
+                      window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${fullId}/${year}/itens?pagina=0&tamanhoPagina=20`;
+                  }
+             }
+
+             // FILTRO CIRÚRGICO: Detecta se esta URL é a lista de itens real
              const isItemsList = (payload.url.includes('/itens') || payload.url.includes('/disputa')) && !payload.url.includes('/totalizadores');
              const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
 
              if (isItemsList && !isMetadata) {
-                  // Captura o contexto da compra (UASG/Número/Ano) para lances via API
-                  const contextMatch = payload.url.match(/\/v1\/compras\/([^\/]+)\/(\d+)/);
-                  if (contextMatch) {
-                       window.polaryonContext_PurchaseId = contextMatch[1];
-                       window.polaryonContext_Year = contextMatch[2];
-                       
-                       // SALVAGUARDA v2.1.19: Usamos a URL original SEM hack de tamanhoPagina
-                       // Isso evita "envenenar" a sessão e causar erro 422
-                       window.polaryonHybrid_ItemsUrl = payload.url;
-                  }
+                  window.polaryonHybrid_ItemsUrl = payload.url;
                   
                   if (!window.polaryonHybrid_Active) {
                        startHybridEngine();
@@ -764,16 +772,20 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
     };
     console.log("[POLARYON] Sessão Local Inicializada:", sessionId, currentConfig);
 
-    // AUTO-CONSTRUTOR v2.1.20: Se o sniffer falhar, montamos a rota via contexto
+    // AUTO-CONSTRUTOR v2.1.21: Se o sniffer falhar, montamos a rota de forma robusta
     if (!window.polaryonHybrid_ItemsUrl && currentConfig.uasg && currentConfig.numero && currentConfig.ano) {
-        // Formata o UASG longo se necessário (remove pontos/traços)
-        const cleanUasg = currentConfig.uasg.replace(/\D/g, '');
-        const cleanNum = currentConfig.numero.replace(/\D/g, '');
+        const uasg = currentConfig.uasg.replace(/\D/g, '');
+        const num = currentConfig.numero.replace(/\D/g, '').padStart(5, '0');
+        const year = currentConfig.ano;
         
-        // URL Base segura sem paginação agressiva
-        window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${cleanUasg}/${cleanNum}/${currentConfig.ano}/itens?pagina=0&tamanhoPagina=20`;
+        // Padrão Serpro: UASG(6) + MODALIDADE(2) + SEQUENCIAL(5)
+        // Tentamos os formatos mais comuns (Modality 05 ou 06)
+        const id1 = `${uasg}05${num}`;
+        const id2 = `${uasg}06${num}`;
         
-        console.log("👻 [POLARYON] Auto-Rota Construída:", window.polaryonHybrid_ItemsUrl);
+        window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${id1}/${year}/itens?pagina=0&tamanhoPagina=20`;
+        
+        console.log("👻 [POLARYON] Tentativa de Auto-Rota:", window.polaryonHybrid_ItemsUrl);
         
         if (window.polaryonAuthBearer && !window.polaryonHybrid_Active) {
             startHybridEngine();
