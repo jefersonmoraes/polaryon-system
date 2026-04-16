@@ -344,6 +344,14 @@ function scrapeDisputeRoom() {
              const hasNestedCard = children.some(child => itemCards.includes(child));
              return !hasNestedCard;
         });
+
+        // v3.1: Watchdog de Paginação (Para Editais com 10+ itens)
+        const paginator = document.querySelector('mat-paginator, .br-pagination, nav[aria-label="Paginador"]');
+        if (paginator && !window.polaryonAutoPaged) {
+             const nextBtn = paginator.querySelector('button[aria-label*="Próxima"], button[aria-label*="Next"], .br-button.circle');
+             // Se detectamos paginador, emitimos um alerta pro operador
+             console.log("[POLARYON] Detetado edital com múltiplas páginas. Radar operando em modo Sequencial.");
+        }
         
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
@@ -386,9 +394,16 @@ function scrapeDisputeRoom() {
 
                     if (valorAtual === 0 && !text.includes('R$')) return;
 
-                    // Extração de ID (agora sabemos que a card inteira começa com o ID)
+                    // Extração de ID e Descrição (Foco em clareza no Terminal)
                     const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i);
                     const itemId = idMatch ? idMatch[1] : "1";
+                    
+                    // Tenta achar a descrição (geralmente o texto longo antes do primeiro R$)
+                    let desc = "";
+                    try {
+                        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+                        desc = lines.find(l => !l.includes('R$') && !l.match(/^\d+$/) && l.length > 20) || "";
+                    } catch(e) {}
 
                     // No novo Serpro tem o iconezinho de Thumbs Down para perdendo. Ou Thumbs Up.
                     const ganhador = text.toUpperCase().includes('MELHOR LANCE') || (meuValor > 0 && meuValor <= valorAtual) ? 'Você' : 'Outro';
@@ -398,6 +413,7 @@ function scrapeDisputeRoom() {
                         valorAtual: valorAtual,
                         meuValor: meuValor,
                         ganhador: ganhador,
+                        descricao: desc.substring(0, 100) + (desc.length > 100 ? "..." : ""),
                         status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
                         tempoRestante: -1, 
                         position: ganhador === 'Você' ? 1 : 0

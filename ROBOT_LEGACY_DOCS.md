@@ -1,45 +1,67 @@
-# 🛡️ POLARYON ROBOT: GUIA DE PRESERVAÇÃO (SNIPER ENGINE)
+# 🎖️ Polaryon War Flow: Documentação de Operação (Salto do Tigre)
 
-> [!IMPORTANT]
-> **ESTE DOCUMENTO É CRÍTICO PARA QUALQUER IA OU DESENVOLVEDOR.**
-> A navegação no portal Compras.gov.br (Lei 14.133) é extremamente sensível. As soluções abaixo foram conquistadas após múltiplas falhas de métodos convencionais. **NÃO ALTERE OS PADRÕES ABAIXO SEM ENTENDER AS CONSEQUÊNCIAS.**
-
-## 🎯 1. O Motor de Clique: Shadow Click (CDP)
-**Arquivos:** `electron/visual-runner.js` e `electron/main.js`
-
-- **O Problema:** Cliques via Javascript (`element.click()`) ou injeção simples de eventos no DOM são detectados e bloqueados pelo portal do governo.
-- **A Solução:** Usamos o **Chrome DevTools Protocol (CDP)** através do comando `Debugger.sendCommand('Input.dispatchMouseEvent')`. 
-- **Regra de Ouro:** Nunca volte para o método `.click()` do Selenium/Javascript puro. O clique deve ser disparado no nível de motor nativo do navegador (Shadow Mode).
-
-## 🚀 2. Localização Sniper (Sniper Lock)
-**Arquivo:** `electron/portal-preload.js`
-
-- **O Problema:** O portal usa estruturas de tabelas e menus aninhados. Localizadores comuns via XPATH ou `.find()` costumam retornar o "container" (bloco inteiro) em vez do link individual. Isso faz o robô clicar no lugar errado (centro do bloco).
-- **A Solução:** Implementamos a **Filtragem por Especificidade**. O robô filtra todos os candidatos com o texto "Licitação e Dispensa (novo)" e escolhe o elemento com o **menor innerText.length**.
-- **Regra de Ouro:** Sempre busque o elemento MAIS ESPECÍFICO (o mais profundo na árvore). Se for necessário mudar o texto, mantenha a lógica de `.sort((a,b) => a.length - b.length)`.
-
-## 🛑 3. Proibição de Saltos Ciegos (Anti-404)
-**Arquivos:** `electron/visual-runner.js`
-
-- **O Problema:** Tentar carregar URLs diretas como `login_f.asp?servico=226` resulta em Erro 404 "Página Não Encontrada". O portal possui barreiras de segurança baseadas em fluxo de navegação.
-- **A Solução:** O robô **NUNCA** deve forçar URLs de serviço. Ele deve carregar a `intro.htm` (Área de Trabalho) e usar o **Sniper Click** nos menus visuais para simular o caminho humano.
-- **Regra de Ouro:** O salto deve ser visual e mecânico, nunca via `webContents.loadURL`.
-
-## 🎭 4. Hijacker de Cabeçalhos (Referer Persistence)
-**Arquivo:** `electron/main.js`
-
-- **O Problema:** O portal valida se o `Referer` e a `Origin` das requisições são legítimos. Se estiverem ausentes, o acesso é negado.
-- **A Solução:** Interceptamos as requisições via `onBeforeSendHeaders` e injetamos dinamicamente os cabeçalhos oficiais:
-  - `Referer: https://www2.comprasnet.gov.br/siasgnet-dispensa/`
-  - `Origin: https://www2.comprasnet.gov.br`
-- **Regra de Ouro:** Mantenha os cabeçalhos sincronizados com o domínio que o portal estiver usando no momento.
-
-## 📦 5. Sincronização de Grade (Multi-UASG)
-**Arquivo:** `src/pages/BiddingDashboardPage.tsx`
-
-- **Lógica:** Cada UASG roda em uma sessão separada mantida em um objeto `Record<string, SessionData>`.
-- **Regra de Ouro:** Ao adicionar novos campos, certifique-se de que a atualização de estado (IPC) está mapeando corretamente para o `sessionId` específico para não misturar dados de pregões diferentes na Grade.
+Este documento "eterniza" e "blinda" o conhecimento técnico acumulado durante a estabilização do robô de lances (v2.1.2). Estas regras **NÃO DEVEM** ser alteradas sem compreensão total dos efeitos colaterais no backend do Serpro/Compras.gov.br.
 
 ---
-**Assinado:** Antigravity AI (Sniper Master)
-**Status:** v1.9.0 Operacional
+
+## 1. 🎯 A "Fórmula Secreta" do Link Direto (Modality Mapping)
+
+**Problema Histórico**: O portal Compras.gov.br retorna **Erro 500** ou **"Compra não encontrada"** se tentarmos acessar a sala de disputa de uma Dispensa 14.133 usando o código de modalidade `14` na URL.
+
+**A Solução Infiltrada**: 
+- Independente da modalidade real (Pregão 05, Dispensa 14, etc.), o link de salto direto **DEVE SEMPRE** usar o código **`06`**.
+- **Modelo de Link Perfeito**: `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra={UASG}{06}{NUMERO}{ANO}`
+- UASG: 6 dígitos (Ex: `390004`)
+- Modaliade: Fixa em `06` (2 dígitos)
+- Número: 5 dígitos (Ex: `00006`)
+- Ano: 4 dígitos (Ex: `2026`)
+
+> [!IMPORTANT]
+> O uso do código `06` é a "chave mestre" que permite o acesso direto ignorando a instabilidade do servidor de participação do Serpro.
+
+---
+
+## 2. 🐅 O Salto do Tigre (Base de Estabilidade)
+
+Quando o "Salto Direto" falha por instabilidade de sessão, o robô recua para a estratégia v2.0.4:
+
+1. **Navegação de Busca**: O robô entra na tela de "Pesquisa de Dispensa".
+2. **Auto-Preenchimento**: Preenche via DOM os campos `UASG` e `Número`.
+3. **Trigger de Busca**: Clica no botão "Pesquisar".
+4. **Sincronia de Sessão**: Este fluxo é mais lento, mas **essencial** porque força o servidor do governo a "reconhecer" a empresa logada dentro da licitação específica, criando os cookies de sessão necessários.
+
+---
+
+## 3. 👻 Motor de Extração (Zero-Latência)
+
+Para identificar os itens e dar lances, usamos o **Injetor Visual (MutationObserver)**:
+
+- **MutationObserver**: Monitora mudanças em tempo real no DOM sem recarregar a página. Isso permite latência quase zero no Sniper.
+- **Identificação Leaf-Node**: O robô não procura por classes CSS (que mudam sempre). Ele procura por "folhas" do HTML que contenham o texto `R$` e `Item [X]`.
+- **Anti-Frame Trap**: Como o portal antigo usa Framesets, o robô usa recursão para varrer todos os frames e encontrar o menu `LICITAÇÃO E DISPENSA (NOVO)` ou `servico=226`.
+
+---
+
+## 4. 🛡️ Blindagem de Deploy (VPS)
+
+O script de deploy (`scripts/deploy.js`) possui uma regra de ouro para o servidor Linux:
+- **Unlink Strategy**: Antes de atualizar a pasta `dist`, o script executa `unlink dist/download`. 
+- Isso evita o erro `Directory not empty` que acontece quando o Linux tenta apagar um link simbólico que está sendo acessado pelo sistema de arquivos.
+
+---
+
+## 📋 Ferramentas e Pilares Tecnológicos
+
+- **Electron Preload**: Onde toda a inteligência reside, isolada do site do governo mas com acesso total ao DOM.
+- **IPC-Bridge**: Ponte de comunicação entre a "Máquina de Lances" e o Dashboard do usuário.
+- **Military-Grade Banner**: Injeção visual no topo do portal do governo para dar controle total ao usuário dentro da "zona de combate".
+
+---
+
+## ⚠️ Mandamentos para Futuros Desenvolvedores
+1. **Nunca** mude o `06` para `14` no link de disputa.
+2. **Sempre** mantenha o delay de 3-4 segundos no salto para dar tempo do backend sincronizar.
+3. Se o governo mudar o layout, ajuste a regex de extração, mas mantenha a **Lógica do Tigre**.
+
+**Status da Missão**: CONCLUÍDA E ETERNIZADA.
+**Versão de Referência**: v2.1.2 (Tanque de Guerra GOLD)
