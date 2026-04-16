@@ -65,19 +65,31 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v3.0: Watchdog de Recuperação para Erro 500 / Tela Branca do Portal Novo
+            // v4.0 Tsunami: Resource Watchdog (Monitoramento de Ativos de Rede)
+            // Detecta se scripts vitais do governo falharam ao carregar (Erro 404/500)
+            window.addEventListener('error', (e) => {
+                if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+                    const src = e.target.src || e.target.href;
+                    if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js'))) {
+                        console.error("[POLARYON TSUNAMI] Falha Crítica de Ativo Detectada:", src);
+                        console.warn("[POLARYON] Forçando Hard Refresh em 2s para recuperar...");
+                        setTimeout(() => window.location.reload(), 2000);
+                    }
+                }
+            }, true);
+
+            // v4.0: Watchdog de Recuperação Adicional (Check de Texto e Inércia)
             if (currentUrl.includes('cnetmobile') || currentUrl.includes('comprasnet-web')) {
                 const healthCheck = () => {
                     const hasContent = document.body && document.body.innerText.length > 200;
                     const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
                     
                     if (!hasContent || isSystemError) {
-                        console.warn("[POLARYON] Detetada falha de carregamento no portal. Tentando recuperação em 3s...");
+                        console.warn("[POLARYON] Portal travado ou com erro de texto. Tentando recuperação...");
                         setTimeout(() => window.location.reload(), 3000);
                     }
                 };
-                // Verifica após 5s de carregamento
-                setTimeout(healthCheck, 5000);
+                setTimeout(healthCheck, 6000);
             }
 
             // Fallback Agressivo: Se detectamos o aviso mas não achamos o botão, 
@@ -91,11 +103,12 @@ function scrapeDisputeRoom() {
 
         // --- AUTOMAÇÃO DE LOGIN E HANDOFF DIRETO (v3.0) ---
         
-        // v3.0: SALTO DIRETO PARA PORTAL NOVO (Bypass de Frameset/Menus)
-        // Se estamos no index.asp mas não saltamos pro portal novo ainda
+        // v4.0: MOTOR DE SALTO PERSISTENTE (Handoff Aggressive)
+        // Se estamos no index.asp mas não saltamos pro portal novo ainda (Handoff Persistente)
         if (currentUrl.includes('index.asp') && !currentUrl.includes('servico=226') && bodyText.includes('Joelison')) {
-             console.log("[POLARYON] Handoff Direto v3.0: Saltando para Portal 14.133...");
-             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226';
+             console.log("[POLARYON TSUNAMI] Forçando Salto v4.0 para Portal 14.133...");
+             // Adicionamos um timestamp para forçar bypass de cache no servidor do governo
+             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226&polaryon_ts=' + Date.now();
              return;
         }
 
