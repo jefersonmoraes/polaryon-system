@@ -85,8 +85,8 @@ export default function BiddingDashboardPage() {
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
 
-    // MODO MULTI-UASG (v1.8.0)
-    const [viewMode, setViewMode] = useState<'focus' | 'grid'>('focus');
+    // MODO MULTI-UASG (v2.0 War Flow)
+    const [viewMode, setViewMode] = useState<'focus' | 'grid' | 'flow'>('focus');
     const [sessions, setSessions] = useState<Record<string, {
         uasg: string;
         numero: string;
@@ -143,6 +143,11 @@ export default function BiddingDashboardPage() {
                         setIsLocalRunning(true);
                         setIsListening(true);
                         
+                        // v2.0: Auto-switch to Flow mode when moving to multi-uasg
+                        if (Object.keys(sessions).length > 0) {
+                            setViewMode('flow');
+                        }
+
                         // Inicializa na lista multi-sessão
                         setSessions(prev => ({
                             ...prev,
@@ -152,8 +157,8 @@ export default function BiddingDashboardPage() {
                                 items: [],
                                 chatMessages: [],
                                 lastUpdate: new Date().toLocaleTimeString(),
-                                isAuthenticated: false,
-                                simulationMode: simulationMode
+                                isAuthenticated: true,
+                                simulationMode: true
                             }
                         }));
 
@@ -360,19 +365,22 @@ export default function BiddingDashboardPage() {
         }
     }, [isDesktop, sessionId]);
 
-    const saveStrategy = async (itemId: string, strategy: ItemStrategy) => {
-        if (!sessionId) return;
+    const saveStrategy = async (itemId: string, strategy: ItemStrategy, targetSid?: string) => {
+        const sid = targetSid || sessionId;
+        if (!sid) return;
         try {
-            await api.patch(`/bidding/sessions/${sessionId}/items/${itemId}`, {
+            await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, {
                 ...strategy,
-                simulationMode // Pass global simulation mode to item config
+                simulationMode 
             });
+            
+            // Atualiza estratégias locais
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
 
             // ⚡ NOTIFY LOCAL ENGINE (Real-time Config Sync)
             if (isLocalRunning && (window as any).electronAPI) {
                 (window as any).electronAPI.updateLocalBiddingConfig(
-                    sessionId,
+                    sid,
                     {
                         itemsConfig: {
                             ...itemStrategies,
@@ -520,6 +528,13 @@ export default function BiddingDashboardPage() {
                         >
                             GRADES ({Object.keys(sessions).length})
                         </Button>
+                        <Button 
+                            variant={viewMode === 'flow' ? 'secondary' : 'ghost'} 
+                            onClick={() => setViewMode('flow')}
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg bg-emerald-500/10 text-emerald-500"
+                        >
+                            FLUXO
+                        </Button>
                     </div>
 
                     <div className="flex items-center gap-6">
@@ -564,7 +579,33 @@ export default function BiddingDashboardPage() {
                 )}
             </div>
 
-            {viewMode === 'grid' ? (
+            {viewMode === 'flow' ? (
+                <div className="space-y-4 max-w-5xl mx-auto pb-20">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-xl font-black text-white italic tracking-tighter">FLUXO DE COMBATE</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Monitorando {allItems.length} itens simultâneos</p>
+                        </div>
+                    </div>
+                    {allItems.length === 0 ? (
+                        <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.02]">
+                            <Target className="w-12 h-12 text-slate-700 animate-pulse mb-4" />
+                            <p className="text-slate-500 font-bold text-sm">Nenhum item ativo no fluxo.</p>
+                            <p className="text-slate-700 text-[10px] mt-1 uppercase">Inicie o radar em um UASG para ver os itens aqui.</p>
+                        </div>
+                    ) : (
+                        allItems.map(item => (
+                            <CombatStreamCard 
+                                key={`${item.sid}-${item.id}`} 
+                                item={item} 
+                                sessionId={item.sid}
+                                strategy={itemStrategies[item.id] || { mode: 'follower', minPrice: 0 }}
+                                onSave={(s) => saveStrategy(item.id, s, item.sid)}
+                            />
+                        ))
+                    )}
+                </div>
+            ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-8 duration-500">
                     {Object.entries(sessions).map(([sid, s]) => (
                         <Card 
@@ -1018,6 +1059,105 @@ export default function BiddingDashboardPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </div>
+    );
+}
+
+// v2.0 - COMPONENTE DE ELITE PARA FLUXO DE COMBATE
+function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: BiddingItem & { uasgName: string }, sessionId: string, strategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
+    const isWinning = item.posicao === '1';
+    const [localMinPrice, setLocalMinPrice] = useState(strategy.minPrice.toString());
+
+    return (
+        <Card className={`relative overflow-hidden border-2 transition-all duration-300 ${isWinning ? 'border-emerald-500/30 bg-emerald-500/[0.03]' : 'border-red-500/30 bg-red-500/[0.03] shadow-[0_0_20px_rgba(239,68,68,0.05)]'}`}>
+            <div className="absolute top-0 left-0 w-1 h-full bg-slate-800" />
+            <div className={`absolute top-0 left-0 w-1 h-full animate-pulse ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            
+            <CardContent className="p-4">
+                <div className="grid grid-cols-12 gap-4 items-center">
+                    {/* STATUS E IDENTIFICAÇÃO */}
+                    <div className="col-span-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase whitespace-nowrap">
+                                Item {item.id} • UASG {item.uasgName}
+                            </span>
+                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-black italic tracking-tight w-fit ${isWinning ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>
+                                {isWinning ? <Trophy className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                {isWinning ? 'VENCENDO' : 'PERDENDO'}
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-bold truncate mt-1">{item.descricao}</span>
+                        </div>
+                    </div>
+
+                    {/* LANCE E VALOR */}
+                    <div className="col-span-4 flex flex-col items-center justify-center border-l border-r border-white/10 px-4">
+                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Meu Lance Atual</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-slate-400 text-xs font-bold leading-none">R$</span>
+                            <span className={`text-2xl font-black italic tracking-tighter leading-none ${isWinning ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {item.melhorLance?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                        <div className="text-[9px] text-slate-500 font-bold mt-1">
+                            Vencedor: R$ {item.valorVencedor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </div>
+                    </div>
+
+                    {/* TIMER DE COMBATE */}
+                    <div className="col-span-2 flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Tempo</span>
+                        <div className={`text-xl font-mono font-black tracking-tighter tabular-nums ${item.timerSeconds && item.timerSeconds < 30 ? 'text-orange-500 animate-pulse' : 'text-white'}`}>
+                            {item.timeout || '00:00'}
+                        </div>
+                        <div className="w-full bg-slate-900 h-1 mt-2 rounded-full overflow-hidden">
+                            <div 
+                                className={`h-full transition-all duration-1000 ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`}
+                                style={{ width: `${Math.min(((item.timerSeconds || 0) / 180) * 100, 100)}%` }}
+                             />
+                        </div>
+                    </div>
+
+                    {/* CONTROLES SNIPER (v2.0) */}
+                    <div className="col-span-3 pl-4 flex flex-col gap-2">
+                        <div className="flex flex-col gap-1.5">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    checked={strategy.mode === 'follower'}
+                                    onChange={(e) => onSave({ ...strategy, mode: e.target.checked ? 'follower' : 'manual' })}
+                                    className="w-4 h-4 rounded border-white/20 bg-slate-900 accent-emerald-500"
+                                />
+                                <span className="text-[11px] font-black text-slate-300 group-hover:text-emerald-400 transition-colors uppercase italic">Manter Aberto</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    checked={strategy.mode === 'sniper'}
+                                    onChange={(e) => onSave({ ...strategy, mode: e.target.checked ? 'sniper' : 'manual' })}
+                                    className="w-4 h-4 rounded border-white/20 bg-slate-900 accent-orange-500"
+                                />
+                                <span className="text-[11px] font-black text-slate-300 group-hover:text-orange-400 transition-colors uppercase italic">Modo Sniper</span>
+                            </label>
+                        </div>
+
+                        <div className="relative group">
+                            <span className="absolute -top-2 left-2 bg-slate-900 px-1 text-[8px] font-black text-slate-500 uppercase">Preço Mínimo</span>
+                            <div className="flex gap-1 h-8">
+                                <Input 
+                                    className="bg-slate-950 border-white/10 text-[11px] font-black text-emerald-400 h-full w-full focus:border-emerald-500/50"
+                                    placeholder="0,00"
+                                    value={localMinPrice}
+                                    onChange={(e) => setLocalMinPrice(e.target.value)}
+                                    onBlur={() => onSave({ ...strategy, minPrice: parseFloat(localMinPrice.replace(',', '.')) || 0 })}
+                                />
+                                <Button size="icon" className="h-full w-8 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white" onClick={() => onSave({ ...strategy, minPrice: parseFloat(localMinPrice.replace(',', '.')) || 0 })}>
+                                    <Check className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 
