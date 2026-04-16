@@ -115,7 +115,15 @@ const RadarScannerPage = () => {
     const saveSettings = async () => {
         setIsSaving(true);
         try {
-            await api.post('/radar/settings', { keywords, states: selectedStates });
+            // Auto-add if user typed but didn't click "+"
+            let finalKeywords = [...keywords];
+            if (newKeyword.trim() && !keywords.includes(newKeyword.trim())) {
+                finalKeywords.push(newKeyword.trim());
+                setKeywords(finalKeywords);
+                setNewKeyword('');
+            }
+
+            await api.post('/radar/settings', { keywords: finalKeywords, states: selectedStates });
             toast.success('Radar Re-Calibrado!', {
                 description: 'Os nichos e filtros foram atualizados com sucesso.',
                 icon: <ShieldCheck className="h-4 w-4 text-emerald-500" />

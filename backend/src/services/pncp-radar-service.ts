@@ -80,11 +80,14 @@ export class PncpRadarService {
                 keywords = ['Informática', 'Limpeza', 'Manutenção'];
             }
 
-            // 2. Query PNCP for today's "Dispensas Eletrônicas"
+            // 2. Query PNCP for recent "Dispensas Eletrônicas"
+            // We look back 3 days to ensure the Radar has data to show, while still filtering for 'recebendo_proposta'
             const now = new Date();
-            const today = now.toISOString().split('T')[0].replace(/-/g, '');
+            const lookbackDate = new Date();
+            lookbackDate.setDate(now.getDate() - 3);
+            const start = lookbackDate.toISOString().split('T')[0].replace(/-/g, '');
             
-            const PNCP_SEARCH_URL = `https://pncp.gov.br/api/search/?pagina=1&tam_pagina=100&data_publicacao_inicial=${today}&status=recebendo_proposta&tipos_documento=edital`;
+            const PNCP_SEARCH_URL = `https://pncp.gov.br/api/search/?pagina=1&tam_pagina=100&data_publicacao_inicial=${start}&status=recebendo_proposta&tipos_documento=edital`;
 
             const response = await axios.get(PNCP_SEARCH_URL, {
                 headers: { 
