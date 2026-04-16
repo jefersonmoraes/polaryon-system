@@ -16,8 +16,22 @@ import {
     Search,
     MapPin,
     Building2,
-    Shield
+    Shield,
+    Plus,
+    X,
+    Filter
 } from 'lucide-react';
+import api from '@/lib/api';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger,
+    DialogFooter 
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { socketService } from '@/lib/socket';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +58,14 @@ const RadarScannerPage = () => {
     const [isScanning, setIsScanning] = useState(true);
     const [lastScan, setLastScan] = useState<Date>(new Date());
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    
+    // Configurações do Radar
+    const [keywords, setKeywords] = useState<string[]>([]);
+    const [selectedStates, setSelectedStates] = useState<string[]>([]);
+    const [newKeyword, setNewKeyword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
     const navigate = useNavigate();
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -75,6 +97,54 @@ const RadarScannerPage = () => {
             console.warn("Audio Context blocked", e);
         }
     }, []);
+
+    // 📡 Busca configurações do Radar
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const res = await api.get('/radar/settings');
+                setKeywords(res.data.keywords || []);
+                setSelectedStates(res.data.states || []);
+            } catch (error) {
+                console.error('Falha ao carregar configurações do Radar:', error);
+            }
+        };
+        fetchSettings();
+    }, []);
+
+    const saveSettings = async () => {
+        setIsSaving(true);
+        try {
+            await api.post('/radar/settings', { keywords, states: selectedStates });
+            toast.success('Radar Re-Calibrado!', {
+                description: 'Os nichos e filtros foram atualizados com sucesso.',
+                icon: <ShieldCheck className="h-4 w-4 text-emerald-500" />
+            });
+            setIsSettingsOpen(false);
+        } catch (error) {
+            console.error('Erro ao salvar Radar:', error);
+            toast.error('Falha ao calibrar Radar.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const addKeyword = () => {
+        if (!newKeyword.trim()) return;
+        if (keywords.includes(newKeyword.trim())) return;
+        setKeywords([...keywords, newKeyword.trim()]);
+        setNewKeyword('');
+    };
+
+    const removeKeyword = (kw: string) => {
+        setKeywords(keywords.filter(k => k !== kw));
+    };
+
+    const toggleState = (state: string) => {
+        setSelectedStates(prev => 
+            prev.includes(state) ? prev.filter(s => s !== state) : [...prev, state]
+        );
+    };
 
     useEffect(() => {
         const handleRadarMatch = (data: any) => {
@@ -144,16 +214,99 @@ const RadarScannerPage = () => {
                 <div className="flex items-center gap-3">
                     <Badge variant="outline" className="bg-emerald-500/5 border-emerald-500/20 text-emerald-400 flex gap-2 items-center py-1">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        LINK ESTÁVEL
+                        PNCP MONITOR ATIVO
                     </Badge>
+                    
+                    <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                        <DialogTrigger asChild>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                            >
+                                <Settings className="h-4 w-4 mr-2" />
+                                Configurar Nichos
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-[#0a0d14] border-slate-800 text-white max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 text-emerald-500">
+                                    <Target className="h-5 w-5" /> Calibração de Radar
+                                </DialogTitle>
+                            </DialogHeader>
+                            
+                            <div className="grid gap-6 py-4">
+                                <div className="space-y-4">
+                                    <Label className="text-slate-400 uppercase text-[10px] tracking-widest">Seus Nichos de Interesse (Palavras-Chave)</Label>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            placeholder="Ex: Arroz, Notebook, Papelaria..." 
+                                            value={newKeyword}
+                                            onChange={(e) => setNewKeyword(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+                                            className="bg-slate-900 border-slate-800 text-white"
+                                        />
+                                        <Button onClick={addKeyword} className="bg-emerald-600 hover:bg-emerald-500">
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        {keywords.map(kw => (
+                                            <Badge key={kw} className="bg-slate-800 text-slate-200 border-none px-3 py-1 flex items-center gap-2">
+                                                {kw}
+                                                <X className="h-3 w-3 cursor-pointer hover:text-red-500" onClick={() => removeKeyword(kw)} />
+                                            </Badge>
+                                        ))}
+                                        {keywords.length === 0 && (
+                                            <span className="text-xs text-slate-600 italic">Nenhum nicho configurado. O radar usará filtros genéricos.</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <Label className="text-slate-400 uppercase text-[10px] tracking-widest">Estados (UF)</Label>
+                                    <div className="grid grid-cols-6 md:grid-cols-9 gap-2">
+                                        {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                                            <div 
+                                                key={uf}
+                                                onClick={() => toggleState(uf)}
+                                                className={cn(
+                                                    "cursor-pointer border py-1 rounded text-center text-[10px] font-bold transition-all",
+                                                    selectedStates.includes(uf) 
+                                                        ? "bg-emerald-600 border-emerald-500 text-white" 
+                                                        : "bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700"
+                                                )}
+                                            >
+                                                {uf}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-slate-600">Se nenhum estado for selecionado, o Radar buscará em todo o Brasil.</p>
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <Button 
+                                    className="w-full bg-emerald-600 hover:bg-emerald-500 font-bold" 
+                                    onClick={saveSettings}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? 'Calibrando...' : 'SALVAR CALIBRAÇÃO'}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
                     <Button 
-                        variant="outline" 
+                        variant="ghost" 
                         size="sm" 
-                        className="bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                        className={cn(
+                            "border-none transition-colors",
+                            notificationsEnabled ? "text-emerald-500" : "text-slate-500"
+                        )}
                         onClick={() => setNotificationsEnabled(!notificationsEnabled)}
                     >
-                        {notificationsEnabled ? <Bell className="h-4 w-4 mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
-                        {notificationsEnabled ? 'Alertas ON' : 'Alertas OFF'}
+                        {notificationsEnabled ? <Bell className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
                     </Button>
                 </div>
             </header>
@@ -179,7 +332,10 @@ const RadarScannerPage = () => {
                                 <span className="text-xs text-slate-500">{lastScan.toLocaleTimeString()}</span>
                             </div>
                             <div className="pt-4 border-t border-slate-800">
-                                <div className="text-xs text-slate-500 mb-2 uppercase">Filtro Ativo: CNAEs da Empresa</div>
+                                <div className="text-xs text-slate-500 mb-2 uppercase flex items-center gap-2">
+                                    <Filter className="h-3 w-3" />
+                                    {keywords.length > 0 ? 'Filtro: Nichos Personalizados' : 'Filtro: CNAEs da Empresa'}
+                                </div>
                                 <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
                                     <motion.div 
                                         className="h-full bg-emerald-500" 

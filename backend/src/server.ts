@@ -29,6 +29,7 @@ import maintenanceRoutes from './routes/maintenance';
 import transferegovRoutes from './routes/transferegov';
 import biddingRoutes from './routes/bidding';
 import backupsRoutes from './routes/backups';
+import radarRoutes from './routes/radar';
 import { initSocket } from './socket';
 import { initComplianceCron } from './services/compliance-service';
 import { initBackupCron } from './services/backup-service';
@@ -132,6 +133,7 @@ app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/transferegov', transferegovRoutes);
 app.use('/api/bidding', biddingRoutes);
 app.use('/api/backups', backupsRoutes);
+app.use('/api/radar', radarRoutes);
 
 // Start Server
 const server = app.listen(PORT, () => {

@@ -52,29 +52,46 @@ export class PncpRadarService {
 
     private async scan() {
         try {
-            console.log('📡 [RADAR] Varrendo PNCP por novas oportunidades...');
+            console.log('📡 [RADAR] Varrendo PNCP por novas oportunidades de nicho...');
             
-            // 1. Get Keywords from Main Company Profile
+            // 1. Get Keywords and States from Main Company Profile
             const profile = await prisma.mainCompanyProfile.findFirst({ where: { isDefault: true } });
             let keywords: string[] = [];
+            let states: string[] = [];
             
-            if (profile && profile.cnaes) {
-                const cnaes = profile.cnaes as any[];
-                keywords = cnaes.map(c => c.descricao || '').filter(d => d.length > 5);
+            if (profile) {
+                // Use custom radar keywords if available
+                if (profile.radarKeywords && Array.isArray(profile.radarKeywords)) {
+                    keywords = profile.radarKeywords as string[];
+                } else if (profile.cnaes) {
+                    // Fallback to CNAEs if no custom keywords
+                    const cnaes = profile.cnaes as any[];
+                    keywords = cnaes.map(c => (c.descricao || '').split(' - ')[0]) // Get main part of description
+                                    .filter(d => d.length > 5);
+                }
+
+                if (profile.radarStates && Array.isArray(profile.radarStates)) {
+                    states = profile.radarStates as string[];
+                }
             }
 
-            // Fallback keywords if profile is empty
+            // Global Fallback if everything is empty
             if (keywords.length === 0) {
-                keywords = ['Arroz', 'Informática', 'Cadeira', 'Limpeza', 'Manutenção'];
+                keywords = ['Informática', 'Limpeza', 'Manutenção'];
             }
 
             // 2. Query PNCP for today's "Dispensas Eletrônicas"
-            const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+            const now = new Date();
+            const today = now.toISOString().split('T')[0].replace(/-/g, '');
+            
             const PNCP_SEARCH_URL = `https://pncp.gov.br/api/search/?pagina=1&tam_pagina=100&data_publicacao_inicial=${today}&status=recebendo_proposta&tipos_documento=edital`;
 
             const response = await axios.get(PNCP_SEARCH_URL, {
-                headers: { 'User-Agent': 'Mozilla/5.0 Polaryon-Radar/1.0' },
-                timeout: 10000
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 Polaryon-Radar/1.1',
+                    'Accept': 'application/json' 
+                },
+                timeout: 15000
             });
 
             const items = response.data.items || [];
@@ -85,6 +102,12 @@ export class PncpRadarService {
                 const opportunityId = `${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`;
 
                 if (this.seenIds.has(opportunityId)) continue;
+                
+                // Filter by State if configured
+                if (states.length > 0) {
+                    const itemState = (item.uf_sigla || '').toUpperCase();
+                    if (!states.includes(itemState)) continue;
+                }
                 
                 // Match with keywords
                 const isMatch = keywords.some(kw => desc.includes(kw.toLowerCase()));
@@ -108,14 +131,16 @@ export class PncpRadarService {
 
             // 3. Notify Online Users via Socket
             if (matches.length > 0) {
-                console.log(`🎯 [RADAR] Encontradas ${matches.length} novas oportunidades!`);
+                console.log(`🎯 [RADAR] Encontradas ${matches.length} novas oportunidades de nicho!`);
                 const io = getIO();
-                io.emit('bidding_alert', {
-                    type: 'PNCP_RADAR_MATCH',
-                    message: `O Radar encontrou ${matches.length} novas Dispensas Eletrônicas para você!`,
-                    critical: true,
-                    data: { opportunities: matches }
-                });
+                if (io) {
+                    io.emit('bidding_alert', {
+                        type: 'PNCP_RADAR_MATCH',
+                        message: `🎯 Radar: Encontradas ${matches.length} oportunidades no seu nicho!`,
+                        critical: true,
+                        data: { opportunities: matches }
+                    });
+                }
             }
 
         } catch (error: any) {

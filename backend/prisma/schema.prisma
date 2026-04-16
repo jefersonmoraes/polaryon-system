@@ -217,6 +217,8 @@ model MainCompanyProfile {
   icms             Float
   ipi              Float
   annexRates       Json?
+  radarKeywords    Json?    // Array of string niches
+  radarStates      Json?    // Array of state abbreviations (e.g., ['DF', 'GO'])
 }
 
 model Company {
