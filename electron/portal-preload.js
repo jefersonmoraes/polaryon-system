@@ -65,75 +65,19 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v10.0: Salto Infiltrado (War Edition) - Participation Sync
-            const jumpToDisputeRoom = (forceLegacy = false) => {
-                if (!currentConfig.uasg || !currentConfig.numero) return;
-                
-                const uasgStr = currentConfig.uasg.toString().padStart(6, '0');
-                const numStr = currentConfig.numero.toString().padStart(5, '0');
-                const anoStr = currentConfig.ano?.toString() || new Date().getFullYear().toString();
-                
-                // v10.0: Se forceLegacy for true, usamos modalidade 14 (Lei 14.133 Bridge)
-                const modalityCode = forceLegacy ? '14' : '06';
-                const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
-                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
-                
-                if (currentUrl !== targetUrl && !currentUrl.includes('disputa')) {
-                    console.log(`[POLARYON WAR] v10.0: Salto para Sala... (ID: ${compraCode})`);
-                    window.location.href = targetUrl;
-                }
-            };
-
-            // v10.0: Motor de Vigilância para "Compra não encontrada"
-            const recoveryWatcher = () => {
-                const isNotFound = bodyText.includes('Compra não encontrada') || bodyText.includes('não foi encontrada');
-                if (isNotFound && (currentUrl.includes('disputa') || currentUrl.includes('compra='))) {
-                    if (!window.__polaryon_retry_count) window.__polaryon_retry_count = 0;
-                    window.__polaryon_retry_count++;
-
-                    if (window.__polaryon_retry_count === 1) {
-                        console.warn("[POLARYON] Compra não encontrada com ID 06. Tentando Manobra com ID 14...");
-                        jumpToDisputeRoom(true); 
-                    } else {
-                        console.warn("[POLARYON] Erro persistente no Serpro. Retornando para Lista para Sincronizar Sessão...");
-                        // Reset do contador para permitir novas tentativas após o sync
-                        window.__polaryon_retry_count = 0;
-                        window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/escritorio-fornecedor';
-                    }
-                }
-            };
-            setTimeout(recoveryWatcher, 4000);
-
-            // Dispara o salto se estiver no "Handoff" ou na "Lista" do portal novo
-            // Na v10.0, aumentamos para 4s para dar tempo da API de listagem do governo responder (Sync de Sessão)
-            if (currentUrl.includes('servico=226') || currentUrl.includes('escritorio-fornecedor')) {
-                console.log("[POLARYON WAR] Sincronizando com o Serpro... Salto em 4s");
-                setTimeout(() => jumpToDisputeRoom(false), 4000);
-            }
-
-            // v10.0: Watchdog de Ativos Agressivo
-            window.addEventListener('error', (e) => {
-                if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-                    const src = e.target.src || e.target.href;
-                    if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js') || src.includes('disputa'))) {
-                        console.error("[POLARYON WAR] Falha de Ativo Serpro. Forçando Refresh...");
-                        setTimeout(() => window.location.reload(), 2000);
-                    }
-                }
-            }, true);
-
-            // v4.0: Watchdog de Recuperação Adicional (Check de Texto e Inércia)
+            // v3.0: Watchdog de Recuperação para Erro 500 / Tela Branca do Portal Novo
             if (currentUrl.includes('cnetmobile') || currentUrl.includes('comprasnet-web')) {
                 const healthCheck = () => {
                     const hasContent = document.body && document.body.innerText.length > 200;
                     const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
                     
                     if (!hasContent || isSystemError) {
-                        console.warn("[POLARYON] Portal travado ou com erro de texto. Tentando recuperação...");
+                        console.warn("[POLARYON] Detetada falha de carregamento no portal. Tentando recuperação em 3s...");
                         setTimeout(() => window.location.reload(), 3000);
                     }
                 };
-                setTimeout(healthCheck, 6000);
+                // Verifica após 5s de carregamento
+                setTimeout(healthCheck, 5000);
             }
 
             // Fallback Agressivo: Se detectamos o aviso mas não achamos o botão, 
@@ -147,12 +91,11 @@ function scrapeDisputeRoom() {
 
         // --- AUTOMAÇÃO DE LOGIN E HANDOFF DIRETO (v3.0) ---
         
-        // v4.0: MOTOR DE SALTO PERSISTENTE (Handoff Aggressive)
-        // Se estamos no index.asp mas não saltamos pro portal novo ainda (Handoff Persistente)
+        // v3.0: SALTO DIRETO PARA PORTAL NOVO (Bypass de Frameset/Menus)
+        // Se estamos no index.asp mas não saltamos pro portal novo ainda
         if (currentUrl.includes('index.asp') && !currentUrl.includes('servico=226') && bodyText.includes('Joelison')) {
-             console.log("[POLARYON TSUNAMI] Forçando Salto v4.0 para Portal 14.133...");
-             // Adicionamos um timestamp para forçar bypass de cache no servidor do governo
-             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226&polaryon_ts=' + Date.now();
+             console.log("[POLARYON] Handoff Direto v3.0: Saltando para Portal 14.133...");
+             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226';
              return;
         }
 
