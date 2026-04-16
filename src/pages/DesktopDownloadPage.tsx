@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { motion } from 'framer-motion';
 
 export default function DesktopDownloadPage() {
-    const version = "2.0.8";
+    const version = "2.0.9";
     const downloadUrl = `/download/Polaryon-v${version}-Setup.exe`;
 
     return (

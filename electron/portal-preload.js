@@ -65,48 +65,56 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v8.0: Salto Profundo com Retardo de Sincronia (Delayed Jump)
-            const jumpToDisputeRoom = () => {
+            // v9.0: Salto Infiltrado (Ghost Navigation) - Dual-ID Try
+            const jumpToDisputeRoom = (tryLegacy = false) => {
                 if (!currentConfig.uasg || !currentConfig.numero) return;
                 
                 const uasgStr = currentConfig.uasg.toString().padStart(6, '0');
                 const numStr = currentConfig.numero.toString().padStart(5, '0');
                 const anoStr = currentConfig.ano?.toString() || new Date().getFullYear().toString();
-                const compraCode = `${uasgStr}06${numStr}${anoStr}`;
+                
+                // Mapeamento Dinâmico de Modalidade (06 = Moderno, 14 = Legado/14133 Bridge)
+                const modalityCode = tryLegacy ? '14' : '06';
+                const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
                 
                 if (currentUrl !== targetUrl && !currentUrl.includes('disputa')) {
-                    console.log("[POLARYON TSUNAMI] v8.0: Executando SALTO PROFUNDO com Retardo de Sincronia...");
+                    console.log(`[POLARYON GHOST] v9.0: Tentando Salto com Modalidade: ${modalityCode}...`);
                     window.location.href = targetUrl;
                 }
             };
 
-            // v8.0: Motor de Recuperação de "Compra não encontrada" ou "Erro de Sincronia"
+            // v9.0: Motor de Recuperação Inteligente (Detecta Sincronia de Sala)
             const recoveryCheck = () => {
                 const isNotFound = bodyText.includes('Compra não encontrada') || bodyText.includes('não foi encontrada');
+                const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
+
                 if (isNotFound && (currentUrl.includes('disputa') || currentUrl.includes('compra='))) {
-                    console.warn("[POLARYON] Sincronia falhou (Compra não encontrada). Retornando para Lista...");
-                    window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/escritorio-fornecedor';
+                    if (!window.__polaryon_tried_legacy) {
+                        console.warn("[POLARYON GHOST] Sincronia Falhou com ID 06. Tentando ID 14 (Lei 14.133 Legacy)...");
+                        window.__polaryon_tried_legacy = true;
+                        jumpToDisputeRoom(true); // Tenta o ID legado 14
+                    } else {
+                        console.warn("[POLARYON] Ambos IDs falharam. Retornando para Lista para Resetar Sessão...");
+                        window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/escritorio-fornecedor';
+                    }
                 }
             };
-            setTimeout(recoveryCheck, 3000);
+            setTimeout(recoveryCheck, 4000);
 
             // Dispara o salto se estiver no "Handoff" ou na "Lista" do portal novo
-            // Aumentamos o tempo para 2.5s para o Serpro "carregar" sua participação em background
             if (currentUrl.includes('servico=226') || currentUrl.includes('escritorio-fornecedor')) {
-                console.log("[POLARYON] Sincronizando sessão no Escritório... Salto em 2.5s");
-                setTimeout(jumpToDisputeRoom, 2500);
+                console.log("[POLARYON] Infiltrando Sessão... Salto em 3s");
+                setTimeout(() => jumpToDisputeRoom(false), 3000);
             }
 
             // v4.0 Tsunami: Resource Watchdog (Monitoramento de Ativos de Rede)
-            // Detecta se scripts vitais do governo falharam ao carregar (Erro 404/500)
             window.addEventListener('error', (e) => {
                 if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
                     const src = e.target.src || e.target.href;
                     if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js') || src.includes('disputa'))) {
-                        console.error("[POLARYON TSUNAMI] Falha Crítica de Ativo Detectada:", src);
-                        console.warn("[POLARYON] Forçando Hard Refresh em 2s para recuperar...");
-                        setTimeout(() => window.location.reload(), 2000);
+                        console.error("[POLARYON GHOST] Falha de Ativo Serpro Detectada:", src);
+                        setTimeout(() => window.location.reload(), 2500);
                     }
                 }
             }, true);
