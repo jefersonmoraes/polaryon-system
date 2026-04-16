@@ -432,7 +432,7 @@ const AppSidebar = () => {
             >
               <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
               {!isCollapsed && <span>CENTRAL DO BOT</span>}
-              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V2.1.7 HIGH-PERF</div>}
+              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V2.1.11 STABLE-HYBRID</div>}
             </Link>
           </div>
         )}

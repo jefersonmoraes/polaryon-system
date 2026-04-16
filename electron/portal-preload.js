@@ -19,13 +19,14 @@ window.addEventListener("message", (event) => {
              window.polaryonAuthBearer = payload.token;
         }
 
-        // 🚀 FASE 2: Captura de URL e Ativação do Stealth Fetch Api-Direct
-        if (payload.action === 'API_DUMP' && payload.url && payload.url.includes('compras/participacoes') && payload.url.includes('tamanhoPagina')) {
-             // Atualiza sempre a URL com o captcha mais recente e injeta tamanhoPagina=1000
-             window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
-             
-             if (!window.polaryonHybrid_Active) {
-                  startHybridEngine();
+        if (payload.action === 'API_DUMP' && payload.url && payload.url.includes('tamanhoPagina')) {
+             if (payload.url.includes('compras') || payload.url.includes('disputa') || payload.url.includes('itens')) {
+                 // Atualiza sempre a URL com o captcha mais recente e injeta tamanhoPagina=1000
+                 window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
+                 
+                 if (!window.polaryonHybrid_Active) {
+                      startHybridEngine();
+                 }
              }
         }
     }
@@ -55,21 +56,24 @@ const startHybridEngine = () => {
                    
                    // FASE 3: BYPASS TOTAL DO DOM.
                    // Pega o JSON puro do Módulo Híbrido e injeta como se o Scraper Visual tivesse lido da tela.
-                   if (Array.isArray(data)) {
+                   const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                   
+                   if (Array.isArray(itemsArray)) {
                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
                         
-                        data.forEach(item => {
+                        itemsArray.forEach(item => {
                              const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
                              const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
                              
-                             window.polaryonAllItems[`item_` + item.numero] = {
+                             // UNIFICAÇÃO DE CHAVE: Usar apenas o número do item (ex: "8")
+                             window.polaryonAllItems[item.numero.toString()] = {
                                   itemId: item.numero.toString(),
                                   valorAtual: melhorGeral,
                                   meuValor: melhorMeu,
                                   isDispute: item.situacao === '1' || item.situacao === '2', // 1=Aberto, 2=Encerrando
                                   desc: item.descricao || ("Item " + item.numero),
                                   ganhando: melhorMeu > 0 && melhorMeu <= melhorGeral,
-                                  status: item.situacao === '1' ? 'Aberto' : 'Encerrado'
+                                  status: item.situacao === '1' ? 'Aberto' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
                              };
                         });
                    }
@@ -561,9 +565,10 @@ function scrapeDisputeRoom() {
             
             window.polaryonPageScanState.totalPages = totalPages;
 
-            // Detecta página atual ativa
-            const activePage = paginator.querySelector('button.active, button[class*="active"], button[aria-current="page"], button[disabled]');
-            const currentPageNum = activePage ? parseInt(activePage.innerText.trim()) : 1;
+            // Detecta página atual ativa e trata o texto para evitar NaN
+            const activePage = paginator.querySelector('button.active, button[class*="active"], button[aria-current="page"], button[disabled], .active');
+            const activeText = (activePage ? activePage.innerText.trim() : "1").replace(/\D/g, ''); // Remove tudo que não for dígito
+            const currentPageNum = activeText ? parseInt(activeText) : 1;
 
             if (currentPageNum !== window.polaryonPageScanState.lastPage) {
                 // Nova página! Processa os itens desta página primeiro
