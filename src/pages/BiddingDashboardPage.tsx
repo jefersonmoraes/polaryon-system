@@ -343,12 +343,13 @@ export default function BiddingDashboardPage() {
 
             // 🛡️ MODO HÍBRIDO: Recepção da Telemetria Espiã
             if ((window as any).electronAPI.onBiddingHybridDump) {
-                 (window as any).electronAPI.onBiddingHybridDump((data: any) => {
-                      if (data.action === 'TOKEN_GRABBED') {
-                           console.log("%c[POLARYON HYBRID] TOKEN CAPTURADO: ", "color: yellow; font-size: 14px; font-weight: bold;", data.token);
+                 (window as any).electronAPI.onBiddingHybridDump((pkg: any) => {
+                      const payload = pkg.data || {};
+                      if (pkg.action === 'TOKEN_GRABBED') {
+                           console.log("%c[POLARYON HYBRID] TOKEN CAPTURADO: ", "color: yellow; font-size: 14px; font-weight: bold;", payload.token);
                            import('sonner').then(({ toast }) => toast.warning("Radar Híbrido: Conexão Oculta Estabelecida! 🤫"));
-                      } else if (data.action === 'API_DUMP') {
-                           console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + data.url + "): ", "color: cyan; font-weight: bold;", data.response);
+                      } else if (pkg.action === 'API_DUMP') {
+                           console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + payload.url + "): ", "color: cyan; font-weight: bold;", payload.response);
                       }
                  });
             }
