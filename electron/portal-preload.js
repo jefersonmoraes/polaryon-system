@@ -65,12 +65,33 @@ function scrapeDisputeRoom() {
                 return;
             }
 
+            // v7.0: Salto Profundo (Deep Jump) - Navegação Direta para Sala de Lances
+            const jumpToDisputeRoom = () => {
+                if (!currentConfig.uasg || !currentConfig.numero) return;
+                
+                const uasgStr = currentConfig.uasg.toString().padStart(6, '0');
+                const numStr = currentConfig.numero.toString().padStart(5, '0');
+                const anoStr = currentConfig.ano?.toString() || new Date().getFullYear().toString();
+                const compraCode = `${uasgStr}06${numStr}${anoStr}`;
+                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
+                
+                if (currentUrl !== targetUrl && !currentUrl.includes('disputa')) {
+                    console.log("[POLARYON TSUNAMI] Executando SALTO PROFUNDO v7.0 direto para Sala de Lances...");
+                    window.location.href = targetUrl;
+                }
+            };
+
+            // Dispara o salto se estiver no "Handoff" ou na "Lista" do portal novo
+            if (currentUrl.includes('servico=226') || currentUrl.includes('escritorio-fornecedor')) {
+                setTimeout(jumpToDisputeRoom, 500);
+            }
+
             // v4.0 Tsunami: Resource Watchdog (Monitoramento de Ativos de Rede)
             // Detecta se scripts vitais do governo falharam ao carregar (Erro 404/500)
             window.addEventListener('error', (e) => {
                 if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
                     const src = e.target.src || e.target.href;
-                    if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js'))) {
+                    if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js') || src.includes('disputa'))) {
                         console.error("[POLARYON TSUNAMI] Falha Crítica de Ativo Detectada:", src);
                         console.warn("[POLARYON] Forçando Hard Refresh em 2s para recuperar...");
                         setTimeout(() => window.location.reload(), 2000);
