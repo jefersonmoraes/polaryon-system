@@ -14,6 +14,33 @@ class VisualRunner {
             }
         });
 
+        // Listener para Cliques Nativos (Competition Grade)
+        ipcMain.on('portal-native-click', (event, { sessionId, x, y }) => {
+            const session = this.sessions.get(sessionId);
+            if (session && session.window) {
+                console.log(`[POLARYON-WAR] Disparando CLIQUE NATIVO em: X=${x}, Y=${y}`);
+                
+                // Sequência: Mousedown -> Mouseup (Clique Físico)
+                session.window.webContents.sendInputEvent({
+                    type: 'mouseDown',
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    button: 'left',
+                    clickCount: 1
+                });
+                
+                setTimeout(() => {
+                    session.window.webContents.sendInputEvent({
+                        type: 'mouseUp',
+                        x: Math.round(x),
+                        y: Math.round(y),
+                        button: 'left',
+                        clickCount: 1
+                    });
+                }, 50);
+            }
+        });
+
         this.setupIpc();
     }
 

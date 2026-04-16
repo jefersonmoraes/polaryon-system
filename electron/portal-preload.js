@@ -131,32 +131,48 @@ function scrapeDisputeRoom() {
 
                     if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
-                        console.log(`[POLARYON] Alvo Atômico Detectado! Iniciando sequência de disparo...`);
+                        console.log(`[POLARYON] Alvo Encontrado! Iniciando DEPLOY DE CLIQUE NATIVO (v1.5.0)...`);
                         
+                        // 1. Sequência Visual de Apoio
                         const opts = { bubbles: true, cancelable: true, view: win };
-                        
-                        // Sequência completa para enganar menus LEGACY (Milonic/DHTML)
                         target.dispatchEvent(new MouseEvent('mouseover', opts));
                         target.dispatchEvent(new MouseEvent('mouseenter', opts));
-                        target.dispatchEvent(new MouseEvent('mousedown', opts));
-                        if (typeof target.focus === 'function') target.focus();
+                        
+                        // 2. Cálculo de Coordenadas Globais (Bypass de Frameset)
+                        let rect = target.getBoundingClientRect();
+                        let x = (rect.left + rect.right) / 2;
+                        let y = (rect.top + rect.bottom) / 2;
+                        
+                        // Ajusta as coordenadas para a janela TOPO se estiver dentro de um frame
+                        let currentWin = win;
+                        try {
+                            while (currentWin !== window.top) {
+                                let frameEl = currentWin.frameElement;
+                                if (frameEl) {
+                                    let fRect = frameEl.getBoundingClientRect();
+                                    x += fRect.left;
+                                    y += fRect.top;
+                                }
+                                currentWin = currentWin.parent;
+                            }
+                        } catch(e) { console.warn("[POLARYON] Erro ao calcular offset de frame:", e); }
 
-                        // Pequeno delay para simular a reação do script do portal
+                        // 3. Disparo do Clique Nativo via IPC
                         setTimeout(() => {
-                            target.dispatchEvent(new MouseEvent('mouseup', opts));
-                            target.click();
+                            ipcRenderer.send('portal-native-click', { sessionId: mySessionId, x, y });
                             
-                            // TENTATIVA DE EXTRAÇÃO DE ROTA (Bypass de segurança)
-                            // Se o elemento tem um href ou onclick com link, forçamos a navegação no topo
+                            // 4. Extração de Rota de Fuga (Backup se o clique físico demorar)
                             const attrClick = target.getAttribute('onclick') || "";
                             const href = target.href || "";
                             if (href.includes('servico=226') || attrClick.includes('servico=226')) {
-                                console.log("[POLARYON] Extração de Rota v266 bem sucedida!");
-                                window.top.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                                setTimeout(() => {
+                                    if (window.location.href.includes('intro.htm')) {
+                                        window.top.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                                    }
+                                }, 500);
                             }
-                            
                             foundMenu = true;
-                        }, 80);
+                        }, 100);
                         return;
                     }
 
