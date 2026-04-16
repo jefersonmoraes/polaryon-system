@@ -42,88 +42,93 @@ window.addEventListener("message", (event) => {
     }
 }, false);
 
-// 🚀 FASE 2: MOTOR DE TRAÇÃO DIRETA (Background Fetch)
+// 🚀 FASE 2: MOTOR DE TRAÇÃO FANTASMA (Adaptive Polling)
 const startHybridEngine = () => {
+    if (window.polaryonHybrid_Active) return;
     window.polaryonHybrid_Active = true;
-    console.log("🔥 [POLARYON HYBRID] Motor API-Direct Ativado! Baixando lances diretamente da fonte...");
+    console.log("🔥 [POLARYON PHANTOM] Modo Combate Ativado! Polling adaptativo iniciado.");
 
-    // Rotina de extração invisível em background
-    setInterval(async () => {
-         if (!window.polaryonAuthBearer || !window.polaryonHybrid_ItemsUrl) return;
+    let apiHealthCounter = 0;
+
+    const pollingLoop = async () => {
+         if (!window.polaryonAuthBearer || !window.polaryonHybrid_ItemsUrl) {
+             setTimeout(pollingLoop, 2000);
+             return;
+         }
 
          try {
               const res = await fetch(window.polaryonHybrid_ItemsUrl, {
                    method: 'GET',
-                   credentials: 'omit', // Tenta omit e passa manual
                    headers: {
                         'Authorization': window.polaryonAuthBearer,
                         'Accept': 'application/json, text/plain, */*'
                    }
               });
 
-               if (res && res.ok && typeof res.text === 'function') {
-                    const rawText = await res.text();
-                    
-                    if (!rawText || rawText.trim().length === 0) {
-                         // Resposta vazia, ignora silenciosamente (evita "Unexpected end of JSON input")
-                         return;
-                    }
+              if (res && res.ok && typeof res.text === 'function') {
+                   const rawText = await res.text();
+                   if (rawText && rawText.trim().length > 0) {
+                        try {
+                            const data = JSON.parse(rawText);
+                            const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                            
+                            if (Array.isArray(itemsArray)) {
+                                 if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                                 itemsArray.forEach(item => {
+                                      const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
+                                      const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
+                                      
+                                      window.polaryonAllItems[item.numero.toString()] = {
+                                           itemId: item.numero.toString(),
+                                           valorAtual: melhorGeral,
+                                           meuValor: melhorMeu,
+                                           isDispute: item.situacao === '1' || item.situacao === '2',
+                                           desc: item.descricao || ("Item " + item.numero),
+                                           ganhador: melhorMeu > 0 && melhorMeu <= melhorGeral ? 'Você' : 'Outro',
+                                           status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
+                                      };
+                                 });
+                            }
 
-                    let data;
-                    try {
-                        data = JSON.parse(rawText);
-                    } catch(jsonErr) {
-                        // Se não for JSON válido, ignora ou reporta erro silencioso
-                        return;
-                    }
-                    
-                    // FASE 3: BYPASS TOTAL DO DOM.
-                    const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                    
-                    if (Array.isArray(itemsArray)) {
-                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
-                         
-                         itemsArray.forEach(item => {
-                              const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
-                              const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
-                              
-                              window.polaryonAllItems[item.numero.toString()] = {
-                                   itemId: item.numero.toString(),
-                                   valorAtual: melhorGeral,
-                                   meuValor: melhorMeu,
-                                   isDispute: item.situacao === '1' || item.situacao === '2',
-                                   desc: item.descricao || ("Item " + item.numero),
-                                   ganhando: melhorMeu > 0 && melhorMeu <= melhorGeral,
-                                   status: item.situacao === '1' ? 'Aberto' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
-                              };
-                         });
-                    }
+                            ipcRenderer.send('portal-hybrid-capture', {
+                                sessionId: mySessionId || 'UNKNOWN',
+                                action: 'HYBRID_API_RESULTS',
+                                data: { items: data }
+                            });
+                            
+                            window.polaryonAPIStatus = "✅ CONECTADO";
+                        } catch(e) {}
+                   }
+              } else {
+                   window.polaryonAPIStatus = "❌ ERRO API";
+              }
 
-                    ipcRenderer.send('portal-hybrid-capture', {
-                        sessionId: mySessionId || 'UNKNOWN',
-                        action: 'HYBRID_API_RESULTS',
-                        data: { items: data }
-                    });
-               } else if (res && typeof res.text === 'function') {
-                    const txt = await res.text();
-                    // Só reporta erro se não for vazio
-                    if (txt && txt.trim().length > 0) {
-                        ipcRenderer.send('portal-hybrid-capture', {
-                            sessionId: mySessionId || 'UNKNOWN',
-                            action: 'HYBRID_API_ERROR',
-                            data: { status: res.status, body: txt.substring(0, 500) }
-                        });
-                    }
-               }
+              // HEALTH CHECK (Sinal de vida a cada 10 ciclos)
+              apiHealthCounter++;
+              if (apiHealthCounter >= 10) {
+                  apiHealthCounter = 0;
+                  const healthRes = await fetch('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-usuario/v2/sessao/fornecedor/usuario', {
+                      headers: { 'Authorization': window.polaryonAuthBearer }
+                  });
+                  if (healthRes.ok) window.polaryonAPIStatus = "✅ ELITE (MILITAR)";
+                  else window.polaryonAPIStatus = "⚠️ TOKEN INSTÁVEL";
+              }
+
          } catch(e) {
-              ipcRenderer.send('portal-hybrid-capture', {
-                   sessionId: mySessionId || 'UNKNOWN',
-                   action: 'HYBRID_API_ERROR',
-                   data: { error: e.message }
-              });
+              window.polaryonAPIStatus = "❌ OFFLINE";
          }
-    }, 1500); // 1.5s pra não causar throtling de IP, o portal real já bate a cada X segs.
+
+         // ADAPTATIVE SPEED: Acelera se houver itens em disputa crítica
+         const items = Object.values(window.polaryonAllItems || {});
+         const hasCritical = items.some(it => it.status === 'Disputa' || it.status === 'Iminência');
+         const delay = hasCritical ? 600 : 1500;
+         
+         setTimeout(pollingLoop, delay);
+    };
+
+    pollingLoop();
 };
+
 
 const injectSniffer = () => {
     const script = document.createElement('script');
@@ -568,67 +573,11 @@ function scrapeDisputeRoom() {
              return !hasNestedCard;
         });
 
-        // v4.0: MOTOR DE PAGINAÇÃO AUTOMÁTICA (Radar Multi-Página)
-        // Inicializa o mapa global de itens se não existir
-        if (!window.polaryonAllItems) window.polaryonAllItems = {};
-        if (!window.polaryonPageScanState) {
-            window.polaryonPageScanState = { scanning: false, lastPage: -1, totalPages: 0 };
-        }
+        // v4.0: MOTOR DE PAGINAÇÃO (MODO FANTASMA - DESATIVADO)
+        // O robô agora usa 100% API-Direct, não precisamos mais ficar clicando em páginas visuais.
+        // Isso economiza processamento e evita detecção por comportamento.
+        if (window.polaryonPageScanState) window.polaryonPageScanState.scanning = false;
 
-        // Detecta paginador do Serpro (mat-paginator é o componente Angular deles)
-        const paginator = document.querySelector('mat-paginator, .br-pagination, [class*="paginator"]');
-        if (paginator && !window.polaryonPageScanState.scanning) {
-            // Descobre quantas páginas existem 
-            const pageButtons = Array.from(paginator.querySelectorAll('button')).filter(b => {
-                const n = parseInt(b.innerText.trim());
-                return !isNaN(n);
-            });
-            const totalPages = pageButtons.length > 0 
-                ? Math.max(...pageButtons.map(b => parseInt(b.innerText.trim()))) 
-                : 1;
-            
-            window.polaryonPageScanState.totalPages = totalPages;
-
-            // Detecta página atual ativa e trata o texto para evitar NaN
-            const activePage = paginator.querySelector('button.active, button[class*="active"], button[aria-current="page"], button[disabled], .active');
-            const activeText = (activePage ? activePage.innerText.trim() : "1").replace(/\D/g, ''); // Remove tudo que não for dígito
-            const currentPageNum = activeText ? parseInt(activeText) : 1;
-
-            if (currentPageNum !== window.polaryonPageScanState.lastPage) {
-                // Nova página! Processa os itens desta página primeiro
-                console.log(`[POLARYON] Radar Multi-Page: Página ${currentPageNum}/${totalPages}`);
-                window.polaryonPageScanState.lastPage = currentPageNum;
-                window.polaryonPageScanState.scanning = true;
-
-                // Agenda navegação para próxima página após processar esta
-                if (currentPageNum < totalPages) {
-                    setTimeout(() => {
-                        // Tenta achar o botão da próxima página
-                        const nextBtns = Array.from((paginator || document).querySelectorAll('button'));
-                        const nextBtn = nextBtns.find(b => {
-                            const label = (b.getAttribute('aria-label') || b.innerText || '').toUpperCase();
-                            return label.includes('PRÓXIMA') || label.includes('NEXT') || label === '>';
-                        }) || nextBtns.find(b => parseInt(b.innerText.trim()) === currentPageNum + 1);
-                        
-                        if (nextBtn && !nextBtn.disabled) {
-                            console.log(`[POLARYON] Avançando para página ${currentPageNum + 1}...`);
-                            nextBtn.click();
-                            // Libera o scanning após a navegação
-                            setTimeout(() => { window.polaryonPageScanState.scanning = false; }, 1500);
-                        } else {
-                            window.polaryonPageScanState.scanning = false;
-                        }
-                    }, 800); // Espera 800ms para garantir que os itens da página atual foram processados
-                } else {
-                    // Última página: reseta o ciclo
-                    console.log(`[POLARYON] Radar Multi-Page: Ciclo completo! ${Object.keys(window.polaryonAllItems).length} itens no total.`);
-                    setTimeout(() => {
-                        window.polaryonPageScanState.scanning = false;
-                        window.polaryonPageScanState.lastPage = -1; // Reseta para varrer de novo no próximo ciclo
-                    }, 5000); // Aguarda 5 segundos antes de iniciar novo ciclo completo
-                }
-            }
-        }
 
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
@@ -791,6 +740,13 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
 
 ipcRenderer.on('update-config', (event, config) => {
     currentVault = { ...currentVault, ...config };
+    
+    // Sincroniza o modo de simulação global
+    if (config.simulationMode !== undefined) {
+        window.isSimulationMode = config.simulationMode;
+        console.log(`[POLARYON] Modo Simulação: ${window.isSimulationMode ? 'ATIVO' : 'DESATIVADO (REAL!)'}`);
+    }
+
     if (config.itemsConfig) {
         Object.keys(config.itemsConfig).forEach(itemId => {
             const strat = config.itemsConfig[itemId];
@@ -850,9 +806,17 @@ function renderBiddingPanel(items) {
             <div style="font-size:9px; opacity:0.5; border:1px solid rgba(255,255,255,0.2); padding:2px 4px; border-radius:3px;">V3.0</div>
         `;
         
+        const subHeader = document.createElement('div');
+        subHeader.style.cssText = 'padding: 8px 15px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;';
+        subHeader.innerHTML = `
+            <div id="polaryon-api-status" style="color: #10b981;">API: CONECTANDO...</div>
+            <div id="polaryon-mode-status" style="color: #eab308;">MODO: ?</div>
+        `;
+
         const listContainer = document.createElement('div');
         listContainer.id = 'polaryon-items-list';
         listContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px;';
+        
         // Add scrollbar styling via injected style
         const style = document.createElement('style');
         style.innerHTML = `
@@ -865,12 +829,12 @@ function renderBiddingPanel(items) {
         const footer = document.createElement('div');
         footer.style.cssText = 'padding: 15px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.4);';
         
+        
         const startBtn = document.createElement('button');
         startBtn.id = 'polaryon-combat-btn';
-        startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCES';
+        startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCE';
         startBtn.style.cssText = 'width: 100%; padding: 14px; background: #10b981; color: #000; font-weight: 900; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; font-size: 12px; box-shadow: 0 0 20px rgba(16,185,129,0.3); letter-spacing: 0.5px;';
-        startBtn.onmouseover = () => { if(!isBiddingActive) startBtn.style.transform = 'scale(1.02)'; };
-        startBtn.onmouseout = () => { startBtn.style.transform = 'scale(1)'; };
+        
         startBtn.onclick = () => {
             isBiddingActive = !isBiddingActive;
             const led = document.getElementById('polaryon-led');
@@ -881,20 +845,31 @@ function renderBiddingPanel(items) {
                 startBtn.style.boxShadow = '0 0 20px rgba(239,68,68,0.4)';
                 if (led) { led.style.background = '#ef4444'; led.style.boxShadow = '0 0 10px #ef4444'; }
             } else {
-                startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCES';
+                startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCE';
                 startBtn.style.background = '#10b981';
                 startBtn.style.color = '#000';
                 startBtn.style.boxShadow = '0 0 20px rgba(16,185,129,0.3)';
                 if (led) { led.style.background = '#eab308'; led.style.boxShadow = '0 0 10px #eab308'; }
             }
         };
-        
+
         footer.appendChild(startBtn);
         panel.appendChild(header);
+        panel.appendChild(subHeader);
         panel.appendChild(listContainer);
         panel.appendChild(footer);
         document.body.appendChild(panel);
     }
+    
+    // Atualiza Status da API e Modo no Painel
+    const apiStatusEl = document.getElementById('polaryon-api-status');
+    const modeStatusEl = document.getElementById('polaryon-mode-status');
+    if (apiStatusEl) apiStatusEl.innerText = 'API: ' + (window.polaryonAPIStatus || 'OFFLINE');
+    if (modeStatusEl) {
+        modeStatusEl.innerText = window.isSimulationMode ? 'MODO: SIMULAÇÃO' : 'MODO: REAL ⚡';
+        modeStatusEl.style.color = window.isSimulationMode ? '#eab308' : '#ef4444';
+    }
+
     
     // Update Items gracefully to avoid losing input focus
     const list = document.getElementById('polaryon-items-list');
@@ -968,6 +943,12 @@ function renderBiddingPanel(items) {
 
 // -------------- ROTINA DE DISPARO HÍBRIDO (ELITE) --------------
 async function enviarLanceHibrido(itemId, valor) {
+    // 0. Proteção de Simulação
+    if (window.isSimulationMode) {
+        console.log(`[POLARYON SIM] Simulação ativa. Lance de R$ ${valor} ignorado.`);
+        return false;
+    }
+
     // 1. Tenta o disparo via API (Velocidade Superior e Multi-Página)
     let apiSuccess = false;
     if (window.polaryonAuthBearer && window.polaryonContext_PurchaseId && window.polaryonContext_Year) {
