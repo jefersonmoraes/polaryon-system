@@ -14,24 +14,46 @@ class VisualRunner {
             }
         });
 
-        // Listener para Cliques Nativos de Elite (v2)
-        ipcMain.on('portal-native-click', (event, { sessionId, x, y }) => {
+        // Listener para Cliques de Elite v3 (SHADOW CLICK - CDP)
+        ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window) {
-                console.log(`[POLARYON-WAR] Executando CLIQUE ELITE (v2) em: X=${Math.round(x)}, Y=${Math.round(y)}`);
-                
                 const wc = session.window.webContents;
                 const pos = { x: Math.round(x), y: Math.round(y) };
-
-                // Sequência de Elite: Move -> Down -> Up
-                wc.sendInputEvent({ type: 'mouseMove', ...pos });
                 
-                setTimeout(() => {
+                console.log(`[POLARYON-WAR] Executando SHADOW CLICK (CDP) em: X=${pos.x}, Y=${pos.y}`);
+
+                try {
+                    // Tenta anexar o debugger se ainda não estiver
+                    if (!wc.debugger.isAttached()) {
+                        wc.debugger.attach('1.3');
+                    }
+
+                    // Sequência nativa de protocolo (mesma do Puppeteer)
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+                        type: 'mouseMoved', x: pos.x, y: pos.y
+                    });
+                    
+                    await new Promise(r => setTimeout(r, 50));
+                    
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+                        type: 'mousePressed', x: pos.x, y: pos.y, button: 'left', clickCount: 1
+                    });
+                    
+                    await new Promise(r => setTimeout(r, 50));
+                    
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+                        type: 'mouseReleased', x: pos.x, y: pos.y, button: 'left', clickCount: 1
+                    });
+
+                } catch (e) {
+                    console.error("[POLARYON-WAR] Falha no Shadow Click:", e);
+                    // Fallback para o sendInputEvent se o CDP falhar
                     wc.sendInputEvent({ type: 'mouseDown', ...pos, button: 'left', clickCount: 1 });
                     setTimeout(() => {
                         wc.sendInputEvent({ type: 'mouseUp', ...pos, button: 'left', clickCount: 1 });
                     }, 50);
-                }, 50);
+                }
             }
         });
 
@@ -118,17 +140,14 @@ class VisualRunner {
             win.webContents.send('init-session', { sessionId, config });
         });
 
-        // TENTATIVA DE SALTO AUTOMÁTICO (Elite Gateway)
-        // Se após 3 segundos o robô detectar que parou na intro, ele força o salto SSO
+        // RADAR DE LOGIN (Substitui o Salto Cego que dava 404)
         win.webContents.on('did-finish-load', () => {
             const currentUrl = win.webContents.getURL();
             if (currentUrl.includes('intro.htm')) {
-                console.log('[POLARYON-WAR] Detectada Estagnação na Intro. Aplicando ' + '"' + 'Salto de Elite' + '"' + '...');
-                setTimeout(() => {
-                    // Força o carregamento do serviço 226 (Handoff SSO)
-                    // O Hijacker no main.js cuidará dos cabeçalhos.
-                    win.loadURL('https://www.comprasnet.gov.br/seguro/index_f.asp?servico=226');
-                }, 1500);
+                console.log('[POLARYON-WAR] Usuário Autenticado na Home. Aguardando disparo do Shadow Click...');
+                // Não forçamos mais a URL servico=226 manualmente para evitar 404.
+                // Agora deixamos o Shadow Click ou a interação humana agir, 
+                // enquanto o Hijacker no main.js limpa o caminho.
             }
         });
 
