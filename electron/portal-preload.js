@@ -20,13 +20,23 @@ window.addEventListener("message", (event) => {
         }
 
         if (payload.action === 'API_DUMP' && payload.url && payload.url.includes('tamanhoPagina')) {
-             if (payload.url.includes('compras') || payload.url.includes('disputa') || payload.url.includes('itens')) {
-                 // Atualiza sempre a URL com o captcha mais recente e injeta tamanhoPagina=1000
-                 window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
-                 
-                 if (!window.polaryonHybrid_Active) {
-                      startHybridEngine();
-                 }
+             // FILTRO CIRÚRGICO: Só injeta tamanhoPagina=1000 se for explicitamente a lista de itens/disputa
+             const isItemsList = payload.url.includes('/itens') || payload.url.includes('/disputa');
+             const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
+
+             if (isItemsList && !isMetadata) {
+                  // Captura o contexto da compra (UASG/Número/Ano) para lances via API
+                  const contextMatch = payload.url.match(/\/v1\/compras\/([^\/]+)\/(\d+)/);
+                  if (contextMatch) {
+                       window.polaryonContext_PurchaseId = contextMatch[1];
+                       window.polaryonContext_Year = contextMatch[2];
+                       // URL Base para extração de itens
+                       window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
+                  }
+                  
+                  if (!window.polaryonHybrid_Active) {
+                       startHybridEngine();
+                  }
              }
         }
     }
@@ -732,7 +742,7 @@ function scrapeDisputeRoom() {
                         }
 
                         if (targetBid >= valLim && targetBid < it.valorAtual) {
-                            enviarLanceVisual(it.itemId, targetBid);
+                            enviarLanceHibrido(it.itemId, targetBid);
                             window.lastBidTime = Date.now();
                         }
                     }
@@ -956,8 +966,49 @@ function renderBiddingPanel(items) {
     }
 }
 
-// -------------- ROTINA DE DISPARO VISUAL --------------
-function enviarLanceVisual(itemId, valorStr) {
+// -------------- ROTINA DE DISPARO HÍBRIDO (ELITE) --------------
+async function enviarLanceHibrido(itemId, valor) {
+    // 1. Tenta o disparo via API (Velocidade Superior e Multi-Página)
+    let apiSuccess = false;
+    if (window.polaryonAuthBearer && window.polaryonContext_PurchaseId && window.polaryonContext_Year) {
+        try {
+            const uasg = window.polaryonContext_PurchaseId;
+            const ano = window.polaryonContext_Year;
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${uasg}/${ano}/itens/${itemId}/lances`;
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': window.polaryonAuthBearer,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    valorLance: valor
+                })
+            });
+
+            if (res.ok) {
+                console.log(`🚀 [POLARYON ELITE] LANCE API SUCESSO! Item ${itemId} -> R$ ${valor}`);
+                apiSuccess = true;
+            } else {
+                const err = await res.text();
+                console.warn(`[POLARYON HYBRID] API rejeitou lance (Item ${itemId}):`, err);
+            }
+        } catch(e) {
+            console.error(`[POLARYON HYBRID] Erro no fetch de disparo:`, e);
+        }
+    }
+
+    // 2. Sempre tenta o disparo Visual como reforço e feedback para o usuário
+    // (Se o item estiver na tela, ele vai preencher o campo e clicar)
+    enviarLanceVisual(itemId, valor);
+    
+    return apiSuccess;
+}
+
+function enviarLanceVisual(itemId, valor) {
+    const valorStr = valor; // Passa o número direto
     try {
         const possibleRows = Array.from(document.querySelectorAll('div, tr, li, article'));
         let itemCards = possibleRows.filter(el => {
@@ -1001,22 +1052,22 @@ function enviarLanceVisual(itemId, valorStr) {
                 
                 if (submitBtn) {
                     submitBtn.click();
-                    console.log(`[POLARYON COMBAT TACTICAL] Fire: Item ${itemId} -> R$ ${cleanValue}`);
+                    console.log(`[POLARYON VISUAL] Clique disparado: Item ${itemId} -> R$ ${cleanValue}`);
                     
-                    // Identifica Modal de Confirmação (Gov.br 14.133 frequentemente pergunta: "Deseja confirmar o lance?")
                     setTimeout(() => {
                         const confirmBtns = Array.from(document.querySelectorAll('button'));
                         const btnConfirma = confirmBtns.find(b => b.innerText.toUpperCase() === 'CONFIRMAR' || b.innerText.toUpperCase() === 'SIM');
                         if (btnConfirma) {
                             btnConfirma.click();
-                            console.log(`[POLARYON COMBAT TACTICAL] Auto-Confirmação Clicada para Item ${itemId}`);
+                            console.log(`[POLARYON VISUAL] Confirmação Automática: Item ${itemId}`);
                         }
-                    }, 500); // 500ms delay for modal to popup
+                    }, 500);
                 }
             }
         }
     } catch (e) {
-        console.error("Polaryon Combat Error:", e);
+        console.error("Polaryon Visual Error:", e);
     }
 }
+
 // -------------- FIM DO INJETOR v1.2.50 --------------
