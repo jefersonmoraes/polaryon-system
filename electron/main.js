@@ -57,6 +57,10 @@ function createWindow() {
   // Check for updates
   if (!isDev) {
     autoUpdater.checkForUpdatesAndNotify();
+    // Check every 30 mins
+    setInterval(() => {
+        autoUpdater.checkForUpdatesAndNotify();
+    }, 30 * 60 * 1000);
   }
 }
 
