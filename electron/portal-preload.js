@@ -18,8 +18,54 @@ window.addEventListener("message", (event) => {
              console.log("👻 [POLARYON] Token Capturado! Modo Híbrido armado.");
              window.polaryonAuthBearer = payload.token;
         }
+
+        // 🚀 FASE 2: Captura de URL e Ativação do Stealth Fetch Api-Direct
+        if (payload.action === 'API_DUMP' && payload.url && payload.url.includes('compras/participacoes') && payload.url.includes('tamanhoPagina')) {
+             // Atualiza sempre a URL com o captcha mais recente e injeta tamanhoPagina=1000
+             window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
+             
+             if (!window.polaryonHybrid_Active) {
+                  startHybridEngine();
+             }
+        }
     }
 }, false);
+
+// 🚀 FASE 2: MOTOR DE TRAÇÃO DIRETA (Background Fetch)
+const startHybridEngine = () => {
+    window.polaryonHybrid_Active = true;
+    console.log("🔥 [POLARYON HYBRID] Motor API-Direct Ativado! Baixando lances diretamente da fonte...");
+
+    // Rotina de extração invisível em background
+    setInterval(async () => {
+         if (!window.polaryonAuthBearer || !window.polaryonHybrid_ItemsUrl) return;
+
+         try {
+              const res = await fetch(window.polaryonHybrid_ItemsUrl, {
+                   method: 'GET',
+                   headers: {
+                        'Authorization': window.polaryonAuthBearer,
+                        'Accept': 'application/json, text/plain, */*'
+                   }
+              });
+
+              if (res.ok) {
+                   const data = await res.json();
+                   // Transmite o Array com TODOS os itens instantaneamente pro Console do Terminal
+                   ipcRenderer.send('portal-hybrid-capture', {
+                       sessionId: mySessionId || 'UNKNOWN',
+                       action: 'HYBRID_API_RESULTS',
+                       data: { items: data }
+                   });
+              } else {
+                   // Se falhar (ex: captcha expirou), o portal original vai atualizar logo depois
+                   console.log("⚠️ [POLARYON HYBRID] Falha silenciosa no pull direto, aguardando renovação...");
+              }
+         } catch(e) {
+              // Fail in background silently
+         }
+    }, 1500); // 1.5s pra não causar throtling de IP, o portal real já bate a cada X segs.
+};
 
 const injectSniffer = () => {
     const script = document.createElement('script');

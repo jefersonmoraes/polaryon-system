@@ -350,6 +350,8 @@ export default function BiddingDashboardPage() {
                            import('sonner').then(({ toast }) => toast.warning("Radar Híbrido: Conexão Oculta Estabelecida! 🤫"));
                       } else if (pkg.action === 'API_DUMP') {
                            console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + payload.url + "): ", "color: cyan; font-weight: bold;", payload.response);
+                      } else if (pkg.action === 'HYBRID_API_RESULTS') {
+                           console.log("%c[🔥 POLARYON HYBRID PULL DIRETO]: ", "color: #00ff00; font-weight: bold; background: #002200; padding: 2px 5px;", payload.items);
                       }
                  });
             }
