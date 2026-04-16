@@ -14,6 +14,15 @@ class VisualRunner {
             }
         });
 
+        // 🛡️ NOVO: Listener Híbrido Injetado
+        ipcMain.removeAllListeners('portal-hybrid-capture');
+        ipcMain.on('portal-hybrid-capture', (event, data) => {
+            if (this.dashboardWebContents) {
+                // Manda direto pro Dashboard
+                this.dashboardWebContents.send('bidding-hybrid-dump', data);
+            }
+        });
+
         // Listener para Cliques de Elite v3 (SHADOW CLICK - CDP)
         ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);

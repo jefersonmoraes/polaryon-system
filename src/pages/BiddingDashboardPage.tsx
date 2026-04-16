@@ -341,6 +341,18 @@ export default function BiddingDashboardPage() {
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
             (window as any).electronAPI.onBiddingChat(handleChat);
 
+            // 🛡️ MODO HÍBRIDO: Recepção da Telemetria Espiã
+            if ((window as any).electronAPI.onBiddingHybridDump) {
+                 (window as any).electronAPI.onBiddingHybridDump((data: any) => {
+                      if (data.action === 'TOKEN_GRABBED') {
+                           console.log("%c[POLARYON HYBRID] TOKEN CAPTURADO: ", "color: yellow; font-size: 14px; font-weight: bold;", data.token);
+                           import('sonner').then(({ toast }) => toast.warning("Radar Híbrido: Conexão Oculta Estabelecida! 🤫"));
+                      } else if (data.action === 'API_DUMP') {
+                           console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + data.url + "): ", "color: cyan; font-weight: bold;", data.response);
+                      }
+                 });
+            }
+
             // Reativar sessões se existirem no store local
             const restore = async () => {
                 const activeSessions = await (window as any).electronAPI.getRestoredSessions();

