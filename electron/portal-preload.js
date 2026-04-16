@@ -159,11 +159,12 @@ function scrapeDisputeRoom() {
                         win.polaryonMenuClicked = true;
                     }
 
-                    // 3. ESTRATÉGIA DE SALTO DIRETO (MÉTODO CONCORRÊNCIA)
-                    // Se estivermos autenticados na home, não esperamos cliques. Saltamos para o portal novo.
+                    // 3. ESTRATÉGIA DE SALTO DIRETO (MÉTODO CONCORRÊNCIA V2)
+                    // Se estivermos autenticados na home, usamos o Gateway Interno para realizar o handoff de sessão.
                     if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                        console.log("[POLARYON-WAR] Autenticação Detectada. Executando SALTO QUÂNTICO para o novo portal...");
-                        window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+                        console.log("[POLARYON-WAR] Autenticação Detectada. Executando GATEWAY HANDOFF v2...");
+                        // Este URL é o oficial que redireciona para o novo portal com a sessão injetada.
+                        window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
                         foundMenu = true;
                         return;
                     }
@@ -184,15 +185,15 @@ function scrapeDisputeRoom() {
             window.polaryonJumpAttempted++;
 
             if (window.polaryonJumpAttempted > 15 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                 console.log("[POLARYON-WAR] Estagnação. Forçando salto de emergência...");
-                 window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+                 console.log("[POLARYON-WAR] Estagnação. Forçando salto via Gateway...");
+                 window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
                  return;
             }
             
-            // EXECUÇÃO IMEDIATA DO SALTO SE DETECTADO LOGADO
-            if (bodyText.includes('Área de Trabalho do Fornecedor') || window.location.href.includes('intro.htm')) {
-                 console.log("[POLARYON] Executando Salto Quântico de login...");
-                 window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+            // EXECUÇÃO DO SALTO APÓS BREVE DELAY (Dá tempo dos frames carregarem)
+            if ((bodyText.includes('Área de Trabalho do Fornecedor') || window.location.href.includes('intro.htm')) && window.polaryonJumpAttempted > 5) {
+                 console.log("[POLARYON] Executando Gateway Handoff de login...");
+                 window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
                  return;
             }
             
