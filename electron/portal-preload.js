@@ -250,15 +250,21 @@ function scrapeDisputeRoom() {
 
 
         // --- AUTO-DIRECIONAMENTO DIRETO PARA A SALA LOGO APÓS O HANDOFF ---
+        // v2.1.2: Correção Crítica do Jefão - Para 14.133, usar SEMPRE modalidade '06' no link de disputa.
         if (window.location.href.includes('cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras')) {
             const uasgStr = (currentConfig.uasg || "150002").toString().padStart(6, '0');
             const numStr = (currentConfig.numero || "67").toString().padStart(5, '0');
             const anoStr = (currentConfig.ano || "2026").toString();
-            const modalityCode = (currentConfig.modality || "06").toString().padStart(2, '0');
+            
+            // Força 06 se for 14.133 (14) para garantir que o link direto funcione
+            let mod = (currentConfig.modality || "06").toString();
+            if (mod === "14") mod = "06"; 
+            const modalityCode = mod.padStart(2, '0');
+            
             const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
             const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
 
-            console.log(`[POLARYON] Handoff Concluído! Saltando direto para a sala de combate: ${targetUrl}`);
+            console.log(`[POLARYON] Infiltrado v2.1.2: Saltando para sala com ID Corrigido: ${compraCode}`);
             window.location.href = targetUrl;
             return;
         }
