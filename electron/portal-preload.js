@@ -19,9 +19,9 @@ window.addEventListener("message", (event) => {
              window.polaryonAuthBearer = payload.token;
         }
 
-        if (payload.action === 'API_DUMP' && payload.url && payload.url.includes('tamanhoPagina')) {
-             // FILTRO CIRÚRGICO: Só injeta tamanhoPagina=1000 se for explicitamente a lista de itens/disputa
-             const isItemsList = payload.url.includes('/itens') || payload.url.includes('/disputa');
+        if (payload.action === 'API_DUMP' && payload.url) {
+             // FILTRO CIRÚRGICO: Detecta a lista de itens/disputa por padrões de URL
+             const isItemsList = (payload.url.includes('/itens') || payload.url.includes('/disputa')) && !payload.url.includes('/totalizadores');
              const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
 
              if (isItemsList && !isMetadata) {
@@ -30,8 +30,10 @@ window.addEventListener("message", (event) => {
                   if (contextMatch) {
                        window.polaryonContext_PurchaseId = contextMatch[1];
                        window.polaryonContext_Year = contextMatch[2];
-                       // URL Base para extração de itens
-                       window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=1000').replace(/pagina=\d+/, 'pagina=0');
+                       
+                       // SALVAGUARDA v2.1.19: Usamos a URL original SEM hack de tamanhoPagina
+                       // Isso evita "envenenar" a sessão e causar erro 422
+                       window.polaryonHybrid_ItemsUrl = payload.url;
                   }
                   
                   if (!window.polaryonHybrid_Active) {
@@ -57,50 +59,75 @@ const startHybridEngine = () => {
          }
 
          try {
-              const res = await fetch(window.polaryonHybrid_ItemsUrl, {
-                   method: 'GET',
-                   headers: {
-                        'Authorization': window.polaryonAuthBearer,
-                        'Accept': 'application/json, text/plain, */*'
-                   }
-              });
+              // Navegação Camuflada: Percorre as páginas individualmente se necessário
+              let allFetchedItems = [];
+              let page = 0;
+              let hasMore = true;
+              
+              // Limite de segurança para evitar loops (Máximo 5 páginas de 20 = 100 itens)
+              while (hasMore && page < 5) {
+                  const targetUrl = window.polaryonHybrid_ItemsUrl
+                      .replace(/pagina=\d+/, `pagina=${page}`)
+                      .replace(/pagina=\d+/, `pagina=${page}`); // Dupla garantia
+                  
+                  const res = await fetch(targetUrl, {
+                       method: 'GET',
+                       headers: {
+                            'Authorization': window.polaryonAuthBearer,
+                            'Accept': 'application/json, text/plain, */*'
+                       }
+                  });
 
-              if (res && res.ok && typeof res.text === 'function') {
-                   const rawText = await res.text();
-                   if (rawText && rawText.trim().length > 0) {
-                        try {
-                            const data = JSON.parse(rawText);
-                            const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                            
-                            if (Array.isArray(itemsArray)) {
-                                 if (!window.polaryonAllItems) window.polaryonAllItems = {};
-                                 itemsArray.forEach(item => {
-                                      const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
-                                      const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
-                                      
-                                      window.polaryonAllItems[item.numero.toString()] = {
-                                           itemId: item.numero.toString(),
-                                           valorAtual: melhorGeral,
-                                           meuValor: melhorMeu,
-                                           isDispute: item.situacao === '1' || item.situacao === '2',
-                                           desc: item.descricao || ("Item " + item.numero),
-                                           ganhador: melhorMeu > 0 && melhorMeu <= melhorGeral ? 'Você' : 'Outro',
-                                           status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
-                                      };
-                                 });
-                            }
+                  if (!res.ok) {
+                      if (res.status === 422) window.polaryonAPIStatus = "⚠️ DESVIO DE ROTA (422)";
+                      break;
+                  }
 
-                            ipcRenderer.send('portal-hybrid-capture', {
-                                sessionId: mySessionId || 'UNKNOWN',
-                                action: 'HYBRID_API_RESULTS',
-                                data: { items: data }
-                            });
-                            
-                            window.polaryonAPIStatus = "✅ CONECTADO";
-                        } catch(e) {}
-                   }
-              } else {
-                   window.polaryonAPIStatus = "❌ ERRO API";
+                  const rawText = await res.text();
+                  if (!rawText || rawText.trim().length === 0) break;
+                  
+                  const data = JSON.parse(rawText);
+                  const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                  
+                  if (itemsArray.length === 0) break;
+                  allFetchedItems = [...allFetchedItems, ...itemsArray];
+
+                  // Detecta se é a última página
+                  const sizeMatch = targetUrl.match(/tamanhoPagina=(\d+)/);
+                  const pageSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
+                  if (itemsArray.length < pageSize) {
+                      hasMore = false;
+                  } else {
+                      page++;
+                      // Pequeno intervalo entre páginas para parecer humano
+                      await new Promise(r => setTimeout(r, 50)); 
+                  }
+              }
+
+              if (allFetchedItems.length > 0) {
+                   if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                   allFetchedItems.forEach(item => {
+                        const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
+                        const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
+                        
+                        window.polaryonAllItems[item.numero.toString()] = {
+                             itemId: item.numero.toString(),
+                             valorAtual: melhorGeral,
+                             meuValor: melhorMeu,
+                             isDispute: item.situacao === '1' || item.situacao === '2',
+                             desc: item.descricao || ("Item " + item.numero),
+                             ganhador: melhorMeu > 0 && melhorMeu <= melhorGeral ? 'Você' : 'Outro',
+                             status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
+                        };
+                   });
+
+                   ipcRenderer.send('portal-hybrid-capture', {
+                       sessionId: mySessionId || 'UNKNOWN',
+                       action: 'HYBRID_API_RESULTS',
+                       data: { items: allFetchedItems }
+                   });
+                   
+                   window.polaryonAPIStatus = "✅ ELITE (CAMUFLADO)";
               }
 
               // HEALTH CHECK (Sinal de vida a cada 10 ciclos)
@@ -809,8 +836,8 @@ function renderBiddingPanel(items) {
         const subHeader = document.createElement('div');
         subHeader.style.cssText = 'padding: 8px 15px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;';
         subHeader.innerHTML = `
-            <div id="polaryon-api-status" style="color: #10b981;">API: CONECTANDO...</div>
-            <div id="polaryon-mode-status" style="color: #eab308;">MODO: ?</div>
+            <div id="polaryon-api-status" style="color: #ef4444;" title="Status de conexão com o banco de dados do Governo">API: OFFLINE</div>
+            <div id="polaryon-mode-status" style="color: #eab308;" title="REAL: Lances valem dinheiro! SIMULAÇÃO: Apenas testes.">MODO: ?</div>
         `;
 
         const listContainer = document.createElement('div');
