@@ -51,45 +51,59 @@ const startHybridEngine = () => {
                    }
               });
 
-               if (res && res.ok && typeof res.json === 'function') {
-                    const data = await res.json();
+               if (res && res.ok && typeof res.text === 'function') {
+                    const rawText = await res.text();
+                    
+                    if (!rawText || rawText.trim().length === 0) {
+                         // Resposta vazia, ignora silenciosamente (evita "Unexpected end of JSON input")
+                         return;
+                    }
+
+                    let data;
+                    try {
+                        data = JSON.parse(rawText);
+                    } catch(jsonErr) {
+                        // Se não for JSON válido, ignora ou reporta erro silencioso
+                        return;
+                    }
                     
                     // FASE 3: BYPASS TOTAL DO DOM.
-                    // Pega o JSON puro do Módulo Híbrido e injeta como se o Scraper Visual tivesse lido da tela.
-                   const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                   
-                   if (Array.isArray(itemsArray)) {
-                        if (!window.polaryonAllItems) window.polaryonAllItems = {};
-                        
-                        itemsArray.forEach(item => {
-                             const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
-                             const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
-                             
-                             // UNIFICAÇÃO DE CHAVE: Usar apenas o número do item (ex: "8")
-                             window.polaryonAllItems[item.numero.toString()] = {
-                                  itemId: item.numero.toString(),
-                                  valorAtual: melhorGeral,
-                                  meuValor: melhorMeu,
-                                  isDispute: item.situacao === '1' || item.situacao === '2', // 1=Aberto, 2=Encerrando
-                                  desc: item.descricao || ("Item " + item.numero),
-                                  ganhando: melhorMeu > 0 && melhorMeu <= melhorGeral,
-                                  status: item.situacao === '1' ? 'Aberto' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
-                             };
-                        });
-                   }
+                    const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                    
+                    if (Array.isArray(itemsArray)) {
+                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                         
+                         itemsArray.forEach(item => {
+                              const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
+                              const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
+                              
+                              window.polaryonAllItems[item.numero.toString()] = {
+                                   itemId: item.numero.toString(),
+                                   valorAtual: melhorGeral,
+                                   meuValor: melhorMeu,
+                                   isDispute: item.situacao === '1' || item.situacao === '2',
+                                   desc: item.descricao || ("Item " + item.numero),
+                                   ganhando: melhorMeu > 0 && melhorMeu <= melhorGeral,
+                                   status: item.situacao === '1' ? 'Aberto' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
+                              };
+                         });
+                    }
 
-                   ipcRenderer.send('portal-hybrid-capture', {
-                       sessionId: mySessionId || 'UNKNOWN',
-                       action: 'HYBRID_API_RESULTS',
-                       data: { items: data }
-                   });
-               } else if (res && typeof res.text === 'function') {
-                    const txt = await res.text();
                     ipcRenderer.send('portal-hybrid-capture', {
                         sessionId: mySessionId || 'UNKNOWN',
-                        action: 'HYBRID_API_ERROR',
-                        data: { status: res.status, body: (txt || "").substring(0, 500) }
+                        action: 'HYBRID_API_RESULTS',
+                        data: { items: data }
                     });
+               } else if (res && typeof res.text === 'function') {
+                    const txt = await res.text();
+                    // Só reporta erro se não for vazio
+                    if (txt && txt.trim().length > 0) {
+                        ipcRenderer.send('portal-hybrid-capture', {
+                            sessionId: mySessionId || 'UNKNOWN',
+                            action: 'HYBRID_API_ERROR',
+                            data: { status: res.status, body: txt.substring(0, 500) }
+                        });
+                    }
                }
          } catch(e) {
               ipcRenderer.send('portal-hybrid-capture', {
