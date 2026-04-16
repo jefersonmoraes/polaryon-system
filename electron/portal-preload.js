@@ -120,13 +120,14 @@ function scrapeDisputeRoom() {
                 try {
                     const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li, button'));
                     
-                    // 1. TENTA O CLIQUE DIRETO NO SUBMENU SE ESTIVER VISÍVEL (Precisão Cirúrgica v1.8.0)
-                    const submenuMatch = allElements.find(el => {
+                    // 1. TENTA O CLIQUE DIRETO NO SUBMENU COM PRECISÃO SNIPER (v1.9.0)
+                    const matches = allElements.filter(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        // Prioridade máxima para o portal NOVO
-                        return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
-                               txt.includes('(NOVO)') && txt.includes('DISPENSA');
+                        return txt.includes('LICITAÇÃO E DISPENSA (NOVO)');
                     });
+
+                    // Escolhe o elemento mais específico (o que tiver o menor texto, evitando containers)
+                    const submenuMatch = matches.sort((a, b) => (a.innerText?.length || 0) - (b.innerText?.length || 0))[0];
 
                     if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
@@ -137,7 +138,7 @@ function scrapeDisputeRoom() {
                             target.style.boxShadow = '0 0 10px red';
                         } catch(e) {}
 
-                        console.log(`[POLARYON] Alvo Detectado com Precisão (v1.8.0): "${target.innerText}"`);
+                        console.log(`[POLARYON] Sniper Lock (v1.9.0): "${target.innerText.split('\n')[0].trim()}"`);
                         
                         // 1. Sequência Visual de Apoio
                         const opts = { bubbles: true, cancelable: true, view: win };
