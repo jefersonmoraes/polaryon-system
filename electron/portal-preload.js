@@ -127,19 +127,34 @@ function scrapeDisputeRoom() {
                     });
 
                     if (submenuMatch) {
+                    if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
-                        console.log(`[POLARYON] Submenu Encontrado! Executando Clique Visual de Alta Fidelidade...`);
+                        console.log(`[POLARYON] Alvo Atômico Detectado! Iniciando sequência de disparo...`);
                         
                         const opts = { bubbles: true, cancelable: true, view: win };
-                        target.dispatchEvent(new MouseEvent('mouseover', opts));
-                        target.dispatchEvent(new MouseEvent('mousedown', opts));
                         
+                        // Sequência completa para enganar menus LEGACY (Milonic/DHTML)
+                        target.dispatchEvent(new MouseEvent('mouseover', opts));
+                        target.dispatchEvent(new MouseEvent('mouseenter', opts));
+                        target.dispatchEvent(new MouseEvent('mousedown', opts));
+                        if (typeof target.focus === 'function') target.focus();
+
+                        // Pequeno delay para simular a reação do script do portal
                         setTimeout(() => {
                             target.dispatchEvent(new MouseEvent('mouseup', opts));
                             target.click();
-                            // Marcar como sucesso para parar a recursão
+                            
+                            // TENTATIVA DE EXTRAÇÃO DE ROTA (Bypass de segurança)
+                            // Se o elemento tem um href ou onclick com link, forçamos a navegação no topo
+                            const attrClick = target.getAttribute('onclick') || "";
+                            const href = target.href || "";
+                            if (href.includes('servico=226') || attrClick.includes('servico=226')) {
+                                console.log("[POLARYON] Extração de Rota v266 bem sucedida!");
+                                window.top.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                            }
+                            
                             foundMenu = true;
-                        }, 50);
+                        }, 80);
                         return;
                     }
 
