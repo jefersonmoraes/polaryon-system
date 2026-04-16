@@ -120,18 +120,24 @@ function scrapeDisputeRoom() {
                 try {
                     const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li, button'));
                     
-                    // 1. TENTA O CLIQUE DIRETO NO SUBMENU SE ESTIVER VISÍVEL
+                    // 1. TENTA O CLIQUE DIRETO NO SUBMENU SE ESTIVER VISÍVEL (Precisão Cirúrgica v1.8.0)
                     const submenuMatch = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        // Suporte a múltiplas variações de texto usadas pelo portal
+                        // Prioridade máxima para o portal NOVO
                         return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || 
-                               txt.includes('LICITAÇÕES E DISPENSAS (NOVO)') ||
-                               txt.includes('CONTRATAÇÃO DIRETA');
+                               txt.includes('(NOVO)') && txt.includes('DISPENSA');
                     });
 
                     if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
-                        console.log(`[POLARYON] Alvo Encontrado! Iniciando DEPLOY DE CLIQUE NATIVO (v1.5.0)...`);
+                        
+                        // DEBUG VISUAL: Coloca uma borda vermelha no botão detectado
+                        try {
+                            target.style.outline = '3px solid red';
+                            target.style.boxShadow = '0 0 10px red';
+                        } catch(e) {}
+
+                        console.log(`[POLARYON] Alvo Detectado com Precisão (v1.8.0): "${target.innerText}"`);
                         
                         // 1. Sequência Visual de Apoio
                         const opts = { bubbles: true, cancelable: true, view: win };

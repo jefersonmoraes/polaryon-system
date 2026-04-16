@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
     AlertDialog,
@@ -85,6 +85,18 @@ export default function BiddingDashboardPage() {
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
 
+    // MODO MULTI-UASG (v1.8.0)
+    const [viewMode, setViewMode] = useState<'focus' | 'grid'>('focus');
+    const [sessions, setSessions] = useState<Record<string, {
+        uasg: string;
+        numero: string;
+        items: BiddingItem[];
+        chatMessages: any[];
+        lastUpdate: string;
+        isAuthenticated: boolean;
+        simulationMode: boolean;
+    }>>({});
+
     const dummyCredentialId = 'simulated-credential-id';
 
     const startRadar = async (overrideUasg?: string, overrideNum?: string, overrideAno?: string) => {
@@ -130,7 +142,22 @@ export default function BiddingDashboardPage() {
                         });
                         setIsLocalRunning(true);
                         setIsListening(true);
-                        toast.success("Modo Visual Ativado! Logue no Gov.br na nova janela. 👁️");
+                        
+                        // Inicializa na lista multi-sessão
+                        setSessions(prev => ({
+                            ...prev,
+                            [session.id]: {
+                                uasg: targetUasg,
+                                numero: targetNum,
+                                items: [],
+                                chatMessages: [],
+                                lastUpdate: new Date().toLocaleTimeString(),
+                                isAuthenticated: false,
+                                simulationMode: simulationMode
+                            }
+                        }));
+
+                        toast.success(`Robô ${targetUasg} Iniciado! 👁️`);
                         return;
                     }
                     
@@ -250,23 +277,38 @@ export default function BiddingDashboardPage() {
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
             const handleUpdate = (data: any) => {
-                if (data.sessionId === sessionId) {
-                    setItems(data.items);
-                    setLastUpdate(data.timestamp);
-                    if (data.turbo !== undefined) setTurbo(data.turbo);
+                const { sessionId: sid, items: newItems, timestamp, turbo: isTurbo } = data;
+                
+                // Atualiza Global (se for a sessão focada)
+                if (sid === sessionId) {
+                    setItems(newItems);
+                    setLastUpdate(timestamp);
+                    if (isTurbo !== undefined) setTurbo(isTurbo);
                 }
-            };
-            
-            const handleError = (data: any) => {
-                if (data.sessionId === sessionId) {
-                    toast.error(`Erro no motor local: ${data.error}`);
-                }
+
+                // Atualiza Registro Multi-Sessão
+                setSessions(prev => ({
+                    ...prev,
+                    [sid]: {
+                        ...prev[sid],
+                        items: newItems,
+                        lastUpdate: timestamp
+                    }
+                }));
             };
             
             const handleChat = (data: any) => {
-                if (data.messages) {
-                    setChatMessages(data.messages);
+                const { sessionId: sid, messages } = data;
+                if (sid === sessionId) {
+                    setChatMessages(messages);
                 }
+                setSessions(prev => ({
+                    ...prev,
+                    [sid]: {
+                        ...prev[sid],
+                        chatMessages: messages
+                    }
+                }));
             };
             
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
@@ -462,6 +504,24 @@ export default function BiddingDashboardPage() {
 
                     <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
 
+                    {/* VIEW SWITCHER (v1.8.0) */}
+                    <div className="flex bg-slate-950/50 p-1 rounded-xl border border-white/5">
+                        <Button 
+                            variant={viewMode === 'focus' ? 'secondary' : 'ghost'} 
+                            onClick={() => setViewMode('focus')}
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                        >
+                            FOCADO
+                        </Button>
+                        <Button 
+                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                            onClick={() => setViewMode('grid')}
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                        >
+                            GRADES ({Object.keys(sessions).length})
+                        </Button>
+                    </div>
+
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col">
                             <span className="text-[10px] text-slate-500 font-black uppercase">Vencendo</span>
@@ -504,7 +564,72 @@ export default function BiddingDashboardPage() {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-8 duration-500">
+                    {Object.entries(sessions).map(([sid, s]) => (
+                        <Card 
+                            key={sid} 
+                            onClick={() => {
+                                setSessionId(sid);
+                                setUasg(s.uasg);
+                                setNumeroPregao(s.numero);
+                                setItems(s.items);
+                                setChatMessages(s.chatMessages);
+                                setViewMode('focus');
+                            }}
+                            className={`group cursor-pointer shadow-xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 transition-all hover:scale-[1.02] hover:ring-emerald-500/50 ${
+                                sessionId === sid ? 'ring-emerald-500' : 'ring-white/10'
+                            }`}
+                        >
+                            <div className={`h-1 w-full ${s.items.some(i => i.ganhador === 'Você') ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
+                            <CardHeader className="p-4 pb-2">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex flex-col">
+                                        <CardTitle className="text-lg font-black tracking-tighter text-slate-100">UASG {s.uasg}</CardTitle>
+                                        <CardDescription className="text-[10px] font-bold uppercase text-slate-500">Pregão {s.numero}</CardDescription>
+                                    </div>
+                                    {s.items.some(i => i.tempoRestante > 0) && (
+                                        <span className="flex items-center gap-1 text-[10px] text-red-500 font-black animate-pulse">
+                                            <Activity className="w-3 h-3" /> ATIVO
+                                        </span>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-2">
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                    <div className="bg-slate-950/50 p-2 rounded-lg border border-white/5">
+                                        <p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Itens</p>
+                                        <p className="text-sm font-black text-slate-200">{s.items.length}</p>
+                                    </div>
+                                    <div className="bg-slate-950/50 p-2 rounded-lg border border-white/5">
+                                        <p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Vencendo</p>
+                                        <p className="text-sm font-black text-emerald-500">{s.items.filter(i => i.ganhador === 'Você').length}</p>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center text-[9px] font-mono text-slate-600">
+                                    <span>Sync: {s.lastUpdate}</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${s.isAuthenticated ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                        <span>{s.isAuthenticated ? 'ONLINE' : 'AUTH'}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                    
+                    {/* Botão de Adicionar na Grade */}
+                    <Card 
+                        onClick={() => setViewMode('focus')}
+                        className="flex items-center justify-center border-dashed border-2 border-white/10 bg-transparent hover:bg-white/5 cursor-pointer transition-colors min-h-[150px]"
+                    >
+                        <div className="flex flex-col items-center gap-2 text-slate-500">
+                            <PlusIcon className="w-6 h-6" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Nova Operação</span>
+                        </div>
+                    </Card>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Controls Card */}
                 <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
@@ -866,7 +991,8 @@ export default function BiddingDashboardPage() {
                         )}
                     </CardContent>
                 </Card>
-            </div>
+                </div>
+            )}
 
             <AlertDialog open={showRealModeWarning} onOpenChange={setShowRealModeWarning}>
                 <AlertDialogContent className="bg-slate-900 border-white/10 text-slate-100">
