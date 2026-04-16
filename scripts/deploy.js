@@ -42,7 +42,7 @@ function deploy() {
 
         // 5. Sync Git, Build Web e Sincronização de Pastas de Download
         console.log(`Puxando código no VPS, gerando build web e sincronizando pastas de download...`);
-        const remoteCmd = `cd /var/www/polaryon && git pull origin main && npm run build && mkdir -p dist/download && cp -rn public/download/* dist/download/ && pm2 restart polaryon-backend`;
+        const remoteCmd = `cd /var/www/polaryon && git pull origin main && npm run build && pm2 restart polaryon-backend`;
         execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
 
         console.log('\n✅ DEPLOY COMPLETO! A versão v' + version + ' está ao vivo e pronta para download/update.');
