@@ -61,6 +61,22 @@ const startHybridEngine = () => {
     let apiHealthCounter = 0;
 
     const pollingLoop = async () => {
+         // SCANNER DE REDE REATIVO: Se não temos URL, vasculhamos o histórico de rede do navegador
+         if (!window.polaryonHybrid_ItemsUrl) {
+             try {
+                 const resources = performance.getEntriesByType('resource');
+                 const itemsResource = resources.find(r => 
+                     (r.name.includes('/itens') || r.name.includes('/disputa')) && 
+                     !r.name.includes('/totalizadores') &&
+                     r.name.includes('/v1/compras/')
+                 );
+                 if (itemsResource) {
+                     window.polaryonHybrid_ItemsUrl = itemsResource.name;
+                     console.log("👻 [POLARYON] Scanner de Rede Encontrou o Link Real:", itemsResource.name);
+                 }
+             } catch(e) {}
+         }
+
          if (!window.polaryonAuthBearer || !window.polaryonHybrid_ItemsUrl) {
              setTimeout(pollingLoop, 2000);
              return;
@@ -87,7 +103,11 @@ const startHybridEngine = () => {
                   });
 
                   if (!res.ok) {
-                      if (res.status === 422) window.polaryonAPIStatus = "⚠️ DESVIO DE ROTA (422)";
+                      if (res.status === 404 || res.status === 422) {
+                           // Link Quebrado ou Expirado: Força re-escaneamento de rede
+                           window.polaryonHybrid_ItemsUrl = null;
+                           window.polaryonAPIStatus = "⚠️ RE-SINCRONIZANDO...";
+                      }
                       break;
                   }
 
@@ -192,6 +212,8 @@ const injectSniffer = () => {
                 
                 xhr.setRequestHeader = function(header, value) {
                     if (header.toLowerCase() === 'authorization' || header.toLowerCase() === 'bearer') {
+                        // CAPTURA AGRESSIVA: Atualiza o token em cada pedido feito pelo portal
+                        window.polaryonAuthBearer = value;
                         sendToPreload({ action: 'TOKEN_GRABBED', token: value, url: this._url });
                     }
                     return origSetReqHeader.apply(this, arguments);
@@ -221,10 +243,15 @@ const injectSniffer = () => {
                     try {
                         if (options.headers.get && typeof options.headers.get === 'function') {
                             const tk = options.headers.get('authorization') || options.headers.get('Authorization');
-                            if (tk) { sendToPreload({ action: 'TOKEN_GRABBED', token: tk, url: url }); hasToken = true; }
+                            if (tk) { 
+                                window.polaryonAuthBearer = tk; // Sincronização direta
+                                sendToPreload({ action: 'TOKEN_GRABBED', token: tk, url: url }); 
+                                hasToken = true; 
+                            }
                         } else {
                             for (const [k, v] of Object.entries(options.headers)) {
                                 if (k.toLowerCase() === 'authorization') {
+                                    window.polaryonAuthBearer = v; // Sincronização direta
                                     sendToPreload({ action: 'TOKEN_GRABBED', token: v, url: url });
                                     hasToken = true;
                                 }
@@ -772,24 +799,10 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
     };
     console.log("[POLARYON] Sessão Local Inicializada:", sessionId, currentConfig);
 
-    // AUTO-CONSTRUTOR v2.1.21: Se o sniffer falhar, montamos a rota de forma robusta
-    if (!window.polaryonHybrid_ItemsUrl && currentConfig.uasg && currentConfig.numero && currentConfig.ano) {
-        const uasg = currentConfig.uasg.replace(/\D/g, '');
-        const num = currentConfig.numero.replace(/\D/g, '').padStart(5, '0');
-        const year = currentConfig.ano;
-        
-        // Padrão Serpro: UASG(6) + MODALIDADE(2) + SEQUENCIAL(5)
-        // Tentamos os formatos mais comuns (Modality 05 ou 06)
-        const id1 = `${uasg}05${num}`;
-        const id2 = `${uasg}06${num}`;
-        
-        window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${id1}/${year}/itens?pagina=0&tamanhoPagina=20`;
-        
-        console.log("👻 [POLARYON] Tentativa de Auto-Rota:", window.polaryonHybrid_ItemsUrl);
-        
-        if (window.polaryonAuthBearer && !window.polaryonHybrid_Active) {
-            startHybridEngine();
-        }
+    // SCANNER v2.1.22: Garante que o motor já inicie tentando farejar a rede
+    if (window.polaryonAuthBearer && !window.polaryonHybrid_ItemsUrl) {
+         // A rota agora será encontrada pelo performance scanner no pollingLoop
+         if (!window.polaryonHybrid_Active) startHybridEngine();
     }
 });
 
