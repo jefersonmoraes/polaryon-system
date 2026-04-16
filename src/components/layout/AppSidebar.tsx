@@ -26,7 +26,7 @@ const AppSidebar = () => {
   useEffect(() => {
     const fetchQuotes = async () => {
       try {
-        const version = "2.0.7";
+        const version = "2.0.8";
         const response = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL');
         const data = await response.json();
         setCurrencyQuotes({
@@ -432,7 +432,7 @@ const AppSidebar = () => {
             >
               <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
               {!isCollapsed && <span>CENTRAL DO BOT</span>}
-              {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V2.0.7 WAR-FLOW</div>}
+              {!isCollapsed && <div className="ml-auto bg-emerald-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V2.0.8 WAR-FLOW</div>}
             </Link>
           </div>
         )}

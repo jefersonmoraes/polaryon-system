@@ -65,7 +65,7 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v7.0: Salto Profundo (Deep Jump) - Navegação Direta para Sala de Lances
+            // v8.0: Salto Profundo com Retardo de Sincronia (Delayed Jump)
             const jumpToDisputeRoom = () => {
                 if (!currentConfig.uasg || !currentConfig.numero) return;
                 
@@ -76,14 +76,26 @@ function scrapeDisputeRoom() {
                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
                 
                 if (currentUrl !== targetUrl && !currentUrl.includes('disputa')) {
-                    console.log("[POLARYON TSUNAMI] Executando SALTO PROFUNDO v7.0 direto para Sala de Lances...");
+                    console.log("[POLARYON TSUNAMI] v8.0: Executando SALTO PROFUNDO com Retardo de Sincronia...");
                     window.location.href = targetUrl;
                 }
             };
 
+            // v8.0: Motor de Recuperação de "Compra não encontrada" ou "Erro de Sincronia"
+            const recoveryCheck = () => {
+                const isNotFound = bodyText.includes('Compra não encontrada') || bodyText.includes('não foi encontrada');
+                if (isNotFound && (currentUrl.includes('disputa') || currentUrl.includes('compra='))) {
+                    console.warn("[POLARYON] Sincronia falhou (Compra não encontrada). Retornando para Lista...");
+                    window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/escritorio-fornecedor';
+                }
+            };
+            setTimeout(recoveryCheck, 3000);
+
             // Dispara o salto se estiver no "Handoff" ou na "Lista" do portal novo
+            // Aumentamos o tempo para 2.5s para o Serpro "carregar" sua participação em background
             if (currentUrl.includes('servico=226') || currentUrl.includes('escritorio-fornecedor')) {
-                setTimeout(jumpToDisputeRoom, 500);
+                console.log("[POLARYON] Sincronizando sessão no Escritório... Salto em 2.5s");
+                setTimeout(jumpToDisputeRoom, 2500);
             }
 
             // v4.0 Tsunami: Resource Watchdog (Monitoramento de Ativos de Rede)
