@@ -201,6 +201,28 @@ export default function BiddingDashboardPage() {
         }
     };
 
+    // v2.0 War Flow - Unified Item List
+    const allItems = useMemo(() => {
+        const list: (BiddingItem & { sid: string, uasgName: string })[] = [];
+        Object.entries(sessions).forEach(([sid, session]) => {
+            (session.items || []).forEach(item => {
+                list.push({ ...item, sid, uasgName: session.uasg });
+            });
+        });
+
+        // Ordenação inteligente: Perdedores e Urgentes primeiro
+        return list.sort((a, b) => {
+            const aIsWinning = a.posicao === '1';
+            const bIsWinning = b.posicao === '1';
+            
+            if (!aIsWinning && bIsWinning) return -1;
+            if (aIsWinning && !bIsWinning) return 1;
+            
+            // Se ambos estão no mesmo status, os com menos tempo vem primeiro
+            return (a.timerSeconds || 9999) - (b.timerSeconds || 9999);
+        });
+    }, [sessions]);
+
     const stopRadar = async () => {
         if (!sessionId) return;
         try {
