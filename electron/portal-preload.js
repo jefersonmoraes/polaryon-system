@@ -121,12 +121,6 @@ function scrapeDisputeRoom() {
                     const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li, button'));
                     
                     // 1. TENTA O CLIQUE DIRETO NO SUBMENU SE ESTIVER VISÍVEL
-                    const submenuMatch = allElements.find(el => {
-                        const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || txt.includes('LICITAÇÕES E DISPENSAS (NOVO)');
-                    });
-
-                    if (submenuMatch) {
                     if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
                         console.log(`[POLARYON] Alvo Atômico Detectado! Iniciando sequência de disparo...`);
