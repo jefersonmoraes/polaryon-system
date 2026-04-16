@@ -65,6 +65,21 @@ function scrapeDisputeRoom() {
                 return;
             }
 
+            // v3.0: Watchdog de Recuperação para Erro 500 / Tela Branca do Portal Novo
+            if (currentUrl.includes('cnetmobile') || currentUrl.includes('comprasnet-web')) {
+                const healthCheck = () => {
+                    const hasContent = document.body && document.body.innerText.length > 200;
+                    const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
+                    
+                    if (!hasContent || isSystemError) {
+                        console.warn("[POLARYON] Detetada falha de carregamento no portal. Tentando recuperação em 3s...");
+                        setTimeout(() => window.location.reload(), 3000);
+                    }
+                };
+                // Verifica após 5s de carregamento
+                setTimeout(healthCheck, 5000);
+            }
+
             // Fallback Agressivo: Se detectamos o aviso mas não achamos o botão, 
             // tentamos saltar direto para a página pós-login (intro.htm)
             if (currentUrl.includes('Aviso') || currentUrl.includes('Comunicado')) {
@@ -74,7 +89,16 @@ function scrapeDisputeRoom() {
             }
         }
 
-        // --- AUTOMAÇÃO DE LOGIN (GOV.BR) ---
+        // --- AUTOMAÇÃO DE LOGIN E HANDOFF DIRETO (v3.0) ---
+        
+        // v3.0: SALTO DIRETO PARA PORTAL NOVO (Bypass de Frameset/Menus)
+        // Se estamos no index.asp mas não saltamos pro portal novo ainda
+        if (currentUrl.includes('index.asp') && !currentUrl.includes('servico=226') && bodyText.includes('Joelison')) {
+             console.log("[POLARYON] Handoff Direto v3.0: Saltando para Portal 14.133...");
+             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226';
+             return;
+        }
+
         // Fase 1: Tela intermediária do Comprasnet ("Acesse sua Conta" -> "Entrar com Gov.br")
         if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
             const entrarBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
