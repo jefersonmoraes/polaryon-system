@@ -763,6 +763,22 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
         modality: config.modality
     };
     console.log("[POLARYON] Sessão Local Inicializada:", sessionId, currentConfig);
+
+    // AUTO-CONSTRUTOR v2.1.20: Se o sniffer falhar, montamos a rota via contexto
+    if (!window.polaryonHybrid_ItemsUrl && currentConfig.uasg && currentConfig.numero && currentConfig.ano) {
+        // Formata o UASG longo se necessário (remove pontos/traços)
+        const cleanUasg = currentConfig.uasg.replace(/\D/g, '');
+        const cleanNum = currentConfig.numero.replace(/\D/g, '');
+        
+        // URL Base segura sem paginação agressiva
+        window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${cleanUasg}/${cleanNum}/${currentConfig.ano}/itens?pagina=0&tamanhoPagina=20`;
+        
+        console.log("👻 [POLARYON] Auto-Rota Construída:", window.polaryonHybrid_ItemsUrl);
+        
+        if (window.polaryonAuthBearer && !window.polaryonHybrid_Active) {
+            startHybridEngine();
+        }
+    }
 });
 
 ipcRenderer.on('update-config', (event, config) => {
