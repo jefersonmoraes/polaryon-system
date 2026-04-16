@@ -126,47 +126,35 @@ function scrapeDisputeRoom() {
                         return txt.includes('LICITAÇÃO E DISPENSA (NOVO)') || txt.includes('LICITAÇÕES E DISPENSAS (NOVO)');
                     });
 
-                    if (submenuMatch && submenuMatch.offsetParent !== null) { // Garante que está visível
+                    if (submenuMatch) {
                         const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
-                        console.log(`[POLARYON v1.3.7] Submenu Detectado! Disparando navegação...`);
+                        console.log(`[POLARYON] Submenu Encontrado! Executando Clique Visual de Alta Fidelidade...`);
                         
                         const opts = { bubbles: true, cancelable: true, view: win };
                         target.dispatchEvent(new MouseEvent('mouseover', opts));
                         target.dispatchEvent(new MouseEvent('mousedown', opts));
-                        if (typeof target.focus === 'function') target.focus();
                         
                         setTimeout(() => {
                             target.dispatchEvent(new MouseEvent('mouseup', opts));
                             target.click();
-                            // Fallback redundante
-                            if (target.href && !target.href.includes('javascript') && target.href !== '#') {
-                                win.location.href = target.href;
-                            }
-                        }, 100);
-                        foundMenu = true;
+                            // Marcar como sucesso para parar a recursão
+                            foundMenu = true;
+                        }, 50);
                         return;
                     }
 
-                    // 2. SE NÃO ACHOU SUBMENU, TENTA ABRIR O MENU PAI "COMPRAS" (Legacy Fallback)
+                    // 2. SE NÃO ACHOU SUBMENU, TENTA ABRIR O MENU PAI "COMPRAS" NO FRAME CORRETO
                     const mainBtn = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        return txt === 'COMPRAS' || txt === 'MENU COMPRAS';
+                        // Alguns portais usam 'MENU COMPRAS', outros apenas 'COMPRAS'
+                        return txt === 'COMPRAS' || txt === 'MENU COMPRAS' || txt.includes('ABA COMPRAS');
                     });
 
-                    if (mainBtn && !win.polaryonMenuClicked) {
-                        console.log("[POLARYON] Abrindo aba de comando COMPRAS (Fallback)...");
+                    if (mainBtn) {
+                        console.log("[POLARYON] Drone de Navegação: Ativando Menu Compras...");
+                        mainBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles:true, cancelable: true}));
                         mainBtn.click();
-                        win.polaryonMenuClicked = true;
-                    }
-
-                    // 3. ESTRATÉGIA DE SALTO DIRETO (MÉTODO CONCORRÊNCIA V2)
-                    // Se estivermos autenticados na home, usamos o Gateway Interno para realizar o handoff de sessão.
-                    if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                        console.log("[POLARYON-WAR] Autenticação Detectada. Executando GATEWAY HANDOFF v2...");
-                        // Este URL é o oficial que redireciona para o novo portal com a sessão injetada.
-                        window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
-                        foundMenu = true;
-                        return;
+                        // Não marcamos foundMenu pois queremos clicar no submenu no próximo poll
                     }
 
                     // 3. RECURSÃO DE SEGURANÇA (BUSCA EM TODOS OS FRAMES DO PORTAL)
@@ -184,16 +172,9 @@ function scrapeDisputeRoom() {
             }
             window.polaryonJumpAttempted++;
 
-            if (window.polaryonJumpAttempted > 15 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                 console.log("[POLARYON-WAR] Estagnação. Forçando salto via Gateway...");
-                 window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
-                 return;
-            }
-            
-            // EXECUÇÃO DO SALTO APÓS BREVE DELAY (Dá tempo dos frames carregarem)
-            if ((bodyText.includes('Área de Trabalho do Fornecedor') || window.location.href.includes('intro.htm')) && window.polaryonJumpAttempted > 5) {
-                 console.log("[POLARYON] Executando Gateway Handoff de login...");
-                 window.location.href = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+            if (window.polaryonJumpAttempted > 20 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                 console.log("[POLARYON-WAR] Estagnação Crítica. Recarregando frameset de segurança...");
+                 window.location.reload();
                  return;
             }
             
