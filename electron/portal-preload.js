@@ -51,11 +51,11 @@ const startHybridEngine = () => {
                    }
               });
 
-              if (res.ok) {
-                   const data = await res.json();
-                   
-                   // FASE 3: BYPASS TOTAL DO DOM.
-                   // Pega o JSON puro do Módulo Híbrido e injeta como se o Scraper Visual tivesse lido da tela.
+               if (res && res.ok && typeof res.json === 'function') {
+                    const data = await res.json();
+                    
+                    // FASE 3: BYPASS TOTAL DO DOM.
+                    // Pega o JSON puro do Módulo Híbrido e injeta como se o Scraper Visual tivesse lido da tela.
                    const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
                    
                    if (Array.isArray(itemsArray)) {
@@ -83,14 +83,14 @@ const startHybridEngine = () => {
                        action: 'HYBRID_API_RESULTS',
                        data: { items: data }
                    });
-              } else {
-                   const txt = await res.text();
-                   ipcRenderer.send('portal-hybrid-capture', {
-                       sessionId: mySessionId || 'UNKNOWN',
-                       action: 'HYBRID_API_ERROR',
-                       data: { status: res.status, body: txt.substring(0, 500) }
-                   });
-              }
+               } else if (res && typeof res.text === 'function') {
+                    const txt = await res.text();
+                    ipcRenderer.send('portal-hybrid-capture', {
+                        sessionId: mySessionId || 'UNKNOWN',
+                        action: 'HYBRID_API_ERROR',
+                        data: { status: res.status, body: (txt || "").substring(0, 500) }
+                    });
+               }
          } catch(e) {
               ipcRenderer.send('portal-hybrid-capture', {
                    sessionId: mySessionId || 'UNKNOWN',
