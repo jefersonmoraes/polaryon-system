@@ -65,56 +65,59 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v9.0: Salto Infiltrado (Ghost Navigation) - Dual-ID Try
-            const jumpToDisputeRoom = (tryLegacy = false) => {
+            // v10.0: Salto Infiltrado (War Edition) - Participation Sync
+            const jumpToDisputeRoom = (forceLegacy = false) => {
                 if (!currentConfig.uasg || !currentConfig.numero) return;
                 
                 const uasgStr = currentConfig.uasg.toString().padStart(6, '0');
                 const numStr = currentConfig.numero.toString().padStart(5, '0');
                 const anoStr = currentConfig.ano?.toString() || new Date().getFullYear().toString();
                 
-                // Mapeamento Dinâmico de Modalidade (06 = Moderno, 14 = Legado/14133 Bridge)
-                const modalityCode = tryLegacy ? '14' : '06';
+                // v10.0: Se forceLegacy for true, usamos modalidade 14 (Lei 14.133 Bridge)
+                const modalityCode = forceLegacy ? '14' : '06';
                 const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
                 
                 if (currentUrl !== targetUrl && !currentUrl.includes('disputa')) {
-                    console.log(`[POLARYON GHOST] v9.0: Tentando Salto com Modalidade: ${modalityCode}...`);
+                    console.log(`[POLARYON WAR] v10.0: Salto para Sala... (ID: ${compraCode})`);
                     window.location.href = targetUrl;
                 }
             };
 
-            // v9.0: Motor de Recuperação Inteligente (Detecta Sincronia de Sala)
-            const recoveryCheck = () => {
+            // v10.0: Motor de Vigilância para "Compra não encontrada"
+            const recoveryWatcher = () => {
                 const isNotFound = bodyText.includes('Compra não encontrada') || bodyText.includes('não foi encontrada');
-                const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
-
                 if (isNotFound && (currentUrl.includes('disputa') || currentUrl.includes('compra='))) {
-                    if (!window.__polaryon_tried_legacy) {
-                        console.warn("[POLARYON GHOST] Sincronia Falhou com ID 06. Tentando ID 14 (Lei 14.133 Legacy)...");
-                        window.__polaryon_tried_legacy = true;
-                        jumpToDisputeRoom(true); // Tenta o ID legado 14
+                    if (!window.__polaryon_retry_count) window.__polaryon_retry_count = 0;
+                    window.__polaryon_retry_count++;
+
+                    if (window.__polaryon_retry_count === 1) {
+                        console.warn("[POLARYON] Compra não encontrada com ID 06. Tentando Manobra com ID 14...");
+                        jumpToDisputeRoom(true); 
                     } else {
-                        console.warn("[POLARYON] Ambos IDs falharam. Retornando para Lista para Resetar Sessão...");
+                        console.warn("[POLARYON] Erro persistente no Serpro. Retornando para Lista para Sincronizar Sessão...");
+                        // Reset do contador para permitir novas tentativas após o sync
+                        window.__polaryon_retry_count = 0;
                         window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/escritorio-fornecedor';
                     }
                 }
             };
-            setTimeout(recoveryCheck, 4000);
+            setTimeout(recoveryWatcher, 4000);
 
             // Dispara o salto se estiver no "Handoff" ou na "Lista" do portal novo
+            // Na v10.0, aumentamos para 4s para dar tempo da API de listagem do governo responder (Sync de Sessão)
             if (currentUrl.includes('servico=226') || currentUrl.includes('escritorio-fornecedor')) {
-                console.log("[POLARYON] Infiltrando Sessão... Salto em 3s");
-                setTimeout(() => jumpToDisputeRoom(false), 3000);
+                console.log("[POLARYON WAR] Sincronizando com o Serpro... Salto em 4s");
+                setTimeout(() => jumpToDisputeRoom(false), 4000);
             }
 
-            // v4.0 Tsunami: Resource Watchdog (Monitoramento de Ativos de Rede)
+            // v10.0: Watchdog de Ativos Agressivo
             window.addEventListener('error', (e) => {
                 if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
                     const src = e.target.src || e.target.href;
                     if (src && (src.includes('cnetmobile') || src.includes('polyfills') || src.includes('main.js') || src.includes('disputa'))) {
-                        console.error("[POLARYON GHOST] Falha de Ativo Serpro Detectada:", src);
-                        setTimeout(() => window.location.reload(), 2500);
+                        console.error("[POLARYON WAR] Falha de Ativo Serpro. Forçando Refresh...");
+                        setTimeout(() => window.location.reload(), 2000);
                     }
                 }
             }, true);
