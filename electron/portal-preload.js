@@ -147,18 +147,25 @@ function scrapeDisputeRoom() {
                         return;
                     }
 
-                    // 2. SE NÃO ACHOU SUBMENU, TENTA ABRIR O MENU PAI "COMPRAS"
+                    // 2. SE NÃO ACHOU SUBMENU, TENTA ABRIR O MENU PAI "COMPRAS" (Legacy Fallback)
                     const mainBtn = allElements.find(el => {
                         const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
                         return txt === 'COMPRAS' || txt === 'MENU COMPRAS';
                     });
 
                     if (mainBtn && !win.polaryonMenuClicked) {
-                        console.log("[POLARYON] Abrindo aba de comando COMPRAS...");
+                        console.log("[POLARYON] Abrindo aba de comando COMPRAS (Fallback)...");
                         mainBtn.click();
-                        mainBtn.dispatchEvent(new MouseEvent('mouseover', {bubbles:true}));
                         win.polaryonMenuClicked = true;
-                        // Não marca foundMenu=true aqui pois queremos que no próximo ciclo ele ache o submenu
+                    }
+
+                    // 3. ESTRATÉGIA DE SALTO DIRETO (MÉTODO CONCORRÊNCIA)
+                    // Se estivermos autenticados na home, não esperamos cliques. Saltamos para o portal novo.
+                    if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                        console.log("[POLARYON-WAR] Autenticação Detectada. Executando SALTO QUÂNTICO para o novo portal...");
+                        window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+                        foundMenu = true;
+                        return;
                     }
 
                     // 3. RECURSÃO DE SEGURANÇA (BUSCA EM TODOS OS FRAMES DO PORTAL)
@@ -176,12 +183,16 @@ function scrapeDisputeRoom() {
             }
             window.polaryonJumpAttempted++;
 
-            if (window.polaryonJumpAttempted > 12 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                 console.log("[POLARYON-WAR] Detecção de estagnação prolongada. Solicitando intervenção ou aguardando menus...");
-                 // Em vez de redirecionar para links mortos, tentamos apenas um refresh suave da página para reativar os menus
-                 if (window.polaryonJumpAttempted === 13) {
-                    window.location.reload();
-                 }
+            if (window.polaryonJumpAttempted > 15 && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
+                 console.log("[POLARYON-WAR] Estagnação. Forçando salto de emergência...");
+                 window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+                 return;
+            }
+            
+            // EXECUÇÃO IMEDIATA DO SALTO SE DETECTADO LOGADO
+            if (bodyText.includes('Área de Trabalho do Fornecedor') || window.location.href.includes('intro.htm')) {
+                 console.log("[POLARYON] Executando Salto Quântico de login...");
+                 window.location.href = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
                  return;
             }
             
