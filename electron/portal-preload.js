@@ -345,14 +345,67 @@ function scrapeDisputeRoom() {
              return !hasNestedCard;
         });
 
-        // v3.1: Watchdog de Paginação (Para Editais com 10+ itens)
-        const paginator = document.querySelector('mat-paginator, .br-pagination, nav[aria-label="Paginador"]');
-        if (paginator && !window.polaryonAutoPaged) {
-             const nextBtn = paginator.querySelector('button[aria-label*="Próxima"], button[aria-label*="Next"], .br-button.circle');
-             // Se detectamos paginador, emitimos um alerta pro operador
-             console.log("[POLARYON] Detetado edital com múltiplas páginas. Radar operando em modo Sequencial.");
+        // v4.0: MOTOR DE PAGINAÇÃO AUTOMÁTICA (Radar Multi-Página)
+        // Inicializa o mapa global de itens se não existir
+        if (!window.polaryonAllItems) window.polaryonAllItems = {};
+        if (!window.polaryonPageScanState) {
+            window.polaryonPageScanState = { scanning: false, lastPage: -1, totalPages: 0 };
         }
-        
+
+        // Detecta paginador do Serpro (mat-paginator é o componente Angular deles)
+        const paginator = document.querySelector('mat-paginator, .br-pagination, [class*="paginator"]');
+        if (paginator && !window.polaryonPageScanState.scanning) {
+            // Descobre quantas páginas existem 
+            const pageButtons = Array.from(paginator.querySelectorAll('button')).filter(b => {
+                const n = parseInt(b.innerText.trim());
+                return !isNaN(n);
+            });
+            const totalPages = pageButtons.length > 0 
+                ? Math.max(...pageButtons.map(b => parseInt(b.innerText.trim()))) 
+                : 1;
+            
+            window.polaryonPageScanState.totalPages = totalPages;
+
+            // Detecta página atual ativa
+            const activePage = paginator.querySelector('button.active, button[class*="active"], button[aria-current="page"], button[disabled]');
+            const currentPageNum = activePage ? parseInt(activePage.innerText.trim()) : 1;
+
+            if (currentPageNum !== window.polaryonPageScanState.lastPage) {
+                // Nova página! Processa os itens desta página primeiro
+                console.log(`[POLARYON] Radar Multi-Page: Página ${currentPageNum}/${totalPages}`);
+                window.polaryonPageScanState.lastPage = currentPageNum;
+                window.polaryonPageScanState.scanning = true;
+
+                // Agenda navegação para próxima página após processar esta
+                if (currentPageNum < totalPages) {
+                    setTimeout(() => {
+                        // Tenta achar o botão da próxima página
+                        const nextBtns = Array.from((paginator || document).querySelectorAll('button'));
+                        const nextBtn = nextBtns.find(b => {
+                            const label = (b.getAttribute('aria-label') || b.innerText || '').toUpperCase();
+                            return label.includes('PRÓXIMA') || label.includes('NEXT') || label === '>';
+                        }) || nextBtns.find(b => parseInt(b.innerText.trim()) === currentPageNum + 1);
+                        
+                        if (nextBtn && !nextBtn.disabled) {
+                            console.log(`[POLARYON] Avançando para página ${currentPageNum + 1}...`);
+                            nextBtn.click();
+                            // Libera o scanning após a navegação
+                            setTimeout(() => { window.polaryonPageScanState.scanning = false; }, 1500);
+                        } else {
+                            window.polaryonPageScanState.scanning = false;
+                        }
+                    }, 800); // Espera 800ms para garantir que os itens da página atual foram processados
+                } else {
+                    // Última página: reseta o ciclo
+                    console.log(`[POLARYON] Radar Multi-Page: Ciclo completo! ${Object.keys(window.polaryonAllItems).length} itens no total.`);
+                    setTimeout(() => {
+                        window.polaryonPageScanState.scanning = false;
+                        window.polaryonPageScanState.lastPage = -1; // Reseta para varrer de novo no próximo ciclo
+                    }, 5000); // Aguarda 5 segundos antes de iniciar novo ciclo completo
+                }
+            }
+        }
+
         if (itemCards.length > 0) {
             itemCards.forEach(card => {
                 const text = card.innerText.trim();
@@ -418,16 +471,33 @@ function scrapeDisputeRoom() {
                         tempoRestante: -1, 
                         position: ganhador === 'Você' ? 1 : 0
                     });
+
+                    // v4.0: Acumula no mapa global (preserva itens de outras páginas)
+                    if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                    window.polaryonAllItems[itemId] = {
+                        itemId: itemId,
+                        valorAtual: valorAtual,
+                        meuValor: meuValor,
+                        ganhador: ganhador,
+                        descricao: desc.substring(0, 100) + (desc.length > 100 ? "..." : ""),
+                        status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
+                        tempoRestante: -1, 
+                        position: ganhador === 'Você' ? 1 : 0
+                    };
                 }
             });
         }
 
-        if (items.length > 0) {
-            renderBiddingPanel(items);
+        // Emite snapshot completo de TODOS os itens (multi-página)
+        const allAccumulatedItems = Object.values(window.polaryonAllItems || {});
+        const itemsToReport = allAccumulatedItems.length > 0 ? allAccumulatedItems : items;
+
+        if (itemsToReport.length > 0) {
+            renderBiddingPanel(itemsToReport);
             
             // Lógica Autônoma se Máquina Ativa
             if (isBiddingActive) {
-                items.forEach(it => {
+                itemsToReport.forEach(it => {
                     const limit = itemLimits[it.itemId];
                     if (!limit || !limit.price) return;
                     
@@ -455,15 +525,16 @@ function scrapeDisputeRoom() {
                 });
             }
             
-            // Emite pro Electron Master atualizar a tela do Polaryon
+            // Emite pro Electron Master atualizar a tela do Polaryon (com snapshot completo multi-página)
             ipcRenderer.send('portal-update', {
                 sessionId: mySessionId,
-                items,
+                items: itemsToReport,
                 actions: [], // Ações simuladas ou reais enviadas
                 timestamp: new Date().toISOString(),
                 source: 'VISUAL_AUTOMATION',
                 turbo: hasItemsInDispute
             });
+
         } else {
              ipcRenderer.send('portal-update', {
                 sessionId: mySessionId,

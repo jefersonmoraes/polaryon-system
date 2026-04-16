@@ -682,12 +682,24 @@ export default function BiddingDashboardPage() {
                     
                     {/* Botão de Adicionar na Grade */}
                     <Card 
-                        onClick={() => setViewMode('focus')}
-                        className="flex items-center justify-center border-dashed border-2 border-white/10 bg-transparent hover:bg-white/5 cursor-pointer transition-colors min-h-[150px]"
+                        onClick={() => {
+                            // Reset para nova operação: limpa campos e sessão ativa
+                            setUasg('');
+                            setNumeroPregao('');
+                            setAnoPregao(new Date().getFullYear().toString());
+                            setItems([]);
+                            setChatMessages([]);
+                            setSessionId(null); // Deseleciona sessão atual para não confundir o FOCADO
+                            setIsListening(false);
+                            setIsLocalRunning(false);
+                            setViewMode('focus');
+                        }}
+                        className="flex items-center justify-center border-dashed border-2 border-emerald-500/30 bg-transparent hover:bg-emerald-500/5 cursor-pointer transition-colors min-h-[150px]"
                     >
-                        <div className="flex flex-col items-center gap-2 text-slate-500">
-                            <PlusIcon className="w-6 h-6" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Nova Operação</span>
+                        <div className="flex flex-col items-center gap-2 text-emerald-500/70 group-hover:text-emerald-400 transition-colors">
+                            <PlusIcon className="w-8 h-8" />
+                            <span className="text-[11px] font-black uppercase tracking-widest">Nova Operação</span>
+                            <span className="text-[8px] text-white/20 uppercase">Sessão independente</span>
                         </div>
                     </Card>
                 </div>
