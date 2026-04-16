@@ -43,6 +43,7 @@ const startHybridEngine = () => {
          try {
               const res = await fetch(window.polaryonHybrid_ItemsUrl, {
                    method: 'GET',
+                   credentials: 'omit', // Tenta omit e passa manual
                    headers: {
                         'Authorization': window.polaryonAuthBearer,
                         'Accept': 'application/json, text/plain, */*'
@@ -51,18 +52,47 @@ const startHybridEngine = () => {
 
               if (res.ok) {
                    const data = await res.json();
-                   // Transmite o Array com TODOS os itens instantaneamente pro Console do Terminal
+                   
+                   // FASE 3: BYPASS TOTAL DO DOM.
+                   // Pega o JSON puro do Módulo Híbrido e injeta como se o Scraper Visual tivesse lido da tela.
+                   if (Array.isArray(data)) {
+                        if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                        
+                        data.forEach(item => {
+                             const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
+                             const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
+                             
+                             window.polaryonAllItems[`item_` + item.numero] = {
+                                  itemId: item.numero.toString(),
+                                  valorAtual: melhorGeral,
+                                  meuValor: melhorMeu,
+                                  isDispute: item.situacao === '1' || item.situacao === '2', // 1=Aberto, 2=Encerrando
+                                  desc: item.descricao || ("Item " + item.numero),
+                                  ganhando: melhorMeu > 0 && melhorMeu <= melhorGeral,
+                                  status: item.situacao === '1' ? 'Aberto' : 'Encerrado'
+                             };
+                        });
+                   }
+
                    ipcRenderer.send('portal-hybrid-capture', {
                        sessionId: mySessionId || 'UNKNOWN',
                        action: 'HYBRID_API_RESULTS',
                        data: { items: data }
                    });
               } else {
-                   // Se falhar (ex: captcha expirou), o portal original vai atualizar logo depois
-                   console.log("⚠️ [POLARYON HYBRID] Falha silenciosa no pull direto, aguardando renovação...");
+                   const txt = await res.text();
+                   ipcRenderer.send('portal-hybrid-capture', {
+                       sessionId: mySessionId || 'UNKNOWN',
+                       action: 'HYBRID_API_ERROR',
+                       data: { status: res.status, body: txt.substring(0, 500) }
+                   });
               }
          } catch(e) {
-              // Fail in background silently
+              ipcRenderer.send('portal-hybrid-capture', {
+                   sessionId: mySessionId || 'UNKNOWN',
+                   action: 'HYBRID_API_ERROR',
+                   data: { error: e.message }
+              });
          }
     }, 1500); // 1.5s pra não causar throtling de IP, o portal real já bate a cada X segs.
 };

@@ -352,6 +352,8 @@ export default function BiddingDashboardPage() {
                            console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + payload.url + "): ", "color: cyan; font-weight: bold;", payload.response);
                       } else if (pkg.action === 'HYBRID_API_RESULTS') {
                            console.log("%c[🔥 POLARYON HYBRID PULL DIRETO]: ", "color: #00ff00; font-weight: bold; background: #002200; padding: 2px 5px;", payload.items);
+                      } else if (pkg.action === 'HYBRID_API_ERROR') {
+                           console.log("%c[❌ POLARYON HYBRID ERROR]: ", "color: #ff0000; font-weight: bold;", payload);
                       }
                  });
             }
