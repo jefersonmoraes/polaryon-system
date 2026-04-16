@@ -20,20 +20,22 @@ window.addEventListener("message", (event) => {
         }
 
         if (payload.action === 'API_DUMP' && payload.url) {
-             // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.21)
-             // Tenta extrair o ID longo (13 dígitos) de qualquer requisição à API
-             const idMatch = payload.url.match(/\/v1\/compras\/(\d{10,})/);
+             // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.23)
+             // Tenta extrair o ID longo (10+ dígitos) de qualquer requisição à API
+             const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d{10,})/);
              if (idMatch) {
                   const fullId = idMatch[1];
-                  const yearMatch = payload.url.match(/\/v1\/compras\/\d+\/(\d{4})/);
-                  const year = yearMatch ? yearMatch[1] : '2026';
+                  const yearMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/\d+\/(\d{4})/);
+                  const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
                   
                   window.polaryonContext_PurchaseId = fullId;
                   window.polaryonContext_Year = year;
 
                   // Se ainda não temos a URL de itens, construímos a partir do ID capturado
                   if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
-                      window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${fullId}/${year}/itens?pagina=0&tamanhoPagina=20`;
+                      // Detecta se é Dispensa ou Licitação pelo path original
+                      const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
+                      window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${fullId}/${year}/itens?pagina=0&tamanhoPagina=100`;
                   }
              }
 
@@ -42,7 +44,11 @@ window.addEventListener("message", (event) => {
              const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
 
              if (isItemsList && !isMetadata) {
-                  window.polaryonHybrid_ItemsUrl = payload.url;
+                  // Força tamanhoPagina=100 para evitar limitação de tela
+                  window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
+                  if (!window.polaryonHybrid_ItemsUrl.includes('tamanhoPagina')) {
+                      window.polaryonHybrid_ItemsUrl += (window.polaryonHybrid_ItemsUrl.includes('?') ? '&' : '?') + 'tamanhoPagina=100';
+                  }
                   
                   if (!window.polaryonHybrid_Active) {
                        startHybridEngine();
@@ -92,7 +98,7 @@ const startHybridEngine = () => {
               while (hasMore && page < 5) {
                   const targetUrl = window.polaryonHybrid_ItemsUrl
                       .replace(/pagina=\d+/, `pagina=${page}`)
-                      .replace(/pagina=\d+/, `pagina=${page}`); // Dupla garantia
+                      .replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
                   
                   const res = await fetch(targetUrl, {
                        method: 'GET',
@@ -103,10 +109,11 @@ const startHybridEngine = () => {
                   });
 
                   if (!res.ok) {
-                      if (res.status === 404 || res.status === 422) {
+                      if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 422) {
                            // Link Quebrado ou Expirado: Força re-escaneamento de rede
                            window.polaryonHybrid_ItemsUrl = null;
                            window.polaryonAPIStatus = "⚠️ RE-SINCRONIZANDO...";
+                           console.warn("💀 [POLARYON] Rota expirada (404/401). Scanner reativado.");
                       }
                       break;
                   }
@@ -158,15 +165,20 @@ const startHybridEngine = () => {
                    window.polaryonAPIStatus = "✅ ELITE (CAMUFLADO)";
               }
 
-              // HEALTH CHECK (Sinal de vida a cada 10 ciclos)
+              // HEALTH CHECK v2.1.23: Ponto de checagem mais estável (comprasnet-sessao)
               apiHealthCounter++;
               if (apiHealthCounter >= 10) {
                   apiHealthCounter = 0;
-                  const healthRes = await fetch('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-usuario/v2/sessao/fornecedor/usuario', {
-                      headers: { 'Authorization': window.polaryonAuthBearer }
-                  });
-                  if (healthRes.ok) window.polaryonAPIStatus = "✅ ELITE (MILITAR)";
-                  else window.polaryonAPIStatus = "⚠️ TOKEN INSTÁVEL";
+                  try {
+                      // Usar endpoint do PNCP ou Sessão como heartbeat
+                      const healthRes = await fetch('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sessao/v2/sessao/fornecedor/usuario', {
+                          headers: { 'Authorization': window.polaryonAuthBearer }
+                      });
+                      if (healthRes.ok) window.polaryonAPIStatus = "✅ ELITE (MILITAR)";
+                      else window.polaryonAPIStatus = "⚠️ TOKEN INSTÁVEL";
+                  } catch(e) {
+                      window.polaryonAPIStatus = "⚠️ PORTAL LENTO";
+                  }
               }
 
          } catch(e) {
@@ -878,6 +890,7 @@ function renderBiddingPanel(items) {
         subHeader.style.cssText = 'padding: 8px 15px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;';
         subHeader.innerHTML = `
             <div id="polaryon-api-status" style="color: #ef4444;" title="Status de conexão com o banco de dados do Governo">API: OFFLINE</div>
+            <div id="polaryon-blackbox-status" style="color: #60a5fa;" title="Gravador de Diagnóstico Ativado: Capturando tráfego técnico.">🛰️ BLACKBOX</div>
             <div id="polaryon-mode-status" style="color: #eab308;" title="REAL: Lances valem dinheiro! SIMULAÇÃO: Apenas testes.">MODO: ?</div>
         `;
 

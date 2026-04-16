@@ -380,6 +380,9 @@ export default function OportunidadesSearch() {
     
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    
+    // Novo Estado para Controle de Exportação Blindada
+    const [isExporting, setIsExporting] = useState(false);
 
     // Estado para Visualização Universal de Arquivos PNCP
     const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
@@ -501,7 +504,7 @@ export default function OportunidadesSearch() {
         }
     }, [folders.length, boards.length, lists.length]);
 
-    const handleExportToKanban = () => {
+    const handleExportToKanban = async () => {
         const newErrors: Record<string, boolean> = {};
         if (!exportFolderId) newErrors.folder = true;
         if (!exportBoardId) newErrors.board = true;
@@ -516,11 +519,43 @@ export default function OportunidadesSearch() {
         const exportTarget = directExportItem || selectedItem;
         if (!exportTarget) return;
 
-        const board = boards.find(b => b.id === exportBoardId);
-        if (!board) return;
+        setIsExporting(true);
+        const exportId = exportTarget.numero_controle_pncp || exportTarget.orgao_cnpj;
 
-        // Formatação Rica do Markdown
-        const descriptionMD = `
+        try {
+            // --- BLINDAGEM v2.2: Busca reativa de dados faltantes ---
+            let finalFiles = selectedItemFiles;
+            let finalItems = fullItems;
+            let finalDetail = itemDetail;
+
+            // Se os dados atuais no estado não forem do item que estamos exportando, buscamos agora
+            const isDataConsistent = selectedItem?.numero_controle_pncp === exportId;
+            
+            if (!isDataConsistent || selectedItemFiles.length === 0 || fullItems.length === 0) {
+                const ano = (exportTarget as any).ano_compra || (exportTarget as any).ano;
+                const seq = (exportTarget as any).numero_compra || (exportTarget as any).numero_sequencial;
+                const cnpj = exportTarget.orgao_cnpj;
+
+                if (cnpj && ano && seq) {
+                    toast.info("Capturando anexos e itens do PNCP...");
+                    
+                    const [filesRes, itemsRes, detailData] = await Promise.all([
+                        api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`).catch(() => ({ data: [] })),
+                        api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, { params: { termo: keyword } }).catch(() => ({ data: [] })),
+                        queuePncpFetch(exportTarget).catch(() => null)
+                    ]);
+
+                    finalFiles = filesRes.data || [];
+                    finalItems = itemsRes.data || [];
+                    finalDetail = detailData?.raw || null;
+                }
+            }
+
+            const board = boards.find(b => b.id === exportBoardId);
+            if (!board) return;
+
+            // Formatação Rica do Markdown
+            const descriptionMD = `
 **[GOV.BR] Oportunidade PNCP mapeada pelo Polaryon**
 ---
 **Órgão Licitante:** ${exportTarget.orgao_nome}
@@ -539,133 +574,125 @@ export default function OportunidadesSearch() {
 ${exportTarget.description || exportTarget.title}
 
 ### Arquivos Anexos:
-${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f.tipoDocumentoNome})](${f.url})`).join('\n') : '*Nenhum arquivo capturado automaticamente.*'}
+${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDocumentoNome})](${f.url})`).join('\n') : '*Nenhum arquivo capturado automaticamente.*'}
 
 [🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(exportTarget)})
-        `.trim();
+            `.trim();
 
-        // Robustly extract estimated value - PRIORITIZE itemDetail if available
-        const itemAny = exportTarget as any;
-        const detailAny = itemDetail as any;
-        
-        const estimatedValue = 
-            detailAny?.valorTotalEstimado || 
-            itemAny.valorTotalEstimado || 
-            itemAny.valor_global || 
-            itemAny.valor ||
-            itemAny.valor_total_estimado || 
-            detailAny?.valor ||
-            0;
+            const itemAny = exportTarget as any;
+            const detailAny = finalDetail as any;
+            
+            const estimatedValue = 
+                detailAny?.valorTotalEstimado || 
+                itemAny.valorTotalEstimado || 
+                itemAny.valor_global || 
+                itemAny.valor ||
+                0;
 
-        const formattedValue = estimatedValue > 0 
-            ? `  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}` 
-            : '';
+            const formattedValue = estimatedValue > 0 
+                ? `  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}` 
+                : '';
 
-        const cardParams = {
-            title: `${exportTarget.title}${formattedValue}`,
-            summary: exportTarget.description || exportTarget.title || "Oportunidade importada do GovBr",
-            description: descriptionMD,
-            listId: exportListId,
-            position: 0,
-            labels: [],
-            assignee: null,
-            completed: false,
-            archived: false,
-            trashed: false,
-            customLink: getOfficialLink(exportTarget),
-        };
+            const cardParams = {
+                title: `${exportTarget.title}${formattedValue}`,
+                summary: exportTarget.description || exportTarget.title || "Oportunidade importada do GovBr",
+                description: descriptionMD,
+                listId: exportListId,
+                position: 0,
+                labels: [],
+                assignee: null,
+                completed: false,
+                archived: false,
+                trashed: false,
+                customLink: getOfficialLink(exportTarget),
+            };
 
-        // Inject Attachments (Selected Files only)
-        const cardAttachments: any[] = [];
-
-        for (const file of selectedFilesToExport) {
-            cardAttachments.push({
-                id: crypto.randomUUID(),
-                name: file.titulo || file.tipoDocumentoNome,
-                url: file.url,
-                type: "pdf", // Fallback type
-                addedAt: new Date().toISOString()
-            });
-        }
-
-        // Inject Items from fullItems
-        const cardItems: any[] = [];
-        if (fullItems && fullItems.length > 0) {
-            fullItems.forEach((item: any) => {
-                cardItems.push({
+            // Inject Attachments
+            const cardAttachments: any[] = [];
+            for (const file of finalFiles) {
+                cardAttachments.push({
                     id: crypto.randomUUID(),
-                    name: item.descricao || "Item sem descrição",
-                    unitValue: item.valorUnitarioEstimado || 0,
-                    quantity: item.quantidade || 1
-                });
-            });
-        }
-
-        // Create Milestones (New: LANCES)
-        const endDateTime = itemDetail?.dataFimRecebimentoProposta || 
-                          itemDetail?.dataEncerramentoProposta || 
-                          exportTarget.data_encerramento_proposta ||
-                          exportTarget.data_fim_vigencia;
-        const cardMilestones: any[] = [];
-
-        if (endDateTime) {
-            const d = new Date(endDateTime);
-            if (!isNaN(d.getTime())) {
-                cardMilestones.push({
-                    id: crypto.randomUUID(),
-                    title: "LANCES",
-                    dueDate: d.toISOString().split('T')[0],
-                    hour: d.toTimeString().split(' ')[0].substring(0, 5),
-                    completed: false
+                    name: file.titulo || file.tipoDocumentoNome,
+                    url: file.url,
+                    type: "pdf", 
+                    addedAt: new Date().toISOString()
                 });
             }
-        }
 
-        // Create Full Card Object
-        const newCardData = {
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            comments: [],
-            attachments: cardAttachments,
-            items: cardItems,
-            checklist: [],
-            timeEntries: [],
-            milestones: cardMilestones,
-            descriptionEntries: [],
-            pncpId: exportTarget.numero_controle_pncp || exportTarget.orgao_cnpj,
-            ...cardParams
-        };
+            // Inject Items
+            const cardItems: any[] = [];
+            if (finalItems && finalItems.length > 0) {
+                finalItems.forEach((item: any) => {
+                    cardItems.push({
+                        id: crypto.randomUUID(),
+                        name: item.descricao || "Item sem descrição",
+                        unitValue: item.valorUnitarioEstimado || 0,
+                        quantity: item.quantidade || 1
+                    });
+                });
+            }
 
-        // 1. Update LOCAL store instantly (Optimistic)
-        useKanbanStore.setState(state => ({
-            cards: [newCardData, ...state.cards] 
-        }));
+            // Create Milestones
+            const endDateTime = finalDetail?.dataFimRecebimentoProposta || 
+                              finalDetail?.dataEncerramentoProposta || 
+                              exportTarget.data_encerramento_proposta ||
+                              exportTarget.data_fim_vigencia;
+            const cardMilestones: any[] = [];
 
-        // 2. Notify other clients via Socket instantly
-        try {
+            if (endDateTime) {
+                const d = new Date(endDateTime);
+                if (!isNaN(d.getTime())) {
+                    cardMilestones.push({
+                        id: crypto.randomUUID(),
+                        title: "LANCES",
+                        dueDate: d.toISOString().split('T')[0],
+                        hour: d.toTimeString().split(' ')[0].substring(0, 5),
+                        completed: false
+                    });
+                }
+            }
+
+            const newCardData = {
+                id: crypto.randomUUID(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                comments: [],
+                attachments: cardAttachments,
+                items: cardItems,
+                checklist: [],
+                timeEntries: [],
+                milestones: cardMilestones,
+                descriptionEntries: [],
+                pncpId: exportId,
+                ...cardParams
+            };
+
+            useKanbanStore.setState(state => ({
+                cards: [newCardData, ...state.cards] 
+            }));
+
             if (socketService) {
-                // Emit system_action to make others sync or add
                 socketService.emit('system_action', { 
                     store: 'KANBAN', 
                     type: 'ADD_CARD', 
                     payload: newCardData 
                 });
             }
+
+            await api.post('/kanban/cards', newCardData);
+
+            localStorage.setItem('POLARYON_LAST_EXPORT_FOLDER', exportFolderId);
+            localStorage.setItem('POLARYON_LAST_EXPORT_BOARD', exportBoardId);
+            localStorage.setItem('POLARYON_LAST_EXPORT_LIST', exportListId);
+
+            toast.success("Oportunidade exportada com sucesso!");
+            setIsExportDialogOpen(false);
         } catch (e) {
-            console.error("Socket emit failed:", e);
+            console.error("Export failed", e);
+            toast.error("Falha na exportação. Verifique sua conexão.");
+        } finally {
+            setIsExporting(false);
         }
-
-        // 3. Persist to DB
-        api.post('/kanban/cards', newCardData).catch(e => console.error("Export Kanban Sync failed", e));
-
-        // 4. Save persistence preferences
-        localStorage.setItem('POLARYON_LAST_EXPORT_FOLDER', exportFolderId);
-        localStorage.setItem('POLARYON_LAST_EXPORT_BOARD', exportBoardId);
-        localStorage.setItem('POLARYON_LAST_EXPORT_LIST', exportListId);
-
-        toast.success("Oportunidade exportada! Cartão criado no Kanban.");
-        setIsExportDialogOpen(false);
     };
 
     const fetchOportunidades = useCallback(async (currentPage = 1) => {
@@ -1914,13 +1941,13 @@ ${selectedItemFiles.length > 0 ? selectedItemFiles.map(f => `- [${f.titulo} (${f
                                 </button>
                                 <button
                                     onClick={handleExportToKanban}
-                                    disabled={loadingFullItems && directExportItem === null}
+                                    disabled={isExporting}
                                     className="px-6 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
-                                    {loadingFullItems && directExportItem === null ? (
+                                    {isExporting ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                            Carregando Itens...
+                                            Exportando...
                                         </>
                                     ) : (
                                         'Adicionar Cartão'

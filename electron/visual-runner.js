@@ -1,5 +1,6 @@
 const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 class VisualRunner {
     constructor(dashboardWebContents) {
@@ -14,12 +15,16 @@ class VisualRunner {
             }
         });
 
-        // 🛡️ NOVO: Listener Híbrido Injetado
+        // 🛡️ NOVO: Listener Híbrido Injetado (AGORA COM BLACKBOX AUTOMÁTICO v2.3)
         ipcMain.removeAllListeners('portal-hybrid-capture');
         ipcMain.on('portal-hybrid-capture', (event, data) => {
             if (this.dashboardWebContents) {
-                // Manda direto pro Dashboard
                 this.dashboardWebContents.send('bidding-hybrid-dump', data);
+            }
+
+            // GRAVAÇÃO DE DIAGNÓSTICO (BLACKBOX)
+            if (data.action === 'API_DUMP' && data.data && data.data.response) {
+                this.saveToBlackBox(data.data.url, data.data.response);
             }
         });
 
@@ -212,6 +217,40 @@ class VisualRunner {
                 }
             }
         });
+    }
+    // --- BLACKBOX AUTOMÁTICO PARA DIAGNÓSTICO ---
+    saveToBlackBox(url, response) {
+        try {
+            const logDir = path.join(process.cwd(), 'logs', 'blackbox');
+            if (!fs.existsSync(logDir)) {
+                fs.mkdirSync(logDir, { recursive: true });
+            }
+
+            // Nomeia o arquivo de forma legível
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const urlSlug = url.split('/').pop().split('?')[0] || 'api-dump';
+            const fileName = `traffic_${timestamp}_${urlSlug}.json`;
+            const filePath = path.join(logDir, fileName);
+
+            const payload = {
+                capturedAt: new Date().toISOString(),
+                url: url,
+                data: response
+            };
+
+            fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+            console.log(`🛰️ [BLACKBOX] Tráfego capturado e salvo em: ${fileName}`);
+
+            // Limpeza básica: remove arquivos com mais de 24h
+            const files = fs.readdirSync(logDir);
+            if (files.length > 100) {
+                const oldest = files.sort().slice(0, 10);
+                oldest.forEach(f => fs.unlinkSync(path.join(logDir, f)));
+            }
+
+        } catch (e) {
+            console.error("[BLACKBOX] Erro ao salvar log:", e);
+        }
     }
 }
 
