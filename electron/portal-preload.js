@@ -836,6 +836,28 @@ function scrapeDisputeRoom() {
             });
         }
 
+        // --- SISTEMA DE ALMANAQUE (BLACKBOX DE ELITE v3.0) ---
+        // Captura tudo o que o governo manda para análise posterior "offline"
+        const now = Date.now();
+        if (now - (window.lastAlmanacCapture || 0) > 30000) { // a cada 30s
+            window.lastAlmanacCapture = now;
+            
+            const almanacData = {
+                sessionId: mySessionId,
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                config: currentConfig,
+                items: itemsToReport,
+                // Captura o HTML bruto para remontar a cena depois
+                domSnapshot: document.documentElement.outerHTML,
+                // Captura mensagens de chat visíveis
+                chatSnapshot: Array.from(document.querySelectorAll('.message, .chat-item, #chat, [id*="chat"], .conversa')).map(el => el.innerText)
+            };
+            
+            ipcRenderer.send('save-battle-almanac', almanacData);
+            console.log("🛡️ [ALMANAQUE] Snapshot de Batalha capturado e enviado ao Quartel General.");
+        }
+
     } catch (e) {
         console.error("Erro no Portal Injector:", e);
     }

@@ -71,7 +71,36 @@ class VisualRunner {
             }
         });
 
+        ipcMain.on('save-battle-almanac', (event, data) => {
+            this.saveAlmanac(data);
+        });
+
         this.setupIpc();
+    }
+
+    saveAlmanac(data) {
+        try {
+            const almanacDir = path.join(process.cwd(), 'logs', 'almanaque');
+            if (!fs.existsSync(almanacDir)) {
+                fs.mkdirSync(almanacDir, { recursive: true });
+            }
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const uasg = data.config?.uasg || 'unknown';
+            const baseFileName = `almanaque_${uasg}_${timestamp}`;
+            
+            // Salva JSON completo
+            fs.writeFileSync(path.join(almanacDir, `${baseFileName}.json`), JSON.stringify(data, null, 2));
+            
+            // Salva HTML para inspeção visual rápida
+            if (data.domSnapshot) {
+                fs.writeFileSync(path.join(almanacDir, `${baseFileName}.html`), data.domSnapshot);
+            }
+
+            console.log(`🛡️ [ALMANAQUE] Missão de Coleta de Dados Concluída: ${baseFileName}`);
+        } catch (e) {
+            console.error("[ALMANAQUE] Falha na gravação:", e);
+        }
     }
 
     startVisualSession(sessionId, config) {
