@@ -28,13 +28,13 @@ window.addEventListener("message", (event) => {
                   const yearMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/\d+\/(\d{4})/);
                   const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
                   
+                  const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
                   window.polaryonContext_PurchaseId = fullId;
                   window.polaryonContext_Year = year;
+                  window.polaryonContext_BasePath = basePath;
 
                   // Se ainda não temos a URL de itens, construímos a partir do ID capturado
                   if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
-                      // Detecta se é Dispensa ou Licitação pelo path original
-                      const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
                       window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${fullId}/${year}/itens?pagina=0&tamanhoPagina=100`;
                   }
              }
@@ -1107,7 +1107,8 @@ async function enviarLanceHibrido(itemId, valor) {
         try {
             const uasg = window.polaryonContext_PurchaseId;
             const ano = window.polaryonContext_Year;
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${uasg}/${ano}/itens/${itemId}/lances`;
+            const basePath = window.polaryonContext_BasePath || 'compras';
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${uasg}/${ano}/itens/${itemId}/lances`;
 
             const res = await fetch(url, {
                 method: 'POST',
