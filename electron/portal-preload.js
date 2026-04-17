@@ -151,13 +151,14 @@ const startHybridEngine = () => {
                    allFetchedItems.forEach(item => {
                         const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                         const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
-                        
-                        // v2.2 BLINDAGEM: Não confia no valorCalculado do Serpro para "Ganhando"
-                        // Se o meu valor informado for maior que o melhor da sala, eu estou perdendo.
-                        // Adicionalmente, checamos a posição se disponível (P = Participante, 1 = Líder)
-                        let isWinner = melhorMeu > 0 && melhorMeu <= melhorGeral;
-                        if (item.posicaoParticipanteDisputa && item.posicaoParticipanteDisputa !== '1' && item.posicaoParticipanteDisputa !== 'V') {
-                             isWinner = false;
+                        // v2.2.2: Blindagem Anti-Bug no Ranking (Prioriza posicao e corrige falsos positivos)
+                        const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
+                        let isWinner = false;
+                        if (pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°') {
+                            isWinner = true;
+                        } else if (pos === '?' || pos === '') {
+                            // Fallback se não vier posição: usa valor
+                            if (melhorMeu > 0 && melhorMeu <= melhorGeral) isWinner = true;
                         }
 
                         // v2.2.1: ID Híbrido - Usa 'identificador' (ex: G1) se disponível, senão numero
@@ -725,10 +726,19 @@ function scrapeDisputeRoom() {
                         desc = lines.find(l => !l.includes('R$') && !l.match(/^\d+$/) && l.length > 20) || "";
                     } catch(e) {}
 
-                    // v2.2: Detecção de Vencedor Visual (Prioridade pro Badge "MELHOR LANCE")
-                    const hasWinnerBadge = text.toUpperCase().includes('MELHOR LANCE') || text.toUpperCase().includes('VENCEDOR');
-                    const isWinnerPrice = meuValor > 0 && meuValor <= (valorAtual + 0.0001);
-                    const ganhador = hasWinnerBadge || isWinnerPrice ? 'Você' : 'Outro';
+                    // v2.2.2: Detecção de Vencedor Visual (Prioridade pro Badge "MELHOR LANCE" ou Tumbs down da sala de dispensa)
+                    const hasWinnerBadge = text.toUpperCase().includes('MELHOR LANCE') || text.toUpperCase().includes('VENCEDOR') || card.querySelector('.fa-thumbs-up, .icon-winning, [class*="thumb-up"], .br-icon.thumb-up, i[class*="up"]') !== null;
+                    const hasLoserBadge = text.includes('👎') || card.querySelector('.fa-thumbs-down, .icon-losing, [class*="thumb-down"], .br-icon.thumb-down, i[class*="down"]') !== null;
+                    
+                    let ganhador = 'Outro';
+                    if (hasWinnerBadge) {
+                        ganhador = 'Você';
+                    } else if (hasLoserBadge) {
+                        ganhador = 'Outro';
+                    } else {
+                        const isWinnerPrice = meuValor > 0 && meuValor <= (valorAtual + 0.0001);
+                        ganhador = isWinnerPrice ? 'Você' : 'Outro';
+                    }
 
                     items.push({
                         itemId: itemId,
@@ -762,7 +772,14 @@ function scrapeDisputeRoom() {
         const itemsToReport = allAccumulatedItems.length > 0 ? allAccumulatedItems : items;
 
         if (itemsToReport.length > 0) {
-            renderBiddingPanel(itemsToReport);
+            // v2.2.2: Filtro Anti-Grupo (Não exibe e nem bida em containers de grupo, apenas nos itens)
+            const biddableItems = itemsToReport.filter(it => !it.itemId.toString().toUpperCase().startsWith('G'));
+            
+            if (biddableItems.length > 0) {
+                renderBiddingPanel(biddableItems);
+            } else {
+                renderBiddingPanel(itemsToReport); // Fallback: se tudo for filtrado, mostra normal para não sumir o painel
+            }
             
             // Lógica Autônoma se Máquina Ativa
             if (isBiddingActive) {
