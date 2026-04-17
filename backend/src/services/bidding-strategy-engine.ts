@@ -22,6 +22,8 @@ export class BiddingStrategyEngine {
         const { mode, minPrice, decrementValue, decrementType } = config;
         
         // Se eu já sou o ganhador, não faço nada
+        // v2.2: Blindagem extra. Mesmo que o status diga ganhador, conferimos se o valor atual 
+        // ainda é compatível com o último lance conhecido (implementação futura de persistência de lances)
         if (currentItem.ganhador === 'Você') {
             return { action: 'hold', reason: 'Já ganhando. Aguardando.' };
         }

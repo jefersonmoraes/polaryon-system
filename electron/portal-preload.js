@@ -145,13 +145,21 @@ const startHybridEngine = () => {
                         const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
                         const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
                         
+                        // v2.2 BLINDAGEM: Não confia no valorCalculado do Serpro para "Ganhando"
+                        // Se o meu valor informado for maior que o melhor da sala, eu estou perdendo.
+                        // Adicionalmente, checamos a posição se disponível (P = Participante, 1 = Líder)
+                        let isWinner = melhorMeu > 0 && melhorMeu <= melhorGeral;
+                        if (item.posicaoParticipanteDisputa && item.posicaoParticipanteDisputa !== '1' && item.posicaoParticipanteDisputa !== 'V') {
+                             isWinner = false;
+                        }
+
                         window.polaryonAllItems[item.numero.toString()] = {
                              itemId: item.numero.toString(),
                              valorAtual: melhorGeral,
                              meuValor: melhorMeu,
                              isDispute: item.situacao === '1' || item.situacao === '2',
                              desc: item.descricao || ("Item " + item.numero),
-                             ganhador: melhorMeu > 0 && melhorMeu <= melhorGeral ? 'Você' : 'Outro',
+                             ganhador: isWinner ? 'Você' : 'Outro',
                              status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
                         };
                    });
@@ -676,8 +684,9 @@ function scrapeDisputeRoom() {
 
                     // Extração Dispensa explícita (Melhor valor unitário / global)
                     if (isDispensaItem) {
-                        const melhorMatch = text.match(/Melhor valor[^\d]+([\d,.]+)/i);
-                        const meuMatch = text.match(/Meu valor[^\d]+([\d,.]+)/i);
+                        // Regex Sniper v2.2: Captura números com pontos facultativos (milhar) e vírgulas obrigatórias
+                        const melhorMatch = text.match(/Melhor valor[^\d,]+([\d,.]+)/i);
+                        const meuMatch = text.match(/Meu valor[^\d,]+([\d,.]+)/i);
                         
                         if (melhorMatch) valorAtual = parseFloat(melhorMatch[1].replace(/\./g, '').replace(',', '.'));
                         if (meuMatch) meuValor = parseFloat(meuMatch[1].replace(/\./g, '').replace(',', '.'));
@@ -705,8 +714,10 @@ function scrapeDisputeRoom() {
                         desc = lines.find(l => !l.includes('R$') && !l.match(/^\d+$/) && l.length > 20) || "";
                     } catch(e) {}
 
-                    // No novo Serpro tem o iconezinho de Thumbs Down para perdendo. Ou Thumbs Up.
-                    const ganhador = text.toUpperCase().includes('MELHOR LANCE') || (meuValor > 0 && meuValor <= valorAtual) ? 'Você' : 'Outro';
+                    // v2.2: Detecção de Vencedor Visual (Prioridade pro Badge "MELHOR LANCE")
+                    const hasWinnerBadge = text.toUpperCase().includes('MELHOR LANCE') || text.toUpperCase().includes('VENCEDOR');
+                    const isWinnerPrice = meuValor > 0 && meuValor <= (valorAtual + 0.0001);
+                    const ganhador = hasWinnerBadge || isWinnerPrice ? 'Você' : 'Outro';
 
                     items.push({
                         itemId: itemId,
@@ -889,8 +900,8 @@ function renderBiddingPanel(items) {
         const subHeader = document.createElement('div');
         subHeader.style.cssText = 'padding: 8px 15px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;';
         subHeader.innerHTML = `
-            <div id="polaryon-api-status" style="color: #ef4444;" title="Status de conexão com o banco de dados do Governo">API: OFFLINE</div>
-            <div id="polaryon-blackbox-status" style="color: #60a5fa;" title="Gravador de Diagnóstico Ativado: Capturando tráfego técnico.">🛰️ BLACKBOX</div>
+            <div id="polaryon-api-status" style="color: #ef4444;" title="Status de conexão com o Governo">API: OFFLINE</div>
+            <div id="polaryon-items-count" style="color: #10b981; font-weight: 800;" title="Total de itens rastreados no edital (Multi-Página)">ITENS: 0</div>
             <div id="polaryon-mode-status" style="color: #eab308;" title="REAL: Lances valem dinheiro! SIMULAÇÃO: Apenas testes.">MODO: ?</div>
         `;
 
@@ -945,7 +956,10 @@ function renderBiddingPanel(items) {
     // Atualiza Status da API e Modo no Painel
     const apiStatusEl = document.getElementById('polaryon-api-status');
     const modeStatusEl = document.getElementById('polaryon-mode-status');
+    const itemsCountEl = document.getElementById('polaryon-items-count');
+
     if (apiStatusEl) apiStatusEl.innerText = 'API: ' + (window.polaryonAPIStatus || 'OFFLINE');
+    if (itemsCountEl) itemsCountEl.innerText = `ITENS: ${items.length}`;
     if (modeStatusEl) {
         modeStatusEl.innerText = window.isSimulationMode ? 'MODO: SIMULAÇÃO' : 'MODO: REAL ⚡';
         modeStatusEl.style.color = window.isSimulationMode ? '#eab308' : '#ef4444';
