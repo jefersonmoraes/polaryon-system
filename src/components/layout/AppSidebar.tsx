@@ -26,7 +26,7 @@ const AppSidebar = () => {
   useEffect(() => {
     const fetchQuotes = async () => {
       try {
-        const version = "2.2.3";
+        const version = "2.2.4";
         const response = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL');
         const data = await response.json();
         setCurrencyQuotes({

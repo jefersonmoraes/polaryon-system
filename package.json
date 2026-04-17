@@ -1,7 +1,7 @@
 {
   "name": "polaryon-system",
   "private": true,
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
   "author": "Polaryon Tecnologia",
   "type": "module",
@@ -128,7 +128,7 @@
       "target": [
         "nsis"
       ],
-      "asar": false,
+      "asar": true,
       "icon": "public/favicon.ico",
       "artifactName": "Polaryon-v${version}-Setup.${ext}"
     },

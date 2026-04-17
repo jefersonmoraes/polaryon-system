@@ -1,7 +1,6 @@
-const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
-const url = require('url');
 const isDev = !app.isPackaged;
 const BiddingRunner = require('./bidding-runner');
 const sessionStore = require('./session-store');
@@ -43,27 +42,9 @@ function createWindow() {
     // No dev, o terminal roda no servidor local do Vite
     mainWindow.loadURL('http://localhost:5173/desktop.html');
   } else {
-    // Em produção, carregamos os arquivos BUILIDADOS locais com normalização Ultra-Robusta (Cura do "ÃO")
-    try {
-        const filePath = path.join(__dirname, '../dist/desktop.html');
-        // pathToFileURL garante que acentos e espaços sejam codificados corretamente para o Chromium
-        const fileUrl = url.pathToFileURL(filePath).toString();
-        console.log('[POLARYON] Carregando UI de:', fileUrl);
-        mainWindow.loadURL(fileUrl).catch(err => {
-            console.error('[POLARYON-LOAD-ERROR]', err);
-            dialog.showErrorBox('Falha de Carregamento', `Não foi possível carregar a interface.\n\nErro: ${err.message}\n\nPath: ${filePath}`);
-        });
-    } catch (err) {
-        dialog.showErrorBox('Erro de Path', `Erro ao processar o caminho dos arquivos: ${err.message}`);
-    }
+    // Em produção, carregamos os arquivos BUILIDADOS locais (Puro e Ultra-Leve)
+    mainWindow.loadFile(path.join(__dirname, '../dist/desktop.html'));
   }
-
-  // DEDO-DURO: Se a carga falhar por qualquer motivo técnico, avisa com Dialog Nativo
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.error(`🚨 [POLARYON-FATAL] Falha ao carregar UI: ${errorCode} (${errorDescription})`);
-    dialog.showErrorBox('Erro de Conexão Interna', 
-        `O Robô não conseguiu carregar os arquivos internos.\n\nCódigo: ${errorCode}\nDescrição: ${errorDescription}\nURL: ${validatedURL}\n\nSolução: Tente mover a pasta para C:\\Polaryon e abrir novamente.`);
-  });
 
   // In Dev, open Developer Tools
   if (isDev) {
@@ -73,21 +54,13 @@ function createWindow() {
   // Handle visual "Premium" touches
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
-  // Check for updates (Lazily after window is ready)
+  // Check for updates
   if (!isDev) {
-    try {
-        autoUpdater.setFeedURL({
-            provider: 'generic',
-            url: 'https://polaryon.com.br/download/'
-        });
+    autoUpdater.checkForUpdatesAndNotify();
+    // Check every 30 mins
+    setInterval(() => {
         autoUpdater.checkForUpdatesAndNotify();
-        // Check every 30 mins
-        setInterval(() => {
-            autoUpdater.checkForUpdatesAndNotify();
-        }, 30 * 60 * 1000);
-    } catch (e) {
-        console.error('[POLARYON-UPDATE] Falha crítica no módulo de update:', e);
-    }
+    }, 30 * 60 * 1000);
   }
 }
 
