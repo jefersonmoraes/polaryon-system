@@ -13,10 +13,14 @@ let mainWindow;
 // Configure autoUpdater
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
-autoUpdater.setFeedURL({
-  provider: 'generic',
-  url: 'http://204.168.151.231/download/'
-});
+try {
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'http://204.168.151.231/download/'
+  });
+} catch (e) {
+  console.error('[POLARYON] Erro ao configurar Feed de Update:', e);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({

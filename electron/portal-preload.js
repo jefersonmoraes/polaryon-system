@@ -686,8 +686,9 @@ function scrapeDisputeRoom() {
              const children = Array.from(el.querySelectorAll('*'));
              const hasNestedCard = children.some(child => itemCards.includes(child));
              
-             // v2.2.3: Se for um container de GRUPO, nós REJEITAMOS ele para forçar o foco nos ITENS internos
-             if (el.innerText.toUpperCase().includes('GRUPO') && el.innerText.toUpperCase().includes('ITENS')) {
+             // v2.2.3.5: Filtro Inteligente de Grupo (Só ignora o PAI se ele for um Header de Expansão)
+             const isGroupHeader = el.querySelector('.fa-chevron-down, .fa-chevron-up, .fa-chevron-right, [class*="chevron"]');
+             if (isGroupHeader && el.innerText.toUpperCase().includes('GRUPO')) {
                  return false; 
              }
              
