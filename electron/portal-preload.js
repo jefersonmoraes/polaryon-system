@@ -22,7 +22,7 @@ window.addEventListener("message", (event) => {
         if (payload.action === 'API_DUMP' && payload.url) {
              // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.23)
              // Tenta extrair o ID longo (10+ dígitos) de qualquer requisição à API
-             const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d{10,})/);
+             const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d+)/);
              if (idMatch) {
                   const fullId = idMatch[1];
                   const yearMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/\d+\/(\d{4})/);
@@ -142,8 +142,8 @@ const startHybridEngine = () => {
               if (allFetchedItems.length > 0) {
                    if (!window.polaryonAllItems) window.polaryonAllItems = {};
                    allFetchedItems.forEach(item => {
-                        const melhorGeral = item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0;
-                        const melhorMeu = item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0;
+                        const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
+                        const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                         
                         // v2.2 BLINDAGEM: Não confia no valorCalculado do Serpro para "Ganhando"
                         // Se o meu valor informado for maior que o melhor da sala, eu estou perdendo.
@@ -153,12 +153,15 @@ const startHybridEngine = () => {
                              isWinner = false;
                         }
 
-                        window.polaryonAllItems[item.numero.toString()] = {
-                             itemId: item.numero.toString(),
+                        // v2.2.1: ID Híbrido - Usa 'identificador' (ex: G1) se disponível, senão numero
+                        const rawId = item.identificador || item.numero.toString();
+
+                        window.polaryonAllItems[rawId] = {
+                             itemId: rawId,
                              valorAtual: melhorGeral,
                              meuValor: melhorMeu,
                              isDispute: item.situacao === '1' || item.situacao === '2',
-                             desc: item.descricao || ("Item " + item.numero),
+                             desc: item.descricao || ("Item " + (item.numero > 0 ? item.numero : rawId)),
                              ganhador: isWinner ? 'Você' : 'Outro',
                              status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado')
                         };
@@ -984,7 +987,7 @@ function renderBiddingPanel(items) {
                         <span style="font-size:11px; font-weight:800; color:rgba(255,255,255,0.9);">Item ${it.itemId}</span>
                         <div style="display:flex; flex-direction:column; align-items:flex-end;">
                            <span id="pol-item-status-${it.itemId}" style="font-size:8px; padding:2px 4px; border-radius:3px; background:rgba(255,255,255,0.1); margin-bottom:2px; font-weight:bold; letter-spacing:0.5px;">${it.status.toUpperCase()}</span>
-                           <span id="pol-item-val-${it.itemId}" style="font-size:11px; font-weight:bold; color: #10b981;">R$ ${it.valorAtual.toFixed(2)}</span>
+                           <span id="pol-item-val-${it.itemId}" style="font-size:11px; font-weight:bold; color: #10b981;">R$ ${(it.valorAtual || 0).toFixed(2)}</span>
                         </div>
                     </div>
                     <div style="display:flex; gap: 6px;">
@@ -1012,10 +1015,10 @@ function renderBiddingPanel(items) {
                 
                 list.appendChild(itemDiv);
             } else {
-                // Atualiza apenas os valores visuais do span (sem tocar no input para o usuário não perder o foco)
+                // v2.2.1: Blindagem de Valores Nulos no Painel
                 const valSpan = document.getElementById('pol-item-val-' + it.itemId);
                 const statusSpan = document.getElementById('pol-item-status-' + it.itemId);
-                if (valSpan) valSpan.innerText = 'R$ ' + it.valorAtual.toFixed(2);
+                if (valSpan) valSpan.innerText = 'R$ ' + (it.valorAtual || 0).toFixed(2);
                 if (statusSpan) {
                     statusSpan.innerText = it.status.toUpperCase();
                     if (it.ganhador === 'Você') {
