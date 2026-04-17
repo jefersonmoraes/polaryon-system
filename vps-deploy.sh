@@ -22,7 +22,7 @@ if [ -d "dist_new" ]; then
     ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
     
     rm -rf dist_old
-    echo "✔ Frontend atualizado com sucesso."
+    echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
     echo "❌ FALHA CRÍTICA: dist_new não encontrada."
     exit 1

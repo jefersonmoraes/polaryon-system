@@ -23,6 +23,10 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        desktop: path.resolve(__dirname, 'desktop.html'),
+      },
       output: {
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
