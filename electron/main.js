@@ -43,7 +43,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173/desktop.html');
   } else {
     // Em produção, carregamos os arquivos BUILIDADOS locais (Puro e Ultra-Leve)
-    mainWindow.loadFile(path.join(__dirname, '../dist/desktop.html'));
+    mainWindow.loadFile(path.join(__dirname, '../dist_electron/desktop.html'));
   }
 
   // In Dev, open Developer Tools

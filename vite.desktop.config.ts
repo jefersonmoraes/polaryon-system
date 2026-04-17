@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: "dist_electron",
     emptyOutDir: true,
     minify: "esbuild", 
     target: "chrome100",

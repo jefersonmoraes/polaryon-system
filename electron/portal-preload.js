@@ -392,19 +392,20 @@ function scrapeDisputeRoom() {
                 return;
             }
 
-            // v3.0: Watchdog de Recuperação para Erro 500 / Tela Branca do Portal Novo
+            // v3.1: Watchdog de Recuperação Otimizado (Evita Loops em Conexões Lentas)
             if (currentUrl.includes('cnetmobile') || currentUrl.includes('comprasnet-web')) {
                 const healthCheck = () => {
-                    const hasContent = document.body && document.body.innerText.length > 200;
-                    const isSystemError = bodyText.includes('Internal Server Error') || bodyText.includes('500');
+                    const bodyText = document.body ? document.body.innerText.toUpperCase() : "";
+                    const hasContent = bodyText.length > 50; 
+                    const isSystemError = bodyText.includes('INTERNAL SERVER ERROR') || bodyText.includes(' 500 ') || document.title.includes('500') || document.title.includes('404');
                     
                     if (!hasContent || isSystemError) {
-                        console.warn("[POLARYON] Detetada falha de carregamento no portal. Tentando recuperação em 3s...");
-                        setTimeout(() => window.location.reload(), 3000);
+                        console.warn("[POLARYON] Detetada falha real de carregamento ou Erro 500 no portal. Recuperando...");
+                        setTimeout(() => window.location.reload(), 5000);
                     }
                 };
-                // Verifica após 5s de carregamento
-                setTimeout(healthCheck, 5000);
+                // Verifica apenas após 12s de carregamento (paciência para conexões lentas)
+                setTimeout(healthCheck, 12000);
             }
 
             // Fallback Agressivo: Se detectamos o aviso mas não achamos o botão, 

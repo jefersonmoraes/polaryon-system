@@ -44,11 +44,16 @@ import { CertificateManager } from '@/components/terminal/CertificateManager';
 interface BiddingItem {
     itemId: string;
     valorAtual: number;
+    meuValor?: number;
     valorEstimado?: number;
+    uasgName?: string;
     ganhador: string;
     status: string;
     position: number;
-    tempoRestante: number;
+    timerSeconds?: number;
+    timeout?: string;
+    desc?: string;
+    descricao?: string; // Fallback
 }
 
 interface ItemStrategy {
@@ -1114,8 +1119,8 @@ export default function BiddingDashboardPage() {
 }
 
 // v2.0 - COMPONENTE DE ELITE PARA FLUXO DE COMBATE
-function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: BiddingItem & { uasgName: string }, sessionId: string, strategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
-    const isWinning = item.posicao === '1';
+function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: BiddingItem, sessionId: string, strategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
+    const isWinning = item.ganhador === 'Você' || item.position === 1;
     const [localMinPrice, setLocalMinPrice] = useState(strategy.minPrice.toString());
 
     return (
@@ -1129,27 +1134,27 @@ function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: Bidding
                     <div className="col-span-3">
                         <div className="flex flex-col gap-1">
                             <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase whitespace-nowrap">
-                                Item {item.id} • UASG {item.uasgName}
+                                Item {item.itemId} {item.uasgName ? `• UASG ${item.uasgName}` : ''}
                             </span>
-                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-black italic tracking-tight w-fit ${isWinning ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>
+                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-black italic tracking-tight w-fit ${isWinning ? 'bg-emerald-500 text-white' : 'bg-red-400 text-white animate-pulse'}`}>
                                 {isWinning ? <Trophy className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                                {isWinning ? 'VENCENDO' : 'PERDENDO'}
+                                {isWinning ? 'VENCENDO' : `PERDENDO (${item.position || '?'}º)`}
                             </div>
-                            <span className="text-[10px] text-slate-400 font-bold truncate mt-1">{item.descricao}</span>
+                            <span className="text-[10px] text-slate-400 font-bold truncate mt-1">{item.desc || item.descricao}</span>
                         </div>
                     </div>
 
                     {/* LANCE E VALOR */}
                     <div className="col-span-4 flex flex-col items-center justify-center border-l border-r border-white/10 px-4">
-                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Meu Lance Atual</span>
+                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Meu Lance</span>
                         <div className="flex items-baseline gap-1">
                             <span className="text-slate-400 text-xs font-bold leading-none">R$</span>
                             <span className={`text-2xl font-black italic tracking-tighter leading-none ${isWinning ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {item.melhorLance?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '---'}
                             </span>
                         </div>
-                        <div className="text-[9px] text-slate-500 font-bold mt-1">
-                            Vencedor: R$ {item.valorVencedor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <div className="text-[9px] text-slate-500 font-bold mt-1 uppercase">
+                            Melhor Geral: <span className="text-white">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
 
@@ -1157,7 +1162,7 @@ function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: Bidding
                     <div className="col-span-2 flex flex-col items-center">
                         <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Tempo</span>
                         <div className={`text-xl font-mono font-black tracking-tighter tabular-nums ${item.timerSeconds && item.timerSeconds < 30 ? 'text-orange-500 animate-pulse' : 'text-white'}`}>
-                            {item.timeout || '00:00'}
+                            {item.timeout || '--:--'}
                         </div>
                         <div className="w-full bg-slate-900 h-1 mt-2 rounded-full overflow-hidden">
                             <div 

@@ -121,7 +121,7 @@
       "output": "dist_desktop"
     },
     "files": [
-      "dist/**/*",
+      "dist_electron/**/*",
       "electron/**/*"
     ],
     "win": {
