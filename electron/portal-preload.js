@@ -16,27 +16,33 @@ window.addEventListener("message", (event) => {
         // Log stealth local
         if (payload.action === 'TOKEN_GRABBED') {
              console.log("👻 [POLARYON] Token Capturado! Modo Híbrido armado.");
-             window.polaryonAuthBearer = payload.token;
-        }
-
-        if (payload.action === 'API_DUMP' && payload.url) {
+             window.polaryonAuthBearer = payload.token;        if (payload.action === 'API_DUMP' && payload.url) {
              // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.23)
-             // Tenta extrair o ID longo (10+ dígitos) de qualquer requisição à API
              const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d+)/);
              if (idMatch) {
                   const fullId = idMatch[1];
                   const yearMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/\d+\/(\d{4})/);
                   const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
                   
-                  window.polaryonContext_PurchaseId = fullId;
-                  window.polaryonContext_Year = year;
+                  // v2.2.3: DETECTOR DE TROCA DE SALA (Anti-404)
+                  if (window.polaryonContext_PurchaseId && window.polaryonContext_PurchaseId !== fullId) {
+                      console.log("🔄 [POLARYON] Detectada troca de sala de lances. Resetando contexto...");
+                      window.polaryonContext_PurchaseId = fullId;
+                      window.polaryonContext_Year = year;
+                      window.polaryonHybrid_ItemsUrl = null; // Limpa para forçar re-scaneamento
+                      window.polaryonAllItems = {}; // Limpa itens da sala anterior
+                      window.polaryonBadUrls = new Set(); // Limpa blacklist de 404
+                  } else {
+                      window.polaryonContext_PurchaseId = fullId;
+                      window.polaryonContext_Year = year;
+                  }
 
                   // Se ainda não temos a URL de itens, construímos a partir do ID capturado
                   if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
-                      // Detecta se é Dispensa ou Licitação pelo path original
                       const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
                       window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${fullId}/${year}/itens?pagina=0&tamanhoPagina=100`;
                   }
+             }         }
              }
 
              // FILTRO CIRÚRGICO: Detecta se esta URL é a lista de itens real
@@ -44,14 +50,16 @@ window.addEventListener("message", (event) => {
              const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
 
              if (isItemsList && !isMetadata) {
-                  // Força tamanhoPagina=100 para evitar limitação de tela
-                  window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
-                  if (!window.polaryonHybrid_ItemsUrl.includes('tamanhoPagina')) {
-                      window.polaryonHybrid_ItemsUrl += (window.polaryonHybrid_ItemsUrl.includes('?') ? '&' : '?') + 'tamanhoPagina=100';
-                  }
-                  
-                  if (!window.polaryonHybrid_Active) {
-                       startHybridEngine();
+                  // v2.2.3: Se a URL captura contém o ID da sala atual, usamos ela diretamente (Fim do Guessing)
+                  if (window.polaryonContext_PurchaseId && payload.url.includes(window.polaryonContext_PurchaseId)) {
+                      window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
+                      if (!window.polaryonHybrid_ItemsUrl.includes('tamanhoPagina')) {
+                          window.polaryonHybrid_ItemsUrl += (window.polaryonHybrid_ItemsUrl.includes('?') ? '&' : '?') + 'tamanhoPagina=100';
+                      }
+                      
+                      if (!window.polaryonHybrid_Active) {
+                           startHybridEngine();
+                      }
                   }
              }
         }
@@ -643,6 +651,18 @@ function scrapeDisputeRoom() {
             });
             window.polaryonObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
             console.log("[POLARYON] Motor de Latência Zero Ativado.");
+            
+            // v2.2.3: Crawler de Auto-Expansão de Grupos
+            setInterval(() => {
+                const chevrons = Array.from(document.querySelectorAll('.fa-chevron-down, .br-button.circle[title*="itens"], [class*="chevron-down"]'));
+                chevrons.forEach(btn => {
+                    const card = btn.closest('mat-expansion-panel, .br-item, div[class*="item"]');
+                    if (card && card.innerText.toUpperCase().includes('GRUPO') && !card.innerText.toUpperCase().includes('OCULTAR')) {
+                        console.log("🔓 [POLARYON] Auto-Expandindo Grupo detectado...");
+                        btn.click();
+                    }
+                });
+            }, 3000);
         }
 
         // EXEMPLO DE INJEÇÃO V4: Motor de Identificação de Precisão "Leaf-Node" (Imune a trocas de Classes/Frameworks)
@@ -663,6 +683,12 @@ function scrapeDisputeRoom() {
         itemCards = itemCards.filter(el => {
              const children = Array.from(el.querySelectorAll('*'));
              const hasNestedCard = children.some(child => itemCards.includes(child));
+             
+             // v2.2.3: Se for um container de GRUPO, nós REJEITAMOS ele para forçar o foco nos ITENS internos
+             if (el.innerText.toUpperCase().includes('GRUPO') && el.innerText.toUpperCase().includes('ITENS')) {
+                 return false; 
+             }
+             
              return !hasNestedCard;
         });
 
