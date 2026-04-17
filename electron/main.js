@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const url = require('url');
@@ -43,21 +43,26 @@ function createWindow() {
     // No dev, o terminal roda no servidor local do Vite
     mainWindow.loadURL('http://localhost:5173/desktop.html');
   } else {
-    // Em produção, carregamos os arquivos BUILIDADOS locais com normalização de URI (Cura de Acentos)
-    const filePath = path.join(__dirname, '../dist/desktop.html');
-    const fileUrl = url.format({
-      pathname: filePath,
-      protocol: 'file:',
-      slashes: true
-    });
-    console.log('[POLARYON] Carregando UI de:', fileUrl);
-    mainWindow.loadURL(fileUrl);
+    // Em produção, carregamos os arquivos BUILIDADOS locais com normalização Ultra-Robusta (Cura do "ÃO")
+    try {
+        const filePath = path.join(__dirname, '../dist/desktop.html');
+        // pathToFileURL garante que acentos e espaços sejam codificados corretamente para o Chromium
+        const fileUrl = url.pathToFileURL(filePath).toString();
+        console.log('[POLARYON] Carregando UI de:', fileUrl);
+        mainWindow.loadURL(fileUrl).catch(err => {
+            console.error('[POLARYON-LOAD-ERROR]', err);
+            dialog.showErrorBox('Falha de Carregamento', `Não foi possível carregar a interface.\n\nErro: ${err.message}\n\nPath: ${filePath}`);
+        });
+    } catch (err) {
+        dialog.showErrorBox('Erro de Path', `Erro ao processar o caminho dos arquivos: ${err.message}`);
+    }
   }
 
-  // DEDO-DURO: Se a carga falhar por acentos ou caminhos errados, avisa no console
+  // DEDO-DURO: Se a carga falhar por qualquer motivo técnico, avisa com Dialog Nativo
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     console.error(`🚨 [POLARYON-FATAL] Falha ao carregar UI: ${errorCode} (${errorDescription})`);
-    console.error(`URL tentada: ${validatedURL}`);
+    dialog.showErrorBox('Erro de Conexão Interna', 
+        `O Robô não conseguiu carregar os arquivos internos.\n\nCódigo: ${errorCode}\nDescrição: ${errorDescription}\nURL: ${validatedURL}\n\nSolução: Tente mover a pasta para C:\\Polaryon e abrir novamente.`);
   });
 
   // In Dev, open Developer Tools
