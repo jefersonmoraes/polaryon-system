@@ -1,11 +1,16 @@
-import { Monitor, Download, ShieldCheck, Zap, ArrowRight, CheckCircle2, AlertTriangle, Cpu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 
 export default function DesktopDownloadPage() {
-    const version = "2.2.4";
+    const version = "2.2.5";
     const downloadUrl = `/download/Polaryon-v${version}-Setup.exe`;
+
+    // 🚀 Download Automático v2.2.5
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            window.location.href = downloadUrl;
+        }, 1500); // 1.5s delay para o usuário ver a página
+        return () => clearTimeout(timer);
+    }, [downloadUrl]);
 
     return (
         <div className="min-h-screen bg-[#020817] text-slate-100 p-6 md:p-12 overflow-hidden relative">
