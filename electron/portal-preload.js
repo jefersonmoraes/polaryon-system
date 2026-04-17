@@ -16,7 +16,10 @@ window.addEventListener("message", (event) => {
         // Log stealth local
         if (payload.action === 'TOKEN_GRABBED') {
              console.log("👻 [POLARYON] Token Capturado! Modo Híbrido armado.");
-             window.polaryonAuthBearer = payload.token;        if (payload.action === 'API_DUMP' && payload.url) {
+             window.polaryonAuthBearer = payload.token;
+        }
+
+        if (payload.action === 'API_DUMP' && payload.url) {
              // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.23)
              const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d+)/);
              if (idMatch) {
@@ -42,7 +45,6 @@ window.addEventListener("message", (event) => {
                       const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
                       window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${fullId}/${year}/itens?pagina=0&tamanhoPagina=100`;
                   }
-             }         }
              }
 
              // FILTRO CIRÚRGICO: Detecta se esta URL é a lista de itens real
