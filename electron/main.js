@@ -248,9 +248,6 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
     visualRunner = new VisualRunner(mainWindow.webContents);
   }
   
-  // REMOVIDO: O secure-proxy não suporta HTTP CONNECT e causava a Tela Branca.
-  // Em vez disso, usaremos o gerenciamento nativo do Electron e o bypass de certificado.
-
   visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
 });
 

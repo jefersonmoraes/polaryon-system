@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 
 export default function DesktopDownloadPage() {
-    const version = "2.2.5";
+    const version = "2.2.6";
     const downloadUrl = `/download/Polaryon-v${version}-Setup.exe`;
 
     // 🚀 Download Automático v2.2.5
