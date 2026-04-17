@@ -119,6 +119,7 @@ const startHybridEngine = () => {
                            if (res.status === 404) window.polaryonBadUrls.add(baseBadUrl);
 
                            window.polaryonHybrid_ItemsUrl = null;
+                           if (res.status === 404) window.polaryonContext_PurchaseId = null;
                            window.polaryonAPIStatus = "⚠️ RE-SINCRONIZANDO...";
                            console.warn("💀 [POLARYON] Rota expirada (404/401). Scanner reativado. URL Blacklisted:", baseBadUrl);
                       }
@@ -149,6 +150,11 @@ const startHybridEngine = () => {
               if (allFetchedItems.length > 0) {
                    if (!window.polaryonAllItems) window.polaryonAllItems = {};
                    allFetchedItems.forEach(item => {
+                        // FILTRO INTELIGENTE (Adaptive Grooming): 
+                        // Ignora itens que são apenas Títulos de Grupo (Ex: G1, G2...) para focar nos itens reais
+                        const isGroupHeading = (item.identificador || "").startsWith('G') && (!item.posicaoParticipanteDisputa) && (!item.melhorValorFornecedor);
+                        if (isGroupHeading) return; 
+
                         const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                         const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                         // v2.2.2: Blindagem Anti-Bug no Ranking (Prioriza posicao e corrige falsos positivos)
