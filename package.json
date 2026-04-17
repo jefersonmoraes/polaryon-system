@@ -143,7 +143,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "http://204.168.151.231/download/"
+        "url": "https://polaryon.com.br/download/"
       }
     ]
   }

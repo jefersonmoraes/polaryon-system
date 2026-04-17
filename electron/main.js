@@ -16,7 +16,7 @@ autoUpdater.autoInstallOnAppQuit = true;
 try {
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: 'http://204.168.151.231/download/'
+    url: 'https://polaryon.com.br/download/'
   });
 } catch (e) {
   console.error('[POLARYON] Erro ao configurar Feed de Update:', e);
