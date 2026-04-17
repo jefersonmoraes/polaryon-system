@@ -13,14 +13,6 @@ let mainWindow;
 // Configure autoUpdater
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
-try {
-  autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: 'https://polaryon.com.br/download/'
-  });
-} catch (e) {
-  console.error('[POLARYON] Erro ao configurar Feed de Update:', e);
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -62,13 +54,21 @@ function createWindow() {
   // Handle visual "Premium" touches
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
-  // Check for updates
+  // Check for updates (Lazily after window is ready)
   if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify();
-    // Check every 30 mins
-    setInterval(() => {
+    try {
+        autoUpdater.setFeedURL({
+            provider: 'generic',
+            url: 'https://polaryon.com.br/download/'
+        });
         autoUpdater.checkForUpdatesAndNotify();
-    }, 30 * 60 * 1000);
+        // Check every 30 mins
+        setInterval(() => {
+            autoUpdater.checkForUpdatesAndNotify();
+        }, 30 * 60 * 1000);
+    } catch (e) {
+        console.error('[POLARYON-UPDATE] Falha crítica no módulo de update:', e);
+    }
   }
 }
 
