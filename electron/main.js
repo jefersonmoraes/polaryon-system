@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const url = require('url');
 const isDev = !app.isPackaged;
 const BiddingRunner = require('./bidding-runner');
 const sessionStore = require('./session-store');
@@ -42,9 +43,22 @@ function createWindow() {
     // No dev, o terminal roda no servidor local do Vite
     mainWindow.loadURL('http://localhost:5173/desktop.html');
   } else {
-    // Em produção, carregamos os arquivos BUILIDADOS locais (Puro e Ultra-Leve)
-    mainWindow.loadFile(path.join(__dirname, '../dist/desktop.html'));
+    // Em produção, carregamos os arquivos BUILIDADOS locais com normalização de URI (Cura de Acentos)
+    const filePath = path.join(__dirname, '../dist/desktop.html');
+    const fileUrl = url.format({
+      pathname: filePath,
+      protocol: 'file:',
+      slashes: true
+    });
+    console.log('[POLARYON] Carregando UI de:', fileUrl);
+    mainWindow.loadURL(fileUrl);
   }
+
+  // DEDO-DURO: Se a carga falhar por acentos ou caminhos errados, avisa no console
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`🚨 [POLARYON-FATAL] Falha ao carregar UI: ${errorCode} (${errorDescription})`);
+    console.error(`URL tentada: ${validatedURL}`);
+  });
 
   // In Dev, open Developer Tools
   if (isDev) {
