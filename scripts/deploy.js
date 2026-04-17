@@ -46,8 +46,8 @@ function deploy() {
 
         // 5. Sync Git, Build Web e Sincronização de Pastas de Download
         console.log(`Puxando código no VPS, gerando build web e sincronizando pastas de download...`);
-        // Ajuste v2.1.0: Usamos unlink antes do rm -rf para evitar erro 'Directory not empty' no link de download
-        const remoteCmd = `cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && [ -L dist/download ] && unlink dist/download || true && cd backend && npx prisma@6 db push && cd .. && npm run build && pm2 restart polaryon-backend`;
+        // Ajuste v2.2.5.4: Build PRIMEIRO, depois cria o Symlink (Vite apaga a pasta dist, então o link tem que vir depois)
+        const remoteCmd = `cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && cd backend && npx prisma@6 db push && cd .. && npm run build && rm -rf dist/download && ln -s /var/www/polaryon/storage/download dist/download && pm2 restart polaryon-backend`;
         execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
 
         console.log('\n✅ DEPLOY COMPLETO! A versão v' + version + ' está ao vivo e pronta para download/update.');
