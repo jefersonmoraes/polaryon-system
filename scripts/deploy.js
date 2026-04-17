@@ -36,6 +36,10 @@ function deploy() {
         console.log(`uploading ${exeName} para o servidor...`);
         execSync(`scp dist_desktop/${exeName} root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
 
+        // 3.1 Upload Blockmap (Essencial para integridade)
+        console.log(`uploading ${exeName}.blockmap para o servidor...`);
+        execSync(`scp dist_desktop/${exeName}.blockmap root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
+
         // 4. Upload latest.yml
         console.log(`uploading latest.yml...`);
         execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
