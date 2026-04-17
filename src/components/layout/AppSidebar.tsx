@@ -26,7 +26,7 @@ const AppSidebar = () => {
   useEffect(() => {
     const fetchQuotes = async () => {
       try {
-        const version = "2.2.5";
+        const version = "3.0.0";
         const response = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL');
         const data = await response.json();
         setCurrencyQuotes({
@@ -266,9 +266,8 @@ const AppSidebar = () => {
                     title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
                         <Terminal className="w-3 h-3 text-emerald-500" />
-                        v1.2.28-COMBAT
+                        v3.0.0-TACTICAL
                       </div>
                       <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
                       {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
@@ -432,7 +431,7 @@ const AppSidebar = () => {
             >
               <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
               {!isCollapsed && <span>CENTRAL DO BOT</span>}
-              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">V2.1.11 STABLE-HYBRID</div>}
+              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">v3.0.0 ELITE TACTICAL</div>}
             </Link>
           </div>
         )}

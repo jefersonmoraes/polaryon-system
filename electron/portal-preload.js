@@ -755,6 +755,7 @@ function scrapeDisputeRoom() {
                         descricao: desc.substring(0, 100) + (desc.length > 100 ? "..." : ""),
                         status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
                         tempoRestante: -1, 
+                        isVisual: true,
                         position: ganhador === 'Você' ? 1 : 0
                     });
 
@@ -838,26 +839,37 @@ function scrapeDisputeRoom() {
 
         // --- SISTEMA DE ALMANAQUE (BLACKBOX DE ELITE v3.0) ---
         // Captura tudo o que o governo manda para análise posterior "offline"
-        const now = Date.now();
-        if (now - (window.lastAlmanacCapture || 0) > 30000) { // a cada 30s
-            window.lastAlmanacCapture = now;
-            
-            const almanacData = {
-                sessionId: mySessionId,
-                timestamp: new Date().toISOString(),
-                url: window.location.href,
-                config: currentConfig,
-                items: itemsToReport,
-                // Captura o HTML bruto para remontar a cena depois
-                domSnapshot: document.documentElement.outerHTML,
-                // Captura mensagens de chat visíveis
-                chatSnapshot: Array.from(document.querySelectorAll('.message, .chat-item, #chat, [id*="chat"], .conversa')).map(el => el.innerText)
-            };
-            
-            ipcRenderer.send('save-battle-almanac', almanacData);
-            console.log("🛡️ [ALMANAQUE] Snapshot de Batalha capturado e enviado ao Quartel General.");
-        }
+        const captureAlmanac = () => {
+             const now = Date.now();
+             if (now - (window.lastAlmanacCapture || 0) < 15000) return; // a cada 15s
+             window.lastAlmanacCapture = now;
 
+             try {
+                const chatArea = document.querySelector('.chat-mensagens, #mensagens, [class*="chat"]') || document.body;
+                const messages = Array.from(chatArea.querySelectorAll('div, p, span'))
+                    .filter(el => el.innerText && el.innerText.length > 10)
+                    .map(el => el.innerText.trim())
+                    .slice(-50); // Últimos 50 fragmentos
+
+                const almanacData = {
+                    sessionId: mySessionId,
+                    timestamp: new Date().toISOString(),
+                    path: window.location.pathname,
+                    roomTitle: document.title,
+                    itemCount: itemsToReport.length,
+                    activeItems: itemsToReport.filter(i => i.status === 'Disputa').length,
+                    chatSnapshot: messages,
+                    isSimulation: window.isSimulationMode
+                };
+
+                // Envia para o backend via Electron para persistência pesada (JSON file)
+                ipcRenderer.send('almanac-log', almanacData);
+                console.log("📘 [POLARYON ALMANAQUE] Snapshot tático capturado.");
+             } catch(e) {
+                console.warn("Almanac Capture Error:", e);
+             }
+        };
+        captureAlmanac();
     } catch (e) {
         console.error("Erro no Portal Injector:", e);
     }
@@ -1048,7 +1060,6 @@ function renderBiddingPanel(items) {
                         <div style="position:relative; flex:1;">
                            <span style="position:absolute; left:6px; top:5px; font-size:10px; color:rgba(255,255,255,0.4); font-weight:bold;">R$</span>
                            <input type="text" placeholder="Meu Limite Mínimo" value="${limit.price}" 
-                            <input type="text" placeholder="Meu Limite Mínimo" value="${limit.price}" 
                                class="polaryon-limit-input"
                                style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:6px 6px 6px 22px; color:#fff; font-size:11px; outline:none; font-weight:bold;" />
                         </div>

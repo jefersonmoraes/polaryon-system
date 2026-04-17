@@ -31,6 +31,14 @@ import {
     DialogFooter
 } from "@/components/ui/dialog";
 import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -91,7 +99,6 @@ export default function BiddingDashboardPage() {
     const [isLocalRunning, setIsLocalRunning] = useState(false);
 
     // MODO MULTI-UASG (v2.0 War Flow)
-    const [viewMode, setViewMode] = useState<'focus' | 'grid' | 'flow'>('focus');
     const [sessions, setSessions] = useState<Record<string, {
         uasg: string;
         numero: string;
@@ -149,9 +156,7 @@ export default function BiddingDashboardPage() {
                         setIsListening(true);
                         
                         // v2.0: Auto-switch to Flow mode when moving to multi-uasg
-                        if (Object.keys(sessions).length > 0) {
-                            setViewMode('flow');
-                        }
+                        // viewMode logic removed, isListening handles the transition
 
                         // Inicializa na lista multi-sessão
                         setSessions(prev => ({
@@ -466,7 +471,30 @@ export default function BiddingDashboardPage() {
         if (!socketService) return;
 
         const handleUpdate = (data: any) => {
-            setItems(data.items);
+            // MERGE LOGIC v3.0: Prioritiza dados visuais e preserva 'meuValor'
+            setItems(prevItems => {
+                const incomingItems = data.items || [];
+                if (prevItems.length === 0) return incomingItems;
+
+                return incomingItems.map((newItem: any) => {
+                    const existingItem = prevItems.find(p => p.itemId === newItem.itemId);
+                    if (!existingItem) return newItem;
+
+                    // Se o dado for da API Pública e não tiver meuValor, preserva o último conhecido
+                    const meuValor = (newItem.isVisual || newItem.meuValor > 0) 
+                        ? newItem.meuValor 
+                        : (existingItem.meuValor || 0);
+
+                    return { 
+                        ...existingItem, 
+                        ...newItem, 
+                        meuValor,
+                        // Preserva descrição se a nova for vazia
+                        descricao: newItem.descricao || existingItem.descricao
+                    };
+                });
+            });
+
             if (data.actions && data.actions.length > 0) {
                 setActionLogs(prev => [...data.actions, ...prev].slice(0, 100));
             }
@@ -563,110 +591,182 @@ export default function BiddingDashboardPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
                 <div className="flex items-center gap-6">
                     <div>
-                        <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent uppercase">
-                            POLARYON TERMINAL
+                        <h1 className="text-4xl font-black italic tracking-tighter bg-gradient-to-r from-emerald-400 via-cyan-500 to-indigo-500 bg-clip-text text-transparent uppercase flex items-center gap-3">
+                            <Zap className="w-8 h-8 text-emerald-400 fill-current" />
+                            TERMINAL ELITE
                         </h1>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1 italic">
-                            Military Grade Bidding Automation
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-1 italic flex items-center gap-2">
+                             Visual Automation Engine <span className="w-1 h-1 bg-slate-700 rounded-full"></span> v3.0 Tactical
                         </p>
                     </div>
 
                     <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
 
-                    {/* VIEW SWITCHER (v1.8.0) */}
-                    <div className="flex bg-slate-950/50 p-1 rounded-xl border border-white/5">
-                        <Button 
-                            variant={viewMode === 'focus' ? 'secondary' : 'ghost'} 
-                            onClick={() => setViewMode('focus')}
-                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
-                        >
-                            FOCADO
-                        </Button>
-                        <Button 
-                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                            onClick={() => setViewMode('grid')}
-                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
-                        >
-                            GRADES ({Object.keys(sessions).length})
-                        </Button>
-                        <Button 
-                            variant={viewMode === 'flow' ? 'secondary' : 'ghost'} 
-                            onClick={() => setViewMode('flow')}
-                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg bg-emerald-500/10 text-emerald-500"
-                        >
-                            FLUXO
-                        </Button>
-                    </div>
-
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-8">
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-500 font-black uppercase">Vencendo</span>
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Alvos Ativos</span>
+                            <span className="text-xl font-black text-slate-100">{allItems.length}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Vencendo</span>
                             <span className="text-xl font-black text-emerald-500">{items.filter(i => i.ganhador === 'Você').length}</span>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-500 font-black uppercase">Economia</span>
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Economia Total</span>
                             <span className="text-xl font-black text-cyan-400">R$ {items.reduce((acc, i) => acc + (i.ganhador === 'Você' ? (i.valorEstimado || 0) - i.valorAtual : 0), 0).toFixed(2)}</span>
                         </div>
                     </div>
-                </div>
-                {isListening && (
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-6 px-4 py-2 bg-slate-900/60 rounded-xl border border-white/5 divide-x divide-white/10">
-                            <div className="flex flex-col pr-4">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Latência</span>
-                                <span className="text-xs font-mono text-emerald-400">12ms</span>
-                            </div>
-                            <div className="flex flex-col px-4">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronicidade</span>
-                                <span className="text-xs font-mono text-cyan-400">100%</span>
-                            </div>
-                            <div className="flex flex-col pl-4 text-right">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Modo</span>
-                                <span className="text-xs font-black text-amber-500">{simulationMode ? 'SIMULAÇÃO' : 'REAL'}</span>
-                            </div>
-                        </div>
 
-                        {turbo && (
-                            <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 text-red-500 rounded-full border border-red-500/20 animate-pulse">
-                                <Zap className="w-3 h-3 fill-current" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Ultra Latency</span>
+                    {isListening ? (
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-6 px-4 py-2 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+                            <div className="flex flex-col">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronicidade</span>
+                                <span className="text-xs font-mono text-cyan-400 flex items-center gap-1">
+                                    <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 100%
+                                </span>
                             </div>
-                        )}
-                        <div className="flex items-center gap-3 px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                            <span className="text-sm font-bold uppercase tracking-widest">Radar Ativo</span>
+                            <div className="flex flex-col px-4 border-l border-white/5">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Operação</span>
+                                <span className={`text-[10px] font-black ${simulationMode ? 'text-amber-500' : 'text-red-500 animate-pulse'}`}>
+                                    {simulationMode ? 'SIMULADO' : 'REAL-MODE'}
+                                </span>
+                            </div>
+                            
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button variant="outline" size="sm" className="bg-emerald-500/10 border-emerald-500/30 text-emerald-400 h-8 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all">
+                                        <Settings2 className="w-3.5 h-3.5 mr-2" /> COMANDOS
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent className="bg-slate-950 border-white/10 text-white w-[400px]">
+                                    <SheetHeader className="border-b border-white/5 pb-4 mb-4">
+                                        <SheetTitle className="text-emerald-500 flex items-center gap-2">
+                                            <Shield className="w-5 h-5" /> CENTRAL DE COMANDO
+                                        </SheetTitle>
+                                        <SheetDescription className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">
+                                            Ajustes táticos em tempo real
+                                        </SheetDescription>
+                                    </SheetHeader>
+                                    
+                                    <div className="space-y-6 overflow-y-auto max-h-[85vh] pr-2 custom-scrollbar">
+                                        {/* Copied Config Block */}
+                                        <div className="space-y-4">
+                                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navegação e Foco</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Button variant="outline" onClick={() => focusBiddingWindow()} className="bg-slate-900 border-white/10 text-[10px] h-9 font-black">
+                                                    <Target className="w-3 h-3 mr-2" /> FOCAR PORTAL
+                                                </Button>
+                                                <Button variant="outline" onClick={() => navigateToRoom()} className="bg-slate-900 border-white/10 text-[10px] h-9 font-black">
+                                                    <RefreshCw className="w-3 h-3 mr-2" /> IR P/ SALA
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+                                                Mudar Modo de Voo
+                                            </Label>
+                                            <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                                                <div className="space-y-0.5">
+                                                    <p className="text-xs font-black text-slate-100 uppercase">MODO REAL</p>
+                                                    <p className="text-[9px] text-slate-500 font-bold uppercase italic">Cuidado: Envia lances ao Portal</p>
+                                                </div>
+                                                <Switch 
+                                                    checked={!simulationMode} 
+                                                    onCheckedChange={(val) => {
+                                                        if (val) {
+                                                            setShowRealModeWarning(true);
+                                                        } else {
+                                                            toggleSimulation(true);
+                                                        }
+                                                    }}
+                                                    className="data-[state=checked]:bg-red-500"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Botão Global de Abortar */}
+                                        <Button onClick={() => stopRadar()} variant="destructive" className="w-full font-black h-12 shadow-red-900/40 shadow-xl transition-all hover:scale-[1.02] uppercase tracking-widest text-xs mt-8">
+                                            <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO TÁTICA
+                                        </Button>
+
+                                        {/* Logs Flutuantes */}
+                                        <div className="mt-8">
+                                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+                                                <Zap className="w-3 h-3 text-amber-500" /> Histórico de Lances
+                                            </Label>
+                                            <div className="space-y-2">
+                                                {actionLogs.slice(0, 5).map((log, idx) => (
+                                                    <div key={idx} className="p-2.5 bg-slate-900/50 rounded-xl border border-white/5 flex items-center justify-between">
+                                                        <span className="text-[9px] font-black text-slate-400">ITEM {log.itemId}</span>
+                                                        <span className="text-[10px] font-black text-emerald-400">R$ {log.value.toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-4">
+                         <div className="flex bg-slate-950/50 p-1 rounded-xl border border-white/5">
+                            <Button 
+                                variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                                onClick={() => setViewMode('grid')}
+                                className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
+                            >
+                                SELECIONAR PREGÃO
+                            </Button>
                         </div>
                     </div>
                 )}
-            </div>
-
-            {viewMode === 'flow' ? (
-                <div className="space-y-4 max-w-5xl mx-auto pb-20">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-xl font-black text-white italic tracking-tighter">FLUXO DE COMBATE</h2>
-                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Monitorando {allItems.length} itens simultâneos</p>
+                         {isListening ? (
+                <div className="space-y-6 max-w-6xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    {/* CHAT MONITOR FLOATING BAR */}
+                    {chatMessages.length > 0 && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between gap-4 backdrop-blur-sm">
+                            <div className="flex items-center gap-3">
+                                <Zap className="w-4 h-4 text-amber-500 animate-pulse" />
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-amber-500/70 uppercase tracking-widest">Alerta do Pregoeiro</span>
+                                    <p className="text-[11px] font-medium text-slate-200 truncate max-w-2xl leading-tight italic">
+                                        "{chatMessages[chatMessages.length - 1].texto}"
+                                    </p>
+                                </div>
+                            </div>
+                            <Button variant="ghost" size="sm" className="h-7 text-[9px] font-black text-amber-500 hover:bg-amber-500/20 uppercase tracking-tighter">
+                                Ver Todo Chat
+                            </Button>
                         </div>
-                    </div>
-                    {allItems.length === 0 ? (
-                        <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.02]">
-                            <Target className="w-12 h-12 text-slate-700 animate-pulse mb-4" />
-                            <p className="text-slate-500 font-bold text-sm">Nenhum item ativo no fluxo.</p>
-                            <p className="text-slate-700 text-[10px] mt-1 uppercase">Inicie o radar em um UASG para ver os itens aqui.</p>
-                        </div>
-                    ) : (
-                        allItems.map(item => (
-                            <CombatStreamCard 
-                                key={`${item.sid}-${item.id}`} 
-                                item={item} 
-                                sessionId={item.sid}
-                                strategy={itemStrategies[item.id] || { mode: 'follower', minPrice: 0 }}
-                                onSave={(s) => saveStrategy(item.id, s, item.sid)}
-                            />
-                        ))
                     )}
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {items.length === 0 ? (
+                            <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
+                                <Target className="w-16 h-16 text-slate-800 animate-pulse mb-4" />
+                                <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter">Injetando Sensores...</h3>
+                                <p className="text-slate-700 text-[10px] mt-2 font-bold uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
+                            </div>
+                        ) : (
+                            items.map(item => (
+                                <CombatStreamCard 
+                                    key={`${sessionId}-${item.itemId}`} 
+                                    item={item} 
+                                    sessionId={sessionId}
+                                    strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0 }}
+                                    onSave={(s) => saveStrategy(item.itemId, s, sessionId)}
+                                />
+                            ))
+                        )}
+                    </div>
                 </div>
-            ) : viewMode === 'grid' ? (
+            ) : (
+                /* ========================================================================
+                   LISTA DE SALAS (HOME / STANDBY)
+                   ======================================================================== */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-8 duration-500">
                     {Object.entries(sessions).map(([sid, s]) => (
                         <Card 
@@ -677,434 +777,78 @@ export default function BiddingDashboardPage() {
                                 setNumeroPregao(s.numero);
                                 setItems(s.items);
                                 setChatMessages(s.chatMessages);
-                                setViewMode('focus');
                             }}
-                            className={`group cursor-pointer shadow-xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 transition-all hover:scale-[1.02] hover:ring-emerald-500/50 ${
-                                sessionId === sid ? 'ring-emerald-500' : 'ring-white/10'
-                            }`}
+                            className="group cursor-pointer shadow-xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 transition-all hover:scale-[1.02] hover:ring-emerald-500/50"
                         >
                             <div className={`h-1 w-full ${s.items.some(i => i.ganhador === 'Você') ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
                             <CardHeader className="p-4 pb-2">
                                 <div className="flex justify-between items-start">
                                     <div className="flex flex-col">
-                                        <CardTitle className="text-lg font-black tracking-tighter text-slate-100">UASG {s.uasg}</CardTitle>
-                                        <CardDescription className="text-[10px] font-bold uppercase text-slate-500">Pregão {s.numero}</CardDescription>
+                                        <CardTitle className="text-lg font-black tracking-tighter text-slate-100 italic">UASG {s.uasg}</CardTitle>
+                                        <CardDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Pregão {s.numero}</CardDescription>
                                     </div>
-                                    {s.items.some(i => i.tempoRestante > 0) && (
-                                        <span className="flex items-center gap-1 text-[10px] text-red-500 font-black animate-pulse">
-                                            <Activity className="w-3 h-3" /> ATIVO
-                                        </span>
-                                    )}
+                                    <div className="px-2 py-0.5 rounded-full bg-slate-950/50 border border-white/5 text-[9px] font-black text-slate-400">
+                                        {s.items.length} ITENS
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent className="p-4 pt-2">
-                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                    <div className="bg-slate-950/50 p-2 rounded-lg border border-white/5">
-                                        <p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Itens</p>
-                                        <p className="text-sm font-black text-slate-200">{s.items.length}</p>
-                                    </div>
-                                    <div className="bg-slate-950/50 p-2 rounded-lg border border-white/5">
-                                        <p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Vencendo</p>
-                                        <p className="text-sm font-black text-emerald-500">{s.items.filter(i => i.ganhador === 'Você').length}</p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center text-[9px] font-mono text-slate-600">
+                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-600 uppercase">
                                     <span>Sync: {s.lastUpdate}</span>
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${s.isAuthenticated ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                                        <span>{s.isAuthenticated ? 'ONLINE' : 'AUTH'}</span>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${s.isAuthenticated ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
+                                        <span>{s.isAuthenticated ? 'LOGADO' : 'AGUARDANDO'}</span>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                     ))}
                     
-                    {/* Botão de Adicionar na Grade */}
                     <Card 
                         onClick={() => {
-                            // Reset para nova operação: limpa campos e sessão ativa
                             setUasg('');
                             setNumeroPregao('');
-                            setAnoPregao(new Date().getFullYear().toString());
-                            setItems([]);
-                            setChatMessages([]);
-                            setSessionId(null); // Deseleciona sessão atual para não confundir o FOCADO
-                            setIsListening(false);
-                            setIsLocalRunning(false);
-                            setViewMode('focus');
+                            setSessionId('');
                         }}
-                        className="flex items-center justify-center border-dashed border-2 border-emerald-500/30 bg-transparent hover:bg-emerald-500/5 cursor-pointer transition-colors min-h-[150px]"
+                        className="group cursor-pointer shadow-xl border-none bg-emerald-500/5 backdrop-blur-xl ring-1 ring-emerald-500/10 transition-all hover:scale-[1.02] border-2 border-dashed border-emerald-500/20"
                     >
-                        <div className="flex flex-col items-center gap-2 text-emerald-500/70 group-hover:text-emerald-400 transition-colors">
-                            <PlusIcon className="w-8 h-8" />
-                            <span className="text-[11px] font-black uppercase tracking-widest">Nova Operação</span>
-                            <span className="text-[8px] text-white/20 uppercase">Sessão independente</span>
-                        </div>
+                        <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                            <PlusIcon className="w-10 h-10 text-emerald-500 mb-3 opacity-60" />
+                            <p className="font-black text-emerald-500 text-sm uppercase tracking-tighter italic">Nova Operação</p>
+                        </CardContent>
                     </Card>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Controls Card */}
-                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-slate-100">
-                            <Target className="w-5 h-5 text-emerald-500"/> Configuração
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">Defina os parâmetros do pregão.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                        <div className="space-y-2">
-                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">UASG / Código do Órgão</Label>
-                            <Input 
-                                value={uasg} 
-                                onChange={e => setUasg(e.target.value)} 
-                                placeholder="Ex: 160045" 
-                                disabled={isListening} 
-                                className="bg-slate-950/50 border-white/10 text-slate-100 h-11 focus:ring-emerald-500/50" 
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Nº Pregão / Dispensa</Label>
-                                <Input 
-                                    value={numeroPregao} 
-                                    onChange={e => setNumeroPregao(e.target.value)} 
-                                    placeholder="Ex: 6" 
-                                    disabled={isListening} 
-                                    className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Ano</Label>
-                                <Input 
-                                    value={anoPregao} 
-                                    onChange={e => setAnoPregao(e.target.value)} 
-                                    disabled={isListening} 
-                                    className="bg-slate-950/50 border-white/10 text-slate-100 h-11" 
-                                />
-                            </div>
-                        </div>
 
-                        <div className="space-y-2">
-                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Modalidade de Compra</Label>
-                            <Select value={modality} onValueChange={setModality} disabled={isListening}>
-                                <SelectTrigger className="bg-slate-950/50 border-white/10 text-slate-100 h-11">
-                                    <SelectValue placeholder="Selecione a modalidade" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-white/10 text-white">
-                                    <SelectItem value="05">PE - Pregão Eletrônico (05)</SelectItem>
-                                    <SelectItem value="14">DE - Dispensa Eletrônica (Lei 14.133)</SelectItem>
-                                    <SelectItem value="06">DE - Dispensa Eletrônica (06 - Antiga Lei)</SelectItem>
-                                    <SelectItem value="01">CV - Convite (01)</SelectItem>
-                                    <SelectItem value="02">TP - Tomada de Preço (02)</SelectItem>
-                                    <SelectItem value="03">CC - Concorrência (03)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        
-                        <div className="space-y-4 pt-2 border-t border-white/5 mt-4">
-                            <div className="flex items-center justify-between p-3 bg-slate-950/30 rounded-xl border border-white/5">
-                                <div className="space-y-0.5">
-                                    <Label className="text-xs font-bold text-slate-300">MODO SIMULAÇÃO</Label>
-                                    <p className="text-[10px] text-slate-500">Não envia lances reais</p>
+                    {/* CONFIGURAÇÃO RÁPIDA (Só aparece se nenhuma sala focada ou se quiser configurar nova) */}
+                    <Card className="lg:col-span-3 shadow-2xl border-none bg-slate-900/60 backdrop-blur-xl ring-1 ring-white/10 p-6 mt-4">
+                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                            <div className="space-y-2">
+                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">UASG / Órgão</Label>
+                                <Input value={uasg} onChange={(e) => setUasg(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black" placeholder="Ex: 927165" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Nº / Ano</Label>
+                                <div className="flex gap-2">
+                                    <Input value={numeroPregao} onChange={(e) => setNumeroPregao(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black w-2/3" placeholder="Ex: 10" />
+                                    <Input value={anoPregao} onChange={(e) => setAnoPregao(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black w-1/3" placeholder="2026" />
                                 </div>
-                                <Switch 
-                                    checked={simulationMode} 
-                                    onCheckedChange={(val) => {
-                                        if (!val) {
-                                            setShowRealModeWarning(true);
-                                        } else {
-                                            toggleSimulation(true);
-                                        }
-                                    }}
-                                    className="data-[state=checked]:bg-amber-500"
-                                />
                             </div>
-
                             <div className="space-y-2">
-                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
-                                    <span className="flex items-center gap-2"><Key className="w-3 h-3" /> Conta de Disputa</span>
-                                    {isAuthenticated && (
-                                        <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-black animate-pulse">
-                                            <CheckCircle2 className="w-3 h-3" /> AUTENTICADO
-                                        </span>
-                                    )}
-                                </Label>
-                                <Select value={selectedCredentialId} onValueChange={setSelectedCredentialId} disabled={isListening}>
-                                    <SelectTrigger className="bg-slate-950/50 border-white/10 text-slate-100 h-11">
-                                        <SelectValue placeholder="Selecione um certificado..." />
+                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Modalidade</Label>
+                                <Select value={modality} onValueChange={setModality}>
+                                    <SelectTrigger className="bg-slate-950 border-white/5 h-11 text-white font-black">
+                                        <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
-                                        {credentials.length === 0 && (
-                                            <div className="p-4 text-center">
-                                                <p className="text-[10px] text-slate-500 mb-2">Sem certificados cadastrados</p>
-                                                <Link to="/seguranca/cofre">
-                                                    <Button size="sm" className="w-full text-[10px] h-7 bg-emerald-600 hover:bg-emerald-500">
-                                                        CONFIGURAR COFRE
-                                                    </Button>
-                                                </Link>
-                                            </div>
-                                        )}
-                                        {credentials.map(c => (
-                                            <SelectItem key={c.id} value={c.id} className="text-xs font-medium">
-                                                {c.alias} ({c.cnpj})
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent className="bg-slate-900 border-white/10 text-white">
+                                        <SelectItem value="14">Dispensa Eletrônica (14.133)</SelectItem>
+                                        <SelectItem value="06">Dispensa (Antiga)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                        </div>
-
-                        <div className="pt-4 space-y-4">
-                            {isDesktop && <CertificateManager />}
-                            
-                            {!isListening ? (
-                                <Button onClick={() => startRadar()} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-12 shadow-emerald-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Play className="w-4 h-4 mr-2 fill-current"/> INICIAR COMBATE
-                                </Button>
-                            ) : (
-                                <Button onClick={() => stopRadar()} variant="destructive" className="w-full font-bold h-12 shadow-red-900/20 shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-                                    <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO
-                                </Button>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Dashboard Monitor */}
-                <Card className="lg:col-span-2 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-white/5">
-                        <div>
-                            <CardTitle className="text-xl text-slate-100">Sala de Disputa</CardTitle>
-                            <CardDescription className="text-slate-400">Monitoramento da sala de lances.</CardDescription>
-                        </div>
-                        <div className="text-right">
-                             <div className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-widest">Último Sync: {lastUpdate || '--:--:--'}</div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0 relative min-h-[400px]">
-                        {!isListening ? (
-                            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
-                                <Activity className="w-12 h-12 text-slate-700 mb-4 opacity-50" />
-                                <p className="font-bold text-slate-500 text-xs">SISTEMA EM STANDBY</p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col h-full">
-                                                            {selectedItems.size > 0 && (
-                                    <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between animate-in slide-in-from-top duration-300">
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => focusBiddingWindow()} className="bg-slate-900 border-white/10 text-xs font-bold h-7">
-                                                <Target className="w-3 h-3 mr-1" /> FOCAR JANELA
-                                            </Button>
-                                            <Button variant="outline" size="sm" onClick={() => navigateToRoom()} className="bg-slate-900 border-white/10 text-xs font-bold h-7">
-                                                <RefreshCw className="w-3 h-3 mr-1" /> VOLTAR P/ SALA
-                                            </Button>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xs font-black text-emerald-500">{selectedItems.size} ITENS SELECIONADOS</span>
-                                            
-                                            <StrategyModal 
-                                                item={{ itemId: 'MASS' } as any}
-                                                initialStrategy={{ mode: 'follower', minPrice: 0.10, decrementValue: 0.05, decrementType: 'fixed' }}
-                                                onSave={applyBulkStrategy}
-                                                isBulk
-                                            />
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={() => setSelectedItems(new Set())} className="text-xs text-slate-500">Cancelar</Button>
-                                    </div>
-                                )}
-
-                                <div className="divide-y divide-white/5">
-                                    {items.map(item => {
-                                        const strategy = itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.10, decrementType: 'fixed' };
-                                        const isSelected = selectedItems.has(item.itemId);
-                                        const isCovered = coveredItems.has(item.itemId);
-                                        
-                                        return (
-                                            <div 
-                                                key={item.itemId} 
-                                                className={`p-3 md:p-4 flex items-center justify-between transition-all group ${
-                                                    item.ganhador === 'Você' ? 'bg-emerald-500/[0.03]' : 'bg-transparent'
-                                                } ${isCovered ? 'bg-red-500/10 animate-pulse ring-1 ring-red-500/40' : ''}`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <Checkbox 
-                                                        checked={isSelected}
-                                                        onCheckedChange={(val) => {
-                                                            const next = new Set(selectedItems);
-                                                            if (val) next.add(item.itemId);
-                                                            else next.delete(item.itemId);
-                                                            setSelectedItems(next);
-                                                        }}
-                                                        className="border-white/20 data-[state=checked]:bg-emerald-500"
-                                                    />
-
-                                                    <div className="flex flex-col">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black text-slate-100 uppercase tracking-tighter">ITEM {item.itemId}</span>
-                                                            {item.position > 0 && (
-                                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
-                                                                    item.position === 1 ? 'bg-emerald-500 text-black' : 'bg-slate-700 text-slate-300'
-                                                                }`}>
-                                                                    {item.position}º
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${
-                                                                strategy.mode === 'shadow' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-slate-800 text-slate-500 border-white/5'
-                                                            }`}>
-                                                                {strategy.mode === 'shadow' ? 'SOMBRA (2º)' : strategy.mode.toUpperCase()}
-                                                            </span>
-                                                            
-                                                            {/* MARGIN INDICATOR */}
-                                                            {strategy.minPrice > 0 && item.valorAtual <= strategy.minPrice ? (
-                                                                <span className="text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse">
-                                                                    LIMITE ATINGIDO
-                                                                </span>
-                                                            ) : strategy.minPrice > 0 ? (
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                                                        <div 
-                                                                            className="h-full bg-emerald-500" 
-                                                                            style={{ width: `${Math.min(100, Math.max(0, ((item.valorAtual - strategy.minPrice) / item.valorAtual) * 100))}%` }}
-                                                                        ></div>
-                                                                    </div>
-                                                                    <span className="text-[8px] text-slate-500 font-bold uppercase">Margem OK</span>
-                                                                </div>
-                                                            ) : null}
-
-                                                            {item.tempoRestante > 0 && (
-                                                                <span className="text-[9px] font-black text-red-500 flex items-center gap-1">
-                                                                    <Activity className="w-2.5 h-2.5 animate-spin"/> {item.tempoRestante}s
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                       <div className="flex items-center gap-6">
-                                                    {/* INPUT DE VALOR MÍNIMO (FLOOR PRICE) */}
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">LIMITE (R$)</span>
-                                                        <Input 
-                                                            type="number"
-                                                            value={strategy.minPrice}
-                                                            onChange={(e) => {
-                                                                const val = parseFloat(e.target.value) || 0;
-                                                                saveStrategy(item.itemId, { ...strategy, minPrice: val });
-                                                            }}
-                                                            className="w-24 h-9 bg-slate-950/50 border-white/5 text-xs font-bold text-emerald-500 focus:ring-emerald-500/50"
-                                                        />
-                                                    </div>
-
-                                                    <div className="text-right flex flex-col items-end">
-                                                        <div className={`text-xl font-black tabular-nums tracking-tighter ${
-                                                            item.ganhador === 'Você' ? 'text-emerald-400' : 'text-amber-500 font-bold'
-                                                        }`}>
-                                                            R$ {item.valorAtual.toFixed(2)}
-                                                        </div>
-                                                        <span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{item.ganhador}</span>
-                                                    </div>
-
-                                                    <StrategyModal 
-                                                        item={item} 
-                                                        initialStrategy={strategy} 
-                                                        onSave={(s) => saveStrategy(item.itemId, s)} 
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Chat Panel Card */}
-                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
-                    <CardHeader className="pb-3 border-b border-white/5 bg-slate-950/20">
-                        <CardTitle className="flex items-center gap-2 text-slate-100 text-lg">
-                            <Zap className="w-5 h-5 text-amber-500"/> Chat do Pregoeiro
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">Mensagens oficiais da sessão.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto px-4 space-y-4 pt-4 custom-scrollbar bg-slate-950/10">
-                        {chatMessages.length === 0 ? (
-                            <div className="text-center py-12 text-slate-600">
-                                <Activity className="w-8 h-8 mx-auto opacity-20 mb-2" />
-                                <p className="text-xs font-medium">Aguardando mensagens...</p>
-                            </div>
-                        ) : (
-                            chatMessages.map((msg, idx) => {
-                                const isOfficial = msg.tipo === 'OFICIAL' || msg.enviadoPeloPregoeiro;
-                                return (
-                                    <div key={idx} className={`p-3 rounded-2xl text-[11px] leading-relaxed shadow-sm ${
-                                        isOfficial 
-                                        ? 'bg-amber-500/10 border-l-2 border-amber-500 text-slate-200 ml-0 mr-4' 
-                                        : 'bg-slate-800/40 border-l-2 border-slate-600 text-slate-400 ml-4 mr-0'
-                                    }`}>
-                                        <div className="flex items-center justify-between mb-1 opacity-60 font-bold uppercase tracking-tighter text-[9px]">
-                                            <span>{isOfficial ? 'PREGOEIRO' : (msg.apelido || 'SISTEMA')}</span>
-                                            <span>{msg.dataEnvio ? new Date(msg.dataEnvio).toLocaleTimeString() : ''}</span>
-                                        </div>
-                                        <p className="font-medium">{msg.texto}</p>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Action Logs Card */}
-                <Card className="lg:col-span-1 shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden relative flex flex-col h-full max-h-[600px]">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-slate-100 text-lg">
-                            <History className="w-5 h-5 text-indigo-400"/> Histórico de Combate
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">Últimas ações do robô.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto px-4 space-y-3 pb-6 custom-scrollbar">
-                        {actionLogs.length === 0 ? (
-                            <div className="text-center py-12 text-slate-600">
-                                <Activity className="w-8 h-8 mx-auto opacity-20 mb-2" />
-                                <p className="text-xs font-medium">Nenhuma ação registrada.</p>
-                            </div>
-                        ) : (
-                            actionLogs.map((log, idx) => (
-                                <div key={idx} className="group relative p-3 bg-slate-950/50 rounded-xl border border-white/5 space-y-1.5 animate-in slide-in-from-right-4 duration-300 hover:border-emerald-500/30 transition-colors">
-                                    <div className="absolute -left-[1px] top-3 w-[2px] h-6 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-tighter ${log.type === 'SIMULATED' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
-                                                {log.type === 'SIMULATED' ? 'SIM' : 'REAL'}
-                                            </span>
-                                            {log.status === 'error' && (
-                                                <AlertTriangle className="w-3 h-3 text-red-500" />
-                                            )}
-                                            <span className="text-[10px] text-slate-500 font-black">ITEM {log.itemId}</span>
-                                        </div>
-                                        <span className="text-[8px] font-mono text-slate-600">
-                                            {new Date(log.timestamp).toLocaleTimeString()}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <p className={`text-xs font-black tabular-nums ${log.status === 'error' ? 'text-red-400' : 'text-slate-100'}`}>
-                                            R$ {log.value.toFixed(2)}
-                                        </p>
-                                        <span className="text-[9px] text-slate-500 uppercase font-black">{log.reason || 'Sincronizado'}</span>
-                                    </div>
-                                    {log.error && (
-                                        <p className="text-[9px] text-red-400/70 italic border-t border-white/5 pt-1 mt-1 truncate">
-                                            ERR: {log.error}
-                                        </p>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </CardContent>
-                </Card>
+                            <Button onClick={() => startRadar()} className="bg-emerald-600 hover:bg-emerald-500 text-white font-black h-11 uppercase tracking-widest shadow-lg shadow-emerald-500/20">
+                                <Play className="w-4 h-4 mr-2 fill-current" /> Iniciar Infiltração
+                            </Button>
+                         </div>
+                    </Card>
                 </div>
             )}
 
