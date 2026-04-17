@@ -512,12 +512,29 @@ export default function BiddingDashboardPage() {
         socketService.on('biddingChat', handleChat);
         socketService.on('bidding_alert', handleAlert);
 
+        // 🔄 POLLING FALLBACK: Se o socket falhar ou atrasar, buscamos manualmente a cada 45s
+        const fallbackInterval = setInterval(async () => {
+            if (isListening && sessionId && !isLocalRunning) {
+                try {
+                    console.log("[POLARYON] Executando Polling Fallback...");
+                    const res = await api.get(`/bidding/sessions/${sessionId}/items`);
+                    if (res.data.success) {
+                        setItems(res.data.items);
+                        setLastUpdate(new Date().toLocaleTimeString() + " (REST)");
+                    }
+                } catch (e) {
+                    console.error("Fallback polling failed", e);
+                }
+            }
+        }, 45000);
+
         return () => {
             socketService.off('biddingUpdate', handleUpdate);
             socketService.off('biddingChat', handleChat);
             socketService.off('bidding_alert', handleAlert);
+            clearInterval(fallbackInterval);
         };
-    }, [socketService, sessionId, isListening]);
+    }, [socketService, sessionId, isListening, isLocalRunning]);
 
     const applyBulkStrategy = async (strategy: ItemStrategy) => {
         if (!sessionId || selectedItems.size === 0) return;

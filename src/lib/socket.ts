@@ -29,7 +29,7 @@ class SocketService {
         if (!this.socket) {
             this.socket = io(BACKEND_URL, {
                 reconnection: true,
-                reconnectionAttempts: 10,
+                reconnectionAttempts: Infinity,
                 reconnectionDelay: 1000,
                 transports: ['websocket', 'polling'] // Try websocket first
             });
