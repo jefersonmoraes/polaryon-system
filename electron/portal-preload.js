@@ -68,13 +68,16 @@ const startHybridEngine = () => {
 
     const pollingLoop = async () => {
          // SCANNER DE REDE REATIVO: Se não temos URL, vasculhamos o histórico de rede do navegador
+         if (!window.polaryonBadUrls) window.polaryonBadUrls = new Set();
+
          if (!window.polaryonHybrid_ItemsUrl) {
              try {
                  const resources = performance.getEntriesByType('resource');
-                 const itemsResource = resources.find(r => 
+                 const itemsResource = [...resources].reverse().find(r => 
                      (r.name.includes('/itens') || r.name.includes('/disputa')) && 
                      !r.name.includes('/totalizadores') &&
-                     r.name.includes('/v1/compras/')
+                     r.name.includes('/v1/compras/') &&
+                     !window.polaryonBadUrls.has(r.name.split('?')[0])
                  );
                  if (itemsResource) {
                      window.polaryonHybrid_ItemsUrl = itemsResource.name;
@@ -111,9 +114,13 @@ const startHybridEngine = () => {
                   if (!res.ok) {
                       if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 422) {
                            // Link Quebrado ou Expirado: Força re-escaneamento de rede
+                           const baseBadUrl = targetUrl.split('?')[0];
+                           if (!window.polaryonBadUrls) window.polaryonBadUrls = new Set();
+                           if (res.status === 404) window.polaryonBadUrls.add(baseBadUrl);
+
                            window.polaryonHybrid_ItemsUrl = null;
                            window.polaryonAPIStatus = "⚠️ RE-SINCRONIZANDO...";
-                           console.warn("💀 [POLARYON] Rota expirada (404/401). Scanner reativado.");
+                           console.warn("💀 [POLARYON] Rota expirada (404/401). Scanner reativado. URL Blacklisted:", baseBadUrl);
                       }
                       break;
                   }
@@ -644,8 +651,8 @@ function scrapeDisputeRoom() {
             const txt = (el.innerText || "").trim();
             // Verifica se o texto tem a sintaxe de dispensa de lances
             const isBiddingArea = (txt.includes('Melhor valor') || txt.includes('Meu valor') || txt.includes('Valor final')) && txt.includes('R$');
-            // Verifica se começa com um número de item longo isolado ou "Item [x]"
-            const hasId = txt.match(/^\s*(\d+)\s+/) || txt.match(/(?:Item)\s*(\d+)/i);
+            // Verifica se começa com um número de item longo isolado ou "Item [x]" ou "GRUPO"
+            const hasId = txt.match(/^\s*(\d+)\s+/) || txt.match(/(?:Item)\s*(\d+)/i) || txt.match(/(?:GRUPO)\s*(\d+)/i);
             
             // Rejeita containers enormes de página (se tiver mais de 2000 caracteres, provavelmente é o body)
             return isBiddingArea && hasId && txt.length < 3000;
@@ -707,8 +714,9 @@ function scrapeDisputeRoom() {
                     if (valorAtual === 0 && !text.includes('R$')) return;
 
                     // Extração de ID e Descrição (Foco em clareza no Terminal)
-                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i);
-                    const itemId = idMatch ? idMatch[1] : "1";
+                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i) || text.match(/(?:GRUPO)\s*(\d+)/i);
+                    const isGrupo = text.toUpperCase().includes('GRUPO');
+                    const itemId = idMatch ? (isGrupo ? 'G' + idMatch[1] : idMatch[1]) : "1";
                     
                     // Tenta achar a descrição (geralmente o texto longo antes do primeiro R$)
                     let desc = "";
