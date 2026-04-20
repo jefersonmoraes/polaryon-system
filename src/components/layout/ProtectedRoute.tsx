@@ -68,6 +68,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         }
     }, [isAuthenticated, currentUser, navigate, location, _hasHydrated]);
     
+    const isElectronDetect = typeof window !== 'undefined' && (!!(window as any).electronAPI?.isDesktop || navigator.userAgent.toLowerCase().includes('electron'));
+    const isElectron = isElectronDetect;
+
+    // Optional: Log once to help verify on the user's end
+    useEffect(() => {
+        if (isElectron) {
+            console.log('🛡️ POLARYON NATIVO: Modo Terminal Ativado');
+        }
+    }, [isElectron]);
+
     if (!_hasHydrated) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -82,16 +92,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     if (!isAuthenticated) {
         return null;
     }
-
-    const isElectronDetect = typeof window !== 'undefined' && (!!(window as any).electronAPI?.isDesktop || navigator.userAgent.toLowerCase().includes('electron'));
-    const isElectron = isElectronDetect;
-
-    // Optional: Log once to help verify on the user's end
-    useEffect(() => {
-        if (isElectron) {
-            console.log('🛡️ POLARYON NATIVO: Modo Terminal Ativado');
-        }
-    }, [isElectron]);
 
     if (isElectron) {
         return (
