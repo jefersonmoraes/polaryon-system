@@ -266,9 +266,6 @@ const AppSidebar = () => {
                     title={company.nomeFantasia || company.razaoSocial || 'Administradora'}
                   >
                     <div className="flex items-center gap-2 truncate">
-                        <Terminal className="w-3 h-3 text-emerald-500" />
-                        v3.0.0-TACTICAL
-                      </div>
                       <Building2 className={`h-4 w-4 shrink-0 ${company.isDefault ? 'text-yellow-500' : ''}`} />
                       {!isCollapsed && <span className="truncate">{company.nomeFantasia || company.razaoSocial || 'Sem Nome'}</span>}
                     </div>
