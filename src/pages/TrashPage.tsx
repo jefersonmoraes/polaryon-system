@@ -188,7 +188,7 @@ const TrashPage = () => {
                                                 onConfirm={() => handleDelete(item)}
                                                 destructive
                                             >
-                                                <button className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
+                                                <button className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-40 group-hover:opacity-100">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
                                             </ConfirmAction>

@@ -27,11 +27,13 @@ const BoardPage = () => {
   const addList = useKanbanStore(state => state.addList);
   const updateList = useKanbanStore(state => state.updateList);
   const deleteList = useKanbanStore(state => state.deleteList);
+  const permanentlyDeleteList = useKanbanStore(state => state.permanentlyDeleteList);
   const reorderLists = useKanbanStore(state => state.reorderLists);
   const moveCard = useKanbanStore(state => state.moveCard);
   const reorderCards = useKanbanStore(state => state.reorderCards);
   const updateCard = useKanbanStore(state => state.updateCard);
   const deleteCard = useKanbanStore(state => state.deleteCard);
+  const permanentlyDeleteCard = useKanbanStore(state => state.permanentlyDeleteCard);
   const updateBoard = useKanbanStore(state => state.updateBoard);
   const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
   const fetchBoardCards = useKanbanStore(state => state.fetchBoardCards);
@@ -484,10 +486,10 @@ const BoardPage = () => {
                                       <ConfirmAction
                                         title="Excluir Permanentemente?"
                                         description="O cartão será excluído de forma permanente."
-                                        onConfirm={() => deleteCard(card.id)}
+                                        onConfirm={() => permanentlyDeleteCard(card.id)}
                                         destructive
                                       >
-                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
+                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-40 group-hover:opacity-100" title="Excluir permanentemente">
                                           <Trash2 className="h-4 w-4" />
                                         </button>
                                       </ConfirmAction>
@@ -539,10 +541,10 @@ const BoardPage = () => {
                                       <ConfirmAction
                                         title="Excluir Permanentemente?"
                                         description="A lista e seus cartões serão excluídos de forma permanente."
-                                        onConfirm={() => deleteList(list.id)}
+                                        onConfirm={() => permanentlyDeleteList(list.id)}
                                         destructive
                                       >
-                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100" title="Excluir permanentemente">
+                                        <button className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 transition-colors opacity-40 group-hover:opacity-100" title="Excluir permanentemente">
                                           <Trash2 className="h-4 w-4" />
                                         </button>
                                       </ConfirmAction>
