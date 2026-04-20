@@ -1,5 +1,5 @@
 import { useKanbanStore } from '@/store/kanban-store';
-import { Trash2, Undo2, Clock, LayoutGrid, Folder, List, CreditCard, Search, X, Building2 } from 'lucide-react';
+import { Trash2, Undo2, Clock, LayoutGrid, Folder, List, CreditCard, Search, X, Building2, MapPin, Route as RouteIcon } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth-store';
@@ -10,12 +10,12 @@ const TrashPage = () => {
     const { 
         cards, lists, boards, folders, budgets, companies, routes,
         updateCard, updateList, updateBoard, updateFolder, restoreBudget, restoreCompany, restoreRoute,
-        deleteCard, deleteList, permanentlyDeleteBoard, permanentlyDeleteFolder, permanentlyDeleteBudget, permanentlyDeleteCompany, permanentlyDeleteRoute,
+        permanentlyDeleteCard, permanentlyDeleteList, permanentlyDeleteBoard, permanentlyDeleteFolder, permanentlyDeleteBudget, permanentlyDeleteCompany, permanentlyDeleteRoute,
         members 
     } = useKanbanStore();
     
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<'all' | 'cards' | 'lists' | 'boards' | 'folders' | 'budgets' | 'companies'>('all');
+    const [filter, setFilter] = useState<'all' | 'cards' | 'lists' | 'boards' | 'folders' | 'budgets' | 'companies' | 'routes'>('all');
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
     const { currentUser } = useAuthStore();
 
@@ -40,14 +40,17 @@ const TrashPage = () => {
         if (filter === 'all' || filter === 'companies') {
             companies.filter(c => c.trashed).forEach(c => items.push({ ...c, type: 'company', icon: <Building2 className="h-4 w-4 text-blue-500" /> }));
         }
+        if (filter === 'all' || filter === 'routes') {
+            routes.filter(r => r.trashed).forEach(r => items.push({ ...r, type: 'route', icon: <MapPin className="h-4 w-4 text-orange-500" /> }));
+        }
 
         return items
             .filter(item => {
-                const title = item.title || item.name || '';
+                const title = item.title || item.name || item.nome_fantasia || item.razao_social || '';
                 return title.toLowerCase().includes(search.toLowerCase());
             })
             .sort((a, b) => new Date(b.trashedAt || 0).getTime() - new Date(a.trashedAt || 0).getTime());
-    }, [cards, lists, boards, folders, budgets, companies, search, filter]);
+    }, [cards, lists, boards, folders, budgets, companies, routes, search, filter]);
 
     const handleRestore = (item: any) => {
         if (item.type === 'card') updateCard(item.id, { trashed: false });
@@ -56,15 +59,17 @@ const TrashPage = () => {
         else if (item.type === 'folder') updateFolder(item.id, { trashed: false });
         else if (item.type === 'budget') restoreBudget(item.id);
         else if (item.type === 'company') restoreCompany(item.id);
+        else if (item.type === 'route') restoreRoute(item.id);
     };
 
     const handleDelete = (item: any) => {
-        if (item.type === 'card') deleteCard(item.id);
-        else if (item.type === 'list') deleteList(item.id);
+        if (item.type === 'card') permanentlyDeleteCard(item.id);
+        else if (item.type === 'list') permanentlyDeleteList(item.id);
         else if (item.type === 'board') permanentlyDeleteBoard(item.id);
         else if (item.type === 'folder') permanentlyDeleteFolder(item.id);
         else if (item.type === 'budget') permanentlyDeleteBudget(item.id);
         else if (item.type === 'company') permanentlyDeleteCompany(item.id);
+        else if (item.type === 'route') permanentlyDeleteRoute(item.id);
     };
 
     return (
@@ -108,6 +113,7 @@ const TrashPage = () => {
                         { id: 'folders', label: 'Pastas', icon: <Folder className="h-3.5 w-3.5" /> },
                         { id: 'budgets', label: 'Orçamentos', icon: <CreditCard className="h-3.5 w-3.5" /> },
                         { id: 'companies', label: 'Empresas', icon: <Building2 className="h-3.5 w-3.5" /> },
+                        { id: 'routes', label: 'Rotas Logísticas', icon: <MapPin className="h-3.5 w-3.5" /> },
                     ].map(btn => (
                         <button
                             key={btn.id}
@@ -160,11 +166,11 @@ const TrashPage = () => {
                                     </div>
 
                                     <h4 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors truncate">
-                                        {item.title || item.name || 'Sem título'}
+                                        {item.title || item.name || item.nome_fantasia || item.razao_social || 'Sem título'}
                                     </h4>
                                     
                                     <div className="text-xs text-muted-foreground mb-4 line-clamp-2 min-h-[2rem]">
-                                        {item.description || item.summary || 'Nenhuma descrição disponível.'}
+                                        {item.description || item.summary || item.cnpj || (item.origin ? `Rota: ${item.origin} ➔ ${item.destination}` : 'Nenhuma descrição disponível.')}
                                     </div>
 
                                     <div className="flex items-center justify-between pt-4 border-t border-border/50">

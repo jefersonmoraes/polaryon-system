@@ -75,11 +75,13 @@ interface KanbanState {
   addList: (boardId: string, title: string) => void;
   updateList: (id: string, data: Partial<KanbanList>) => void;
   deleteList: (id: string) => void;
+  permanentlyDeleteList: (id: string) => void;
   reorderLists: (boardId: string, listIds: string[]) => void;
   // cards
   addCard: (listId: string, title: string) => void;
   updateCard: (id: string, data: Partial<Card>) => void;
   deleteCard: (id: string) => void;
+  permanentlyDeleteCard: (id: string) => void;
   moveCard: (cardId: string, toListId: string, newPosition: number) => void;
   reorderCards: (listId: string, cardIds: string[]) => void;
   reorderCardsByMilestones: (listId: string) => void;
@@ -269,6 +271,16 @@ export const useKanbanStore = create<KanbanState>()(
                 set(s => ({ lists: s.lists.map(l => l.id === payload.id ? { ...l, ...payload.data, updatedAt: new Date().toISOString() } : l) }));
             } else if (type === 'TRASH_LIST') {
                 set(s => ({ lists: s.lists.map(l => l.id === payload.id ? { ...l, trashed: true, trashedAt: new Date().toISOString() } : l) }));
+            } else if (type === 'PERMANENTLY_DELETE_LIST') {
+                set(s => ({ 
+                    lists: s.lists.filter(l => l.id !== payload.id),
+                    cards: s.cards.filter(c => c.listId !== payload.id)
+                }));
+            } else if (type === 'PERMANENTLY_DELETE_CARD') {
+                set(s => ({ 
+                    cards: s.cards.filter(c => c.id !== payload.id),
+                    budgets: s.budgets.filter(b => b.cardId !== payload.id)
+                }));
             } else if (store === 'GOOGLE_CALENDAR' && type === 'SYNC_COMPLETE') {
                 console.log('socket - Received Google Calendar Sync:', payload.length);
                 set({ googleEvents: payload });
@@ -1108,6 +1120,27 @@ export const useKanbanStore = create<KanbanState>()(
         api.put(`/kanban/lists/${id}`, { trashed: true, trashedAt: new Date().toISOString() }).catch(console.error);
         socketService.emit('system_action', { store: 'KANBAN', type: 'TRASH_LIST', payload: { id } });
       },
+      permanentlyDeleteList: (id) => {
+        set(s => {
+          const currentUser = useAuthStore.getState().currentUser;
+          const target = s.lists.find(l => l.id === id);
+          if (currentUser && target) {
+            useAuditStore.getState().addLog({
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: 'EXCLUIR',
+              entity: 'QUADRO/LISTA',
+              details: `Removeu permanentemente a lista "${target.title}" e seus cartões`
+            });
+          }
+          return {
+            lists: s.lists.filter(l => l.id !== id),
+            cards: s.cards.filter(c => c.listId !== id),
+          };
+        });
+        api.delete(`/kanban/lists/${id}`).catch(console.error);
+        socketService.emit('system_action', { store: 'KANBAN', type: 'PERMANENTLY_DELETE_LIST', payload: { id } });
+      },
       reorderLists: (boardId, listIds) => {
         set(s => ({
           lists: s.lists.map(l => {
@@ -1297,6 +1330,27 @@ export const useKanbanStore = create<KanbanState>()(
         }));
         socketService.emit('system_action', { store: 'KANBAN', type: 'DELETE_CARD', payload: { id } });
         api.put(`/kanban/cards/${id}`, { trashed: true }).catch(console.error);
+      },
+      permanentlyDeleteCard: (id) => {
+        set(s => {
+          const currentUser = useAuthStore.getState().currentUser;
+          const target = s.cards.find(c => c.id === id);
+          if (currentUser && target) {
+            useAuditStore.getState().addLog({
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: 'EXCLUIR',
+              entity: 'CARTÃO',
+              details: `Excluiu permanentemente o cartão "${target.title}"`
+            });
+          }
+          return {
+            cards: s.cards.filter(c => c.id !== id),
+            budgets: s.budgets.filter(b => b.cardId !== id)
+          };
+        });
+        api.delete(`/kanban/cards/${id}`).catch(console.error);
+        socketService.emit('system_action', { store: 'KANBAN', type: 'PERMANENTLY_DELETE_CARD', payload: { id } });
       },
       moveCard: (cardId, toListId, newPosition) => {
         const store = get();

@@ -588,6 +588,7 @@ export default function BiddingDashboardPage() {
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+            {/* 🚀 CABEÇALHO UNIFICADO */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
                 <div className="flex items-center gap-6">
                     <div>
@@ -602,34 +603,28 @@ export default function BiddingDashboardPage() {
 
                     <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
 
-                    <div className="flex items-center gap-8">
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Alvos Ativos</span>
-                            <span className="text-xl font-black text-slate-100">{allItems.length}</span>
+                    {isListening && (
+                        <div className="flex items-center gap-8 animate-in slide-in-from-left-4 duration-500">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Alvos Ativos</span>
+                                <span className="text-xl font-black text-slate-100">{items.length}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Vencendo</span>
+                                <span className="text-xl font-black text-emerald-500">{items.filter(i => i.ganhador === 'Você' || i.position === 1).length}</span>
+                            </div>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Vencendo</span>
-                            <span className="text-xl font-black text-emerald-500">{items.filter(i => i.ganhador === 'Você').length}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Economia Total</span>
-                            <span className="text-xl font-black text-cyan-400">R$ {items.reduce((acc, i) => acc + (i.ganhador === 'Você' ? (i.valorEstimado || 0) - i.valorAtual : 0), 0).toFixed(2)}</span>
-                        </div>
-                    </div>
+                    )}
+                </div>
 
-                    {isListening ? (
+                {/* CONTROLES TÁTICOS */}
+                {isListening ? (
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-6 px-4 py-2 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
                             <div className="flex flex-col">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Sincronicidade</span>
-                                <span className="text-xs font-mono text-cyan-400 flex items-center gap-1">
-                                    <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 100%
-                                </span>
-                            </div>
-                            <div className="flex flex-col px-4 border-l border-white/5">
                                 <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Operação</span>
                                 <span className={`text-[10px] font-black ${simulationMode ? 'text-amber-500' : 'text-red-500 animate-pulse'}`}>
-                                    {simulationMode ? 'SIMULADO' : 'REAL-MODE'}
+                                    {simulationMode ? 'SIMULADO' : 'MODO REAL ⚡'}
                                 </span>
                             </div>
                             
@@ -645,12 +640,11 @@ export default function BiddingDashboardPage() {
                                             <Shield className="w-5 h-5" /> CENTRAL DE COMANDO
                                         </SheetTitle>
                                         <SheetDescription className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                                            Ajustes táticos em tempo real
+                                            Ajustes táticos em tempo real (Sessão: {sessionId})
                                         </SheetDescription>
                                     </SheetHeader>
                                     
                                     <div className="space-y-6 overflow-y-auto max-h-[85vh] pr-2 custom-scrollbar">
-                                        {/* Copied Config Block */}
                                         <div className="space-y-4">
                                             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navegação e Foco</Label>
                                             <div className="grid grid-cols-2 gap-2">
@@ -665,7 +659,7 @@ export default function BiddingDashboardPage() {
 
                                         <div className="space-y-3">
                                             <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
-                                                Mudar Modo de Voo
+                                                Poder de Fogo
                                             </Label>
                                             <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5">
                                                 <div className="space-y-0.5">
@@ -675,34 +669,30 @@ export default function BiddingDashboardPage() {
                                                 <Switch 
                                                     checked={!simulationMode} 
                                                     onCheckedChange={(val) => {
-                                                        if (val) {
-                                                            setShowRealModeWarning(true);
-                                                        } else {
-                                                            toggleSimulation(true);
-                                                        }
+                                                        if (val) setShowRealModeWarning(true);
+                                                        else toggleSimulation(true);
                                                     }}
                                                     className="data-[state=checked]:bg-red-500"
                                                 />
                                             </div>
                                         </div>
 
-                                        {/* Botão Global de Abortar */}
                                         <Button onClick={() => stopRadar()} variant="destructive" className="w-full font-black h-12 shadow-red-900/40 shadow-xl transition-all hover:scale-[1.02] uppercase tracking-widest text-xs mt-8">
-                                            <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO TÁTICA
+                                            <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO
                                         </Button>
 
-                                        {/* Logs Flutuantes */}
                                         <div className="mt-8">
                                             <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-                                                <Zap className="w-3 h-3 text-amber-500" /> Histórico de Lances
+                                                <Zap className="w-3 h-3 text-amber-500" /> Histórico Operacional
                                             </Label>
                                             <div className="space-y-2">
-                                                {actionLogs.slice(0, 5).map((log, idx) => (
+                                                {actionLogs.slice(0, 10).map((log, idx) => (
                                                     <div key={idx} className="p-2.5 bg-slate-900/50 rounded-xl border border-white/5 flex items-center justify-between">
                                                         <span className="text-[9px] font-black text-slate-400">ITEM {log.itemId}</span>
-                                                        <span className="text-[10px] font-black text-emerald-400">R$ {log.value.toFixed(2)}</span>
+                                                        <span className="text-[10px] font-black text-emerald-400 font-mono">R$ {log.value.toFixed(2)}</span>
                                                     </div>
                                                 ))}
+                                                {actionLogs.length === 0 && <p className="text-[10px] text-slate-600 italic text-center py-4">Nenhuma ação registrada ainda.</p>}
                                             </div>
                                         </div>
                                     </div>
@@ -711,166 +701,185 @@ export default function BiddingDashboardPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-4">
-                         <div className="flex bg-slate-950/50 p-1 rounded-xl border border-white/5">
-                            <Button 
-                                variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                                onClick={() => setViewMode('grid')}
-                                className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg"
-                            >
-                                SELECIONAR PREGÃO
-                            </Button>
-                        </div>
+                    <div className="flex items-center gap-4 animate-in fade-in duration-500">
+                         <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl">
+                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Aguardando Infiltração</span>
+                         </div>
                     </div>
                 )}
-                         {isListening ? (
-                <div className="space-y-6 max-w-6xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    {/* CHAT MONITOR FLOATING BAR */}
+            </div>
+
+            {/* 🛡️ CORPO PRINCIPAL */}
+            {isListening ? (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 pb-20">
+                    {/* CHAT MONITOR */}
                     {chatMessages.length > 0 && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between gap-4 backdrop-blur-sm">
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-3xl flex items-center justify-between gap-4 backdrop-blur-xl">
                             <div className="flex items-center gap-3">
-                                <Zap className="w-4 h-4 text-amber-500 animate-pulse" />
+                                <div className="bg-amber-500 p-1.5 rounded-lg shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                                    <Zap className="w-4 h-4 text-black fill-current" />
+                                </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-amber-500/70 uppercase tracking-widest">Alerta do Pregoeiro</span>
-                                    <p className="text-[11px] font-medium text-slate-200 truncate max-w-2xl leading-tight italic">
+                                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Alerta do Pregoeiro</span>
+                                    <p className="text-[11px] font-bold text-slate-200 truncate max-w-2xl leading-tight">
                                         "{chatMessages[chatMessages.length - 1].texto}"
                                     </p>
                                 </div>
                             </div>
-                            <Button variant="ghost" size="sm" className="h-7 text-[9px] font-black text-amber-500 hover:bg-amber-500/20 uppercase tracking-tighter">
-                                Ver Todo Chat
-                            </Button>
                         </div>
                     )}
 
                     <div className="grid grid-cols-1 gap-4">
                         {items.length === 0 ? (
                             <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
-                                <Target className="w-16 h-16 text-slate-800 animate-pulse mb-4" />
-                                <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter">Injetando Sensores...</h3>
-                                <p className="text-slate-700 text-[10px] mt-2 font-bold uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
+                                <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
+                                <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
+                                <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
                             </div>
                         ) : (
                             items.map(item => (
                                 <CombatStreamCard 
                                     key={`${sessionId}-${item.itemId}`} 
                                     item={item} 
-                                    sessionId={sessionId}
-                                    strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0 }}
-                                    onSave={(s) => saveStrategy(item.itemId, s, sessionId)}
+                                    sessionId={sessionId || ''}
+                                    strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' }}
+                                    onSave={(s) => saveStrategy(item.itemId, s, sessionId || '')}
                                 />
                             ))
                         )}
                     </div>
                 </div>
             ) : (
-                /* ========================================================================
-                   LISTA DE SALAS (HOME / STANDBY)
-                   ======================================================================== */
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-8 duration-500">
-                    {Object.entries(sessions).map(([sid, s]) => (
-                        <Card 
-                            key={sid} 
-                            onClick={() => {
-                                setSessionId(sid);
-                                setUasg(s.uasg);
-                                setNumeroPregao(s.numero);
-                                setItems(s.items);
-                                setChatMessages(s.chatMessages);
-                            }}
-                            className="group cursor-pointer shadow-xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 transition-all hover:scale-[1.02] hover:ring-emerald-500/50"
-                        >
-                            <div className={`h-1 w-full ${s.items.some(i => i.ganhador === 'Você') ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                            <CardHeader className="p-4 pb-2">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex flex-col">
-                                        <CardTitle className="text-lg font-black tracking-tighter text-slate-100 italic">UASG {s.uasg}</CardTitle>
-                                        <CardDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Pregão {s.numero}</CardDescription>
-                                    </div>
-                                    <div className="px-2 py-0.5 rounded-full bg-slate-950/50 border border-white/5 text-[9px] font-black text-slate-400">
-                                        {s.items.length} ITENS
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-2">
-                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-600 uppercase">
-                                    <span>Sync: {s.lastUpdate}</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${s.isAuthenticated ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                                        <span>{s.isAuthenticated ? 'LOGADO' : 'AGUARDANDO'}</span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                    
-                    <Card 
-                        onClick={() => {
-                            setUasg('');
-                            setNumeroPregao('');
-                            setSessionId('');
-                        }}
-                        className="group cursor-pointer shadow-xl border-none bg-emerald-500/5 backdrop-blur-xl ring-1 ring-emerald-500/10 transition-all hover:scale-[1.02] border-2 border-dashed border-emerald-500/20"
-                    >
-                        <CardContent className="p-8 flex flex-col items-center justify-center text-center">
-                            <PlusIcon className="w-10 h-10 text-emerald-500 mb-3 opacity-60" />
-                            <p className="font-black text-emerald-500 text-sm uppercase tracking-tighter italic">Nova Operação</p>
-                        </CardContent>
-                    </Card>
+                <div className="space-y-10 animate-in slide-in-from-bottom-8 duration-700">
+                    {/* LISTA DE SALAS ATIVAS */}
+                    {Object.keys(sessions).length > 0 && (
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Operações em Andamento</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {Object.entries(sessions).map(([sid, s]) => (
+                                    <Card 
+                                        key={sid} 
+                                        onClick={() => {
+                                            setSessionId(sid);
+                                            setUasg(s.uasg);
+                                            setNumeroPregao(s.numero);
+                                            setItems(s.items);
+                                            setChatMessages(s.chatMessages);
+                                        }}
+                                        className="group cursor-pointer shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 transition-all hover:scale-[1.02] hover:ring-emerald-500/50 relative overflow-hidden"
+                                    >
+                                        <div className={`h-1.5 w-full ${s.items.some(i => i.ganhador === 'Você') ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-slate-800'}`}></div>
+                                        <CardHeader className="p-5 pb-2">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex flex-col">
+                                                    <CardTitle className="text-xl font-black tracking-tighter text-slate-100 italic">UASG {s.uasg}</CardTitle>
+                                                    <CardDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Pregão {s.numero}</CardDescription>
+                                                </div>
+                                                <div className="px-2.5 py-1 rounded-lg bg-slate-950 text-[9px] font-black text-emerald-400 border border-emerald-500/20">
+                                                    {s.items.length} ITENS
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="p-5 pt-2 border-t border-white/5 mt-4">
+                                            <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                <span>Sinc: {s.lastUpdate}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${s.isAuthenticated ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
+                                                    <span>{s.isAuthenticated ? 'LOGADO' : 'AGUARDANDO'}</span>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                    {/* CONFIGURAÇÃO RÁPIDA (Só aparece se nenhuma sala focada ou se quiser configurar nova) */}
-                    <Card className="lg:col-span-3 shadow-2xl border-none bg-slate-900/60 backdrop-blur-xl ring-1 ring-white/10 p-6 mt-4">
-                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                            <div className="space-y-2">
-                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">UASG / Órgão</Label>
-                                <Input value={uasg} onChange={(e) => setUasg(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black" placeholder="Ex: 927165" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Nº / Ano</Label>
-                                <div className="flex gap-2">
-                                    <Input value={numeroPregao} onChange={(e) => setNumeroPregao(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black w-2/3" placeholder="Ex: 10" />
-                                    <Input value={anoPregao} onChange={(e) => setAnoPregao(e.target.value)} className="bg-slate-950 border-white/5 h-11 text-white font-black w-1/3" placeholder="2026" />
+                    {/* CONFIGURADOR DE MISSÃO */}
+                    <div className="max-w-4xl mx-auto">
+                        <Card className="shadow-2xl border-none bg-slate-900/60 backdrop-blur-2xl ring-1 ring-white/10 p-8">
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                                    <Target className="w-6 h-6 text-emerald-500" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-100 uppercase tracking-tighter italic">Nova Infiltração</h2>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Configure os dados do pregão para iniciar o monitoramento visual</p>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Modalidade</Label>
-                                <Select value={modality} onValueChange={setModality}>
-                                    <SelectTrigger className="bg-slate-950 border-white/5 h-11 text-white font-black">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-white/10 text-white">
-                                        <SelectItem value="14">Dispensa Eletrônica (14.133)</SelectItem>
-                                        <SelectItem value="06">Dispensa (Antiga)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+                                <div className="space-y-3">
+                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">UASG / Órgão</Label>
+                                    <Input 
+                                        value={uasg} 
+                                        onChange={(e) => setUasg(e.target.value)} 
+                                        className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg focus:ring-emerald-500/50" 
+                                        placeholder="Ex: 927165" 
+                                    />
+                                </div>
+                                <div className="space-y-3">
+                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">Nº / Ano</Label>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            value={numeroPregao} 
+                                            onChange={(e) => setNumeroPregao(e.target.value)} 
+                                            className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg w-2/3" 
+                                            placeholder="Nº" 
+                                        />
+                                        <Input 
+                                            value={anoPregao} 
+                                            onChange={(e) => setAnoPregao(e.target.value)} 
+                                            className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg w-1/3 text-center" 
+                                            placeholder="Ano" 
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">Modalidade</Label>
+                                    <Select value={modality} onValueChange={setModality}>
+                                        <SelectTrigger className="bg-slate-950/80 border-white/5 h-12 text-white font-black">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-white/10 text-white">
+                                            <SelectItem value="14" className="font-bold">Dispensa Eletrônica (14.133)</SelectItem>
+                                            <SelectItem value="06" className="font-bold">Dispensa (Lei 8.666)</SelectItem>
+                                            <SelectItem value="05" className="font-bold">Pregão Eletrônico</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
-                            <Button onClick={() => startRadar()} className="bg-emerald-600 hover:bg-emerald-500 text-white font-black h-11 uppercase tracking-widest shadow-lg shadow-emerald-500/20">
-                                <Play className="w-4 h-4 mr-2 fill-current" /> Iniciar Infiltração
+                            
+                            <Button 
+                                onClick={() => startRadar()} 
+                                className="w-full mt-8 bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 uppercase tracking-[0.2em] shadow-2xl shadow-emerald-900/40 text-sm transition-all hover:scale-[1.01] active:scale-[0.98]"
+                            >
+                                <Play className="w-5 h-5 mr-3 fill-current" /> INICIAR COMBATE VISUAL
                             </Button>
-                         </div>
-                    </Card>
+                        </Card>
+                    </div>
                 </div>
             )}
 
             <AlertDialog open={showRealModeWarning} onOpenChange={setShowRealModeWarning}>
-                <AlertDialogContent className="bg-slate-900 border-white/10 text-slate-100">
+                <AlertDialogContent className="bg-slate-950 border-white/10 text-slate-100 p-8">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2 text-red-500">
-                            <ShieldAlert className="w-5 h-5" /> ATENÇÃO: MODO REAL ATIVADO
+                        <AlertDialogTitle className="flex items-center gap-4 text-3xl font-black italic tracking-tighter text-red-500">
+                            <ShieldAlert className="w-8 h-8 animate-pulse" /> MODO REAL ATIVADO
                         </AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-400">
-                            Ao desativar o modo simulação, o robô irá realizar lances REAIS no portal Gov.br usando seu Certificado Digital. Estes lances têm validade jurídica e financeira.
+                        <AlertDialogDescription className="text-slate-400 text-sm leading-relaxed mt-4">
+                            Ao desativar o modo simulação, o robô irá realizar lances <span className="text-white font-bold underline">REAIS</span> no portal Gov.br usando seu Certificado Digital.
                             <br /><br />
-                            Deseja prosseguir com a operação real?
+                            Estes lances têm <span className="text-red-400 font-bold uppercase">validade jurídica e financeira</span>. O usuário assume total responsabilidade por cada disparo realizado durante esta sessão.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel className="bg-slate-800 border-white/10 text-slate-300 hover:bg-slate-700">CANCELAR</AlertDialogCancel>
+                    <AlertDialogFooter className="mt-10 gap-4">
+                        <AlertDialogCancel className="bg-slate-800 border-white/5 text-slate-400 hover:bg-slate-700 h-12 font-black">CANCELAR OPERAÇÃO</AlertDialogCancel>
                         <AlertDialogAction 
                             onClick={() => toggleSimulation(false)}
-                            className="bg-red-600 hover:bg-red-500 text-white font-bold"
+                            className="bg-red-600 hover:bg-red-500 text-white font-black h-12 px-8 shadow-2xl shadow-red-900/50"
                         >
-                            SIM, ATIVAR MODO REAL
+                            ENTENDI, ATIVAR DISPARO REAL
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -882,7 +891,7 @@ export default function BiddingDashboardPage() {
 // v2.0 - COMPONENTE DE ELITE PARA FLUXO DE COMBATE
 function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: BiddingItem, sessionId: string, strategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
-    const [localMinPrice, setLocalMinPrice] = useState(strategy.minPrice.toString());
+    const [localMinPrice, setLocalMinPrice] = useState(strategy?.minPrice?.toString() || "0");
 
     return (
         <Card className={`relative overflow-hidden border-2 transition-all duration-300 ${isWinning ? 'border-emerald-500/30 bg-emerald-500/[0.03]' : 'border-red-500/30 bg-red-500/[0.03] shadow-[0_0_20px_rgba(239,68,68,0.05)]'}`}>
