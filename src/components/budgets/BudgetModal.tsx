@@ -1443,15 +1443,19 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
                                         {/* Logic for Resale price calculation */}
                                         {(() => {
-                                            const totalCost = item.totalPrice || 0;
-                                            const totalSell = item.finalSellingPrice || totalCost;
-                                            const totalSellMax = item.finalSellingPriceMax || totalCost;
+                                            const subItems = item.items || [];
+                                            const productsTotal = subItems.reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
+                                            const totalSell = item.finalSellingPrice || 0;
+                                            const totalSellMax = item.finalSellingPriceMax || 0;
                                             
-                                            const resaleFactor = totalCost > 0 ? (totalSell / totalCost) : 1;
+                                            // ⚡ DILUIÇÃO TÁTICA DE FRETE (v3.1)
+                                            // O fator deve ser calculado sobre o total dos produtos, para que o frete e impostos 
+                                            // sejam distribuídos proporcionalmente ao valor de cada item na revenda final.
+                                            const resaleFactor = productsTotal > 0 ? (totalSell / productsTotal) : 1;
                                             const vUnitResale = sub.unitPrice * resaleFactor;
                                             const vTotalResale = sub.totalPrice * resaleFactor;
-
-                                            const resaleFactorMax = totalCost > 0 ? (totalSellMax / totalCost) : 1;
+                                            
+                                            const resaleFactorMax = productsTotal > 0 ? (totalSellMax / productsTotal) : 1;
                                             const vUnitResaleMax = sub.unitPrice * resaleFactorMax;
                                             const vTotalResaleMax = sub.totalPrice * resaleFactorMax;
 
