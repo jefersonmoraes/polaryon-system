@@ -430,8 +430,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             };
         }
 
-        return { cost: effectiveCost, taxNominal, difalNominal, finalPrice, finalPriceMax, breakdown, difalBreakdown };
-    }, [budgetType, mainCompanies]);
+        return { cost: effectiveCost, taxNominal, difalNominal, entryDifalValue, finalPrice, finalPriceMax, breakdown, difalBreakdown };
+    }, [budgetType, mainCompanies, companies]);
 
     const flushRecalculation = useCallback((
         subItems: QuotationSubItem[],
@@ -457,6 +457,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                 totalPrice: result.cost,
                 taxValue: result.taxNominal,
                 difalValue: result.difalNominal,
+                entryDifalValue: result.entryDifalValue, // Novo campo salvo
                 taxesBreakdown: result.breakdown,
                 finalSellingPrice: result.finalPrice,
                 finalSellingPriceMax: result.finalPriceMax,
@@ -861,7 +862,16 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                     </div>
                                 </div>
                             )}
-                            {(!item.taxValue && !item.difalValue) && (
+                            {/* DIFAL de Entrada (Antecipação ICMS) */}
+                            {(item.entryDifalValue || 0) > 0 && (
+                                <div className="w-full relative group/entry">
+                                    <div className="text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded w-full text-right cursor-help border border-blue-500/20" title="Antecipação de ICMS (Compra Interestadual)">
+                                        + Antecipação DF: {formatCurrency(item.entryDifalValue || 0)}
+                                    </div>
+                                </div>
+                            )}
+
+                            {(!item.taxValue && !item.difalValue && !item.entryDifalValue) && (
                                 <p className="text-[10px] font-medium text-muted-foreground italic w-full text-right py-0.5">Sem encargos extras</p>
                             )}
                         </div>
