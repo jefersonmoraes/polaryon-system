@@ -330,11 +330,26 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         let difalBreakdown = null;
 
         const adminCompany = mainCompanies.find(c => c.id === adminId);
+        const supplierCompany = companies.find(c => c.id === item.companyId);
+
+        let entryDifalValue = 0;
+        let entryDifalPercent = 0;
 
         if (adminCompany) {
-            // DIFAL (only for Products logically, but system allows configuration)
-            // Reativado para Simples Nacional/MEI conforme pedido do usuário (ignorando ADI 5464 por opção estratégica/conservadora).
-            const isSimplesOrMei = adminCompany.porte === 'MEI' || adminCompany.taxRegime === 'Simples Nacional';
+            // --- 1. DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
+            // Se o fornecedor é de outro estado, a empresa do DF (ou qualquer estado) 
+            // paga a diferença de alíquota na entrada. Isso é um CUSTO.
+            if (supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
+                const entryDifalDetails = calculateDifalDetailed(supplierCompany.uf, adminCompany.state);
+                if (entryDifalDetails && entryDifalDetails.percent > 0) {
+                    entryDifalPercent = entryDifalDetails.percent;
+                    // O DIFAL de entrada incide sobre o valor da compra (productsTotal + freight)
+                    entryDifalValue = (productsTotal + freight) * (entryDifalPercent / 100);
+                }
+            }
+
+            // --- 2. DIFAL DE SAÍDA (EC 87/15) ---
+            // Reativado para Simples Nacional/MEI conforme pedido do usuário.
             const currentType = itemType || budgetType;
             if (currentType === 'Produto' && adminCompany.state && destState && adminCompany.state !== destState) {
                 const difalDetails = calculateDifalDetailed(adminCompany.state, destState);
@@ -363,8 +378,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             }
         }
 
-        // Custo Efetivo de Aquisição/Transferência: (DIFAL is now treated as sales tax out of Gross Revenue)
-        const effectiveCost = cost;
+        // Custo Efetivo de Aquisição/Transferência: 
+        // Agora inclui o DIFAL de Entrada (Antecipação) no custo base.
+        const effectiveCost = cost + entryDifalValue;
 
         // 3. Aplicação do Markup Divisor Contábil Real (Preço de Venda)
         // O imposto no Brasil (Simples/Presumido e DIFAL EC 87/15) recai sobre o RECEITA BRUTA (Preço Final), não sobre Custo.
