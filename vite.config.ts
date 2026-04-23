@@ -22,6 +22,8 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    outDir: "dist_electron",
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
