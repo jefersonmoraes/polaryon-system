@@ -135,16 +135,40 @@ class VisualRunner {
         // assim o Robô nunca desgruda da sessão.
         // RECONSTRUÇÃO v1.2.50: Redirecionamento Automático e Silencioso (Competition Grade)
         win.webContents.setWindowOpenHandler(({ url }) => {
-            // Se o portal tentar abrir uma nova aba (Disputa), forçamos na mesma janela
             if (url.includes('comprasnet-web') || url.includes('disputa')) {
                 console.log('[POLARYON-NAV] Transição automática detectada para:', url);
-                // Carregamos na janela atual sem perguntar
                 win.loadURL(url);
-                return { action: 'deny' }; // Bloqueia a abertura da nova janela física
+                return { action: 'deny' };
             }
-            
-            // Links externos (ajuda, legislação) continuam abrindo fora
             return { action: 'allow' };
+        });
+
+        // 🎯 [TACTICAL v3.1] INTERCEPTAÇÃO DE REDE DE BAIXA LATÊNCIA (ELITE)
+        // Interceptamos diretamente no nível da Sessão do Electron para evitar lag de DOM
+        const ses = win.webContents.session;
+        ses.webRequest.onCompleted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, async (details) => {
+            if (details.url.includes('/itens') || details.url.includes('/disputa')) {
+                // Notificamos o dashboard sobre o tráfego detectado
+                if (this.dashboardWebContents) {
+                    this.dashboardWebContents.send('bidding-network-traffic', {
+                        url: details.url,
+                        statusCode: details.statusCode,
+                        method: details.method,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+        });
+
+        // Captura de Headers para Sincronização de Relógio (Sniper Prep)
+        ses.webRequest.onResponseStarted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details) => {
+            const serverDate = details.responseHeaders['date'] || details.responseHeaders['Date'];
+            if (serverDate && this.dashboardWebContents) {
+                this.dashboardWebContents.send('portal-server-time', {
+                    serverTime: serverDate[0],
+                    localTime: Date.now()
+                });
+            }
         });
 
         // Injetor de Silenciador de Diálogos Global

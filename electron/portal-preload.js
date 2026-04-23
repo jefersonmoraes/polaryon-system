@@ -328,7 +328,20 @@ const injectSniffer = () => {
 injectSniffer();
 
 let scrapingInterval = null;
-let serverOffset = 0;
+let serverOffset = 0; // Diferença em MS entre o servidor do Governo e o PC Local
+
+// [TACTICAL v3.1] SINCRONIZAÇÃO ATÔMICA DE RELÓGIO
+ipcRenderer.on('portal-server-time', (event, { serverTime, localTime }) => {
+    try {
+        const sTime = new Date(serverTime).getTime();
+        serverOffset = sTime - localTime;
+        console.log(`⏱️ [TACTICAL] Relógio Sincronizado. Offset: ${serverOffset}ms`);
+    } catch(e) {}
+});
+
+function getServerTime() {
+    return Date.now() + serverOffset;
+}
 
 // Configuração recebida via IPC
 let currentVault = {
@@ -800,14 +813,19 @@ function scrapeDisputeRoom() {
                     if (isNaN(valLim)) return;
 
                     if (it.ganhador !== 'Você' && it.status === 'Disputa') {
-                        // Anti-flood rate limit global (3 segundos)
-                        if (Date.now() - (window.lastBidTime || 0) < 3000) return;
+                        // Anti-flood rate limit global (2 segundos no v3.1)
+                        if (Date.now() - (window.lastBidTime || 0) < 2000) return;
                         
-                        let targetBid = it.valorAtual - 0.01; // decremento fixo de 1 centavo
+                        let targetBid = it.valorAtual - 0.01; 
                         
-                        // Se for sniper, espera tempo, mas como não temos timer ainda, atira como follower mas no limite
+                        // --- OTIMIZAÇÃO MODO SNIPER v3.1 ---
                         if (limit.mode === 'sniper') {
-                            // Sniper mode: drop directly to the minimum allowed if it beats the current
+                            // Se for sniper, só atira se faltar menos de 2 segundos para o próximo poll ou iminência
+                            // Nota: Como o portal não manda timer real no item de dispensa, 
+                            // o Sniper aqui atua como "Ultimate Push" (atira o limite direto no final)
+                            // Se o status for 'Iminência', o gatilho é imediato para garantir lugar
+                            if (it.status !== 'Iminência' && it.tempoRestante > 2) return;
+                            
                             targetBid = valLim; 
                         }
 
@@ -942,18 +960,19 @@ function renderBiddingPanel(items) {
             right: 20px;
             width: 320px;
             max-height: 90vh;
-            background: rgba(11, 16, 30, 0.95);
-            backdrop-filter: blur(15px);
+            background: rgba(11, 16, 30, 0.9);
+            backdrop-filter: blur(12px) saturate(180%);
             border: 1px solid rgba(16, 185, 129, 0.4);
             border-radius: 12px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-            z-index: 2147483647; /* MAX Z-INDEX */
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.15), 0 20px 50px rgba(0,0,0,0.8);
+            z-index: 2147483647;
             display: flex;
             flex-direction: column;
             color: #fff;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
             overflow: hidden;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
         `;
         
         const header = document.createElement('div');
@@ -969,9 +988,9 @@ function renderBiddingPanel(items) {
         const subHeader = document.createElement('div');
         subHeader.style.cssText = 'padding: 8px 15px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;';
         subHeader.innerHTML = `
-            <div id="polaryon-api-status" style="color: #ef4444;" title="Status de conexão com o Governo">API: OFFLINE</div>
-            <div id="polaryon-items-count" style="color: #10b981; font-weight: 800;" title="Total de itens rastreados no edital (Multi-Página)">ITENS: 0</div>
-            <div id="polaryon-mode-status" style="color: #eab308;" title="REAL: Lances valem dinheiro! SIMULAÇÃO: Apenas testes.">MODO: ?</div>
+            <div id="polaryon-api-status" style="color: #10b981; text-shadow: 0 0 5px rgba(16,185,129,0.5);">SYNC: OK</div>
+            <div id="polaryon-items-count" style="color: #fff; opacity: 0.8;">OBJETIVOS: 0</div>
+            <div id="polaryon-mode-status" style="color: #eab308; font-weight: 900;">TACTICAL v3.1</div>
         `;
 
         const listContainer = document.createElement('div');
