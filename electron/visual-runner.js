@@ -110,10 +110,12 @@ class VisualRunner {
             return;
         }
 
+        const isLoginFlow = config.modality === 'LOGIN_FLOW';
+
         const win = new BrowserWindow({
             width: 1280,
             height: 900,
-            title: `Polaryon - Modo Visual (Pregão/Dispensa ${config.numero}/${config.ano})`,
+            title: isLoginFlow ? 'Polaryon - Autenticação Compras.gov.br' : `Polaryon - Modo Visual (Pregão/Dispensa ${config.numero}/${config.ano})`,
             autoHideMenuBar: true,
             webPreferences: {
                 preload: path.join(__dirname, 'portal-preload.js'),
@@ -121,57 +123,38 @@ class VisualRunner {
                 contextIsolation: true,
                 webSecurity: false,
                 allowRunningInsecureContent: true,
-                // Partição única por sessão para permitir multilocação ou particionamento persistente padrão
                 partition: 'persist:comprasgov' 
             }
         });
 
         this.sessions.set(sessionId, { window: win, config });
 
-        // --- INTERCEPTADOR DE POPUPS ---
-        // O Serpro costuma abrir o módulo de Disputa em nova aba/janela (`target="_blank"`),
-        // o que faria o Electron abrir uma janela limpa sem o nosso `preload`.
-        // Nós interceptamos esse "PopUp" e forçamos a abrir na *mesma janela*,
-        // assim o Robô nunca desgruda da sessão.
-        // RECONSTRUÇÃO v1.2.50: Redirecionamento Automático e Silencioso (Competition Grade)
+        // --- INTERCEPTADOR DE POPUPS E NAVEGAÇÃO ---
         win.webContents.setWindowOpenHandler(({ url }) => {
-            if (url.includes('comprasnet-web') || url.includes('disputa')) {
-                console.log('[POLARYON-NAV] Transição automática detectada para:', url);
+            if (url.includes('comprasnet-web') || url.includes('disputa') || url.includes('idp.acesso.gov.br')) {
+                console.log('[POLARYON-NAV] Redirecionando fluxo para janela principal:', url);
                 win.loadURL(url);
                 return { action: 'deny' };
             }
             return { action: 'allow' };
         });
 
-        // 🎯 [TACTICAL v3.1] INTERCEPTAÇÃO DE REDE DE BAIXA LATÊNCIA (ELITE)
-        // Interceptamos diretamente no nível da Sessão do Electron para evitar lag de DOM
+        // 🎯 [TACTICAL v3.1] MONITOR DE TRÁFEGO DE ELITE
         const ses = win.webContents.session;
         ses.webRequest.onCompleted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, async (details) => {
             if (details.url.includes('/itens') || details.url.includes('/disputa')) {
-                // Notificamos o dashboard sobre o tráfego detectado
                 if (this.dashboardWebContents) {
                     this.dashboardWebContents.send('bidding-network-traffic', {
+                        sessionId,
                         url: details.url,
                         statusCode: details.statusCode,
-                        method: details.method,
                         timestamp: Date.now()
                     });
                 }
             }
         });
 
-        // Captura de Headers para Sincronização de Relógio (Sniper Prep)
-        ses.webRequest.onResponseStarted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details) => {
-            const serverDate = details.responseHeaders['date'] || details.responseHeaders['Date'];
-            if (serverDate && this.dashboardWebContents) {
-                this.dashboardWebContents.send('portal-server-time', {
-                    serverTime: serverDate[0],
-                    localTime: Date.now()
-                });
-            }
-        });
-
-        // Injetor de Silenciador de Diálogos Global
+        // Injetor de Scripts Globais (Silenciador e Anti-Lag)
         win.webContents.on('did-start-navigation', () => {
             win.webContents.executeJavaScript(`
                 window.alert = () => { console.log("Alert silenciado") };
@@ -180,47 +163,30 @@ class VisualRunner {
             `);
         });
 
-        // Habilita o Console (DevTools) automaticamente para o usuário monitorar os erros
         win.webContents.openDevTools();
-
-        // Atalho F12 para alternar o console
-        win.webContents.on('before-input-event', (event, input) => {
-            if (input.key === 'F12' && input.type === 'keyDown') {
-                win.webContents.toggleDevTools();
-                event.preventDefault();
-            }
-        });
 
         win.on('closed', () => {
             this.sessions.delete(sessionId);
-            
-            // Avisa o dashboard que a janela específica foi fechada
             if (this.dashboardWebContents) {
-                this.dashboardWebContents.send('bidding-error', { 
-                    sessionId, 
-                    error: 'Janela Operacional Fechada pelo usuário.' 
-                });
+                this.dashboardWebContents.send('bidding-error', { sessionId, error: 'Terminal Fechado.' });
             }
         });
 
         win.webContents.on('did-finish-load', () => {
             win.webContents.send('init-session', { sessionId, config });
-        });
-
-        // RADAR DE LOGIN (Substitui o Salto Cego que dava 404)
-        win.webContents.on('did-finish-load', () => {
-            const currentUrl = win.webContents.getURL();
-            if (currentUrl.includes('intro.htm')) {
-                console.log('[POLARYON-WAR] Usuário Autenticado na Home. Aguardando disparo do Shadow Click...');
-                // Não forçamos mais a URL servico=226 manualmente para evitar 404.
-                // Agora deixamos o Shadow Click ou a interação humana agir, 
-                // enquanto o Hijacker no main.js limpa o caminho.
+            
+            // Se entrarmos em uma URL de disputa e estivermos em modo login, avisamos o dashboard para "acordar"
+            const url = win.webContents.getURL();
+            if (url.includes('/disputa') && isLoginFlow && this.dashboardWebContents) {
+                 this.dashboardWebContents.send('bidding-detected-room', { sessionId, url });
             }
         });
 
-        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
-        console.log(`[VISUAL RUNNER] Navegando Inicialmente para: ${startUrl}`);
+        const startUrl = isLoginFlow 
+            ? 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp'
+            : 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp'; // Fallback link
         
+        console.log(`[VISUAL RUNNER] Iniciando em: ${startUrl} (Modo: ${config.modality})`);
         win.loadURL(startUrl);
     }
 

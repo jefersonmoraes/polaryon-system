@@ -251,6 +251,13 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
   visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
 });
 
+// [SIGA AUTO-DETECTION] RELAY PARA O DASHBOARD
+ipcMain.on('portal-detected-room', (event, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bidding-detected-room', data);
+    }
+});
+
 // GESTÃO DE CERTIFICADO A1
 ipcMain.handle('save-a1-certificate', async (event, { fileName, buffer, password }) => {
   return certHelper.saveCertificate(fileName, Buffer.from(buffer), password);

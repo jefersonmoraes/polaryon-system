@@ -362,6 +362,32 @@ window.polaryonUpdateMode = function(itemId, val) {
     itemLimits[itemId].mode = val;
 };
 
+// [SIGA AUTO-DETECTION] MONITOR DE NAVEGAÇÃO MANUAL
+setInterval(() => {
+    const url = window.location.href;
+    
+    // Detecta se entramos em uma sala de disputa (Link direto ou navegação)
+    if (url.includes('/disputa') && url.includes('compra=')) {
+        if (window.lastDetectedRoom !== url) {
+            window.lastDetectedRoom = url;
+            console.log("🎯 [POLARYON] Sala de Disputa Detectada:", url);
+            ipcRenderer.send('portal-detected-room', { url });
+        }
+    }
+
+    // Detecta se o login foi concluído (Área de Trabalho)
+    if (url.includes('intro.htm') || url.includes('index.asp?servico=226')) {
+        if (!window.loginNotified) {
+            window.loginNotified = true;
+            ipcRenderer.send('portal-update', {
+                sessionId: mySessionId,
+                statusMessage: "Conectado com Sucesso! 🟢",
+                isAuthenticated: true
+            });
+        }
+    }
+}, 1000);
+
 let mySessionId = null;
 let currentConfig = {
     uasg: '',

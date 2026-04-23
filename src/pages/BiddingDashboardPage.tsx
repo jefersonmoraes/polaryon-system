@@ -127,103 +127,45 @@ export default function BiddingDashboardPage() {
 
     const dummyCredentialId = 'simulated-credential-id';
 
-    const startRadar = async (overrideUasg?: string, overrideNum?: string, overrideAno?: string) => {
-        const targetUasg = overrideUasg || uasg;
-        const targetNum = overrideNum || numeroPregao;
-        const targetAno = overrideAno || anoPregao;
-
-        if (!targetUasg || !targetNum) {
-            import('sonner').then(({ toast }) => toast.error("Preencha UASG e Nº do Pregão."));
-            return;
-        }
-        
-        try {
-            // Se for Desktop, tentamos rodar LOCALMENTE
-            if (isDesktop && (window as any).electronAPI) {
-                const api = (window as any).api || (await import('@/lib/api')).default;
-                
-                // 1. Criar sessão no servidor (para herdar as estratégias salvas)
+    const openPortalLogin = async () => {
+        if (isDesktop && (window as any).electronAPI) {
+            try {
+                // 1. Criar uma sessão "Autodiscovery" ou usar uma padrão
                 const res = await api.post('/bidding/sessions', {
-                    credentialId: selectedCredentialId || dummyCredentialId,
+                    credentialId: dummyCredentialId,
                     portal: 'compras_gov',
-                    uasg: targetUasg,
-                    numeroPregao: targetNum,
-                    anoPregao: targetAno
+                    uasg: 'LOGIN',
+                    numeroPregao: 'PORTAL',
+                    anoPregao: new Date().getFullYear().toString()
                 });
 
                 if (res.data.success) {
                     const session = res.data.session;
                     setSessionId(session.id);
-
-                    // 2. Chamar o Motor Visual na versão Desktop
-                    if (isDesktop && (window as any).electronAPI) {
-                        (window as any).electronAPI.startVisualBidding({
-                            sessionId: session.id,
-                            uasg: targetUasg.trim(),
-                            numero: targetNum.trim(),
-                            ano: targetAno.trim(),
-                            vault: {
-                                simulationMode,
-                                itemsConfig: itemStrategies
-                            },
-                            modality
-                        });
-                        setIsLocalRunning(true);
-                        setIsListening(true);
-                        
-                        // v2.0: Auto-switch to Flow mode when moving to multi-uasg
-                        // viewMode logic removed, isListening handles the transition
-
-                        // Inicializa na lista multi-sessão
-                        setSessions(prev => ({
-                            ...prev,
-                            [session.id]: {
-                                uasg: targetUasg,
-                                numero: targetNum,
-                                items: [],
-                                chatMessages: [],
-                                lastUpdate: new Date().toLocaleTimeString(),
-                                isAuthenticated: true,
-                                simulationMode: true
-                            }
-                        }));
-
-                        toast.success(`Robô ${targetUasg} Iniciado! 👁️`);
-                        return;
-                    }
                     
-                    // Fallback para modo nuvem se o vault falhar ou não houver credencial real
-                    toast.info("Iniciando via Nuvem (Apenas leitura sem automação visual)...");
+                    // 2. Abrir o portal diretamente na tela de login
+                    (window as any).electronAPI.startVisualBidding({
+                        sessionId: session.id,
+                        uasg: 'LOGIN',
+                        numero: 'PORTAL',
+                        ano: new Date().getFullYear().toString(),
+                        vault: {
+                            simulationMode,
+                            itemsConfig: itemStrategies
+                        },
+                        modality: 'LOGIN_FLOW' // Sinaliza ao runner que é um fluxo de login
+                    });
+                    
+                    setIsLocalRunning(true);
+                    setIsListening(true);
+                    toast.success("Abrindo Portal Compras.gov.br... Utilize seu Certificado Digital. 🔐");
                 }
+            } catch (error) {
+                console.error("Failed to open portal:", error);
+                toast.error("Erro ao abrir o portal de compras.");
             }
-
-            // MODO CLOUD (Original)
-            const res = await api.post('/bidding/sessions', {
-                credentialId: selectedCredentialId || dummyCredentialId,
-                portal: 'compras_gov',
-                uasg: targetUasg,
-                numeroPregao: targetNum,
-                anoPregao: targetAno
-            });
-            
-            const data = res.data;
-            
-            if (data.success) {
-                const newSessionId = data.session.id;
-                setSessionId(newSessionId);
-                
-                if (socketService) {
-                    socketService.emit('join_bidding_room', newSessionId);
-                }
-
-                await api.post(`/bidding/sessions/${newSessionId}/start`);
-                setIsListening(true);
-                toast.success("Radar Polaryon NUVEM ativado com sucesso! ☁️");
-            }
-        } catch (error: any) {
-            console.error("Failed to start radar:", error);
-            const msg = error.response?.data?.error || "Erro ao conectar com o servidor de lances.";
-            toast.error(msg);
+        } else {
+            toast.warning("O login via Certificado Digital requer o Polaryon Desktop.");
         }
     };
 
@@ -366,6 +308,25 @@ export default function BiddingDashboardPage() {
             
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
             (window as any).electronAPI.onBiddingChat(handleChat);
+
+            // 🔍 [SIGA AUTO-DISCOVERY] Detecção de Entrada em Sala
+            if ((window as any).electronAPI.onBiddingDetectedRoom) {
+                (window as any).electronAPI.onBiddingDetectedRoom((data: any) => {
+                    const { url } = data;
+                    console.log("[POLARYON] Sala detectada via navegação manual:", url);
+                    
+                    // Extrair dados da URL (Padrão: compra=UASG06NUMEROANO)
+                    const match = url.match(/compra=(\d{6})06(\d{5})(\d{4})/);
+                    if (match) {
+                        const [, detectedUasg, detectedNum, detectedAno] = match;
+                        setUasg(detectedUasg);
+                        setNumeroPregao(detectedNum);
+                        setAnoPregao(detectedAno);
+                        
+                        toast.success(`Sala Detectada: UASG ${detectedUasg} - Pregão ${detectedNum}. Sincronizando... ⚡`);
+                    }
+                });
+            }
 
             // 🛡️ MODO HÍBRIDO: Recepção da Telemetria Espiã
             if ((window as any).electronAPI.onBiddingHybridDump) {
@@ -840,67 +801,50 @@ export default function BiddingDashboardPage() {
                         </div>
                     )}
 
-                    {/* CONFIGURADOR DE MISSÃO */}
-                    <div className="max-w-4xl mx-auto">
-                        <Card className="shadow-2xl border-none bg-slate-900/60 backdrop-blur-2xl ring-1 ring-white/10 p-8">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
-                                    <Target className="w-6 h-6 text-emerald-500" />
+                    {/* CONFIGURADOR DE MISSÃO (SIGA LOGIN FLOW) */}
+                    <div className="max-w-3xl mx-auto">
+                        <Card className="shadow-[0_0_50px_rgba(16,185,129,0.1)] border-none bg-slate-900/60 backdrop-blur-2xl ring-1 ring-white/10 p-12 text-center relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-50"></div>
+                            
+                            <div className="flex flex-col items-center gap-6 mb-10">
+                                <div className="p-5 bg-emerald-500/10 rounded-3xl border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+                                    <Shield className="w-10 h-10 text-emerald-500" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-black text-slate-100 uppercase tracking-tighter italic">Nova Infiltração</h2>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Configure os dados do pregão para iniciar o monitoramento visual</p>
+                                    <h2 className="text-3xl font-black text-slate-100 uppercase tracking-tighter italic">Acesso ao Portal</h2>
+                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-2">Inicie a conexão segura com o Compras.gov.br</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
-                                <div className="space-y-3">
-                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">UASG / Órgão</Label>
-                                    <Input 
-                                        value={uasg} 
-                                        onChange={(e) => setUasg(e.target.value)} 
-                                        className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg focus:ring-emerald-500/50" 
-                                        placeholder="Ex: 927165" 
-                                    />
+                            <Button 
+                                onClick={() => openPortalLogin()} 
+                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-24 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-2xl shadow-emerald-900/40 transition-all hover:scale-[1.02] active:scale-[0.98] border border-emerald-400/30"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Key className="w-6 h-6 fill-current" />
+                                    <span className="text-xl uppercase tracking-widest">LOGIN COMPRAS.GOV.BR</span>
                                 </div>
-                                <div className="space-y-3">
-                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">Nº / Ano</Label>
-                                    <div className="flex gap-2">
-                                        <Input 
-                                            value={numeroPregao} 
-                                            onChange={(e) => setNumeroPregao(e.target.value)} 
-                                            className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg w-2/3" 
-                                            placeholder="Nº" 
-                                        />
-                                        <Input 
-                                            value={anoPregao} 
-                                            onChange={(e) => setAnoPregao(e.target.value)} 
-                                            className="bg-slate-950/80 border-white/5 h-12 text-white font-black text-lg w-1/3 text-center" 
-                                            placeholder="Ano" 
-                                        />
-                                    </div>
+                                <span className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-[0.2em]">Utilize seu Certificado Digital (A3/Nuvem)</span>
+                            </Button>
+
+                            <div className="mt-10 grid grid-cols-3 gap-4">
+                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                    <div className="text-emerald-500 font-black text-lg">M mTLS</div>
+                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Conexão Criptografada</div>
                                 </div>
-                                <div className="space-y-3">
-                                    <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest px-1">Modalidade</Label>
-                                    <Select value={modality} onValueChange={setModality}>
-                                        <SelectTrigger className="bg-slate-950/80 border-white/5 h-12 text-white font-black">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-white/10 text-white">
-                                            <SelectItem value="14" className="font-bold">Dispensa Eletrônica (14.133)</SelectItem>
-                                            <SelectItem value="06" className="font-bold">Dispensa (Lei 8.666)</SelectItem>
-                                            <SelectItem value="05" className="font-bold">Pregão Eletrônico</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                    <div className="text-emerald-500 font-black text-lg">AUTO</div>
+                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Detecção de Itens</div>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                    <div className="text-emerald-500 font-black text-lg">GOV.BR</div>
+                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Nível Ouro/Prata</div>
                                 </div>
                             </div>
-                            
-                            <Button 
-                                onClick={() => startRadar()} 
-                                className="w-full mt-8 bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 uppercase tracking-[0.2em] shadow-2xl shadow-emerald-900/40 text-sm transition-all hover:scale-[1.01] active:scale-[0.98]"
-                            >
-                                <Play className="w-5 h-5 mr-3 fill-current" /> INICIAR COMBATE VISUAL
-                            </Button>
+
+                            <p className="text-[9px] text-slate-600 font-medium mt-8 italic">
+                                Ao clicar, o navegador interno do Polaryon será aberto. O robô irá monitorar silenciosamente assim que você entrar na sala de disputa.
+                            </p>
                         </Card>
                     </div>
                 </div>

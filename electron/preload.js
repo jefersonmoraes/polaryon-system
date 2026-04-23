@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onBiddingError: (callback) => ipcRenderer.on('bidding-error', (event, data) => callback(data)),
   onBiddingChat: (callback) => ipcRenderer.on('bidding-chat', (event, data) => callback(data)),
   onBiddingHybridDump: (callback) => ipcRenderer.on('bidding-hybrid-dump', (event, data) => callback(data)),
+  onBiddingDetectedRoom: (callback) => ipcRenderer.on('bidding-detected-room', (event, data) => callback(data)),
   // EQUIPAMENTO DE COMBATE V2.1 (SIGA PREGÃO PARITY)
   saveA1Certificate: (data) => ipcRenderer.invoke('save-a1-certificate', data),
   hasA1Certificate: () => ipcRenderer.invoke('has-a1-certificate'),
