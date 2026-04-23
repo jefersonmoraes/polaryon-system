@@ -56,11 +56,13 @@ function createWindow() {
 
   // Check for updates
   if (!isDev) {
+    autoUpdater.allowDowngrade = true;
     autoUpdater.checkForUpdatesAndNotify();
-    // Check every 30 mins
+    
+    // Check every 15 mins (Tactical Interval)
     setInterval(() => {
         autoUpdater.checkForUpdatesAndNotify();
-    }, 30 * 60 * 1000);
+    }, 15 * 60 * 1000);
   }
 }
 
