@@ -109,6 +109,22 @@ export default function BiddingDashboardPage() {
         simulationMode: boolean;
     }>>({});
 
+    // [MODO SIGA v3.2] VIEW STATE
+    const [viewMode, setViewMode] = useState<'card' | 'grid'>('grid');
+    const [isChatOpen, setIsChatOpen] = useState(true);
+
+    const quickBid = async (itemId: string, value: number, sid?: string) => {
+        const targetSid = sid || sessionId;
+        if (!targetSid) return;
+        try {
+            toast.info(`Enviando lance R$ ${value.toFixed(2)}...`);
+            await api.post(`/bidding/sessions/${targetSid}/items/${itemId}/bid`, { value });
+        } catch (error) {
+            console.error("Quick bid failed:", error);
+            toast.error("Falha ao enviar lance rápido.");
+        }
+    };
+
     const dummyCredentialId = 'simulated-credential-id';
 
     const startRadar = async (overrideUasg?: string, overrideNum?: string, overrideAno?: string) => {
@@ -712,40 +728,69 @@ export default function BiddingDashboardPage() {
             {/* 🛡️ CORPO PRINCIPAL */}
             {isListening ? (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 pb-20">
-                    {/* CHAT MONITOR */}
-                    {chatMessages.length > 0 && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-3xl flex items-center justify-between gap-4 backdrop-blur-xl">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-amber-500 p-1.5 rounded-lg shadow-[0_0_15px_rgba(245,158,11,0.3)]">
-                                    <Zap className="w-4 h-4 text-black fill-current" />
+                    <div className={`grid ${viewMode === 'grid' ? 'grid-cols-12' : 'grid-cols-1'} gap-6`}>
+                        {/* LISTA DE ITENS */}
+                        <div className={`${viewMode === 'grid' && isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-4`}>
+                            {items.length === 0 ? (
+                                <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
+                                    <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
+                                    <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
+                                    <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Alerta do Pregoeiro</span>
-                                    <p className="text-[11px] font-bold text-slate-200 truncate max-w-2xl leading-tight">
-                                        "{chatMessages[chatMessages.length - 1].texto}"
-                                    </p>
-                                </div>
-                            </div>
+                            ) : (
+                                viewMode === 'card' ? (
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {items.map(item => (
+                                            <CombatStreamCard 
+                                                key={`${sessionId}-${item.itemId}`} 
+                                                item={item} 
+                                                sessionId={sessionId || ''}
+                                                strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' }}
+                                                onSave={(s) => saveStrategy(item.itemId, s, sessionId || '')}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <BiddingGridView 
+                                        items={allItems} 
+                                        sessionId={sessionId || ''}
+                                        strategies={itemStrategies}
+                                        onSaveStrategy={saveStrategy}
+                                        onQuickBid={quickBid}
+                                    />
+                                )
+                            )}
                         </div>
-                    )}
 
-                    <div className="grid grid-cols-1 gap-4">
-                        {items.length === 0 ? (
-                            <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
-                                <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
-                                <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
-                                <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
+                        {/* CHAT MONITOR PERSISTENTE (GRID MODE) */}
+                        {viewMode === 'grid' && isChatOpen && (
+                            <div className="col-span-3 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl flex flex-col h-[75vh] sticky top-24 overflow-hidden">
+                                <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                                    <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                                        <Zap className="w-3 h-3 fill-current" /> Monitor de Chat
+                                    </h3>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsChatOpen(false)}>
+                                        <PlusIcon className="w-3 h-3 rotate-45" />
+                                    </Button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                    {chatMessages.length === 0 ? (
+                                        <p className="text-[10px] text-slate-600 italic text-center py-10">Nenhuma mensagem interceptada.</p>
+                                    ) : (
+                                        chatMessages.map((msg, idx) => (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[8px] font-black text-slate-500">{msg.data}</span>
+                                                    <span className="text-[8px] font-black text-amber-600 uppercase">{msg.origem || 'PORTAL'}</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                                                    {msg.texto}
+                                                </p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
-                        ) : (
-                            items.map(item => (
-                                <CombatStreamCard 
-                                    key={`${sessionId}-${item.itemId}`} 
-                                    item={item} 
-                                    sessionId={sessionId || ''}
-                                    strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' }}
-                                    onSave={(s) => saveStrategy(item.itemId, s, sessionId || '')}
-                                />
-                            ))
                         )}
                     </div>
                 </div>
@@ -889,6 +934,139 @@ export default function BiddingDashboardPage() {
 }
 
 // v2.0 - COMPONENTE DE ELITE PARA FLUXO DE COMBATE
+// [MODO SIGA v3.2] GRID VIEW COMPONENT - HIGH DENSITY MONITORING
+function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuickBid }: { 
+    items: any[], 
+    sessionId: string, 
+    strategies: Record<string, ItemStrategy>,
+    onSaveStrategy: (id: string, s: ItemStrategy, sid: string) => void,
+    onQuickBid: (id: string, val: number, sid: string) => void
+}) {
+    return (
+        <div className="bg-slate-950/50 rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl shadow-2xl">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="bg-slate-900/80 border-b border-white/10">
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Item / UASG</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status / Posição</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Melhor Valor</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Meu Lance</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Timer</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estratégia / Mínimo</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações Rápidas</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                    {items.map(item => {
+                        const isWinning = item.ganhador === 'Você' || item.position === 1;
+                        const strategy = strategies[item.itemId] || { mode: 'manual', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' };
+                        const isImminent = item.timerSeconds && item.timerSeconds < 60;
+                        const sid = item.sid || sessionId;
+
+                        return (
+                            <tr key={`${sid}-${item.itemId}`} className={`group transition-colors hover:bg-white/[0.02] ${isWinning ? 'bg-emerald-500/[0.02]' : 'bg-red-500/[0.02]'}`}>
+                                <td className="px-4 py-2 relative">
+                                    <div className={`absolute left-0 top-0 w-1 h-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'} ${isImminent ? 'animate-pulse' : ''}`} />
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-black text-slate-200">ITEM {item.itemId}</span>
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase">UASG {item.uasgName || '---'}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${isWinning ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                            {isWinning ? 'Vencendo' : `${item.position || '?'}º Lugar`}
+                                        </div>
+                                        {isImminent && (
+                                            <div className="bg-orange-500 text-white text-[8px] font-black px-1.5 rounded animate-bounce">IMINÊNCIA</div>
+                                        )}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-2">
+                                    <span className="text-[11px] font-mono font-bold text-white">
+                                        R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                    <span className={`text-[13px] font-mono font-black italic ${isWinning ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '---'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                    <span className={`text-[11px] font-mono font-bold ${isImminent ? 'text-orange-500 animate-pulse' : 'text-slate-400'}`}>
+                                        {item.timeout || '--:--'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={strategy.mode === 'follower'}
+                                                    onChange={(e) => onSaveStrategy(item.itemId, { ...strategy, mode: e.target.checked ? 'follower' : 'manual' }, sid)}
+                                                    className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 accent-emerald-500"
+                                                />
+                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Auto</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={strategy.mode === 'sniper'}
+                                                    onChange={(e) => onSaveStrategy(item.itemId, { ...strategy, mode: e.target.checked ? 'sniper' : 'manual' }, sid)}
+                                                    className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 accent-orange-500"
+                                                />
+                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Sniper</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-[8px] font-black text-slate-600 uppercase">Mínimo</span>
+                                            <input 
+                                                type="text"
+                                                className="bg-black/40 border border-white/5 rounded px-2 py-0.5 text-[10px] font-black text-emerald-500 w-20 focus:border-emerald-500/50 outline-none"
+                                                defaultValue={strategy.minPrice}
+                                                onBlur={(e) => onSaveStrategy(item.itemId, { ...strategy, minPrice: parseFloat(e.target.value.replace(',', '.')) || 0 }, sid)}
+                                            />
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-2 text-right">
+                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 0.01, sid)}
+                                            className="h-7 px-2 text-[9px] font-black bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                                        >
+                                            -0,01
+                                        </Button>
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 1.00, sid)}
+                                            className="h-7 px-2 text-[9px] font-black bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-white"
+                                        >
+                                            -1,00
+                                        </Button>
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 0.01, sid)}
+                                            className="h-7 px-2 text-[9px] font-black bg-slate-800 border-white/10 text-white hover:bg-white hover:text-black"
+                                        >
+                                            COBRIR
+                                        </Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: BiddingItem, sessionId: string, strategy: ItemStrategy, onSave: (s: ItemStrategy) => void }) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     const [localMinPrice, setLocalMinPrice] = useState(strategy?.minPrice?.toString() || "0");
