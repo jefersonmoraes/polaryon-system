@@ -793,36 +793,61 @@ router.post('/cards/reorder', async (req: Request, res: Response) => {
 });
 
 router.delete('/cards/:id', async (req: Request, res: Response) => {
+    const cardId = req.params.id as string;
+    console.log(`[PERMANENT_DELETE] Início da exclusão total do card: ${cardId}`);
+
     try {
-        const cardId = req.params.id as string;
+        // --- OPERAÇÃO ATÔMICA DE LIMPEZA TOTAL (v3.1) ---
+        await prisma.$transaction(async (tx) => {
+            // 1. Identifica orçamentos vinculados para log e sync
+            const linkedBudgets = await tx.budget.findMany({
+                where: { cardId },
+                select: { id: true }
+            });
 
-        // Find budgets to delete for broadcasting
-        const budgetsToDelete = await prisma.budget.findMany({
-            where: { cardId },
-            select: { id: true }
-        });
+            // 2. Remove orçamentos (Manualmente, pois não há cascade no schema para Budget)
+            if (linkedBudgets.length > 0) {
+                console.log(`[PERMANENT_DELETE] Removendo ${linkedBudgets.length} orçamentos vinculados.`);
+                await tx.budget.deleteMany({ where: { cardId } });
+            }
 
-        // Manual Cascading Delete for Budgets
-        await prisma.budget.deleteMany({ where: { cardId } });
+            // 3. Remove vínculos em tabelas de auditoria ou contabilidade (se houver documentEntityId)
+            // Nota: AccountingEntry usa documentEntityId como string, não como relação formal,
+            // mas limpamos para evitar lixo no dashboard financeiro.
+            await tx.accountingEntry.updateMany({
+                where: { documentEntityId: cardId },
+                data: { documentEntityId: null, documentEntity: null }
+            });
 
-        // Broadcast budget deletion
-        if (budgetsToDelete.length > 0) {
+            // 4. A exclusão do Card em si (Isso dispara o CASCADE do Prisma para Labels, Checklist, etc.)
+            await tx.card.delete({ where: { id: cardId } });
+            
+            console.log(`[PERMANENT_DELETE] Card ${cardId} removido com sucesso do banco de dados.`);
+            
+            // Retornamos os IDs para broadcast fora da transaction
+            return linkedBudgets;
+        }).then((budgetsToDelete) => {
+            // 5. Sincronização em tempo real via Socket
             try {
                 const { getIO } = require('../socket');
                 const io = getIO();
+                
+                // Notifica sobre a remoção dos orçamentos
                 budgetsToDelete.forEach(b => {
                     io.emit('system_sync', { store: 'KANBAN', type: 'DELETE_BUDGET', payload: { id: b.id } });
                 });
+                
+                // Notifica sobre a remoção do card (Lixeira -> Sumir)
+                io.emit('system_sync', { store: 'KANBAN', type: 'PERMANENTLY_DELETE_CARD', payload: { id: cardId } });
             } catch (err) { console.error("Socket broadcast failed:", err); }
-        }
+        });
 
-        await prisma.card.delete({ where: { id: cardId } });
-
-        // Auto-cleanup on hard delete
-        deleteEventFromGoogle(req.params.id as string).catch(err => console.error("Background sync delete failed:", err));
+        // 6. Cleanup de serviços externos (Calendário)
+        deleteEventFromGoogle(cardId).catch(err => console.error("Background sync delete failed:", err));
 
         res.json({ success: true });
     } catch (e: any) {
+        console.error(`[PERMANENT_DELETE_ERROR] Falha crítica ao deletar card ${cardId}:`, e.message);
         res.status(500).json({ error: e.message });
     }
 });
