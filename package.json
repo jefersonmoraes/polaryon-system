@@ -1,7 +1,7 @@
 {
   "name": "polaryon-system",
   "private": true,
-  "version": "3.3.2",
+  "version": "3.3.3",
   "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
   "author": "Polaryon Tecnologia",
   "type": "module",
@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "vite",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder",
-    "electron:build:terminal": "vite build --config vite.desktop.config.ts && electron-builder",
+    "electron:build": "set ELECTRON_BUILD=true && vite build && electron-builder",
+    "electron:build:terminal": "set ELECTRON_BUILD=true && vite build --config vite.desktop.config.ts && electron-builder",
     "release:terminal": "node scripts/release.js",
     "full-deploy": "node scripts/full-deploy.js",
     "build": "vite build",

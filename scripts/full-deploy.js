@@ -15,9 +15,9 @@ async function start() {
     try {
         console.log('🛡️ INICIANDO DEPLOY TOTAL POLARYON ELITE...');
 
-        // 1. Build do Frontend
-        console.log('\n[1/3] Gerando build do frontend...');
-        run('npm run build');
+        // 1. Build do Frontend (Desktop)
+        console.log('\n[1/3] Gerando build do frontend para Desktop...');
+        run('set ELECTRON_BUILD=true && npm run build');
 
         // 2. Build do Robô (Electron)
         console.log('\n[2/3] Empacotando Robô Electron...');
