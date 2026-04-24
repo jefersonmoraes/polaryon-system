@@ -327,6 +327,53 @@ const injectSniffer = () => {
 };
 injectSniffer();
 
+/**
+ * [SIGA CLONE] EXTRATOR DE CHAT E CRONÔMETRO
+ * Vasculha o portal em busca de mensagens do pregoeiro e tempo restante.
+ */
+function scrapeChatAndTimers() {
+    try {
+        const bodyText = document.body.innerText;
+        
+        // 1. EXTRAÇÃO DE CRONÔMETRO (O "Coração" do SIGA)
+        const timerEls = Array.from(document.querySelectorAll('span, div, b')).filter(el => {
+            const txt = el.innerText.trim();
+            return /^\d{2}:\d{2}:\d{2}$/.test(txt); // Formato 00:00:00
+        });
+
+        if (timerEls.length > 0) {
+            // Pega o primeiro cronômetro visível (geralmente o da sessão)
+            const globalTimer = timerEls[0].innerText;
+            ipcRenderer.send('portal-update', {
+                sessionId: mySessionId,
+                action: 'TIMER_UPDATE',
+                data: { time: globalTimer }
+            });
+        }
+
+        // 2. EXTRAÇÃO DE CHAT (Alertas de Pregoeiro)
+        const chatMessages = [];
+        const chatRows = document.querySelectorAll('.chat-msg, .mensagem-pregoeiro, .br-item.chat');
+        chatRows.forEach(row => {
+            chatMessages.push({
+                text: row.innerText.trim(),
+                time: new Date().toLocaleTimeString()
+            });
+        });
+
+        if (chatMessages.length > 0) {
+            ipcRenderer.send('portal-update', {
+                sessionId: mySessionId,
+                action: 'CHAT_EXTRACTED',
+                data: { messages: chatMessages }
+            });
+        }
+    } catch (e) {}
+}
+
+// Inicia o monitoramento de Chat e Timers em loop paralelo
+setInterval(scrapeChatAndTimers, 2000);
+
 let scrapingInterval = null;
 let serverOffset = 0; // Diferença em MS entre o servidor do Governo e o PC Local
 
@@ -772,16 +819,22 @@ function scrapeDisputeRoom() {
                         desc = lines.find(l => !l.includes('R$') && !l.match(/^\d+$/) && l.length > 20) || "";
                     } catch(e) {}
 
-                    // v2.2.2: Detecção de Vencedor Visual (Prioridade pro Badge "MELHOR LANCE" ou Tumbs down da sala de dispensa)
-                    const hasWinnerBadge = text.toUpperCase().includes('MELHOR LANCE') || text.toUpperCase().includes('VENCEDOR') || card.querySelector('.fa-thumbs-up, .icon-winning, [class*="thumb-up"], .br-icon.thumb-up, i[class*="up"]') !== null;
-                    const hasLoserBadge = text.includes('👎') || card.querySelector('.fa-thumbs-down, .icon-losing, [class*="thumb-down"], .br-icon.thumb-down, i[class*="down"]') !== null;
+                    // v4.1 [SIGA-INTELLIGENCE]: Detecção de Ranking Visual Ultra-Precisa
+                    // Procura por Troféus, Estrelas ou Badges de Vencedor (Comprasnet 14.133)
+                    const hasWinnerVisual = card.querySelector('.fa-trophy, .fa-star, .icon-vencedor, .vencedor-lance, [class*="badge-vencedor"], [class*="melhor-lance"]') !== null || 
+                                          text.toUpperCase().includes('VENCEDOR') || 
+                                          text.toUpperCase().includes('MELHOR LANCE');
+                    
+                    const hasLoserVisual = card.querySelector('.fa-thumbs-down, .icon-perdedor, [class*="lance-coberto"]') !== null || 
+                                         text.toUpperCase().includes('LANCE COBERTO');
                     
                     let ganhador = 'Outro';
-                    if (hasWinnerBadge) {
+                    if (hasWinnerVisual) {
                         ganhador = 'Você';
-                    } else if (hasLoserBadge) {
+                    } else if (hasLoserVisual) {
                         ganhador = 'Outro';
                     } else {
+                        // Fallback matemático se o visual falhar
                         const isWinnerPrice = meuValor > 0 && meuValor <= (valorAtual + 0.0001);
                         ganhador = isWinnerPrice ? 'Você' : 'Outro';
                     }

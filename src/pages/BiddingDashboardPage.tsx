@@ -112,6 +112,7 @@ export default function BiddingDashboardPage() {
     // [MODO SIGA v3.2] VIEW STATE
     const [viewMode, setViewMode] = useState<'card' | 'grid'>('grid');
     const [isChatOpen, setIsChatOpen] = useState(true);
+    const [modalityTab, setModalityTab] = useState<'PREGAO' | 'DISPENSA'>('DISPENSA');
 
     const quickBid = async (itemId: string, value: number, sid?: string) => {
         const targetSid = sid || sessionId;
@@ -564,152 +565,129 @@ export default function BiddingDashboardPage() {
     };
 
     return (
-        <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
-            {/* 🚀 CABEÇALHO UNIFICADO */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
-                <div className="flex items-center gap-6">
-                    <div>
-                        <h1 className="text-4xl font-black italic tracking-tighter bg-gradient-to-r from-emerald-400 via-cyan-500 to-indigo-500 bg-clip-text text-transparent uppercase flex items-center gap-3">
-                            <Zap className="w-8 h-8 text-emerald-400 fill-current" />
-                            TERMINAL ELITE
-                        </h1>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-1 italic flex items-center gap-2">
-                             Visual Automation Engine <span className="w-1 h-1 bg-slate-700 rounded-full"></span> v3.0 Tactical
-                        </p>
+        <div className="min-h-screen bg-[#020817] text-white font-['JetBrains_Mono'] overflow-x-hidden">
+            {/* [SIGA CLONE] HEADER TÁTICO CENTRALIZADO */}
+            <div className="w-full py-10 px-6 flex flex-col items-center justify-center border-b border-white/5 bg-gradient-to-b from-[#020817] to-[#030e25] relative">
+                {/* Status de Conexão Flutuante (v3.2) */}
+                <div className="absolute top-6 right-8 flex items-center gap-4 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-white/20'}`} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                            {isListening ? 'Sistema Operacional' : 'Standby'}
+                        </span>
                     </div>
-
-                    <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
-
                     {isListening && (
-                        <div className="flex items-center gap-8 animate-in slide-in-from-left-4 duration-500">
-                            <div className="flex flex-col">
-                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Alvos Ativos</span>
-                                <span className="text-xl font-black text-slate-100">{items.length}</span>
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Vencendo</span>
-                                <span className="text-xl font-black text-emerald-500">{items.filter(i => i.ganhador === 'Você' || i.position === 1).length}</span>
-                            </div>
-                        </div>
+                        <button onClick={stopRadar} className="text-red-400 hover:text-red-300 transition-colors">
+                            <XCircle className="w-3.5 h-3.5" />
+                        </button>
                     )}
                 </div>
 
-                {/* CONTROLES TÁTICOS */}
-                {isListening ? (
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-6 px-4 py-2 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-                            <div className="flex flex-col">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Operação</span>
-                                <span className={`text-[10px] font-black ${simulationMode ? 'text-amber-500' : 'text-red-500 animate-pulse'}`}>
-                                    {simulationMode ? 'SIMULADO' : 'MODO REAL ⚡'}
-                                </span>
-                            </div>
-                            
-                            <Sheet>
-                                <SheetTrigger asChild>
-                                    <Button variant="outline" size="sm" className="bg-emerald-500/10 border-emerald-500/30 text-emerald-400 h-8 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all">
-                                        <Settings2 className="w-3.5 h-3.5 mr-2" /> COMANDOS
-                                    </Button>
-                                </SheetTrigger>
-                                <SheetContent className="bg-slate-950 border-white/10 text-white w-[400px]">
-                                    <SheetHeader className="border-b border-white/5 pb-4 mb-4">
-                                        <SheetTitle className="text-emerald-500 flex items-center gap-2">
-                                            <Shield className="w-5 h-5" /> CENTRAL DE COMANDO
-                                        </SheetTitle>
-                                        <SheetDescription className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                                            Ajustes táticos em tempo real (Sessão: {sessionId})
-                                        </SheetDescription>
-                                    </SheetHeader>
-                                    
-                                    <div className="space-y-6 overflow-y-auto max-h-[85vh] pr-2 custom-scrollbar">
-                                        <div className="space-y-4">
-                                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navegação e Foco</Label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <Button variant="outline" onClick={() => focusBiddingWindow()} className="bg-slate-900 border-white/10 text-[10px] h-9 font-black">
-                                                    <Target className="w-3 h-3 mr-2" /> FOCAR PORTAL
-                                                </Button>
-                                                <Button variant="outline" onClick={() => navigateToRoom()} className="bg-slate-900 border-white/10 text-[10px] h-9 font-black">
-                                                    <RefreshCw className="w-3 h-3 mr-2" /> IR P/ SALA
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3">
-                                            <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
-                                                Poder de Fogo
-                                            </Label>
-                                            <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5">
-                                                <div className="space-y-0.5">
-                                                    <p className="text-xs font-black text-slate-100 uppercase">MODO REAL</p>
-                                                    <p className="text-[9px] text-slate-500 font-bold uppercase italic">Cuidado: Envia lances ao Portal</p>
-                                                </div>
-                                                <Switch 
-                                                    checked={!simulationMode} 
-                                                    onCheckedChange={(val) => {
-                                                        if (val) setShowRealModeWarning(true);
-                                                        else toggleSimulation(true);
-                                                    }}
-                                                    className="data-[state=checked]:bg-red-500"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <Button onClick={() => stopRadar()} variant="destructive" className="w-full font-black h-12 shadow-red-900/40 shadow-xl transition-all hover:scale-[1.02] uppercase tracking-widest text-xs mt-8">
-                                            <Square className="w-4 h-4 mr-2 fill-current"/> ABORTAR MISSÃO
-                                        </Button>
-
-                                        <div className="mt-8">
-                                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-                                                <Zap className="w-3 h-3 text-amber-500" /> Histórico Operacional
-                                            </Label>
-                                            <div className="space-y-2">
-                                                {actionLogs.slice(0, 10).map((log, idx) => (
-                                                    <div key={idx} className="p-2.5 bg-slate-900/50 rounded-xl border border-white/5 flex items-center justify-between">
-                                                        <span className="text-[9px] font-black text-slate-400">ITEM {log.itemId}</span>
-                                                        <span className="text-[10px] font-black text-emerald-400 font-mono">R$ {log.value.toFixed(2)}</span>
-                                                    </div>
-                                                ))}
-                                                {actionLogs.length === 0 && <p className="text-[10px] text-slate-600 italic text-center py-4">Nenhuma ação registrada ainda.</p>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </SheetContent>
-                            </Sheet>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-4 animate-in fade-in duration-500">
-                         <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl">
-                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Aguardando Infiltração</span>
-                         </div>
-                    </div>
-                )}
+                <h1 className="text-4xl font-['Anton'] tracking-wider mb-2 text-white/90">DISPUTAS COMPRASNET</h1>
+                <p className="text-white/40 text-[10px] mb-8 uppercase tracking-[0.3em]">Envie seus lances nos seus pregões e dispensas eletrônicas</p>
+                
+                {/* [SIGA CLONE] SELETOR DE MODALIDADE */}
+                <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 backdrop-blur-sm">
+                    <button 
+                        onClick={() => setModalityTab('PREGAO')}
+                        className={`px-10 py-2.5 rounded-md text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'PREGAO' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-white/40 hover:text-white'}`}
+                    >
+                        Pregões eletrônicos
+                    </button>
+                    <button 
+                        onClick={() => setModalityTab('DISPENSA')}
+                        className={`px-10 py-2.5 rounded-md text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'DISPENSA' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-white/40 hover:text-white'}`}
+                    >
+                        Dispensas eletrônicas
+                    </button>
+                </div>
             </div>
 
-            {/* 🛡️ CORPO PRINCIPAL */}
-            {isListening ? (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 pb-20">
-                    <div className={`grid ${viewMode === 'grid' ? 'grid-cols-12' : 'grid-cols-1'} gap-6`}>
-                        {/* LISTA DE ITENS */}
-                        <div className={`${viewMode === 'grid' && isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-4`}>
-                            {items.length === 0 ? (
-                                <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
-                                    <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
-                                    <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
-                                    <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
+            <main className="container mx-auto px-4 py-8 max-w-7xl">
+                {!isListening ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000">
+                        {/* CARD DE ACESSO "MÁQUINA DE LANCES" */}
+                        <div className="bg-[#030e25] border border-white/10 p-12 rounded-[2.5rem] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.5)] text-center max-w-lg w-full backdrop-blur-2xl relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                            
+                            <div className="w-24 h-24 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-white/10 transform rotate-12 group-hover:rotate-0 transition-transform duration-500">
+                                <Zap className="w-12 h-12 text-white/80 fill-current" />
+                            </div>
+                            
+                            <h2 className="text-3xl font-black tracking-tighter mb-4 text-white uppercase">MÁQUINA DE LANCES</h2>
+                            <p className="text-white/40 text-xs mb-10 leading-relaxed px-4 font-bold uppercase tracking-widest">
+                                Inicie a automação visual. O robô abrirá o navegador oficial para você autenticar com seu Certificado Digital.
+                            </p>
+                            
+                            <button
+                                onClick={openPortalLogin}
+                                className="w-full bg-white hover:bg-slate-100 text-black font-black py-5 rounded-2xl flex items-center justify-center space-x-4 transition-all transform hover:scale-[1.02] active:scale-95 shadow-2xl shadow-white/10 group relative overflow-hidden"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                                <Shield className="w-6 h-6" />
+                                <span className="text-lg uppercase tracking-tight">LOGIN COMPRAS.GOV.BR</span>
+                            </button>
+
+                            <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-center gap-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Protocolo SIGA</span>
                                 </div>
-                            ) : (
-                                viewMode === 'card' ? (
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {items.map(item => (
-                                            <CombatStreamCard 
-                                                key={`${sessionId}-${item.itemId}`} 
-                                                item={item} 
-                                                sessionId={sessionId || ''}
-                                                strategy={itemStrategies[item.itemId] || { mode: 'follower', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' }}
-                                                onSave={(s) => saveStrategy(item.itemId, s, sessionId || '')}
-                                            />
-                                        ))}
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Latência Zero</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* LISTA DE SALAS ATIVAS NO CACHE (SIGA STYLE) */}
+                        {Object.keys(sessions).length > 0 && (
+                            <div className="w-full max-w-4xl space-y-6">
+                                <div className="flex items-center gap-4 px-4">
+                                    <div className="h-[1px] flex-1 bg-white/5" />
+                                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Sessões em Cache</span>
+                                    <div className="h-[1px] flex-1 bg-white/5" />
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {Object.entries(sessions).map(([sid, s]) => (
+                                        <div 
+                                            key={sid} 
+                                            onClick={() => {
+                                                setSessionId(sid);
+                                                setItems(s.items);
+                                                setIsListening(true);
+                                            }}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl cursor-pointer transition-all flex items-center justify-between group"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/5 text-xs font-black text-white/40">
+                                                    {s.items.length}
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black text-white/80 group-hover:text-white uppercase tracking-tighter">UASG {s.uasg}</h4>
+                                                    <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Sessão {s.numero} • {s.lastUpdate}</p>
+                                                </div>
+                                            </div>
+                                            <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Target className="w-4 h-4 text-emerald-400" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 pb-20">
+                        <div className={`grid ${viewMode === 'grid' ? 'grid-cols-12' : 'grid-cols-1'} gap-6`}>
+                            {/* LISTA DE ITENS */}
+                            <div className={`${viewMode === 'grid' && isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-4`}>
+                                {items.length === 0 ? (
+                                    <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
+                                        <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
+                                        <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
+                                        <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
                                     </div>
                                 ) : (
                                     <BiddingGridView 
@@ -719,136 +697,44 @@ export default function BiddingDashboardPage() {
                                         onSaveStrategy={saveStrategy}
                                         onQuickBid={quickBid}
                                     />
-                                )
+                                )}
+                            </div>
+
+                            {/* CHAT MONITOR PERSISTENTE (GRID MODE) */}
+                            {viewMode === 'grid' && isChatOpen && (
+                                <div className="col-span-3 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl flex flex-col h-[75vh] sticky top-24 overflow-hidden">
+                                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                                        <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                                            <Zap className="w-3 h-3 fill-current" /> Monitor de Chat
+                                        </h3>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsChatOpen(false)}>
+                                            <XCircle className="w-3.5 h-3.5" />
+                                        </Button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                        {chatMessages.length === 0 ? (
+                                            <p className="text-[10px] text-slate-600 italic text-center py-10">Nenhuma mensagem interceptada.</p>
+                                        ) : (
+                                            chatMessages.map((msg, idx) => (
+                                                <div key={idx} className="space-y-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[8px] font-black text-slate-500">{msg.data || msg.time}</span>
+                                                        <span className="text-[8px] font-black text-amber-600 uppercase">{msg.origem || 'PORTAL'}</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                                                        {msg.texto || msg.text}
+                                                    </p>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
                             )}
                         </div>
-
-                        {/* CHAT MONITOR PERSISTENTE (GRID MODE) */}
-                        {viewMode === 'grid' && isChatOpen && (
-                            <div className="col-span-3 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl flex flex-col h-[75vh] sticky top-24 overflow-hidden">
-                                <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                                    <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
-                                        <Zap className="w-3 h-3 fill-current" /> Monitor de Chat
-                                    </h3>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsChatOpen(false)}>
-                                        <PlusIcon className="w-3 h-3 rotate-45" />
-                                    </Button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                                    {chatMessages.length === 0 ? (
-                                        <p className="text-[10px] text-slate-600 italic text-center py-10">Nenhuma mensagem interceptada.</p>
-                                    ) : (
-                                        chatMessages.map((msg, idx) => (
-                                            <div key={idx} className="space-y-1">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[8px] font-black text-slate-500">{msg.data}</span>
-                                                    <span className="text-[8px] font-black text-amber-600 uppercase">{msg.origem || 'PORTAL'}</span>
-                                                </div>
-                                                <p className="text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                                                    {msg.texto}
-                                                </p>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
                     </div>
-                </div>
-            ) : (
-                <div className="space-y-10 animate-in slide-in-from-bottom-8 duration-700">
-                    {/* LISTA DE SALAS ATIVAS */}
-                    {Object.keys(sessions).length > 0 && (
-                        <div className="space-y-4">
-                            <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Operações em Andamento</Label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {Object.entries(sessions).map(([sid, s]) => (
-                                    <Card 
-                                        key={sid} 
-                                        onClick={() => {
-                                            setSessionId(sid);
-                                            setUasg(s.uasg);
-                                            setNumeroPregao(s.numero);
-                                            setItems(s.items);
-                                            setChatMessages(s.chatMessages);
-                                        }}
-                                        className="group cursor-pointer shadow-2xl border-none bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/10 transition-all hover:scale-[1.02] hover:ring-emerald-500/50 relative overflow-hidden"
-                                    >
-                                        <div className={`h-1.5 w-full ${s.items.some(i => i.ganhador === 'Você') ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-slate-800'}`}></div>
-                                        <CardHeader className="p-5 pb-2">
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex flex-col">
-                                                    <CardTitle className="text-xl font-black tracking-tighter text-slate-100 italic">UASG {s.uasg}</CardTitle>
-                                                    <CardDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Pregão {s.numero}</CardDescription>
-                                                </div>
-                                                <div className="px-2.5 py-1 rounded-lg bg-slate-950 text-[9px] font-black text-emerald-400 border border-emerald-500/20">
-                                                    {s.items.length} ITENS
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="p-5 pt-2 border-t border-white/5 mt-4">
-                                            <div className="flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                <span>Sinc: {s.lastUpdate}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${s.isAuthenticated ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
-                                                    <span>{s.isAuthenticated ? 'LOGADO' : 'AGUARDANDO'}</span>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                )}
+            </main>
 
-                    {/* CONFIGURADOR DE MISSÃO (SIGA LOGIN FLOW) */}
-                    <div className="max-w-3xl mx-auto">
-                        <Card className="shadow-[0_0_50px_rgba(16,185,129,0.1)] border-none bg-slate-900/60 backdrop-blur-2xl ring-1 ring-white/10 p-12 text-center relative overflow-hidden group">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-50"></div>
-                            
-                            <div className="flex flex-col items-center gap-6 mb-10">
-                                <div className="p-5 bg-emerald-500/10 rounded-3xl border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
-                                    <Shield className="w-10 h-10 text-emerald-500" />
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-black text-slate-100 uppercase tracking-tighter italic">Acesso ao Portal</h2>
-                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-2">Inicie a conexão segura com o Compras.gov.br</p>
-                                </div>
-                            </div>
-
-                            <Button 
-                                onClick={() => openPortalLogin()} 
-                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-24 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-2xl shadow-emerald-900/40 transition-all hover:scale-[1.02] active:scale-[0.98] border border-emerald-400/30"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Key className="w-6 h-6 fill-current" />
-                                    <span className="text-xl uppercase tracking-widest">LOGIN COMPRAS.GOV.BR</span>
-                                </div>
-                                <span className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-[0.2em]">Utilize seu Certificado Digital (A3/Nuvem)</span>
-                            </Button>
-
-                            <div className="mt-10 grid grid-cols-3 gap-4">
-                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                                    <div className="text-emerald-500 font-black text-lg">M mTLS</div>
-                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Conexão Criptografada</div>
-                                </div>
-                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                                    <div className="text-emerald-500 font-black text-lg">AUTO</div>
-                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Detecção de Itens</div>
-                                </div>
-                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                                    <div className="text-emerald-500 font-black text-lg">GOV.BR</div>
-                                    <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Nível Ouro/Prata</div>
-                                </div>
-                            </div>
-
-                            <p className="text-[9px] text-slate-600 font-medium mt-8 italic">
-                                Ao clicar, o navegador interno do Polaryon será aberto. O robô irá monitorar silenciosamente assim que você entrar na sala de disputa.
-                            </p>
-                        </Card>
-                    </div>
-                </div>
-            )}
 
             <AlertDialog open={showRealModeWarning} onOpenChange={setShowRealModeWarning}>
                 <AlertDialogContent className="bg-slate-950 border-white/10 text-slate-100 p-8">
