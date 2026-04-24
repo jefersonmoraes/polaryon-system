@@ -50,4 +50,4 @@ echo "=== [4/5] Reiniciando Servidor (PM2) ==="
 pm2 restart polaryon-backend || pm2 start dist_prod/server.js --name polaryon-backend
 pm2 save
 
-echo "=== [5/5] DEPLOY CONCLUÍDO (ESTABILIDADE TOTAL v1.2.28) ==="
+echo "=== [5/5] DEPLOY CONCLUÍDO (ESTABILIDADE TOTAL v3.3.5) ==="
