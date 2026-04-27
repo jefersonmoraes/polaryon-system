@@ -354,7 +354,36 @@ export default function BiddingDashboardPage() {
                       } else if (pkg.action === 'API_DUMP') {
                            console.log("%c[POLARYON HYBRID] API INTERCEPTADA (" + payload.url + "): ", "color: cyan; font-weight: bold;", payload.response);
                       } else if (pkg.action === 'HYBRID_API_RESULTS') {
-                           console.log("%c[🔥 POLARYON HYBRID PULL DIRETO]: ", "color: #00ff00; font-weight: bold; background: #002200; padding: 2px 5px;", payload.items);
+                           const hybridItems = payload.items || [];
+                           if (hybridItems.length > 0) {
+                               const newSessions: Record<string, any> = {};
+                               hybridItems.forEach((item: any) => {
+                                   const uasgCode = item.uasg || item.codigoUasg || 'SISTEMA';
+                                   const num = item.numeroCompra || item.numero || '0';
+                                   const ano = item.anoCompra || item.ano || '2026';
+                                   const sid = `HYBRID_${uasgCode}_${num}_${ano}`;
+                                   if (!newSessions[sid]) {
+                                       newSessions[sid] = { uasg: uasgCode, numero: num, items: [], chatMessages: [], lastUpdate: new Date().toLocaleTimeString(), isAuthenticated: true, simulationMode: true, isHybrid: true };
+                                   }
+                                   const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
+                                   const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
+                                   const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
+                                   const isWinner = pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°';
+                                   newSessions[sid].items.push({
+                                       itemId: item.identificador || item.numero.toString(),
+                                       valorAtual: melhorGeral, meuValor: melhorMeu, uasgName: uasgCode, ganhador: isWinner ? 'Você' : 'Outro',
+                                       status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado'),
+                                       position: parseInt(pos) || 0, timerSeconds: item.segundosParaEncerramento || -1, desc: item.descricao || `Item ${item.numero}`
+                                   });
+                               });
+                               setSessions(prev => {
+                                   const updated = { ...prev };
+                                   Object.entries(newSessions).forEach(([sid, session]) => {
+                                       updated[sid] = { ...(updated[sid] || {}), ...session, chatMessages: updated[sid]?.chatMessages || [] };
+                                   });
+                                   return updated;
+                               });
+                           }
                       } else if (pkg.action === 'HYBRID_API_ERROR') {
                            console.log("%c[❌ POLARYON HYBRID ERROR]: ", "color: #ff0000; font-weight: bold;", payload);
                       }
