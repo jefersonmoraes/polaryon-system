@@ -5,7 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: process.env.ELECTRON_BUILD === "true" ? "./" : "/", 
+  // FORÇA CAMINHO RELATIVO PARA ELECTRON (Evita ERR_FILE_NOT_FOUND)
+  base: "./",
   server: {
     host: "::",
     port: 8080,
