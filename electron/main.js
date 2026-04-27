@@ -42,8 +42,11 @@ function createWindow() {
     // No dev, o terminal roda no servidor local do Vite
     mainWindow.loadURL('http://localhost:5173/desktop.html');
   } else {
-    // Em produção, carregamos os arquivos BUILIDADOS locais (Puro e Ultra-Leve)
-    mainWindow.loadFile(path.join(__dirname, '../dist_electron/desktop.html'));
+    // Em produção, usamos url.pathToFileURL para garantir que espaços e acentos no caminho
+    // sejam convertidos corretamente para o protocolo file:// (Evita ERR_FILE_NOT_FOUND)
+    const url = require('url');
+    const desktopPath = path.join(__dirname, '../dist_electron/desktop.html');
+    mainWindow.loadURL(url.pathToFileURL(desktopPath).href);
   }
 
   // In Dev, open Developer Tools
