@@ -135,10 +135,13 @@ const startHybridEngine = () => {
                            .replace(/pagina=\d+/, `pagina=${page}`)
                            .replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
                        
+                       const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
+                       if (!authHeader) break;
+
                        const res = await fetch(targetUrl, {
                             method: 'GET',
                             headers: {
-                                 'Authorization': window.polaryonAuthBearer,
+                                 'Authorization': authHeader,
                                  'Accept': 'application/json, text/plain, */*'
                             }
                        });
@@ -159,12 +162,12 @@ const startHybridEngine = () => {
                        
                        if (itemsArray.length === 0) break;
                        
-                       // CARIMBA OS ITENS COM A ORIGEM (Essencial para o Dashboard)
+                       // CARIMBA OS ITENS COM A ORIGEM (Essencial para o Dashboard v3.5.4+)
                        const enrichedItems = itemsArray.map(it => ({
                            ...it,
                            polaryon_basePath: currentBasePath,
-                           polaryon_purchaseId: currentPurchaseId,
-                           polaryon_year: currentYear
+                           polaryon_purchaseId: currentPurchaseId || it.uasg || it.codigoUasg || it.compra,
+                           polaryon_year: currentYear || it.anoCompra || it.ano
                        }));
 
                        allFetchedItems = [...allFetchedItems, ...enrichedItems];
@@ -225,8 +228,8 @@ const startHybridEngine = () => {
                        data: { items: allFetchedItems }
                    });
                    
-                   // [SIGA SCANNER] AUTO-DISCOVERY: Busca novas participações a cada 30s
-                   if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 30000) {
+                   // [SIGA SCANNER] AUTO-DISCOVERY: Busca novas participações a cada 15s (Mais agressivo)
+                   if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 15000) {
                        window.polaryonLastDiscovery = Date.now();
                        
                        const discoveryTargets = [
@@ -234,23 +237,27 @@ const startHybridEngine = () => {
                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/disputas/compras/participacao?pagina=0&tamanhoPagina=100'
                        ];
 
+                       const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
+
                        for (const discUrl of discoveryTargets) {
                            try {
-                               const discRes = await fetch(discUrl, { headers: { 'Authorization': window.polaryonAuthBearer } });
-                               if (discRes.ok) {
-                                   const discData = await discRes.json();
-                                   const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
-                                   
-                                   const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
-                                   
-                                   certames.forEach(cert => {
-                                       const purchaseId = cert.compra || cert.id;
-                                       const year = cert.ano || new Date().getFullYear();
-                                       const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                               if (authHeader) {
+                                   const discRes = await fetch(discUrl, { headers: { 'Authorization': authHeader } });
+                                   if (discRes.ok) {
+                                       const discData = await discRes.json();
+                                       const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
+                                       const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
                                        
-                                       if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                                       window.polaryonHybrid_Rooms.add(itemsUrl);
-                                   });
+                                       certames.forEach(cert => {
+                                           const purchaseId = cert.compra || cert.id || cert.codigoUasg;
+                                           const year = cert.ano || cert.anoCompra || new Date().getFullYear();
+                                           if (purchaseId) {
+                                               const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                                               if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                                               window.polaryonHybrid_Rooms.add(itemsUrl);
+                                           }
+                                       });
+                                   }
                                }
                            } catch(e) {
                                console.error("[POLARYON] Erro no Scanner de Descoberta:", e);
@@ -307,6 +314,7 @@ const injectSniffer = () => {
                     if (header.toLowerCase() === 'authorization' || header.toLowerCase() === 'bearer') {
                         // CAPTURA AGRESSIVA: Atualiza o token em cada pedido feito pelo portal
                         window.polaryonAuthBearer = value;
+                        window.polaryonAuthBearer_Last = value;
                         sendToPreload({ action: 'TOKEN_GRABBED', token: value, url: this._url });
                     }
                     return origSetReqHeader.apply(this, arguments);
