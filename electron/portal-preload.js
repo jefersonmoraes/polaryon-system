@@ -51,8 +51,30 @@ window.addEventListener("message", (event) => {
                   }
                   
                   if (!window.polaryonHybrid_Active) {
-                       startHybridEngine();
+                        startHybridEngine();
                   }
+             }
+
+             // 🕵️ AUTO-CRAWLER: Se capturamos a lista de participações, processamos todos os certames
+             if (payload.url.includes('/participacao')) {
+                 const content = payload.response;
+                 const certames = content.itens || content.items || (Array.isArray(content) ? content : []);
+                 console.log(`🕵️ [POLARYON CRAWLER] Detectados ${certames.length} certames ativos. Sincronizando...`);
+                 
+                 certames.forEach(cert => {
+                     // Gera a URL de itens para cada certame detectado
+                     const purchaseId = cert.compra || cert.id;
+                     const year = cert.ano || new Date().getFullYear();
+                     const basePath = cert.basePath || (payload.url.includes('disputas') ? 'disputas/compras' : 'compras');
+                     
+                     const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                     
+                     // Adiciona à lista de monitoramento global
+                     if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                     window.polaryonHybrid_Rooms.add(itemsUrl);
+                 });
+
+                 if (!window.polaryonHybrid_Active) startHybridEngine();
              }
         }
     }
@@ -86,66 +108,67 @@ const startHybridEngine = () => {
              } catch(e) {}
          }
 
-         if (!window.polaryonAuthBearer || !window.polaryonHybrid_ItemsUrl) {
-             setTimeout(pollingLoop, 2000);
-             return;
+         if (!window.polaryonAuthBearer) {
+              setTimeout(pollingLoop, 2000);
+              return;
          }
 
          try {
-              // Navegação Camuflada: Percorre as páginas individualmente se necessário
-              let allFetchedItems = [];
-              let page = 0;
-              let hasMore = true;
-              
-              // Limite de segurança para evitar loops (Máximo 5 páginas de 20 = 100 itens)
-              while (hasMore && page < 5) {
-                  const targetUrl = window.polaryonHybrid_ItemsUrl
-                      .replace(/pagina=\d+/, `pagina=${page}`)
-                      .replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
-                  
-                  const res = await fetch(targetUrl, {
-                       method: 'GET',
-                       headers: {
-                            'Authorization': window.polaryonAuthBearer,
-                            'Accept': 'application/json, text/plain, */*'
+               // --- MULTI-ROOM MONITORING v4.0 ---
+               let allFetchedItems = [];
+               const targetUrls = window.polaryonHybrid_Rooms ? Array.from(window.polaryonHybrid_Rooms) : [window.polaryonHybrid_ItemsUrl];
+               
+               for (const baseUrl of targetUrls) {
+                   if (!baseUrl) continue;
+                   
+                   let page = 0;
+                   let hasMore = true;
+                   
+                   while (hasMore && page < 5) {
+                       const targetUrl = baseUrl
+                           .replace(/pagina=\d+/, `pagina=${page}`)
+                           .replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
+                       
+                       const res = await fetch(targetUrl, {
+                            method: 'GET',
+                            headers: {
+                                 'Authorization': window.polaryonAuthBearer,
+                                 'Accept': 'application/json, text/plain, */*'
+                            }
+                       });
+
+                       if (!res.ok) {
+                           if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 422) {
+                                if (window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms.delete(baseUrl);
+                                if (window.polaryonHybrid_ItemsUrl === baseUrl) window.polaryonHybrid_ItemsUrl = null;
+                           }
+                           break;
                        }
-                  });
 
-                  if (!res.ok) {
-                      if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 422) {
-                           // Link Quebrado ou Expirado: Força re-escaneamento de rede
-                           const baseBadUrl = targetUrl.split('?')[0];
-                           if (!window.polaryonBadUrls) window.polaryonBadUrls = new Set();
-                           if (res.status === 404) window.polaryonBadUrls.add(baseBadUrl);
+                       const rawText = await res.text();
+                       if (!rawText || rawText.trim().length === 0) break;
+                       
+                       const data = JSON.parse(rawText);
+                       const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                       
+                       if (itemsArray.length === 0) break;
+                       allFetchedItems = [...allFetchedItems, ...itemsArray];
 
-                           window.polaryonHybrid_ItemsUrl = null;
-                           if (res.status === 404) window.polaryonContext_PurchaseId = null;
-                           window.polaryonAPIStatus = "⚠️ RE-SINCRONIZANDO...";
-                           console.warn("💀 [POLARYON] Rota expirada (404/401). Scanner reativado. URL Blacklisted:", baseBadUrl);
-                      }
-                      break;
-                  }
+                       const sizeMatch = targetUrl.match(/tamanhoPagina=(\d+)/);
+                       const pageSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
+                       if (itemsArray.length < pageSize) {
+                           hasMore = false;
+                       } else {
+                           page++;
+                           await new Promise(r => setTimeout(r, 50)); 
+                       }
+                   }
+               }
 
-                  const rawText = await res.text();
-                  if (!rawText || rawText.trim().length === 0) break;
-                  
-                  const data = JSON.parse(rawText);
-                  const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                  
-                  if (itemsArray.length === 0) break;
-                  allFetchedItems = [...allFetchedItems, ...itemsArray];
-
-                  // Detecta se é a última página
-                  const sizeMatch = targetUrl.match(/tamanhoPagina=(\d+)/);
-                  const pageSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
-                  if (itemsArray.length < pageSize) {
-                      hasMore = false;
-                  } else {
-                      page++;
-                      // Pequeno intervalo entre páginas para parecer humano
-                      await new Promise(r => setTimeout(r, 50)); 
-                  }
-              }
+               if (allFetchedItems.length === 0 && !window.polaryonHybrid_ItemsUrl && (!window.polaryonHybrid_Rooms || window.polaryonHybrid_Rooms.size === 0)) {
+                   setTimeout(pollingLoop, 2000);
+                   return;
+               }
 
               if (allFetchedItems.length > 0) {
                    if (!window.polaryonAllItems) window.polaryonAllItems = {};
@@ -206,16 +229,17 @@ const startHybridEngine = () => {
                   }
               }
 
+               // [SIGA TURBO v3.3] LATÊNCIA ULTRA-BAIXA: 
+               // 150ms para combate real, 1000ms para monitoramento leve
+               const items = Object.values(window.polaryonAllItems || {});
+               const hasCritical = items.some(it => it.status === 'Disputa' || it.status === 'Iminência' || it.isDispute);
+               const delay = hasCritical ? 150 : 1000;
+               
+               setTimeout(pollingLoop, delay);
          } catch(e) {
               window.polaryonAPIStatus = "❌ OFFLINE";
+              setTimeout(pollingLoop, 2000);
          }
-
-         // ADAPTATIVE SPEED: Acelera se houver itens em disputa crítica
-         const items = Object.values(window.polaryonAllItems || {});
-         const hasCritical = items.some(it => it.status === 'Disputa' || it.status === 'Iminência');
-         const delay = hasCritical ? 600 : 1500;
-         
-         setTimeout(pollingLoop, delay);
     };
 
     pollingLoop();
@@ -371,8 +395,8 @@ function scrapeChatAndTimers() {
     } catch (e) {}
 }
 
-// Inicia o monitoramento de Chat e Timers em loop paralelo
-setInterval(scrapeChatAndTimers, 2000);
+// Inicia o monitoramento de Chat e Timers em loop paralelo (SIGA SCANNER)
+setInterval(scrapeChatAndTimers, 500);
 
 let scrapingInterval = null;
 let serverOffset = 0; // Diferença em MS entre o servidor do Governo e o PC Local
@@ -442,6 +466,8 @@ let currentConfig = {
     ano: '',
     modality: '05'
 };
+let isManualLogin = false;
+let loginSuccessDetected = false;
 
 /**
  * Esta função lê o HTML da página do Portal Comprasnet atual 
@@ -459,11 +485,19 @@ function scrapeDisputeRoom() {
         const bodyText = document.body.innerText || "";
         const currentUrl = window.location.href;
         
+        // --- DETECÇÃO DE SUCESSO NO LOGIN (SIGA STYLE) ---
+        // Se detectarmos que o usuário chegou na tela de serviços ou disputa, avisamos para fechar a janela
+        if (!loginSuccessDetected && (currentUrl.includes('servico=226') || currentUrl.includes('/disputa') || currentUrl.includes('intro.htm'))) {
+             console.log("%c[POLARYON] LOGIN DETECTADO COM SUCESSO! Migrando para Operação de Fundo...", "color: #00ff00; font-weight: bold; font-size: 14px;");
+             loginSuccessDetected = true;
+             ipcRenderer.send('login-success', { sessionId: mySessionId, url: currentUrl });
+        }
+
         // --- BYPASS DE AVISOS/COMUNICADOS (SICAF/GOV) ---
-        if (bodyText.includes('A Secretaria de Gestão e Inovação informa') || 
+        if (!isManualLogin && (bodyText.includes('A Secretaria de Gestão e Inovação informa') || 
             bodyText.includes('Comunicado') || 
             bodyText.includes('Aviso Importante') ||
-            currentUrl.includes('AvisoPortal')) {
+            currentUrl.includes('AvisoPortal'))) {
             
             const skipBtns = Array.from(document.querySelectorAll('button, a, input[type="button"], tr, td')).find(el => {
                 const txt = (el.innerText || el.value || "").toUpperCase();
@@ -513,40 +547,36 @@ function scrapeDisputeRoom() {
              return;
         }
 
-        // Fase 1: Tela intermediária do Comprasnet ("Acesse sua Conta" -> "Entrar com Gov.br")
-        if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
-            const entrarBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
-                el.innerText.toUpperCase().includes('ENTRAR COM GOV.BR')
-            );
-            if (entrarBtn) {
-                console.log("[POLARYON] Clicando em Entrar com Gov.br...");
-                entrarBtn.click();
-            }
-            return;
-        }
-
-        // Fase 2: Plataforma Gov.br (SSO)
-        if (bodyText.includes('Identifique-se no gov.br') || bodyText.includes('Acesso Gov.br') || bodyText.includes('Certificado digital')) {
-            // Tentativa rápida e direta no botão de certificado
-            const certButton = document.querySelector('button#login-certificate, .cert-login-button, [alt="Certificado Digital"], #label-certificate');
-            const certLink = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
-                const txt = (el.innerText || el.getAttribute('alt') || '').toUpperCase();
-                return txt.includes('CERTIFICADO DIGITAL') || txt === 'SEU CERTIFICADO DIGITAL';
-            });
-
-            const finalBtn = certButton || certLink;
-
-            if (finalBtn && typeof finalBtn.click === 'function') {
-                console.log("[POLARYON] Executando Login Automático via Certificado...");
-                finalBtn.click();
+        // --- AUTOMAÇÃO DE LOGIN (SOMENTE SE NÃO FOR MANUAL) ---
+        if (!isManualLogin) {
+            // Fase 1: Tela intermediária do Comprasnet ("Acesse sua Conta" -> "Entrar com Gov.br")
+            if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
+                const entrarBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
+                    el.innerText.toUpperCase().includes('ENTRAR COM GOV.BR')
+                );
+                if (entrarBtn) {
+                    console.log("[POLARYON] Clicando em Entrar com Gov.br...");
+                    entrarBtn.click();
+                }
+                return;
             }
 
-            ipcRenderer.send('portal-update', {
-                sessionId: mySessionId,
-                items: [],
-                statusMessage: "Autenticando no Gov.br via A1..."
-            });
-            return;
+            // Fase 2: Plataforma Gov.br (SSO)
+            if (bodyText.includes('Identifique-se no gov.br') || bodyText.includes('Acesso Gov.br') || bodyText.includes('Certificado digital')) {
+                const certButton = document.querySelector('button#login-certificate, .cert-login-button, [alt="Certificado Digital"], #label-certificate');
+                const certLink = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
+                    const txt = (el.innerText || el.getAttribute('alt') || '').toUpperCase();
+                    return txt.includes('CERTIFICADO DIGITAL') || txt === 'SEU CERTIFICADO DIGITAL';
+                });
+
+                const finalBtn = certButton || certLink;
+
+                if (finalBtn && typeof finalBtn.click === 'function') {
+                    console.log("[POLARYON] Executando Login Automático via Certificado...");
+                    finalBtn.click();
+                }
+                return;
+            }
         }
 
         // --- AUTO-NAVEGAÇÃO (ÁREA DO FORNECEDOR / INTRO.HTM COM FRAMES) ---
@@ -986,7 +1016,8 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
         ano: config.ano,
         modality: config.modality
     };
-    console.log("[POLARYON] Sessão Local Inicializada:", sessionId, currentConfig);
+    isManualLogin = config.modality === 'LOGIN_FLOW';
+    console.log(`[POLARYON] Sessão Local Inicializada: ${sessionId} (Manual: ${isManualLogin})`, currentConfig);
 
     // SCANNER v2.1.22: Garante que o motor já inicie tentando farejar a rede
     if (window.polaryonAuthBearer && !window.polaryonHybrid_ItemsUrl) {

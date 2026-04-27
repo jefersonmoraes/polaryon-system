@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
     AlertDialog,
@@ -48,6 +48,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CertificateManager } from '@/components/terminal/CertificateManager';
+import { Badge } from '@/components/ui/badge';
 
 interface BiddingItem {
     itemId: string;
@@ -97,6 +98,7 @@ export default function BiddingDashboardPage() {
     const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
+    const [networkTraffic, setNetworkTraffic] = useState<any[]>([]);
 
     // MODO MULTI-UASG (v2.0 War Flow)
     const [sessions, setSessions] = useState<Record<string, {
@@ -310,7 +312,12 @@ export default function BiddingDashboardPage() {
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
             (window as any).electronAPI.onBiddingChat(handleChat);
 
-            // 🔍 [SIGA AUTO-DISCOVERY] Detecção de Entrada em Sala
+            if ((window as any).electronAPI.onBiddingNetworkTraffic) {
+                (window as any).electronAPI.onBiddingNetworkTraffic((data: any) => {
+                    setNetworkTraffic(prev => [data, ...prev].slice(0, 50));
+                });
+            }
+
             if ((window as any).electronAPI.onBiddingDetectedRoom) {
                 (window as any).electronAPI.onBiddingDetectedRoom((data: any) => {
                     const { url } = data;
@@ -326,6 +333,14 @@ export default function BiddingDashboardPage() {
                         
                         toast.success(`Sala Detectada: UASG ${detectedUasg} - Pregão ${detectedNum}. Sincronizando... ⚡`);
                     }
+                });
+            }
+
+            // 🛡️ DETECÇÃO DE SUCESSO NO LOGIN (SIGA STYLE)
+            if ((window as any).electronAPI.onBiddingLoginFinished) {
+                (window as any).electronAPI.onBiddingLoginFinished((data: any) => {
+                    toast.success("Login confirmado! Ocultando janela e iniciando radar silencioso... 🛡️");
+                    setIsListening(true);
                 });
             }
 
@@ -565,172 +580,175 @@ export default function BiddingDashboardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#020817] text-white font-['JetBrains_Mono'] overflow-x-hidden">
-            {/* [SIGA CLONE] HEADER TÁTICO CENTRALIZADO */}
-            <div className="w-full py-10 px-6 flex flex-col items-center justify-center border-b border-white/5 bg-gradient-to-b from-[#020817] to-[#030e25] relative">
-                {/* Status de Conexão Flutuante (v3.2) */}
-                <div className="absolute top-6 right-8 flex items-center gap-4 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
-                    <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-white/20'}`} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                            {isListening ? 'Sistema Operacional' : 'Standby'}
-                        </span>
+        <div className="min-h-screen bg-slate-100 text-slate-900 font-sans overflow-x-hidden">
+            {/* [SIGA CLONE] HEADER TÁTICO PRETO */}
+            <header className="w-full h-16 bg-black flex items-center justify-between px-8 shadow-xl sticky top-0 z-50">
+                <div className="flex items-center gap-3">
+                    <div className="bg-white p-1.5 rounded-md flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-black fill-current" />
                     </div>
-                    {isListening && (
-                        <button onClick={stopRadar} className="text-red-400 hover:text-red-300 transition-colors">
-                            <XCircle className="w-3.5 h-3.5" />
-                        </button>
-                    )}
+                    <h1 className="text-white font-black italic text-xl tracking-tighter">
+                        SIGA <span className="text-emerald-400">POLARYON</span>
+                    </h1>
                 </div>
 
-                <h1 className="text-4xl font-['Anton'] tracking-wider mb-2 text-white/90">DISPUTAS COMPRASNET</h1>
-                <p className="text-white/40 text-[10px] mb-8 uppercase tracking-[0.3em]">Envie seus lances nos seus pregões e dispensas eletrônicas</p>
-                
-                {/* [SIGA CLONE] SELETOR DE MODALIDADE */}
-                <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 backdrop-blur-sm">
-                    <button 
-                        onClick={() => setModalityTab('PREGAO')}
-                        className={`px-10 py-2.5 rounded-md text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'PREGAO' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-white/40 hover:text-white'}`}
+                <div className="flex items-center gap-6">
+                    <div className="hidden md:flex flex-col items-end">
+                        <span className="text-[10px] font-black text-white uppercase tracking-tight">
+                            {authUser?.name || 'OPERADOR TÁTICO'}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400">
+                            {authUser?.email || 'conexão.segura@polaryon.com'}
+                        </span>
+                    </div>
+                    <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] h-8 px-4"
+                        onClick={() => useAuthStore.getState().logout()}
                     >
-                        Pregões eletrônicos
-                    </button>
-                    <button 
-                        onClick={() => setModalityTab('DISPENSA')}
-                        className={`px-10 py-2.5 rounded-md text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'DISPENSA' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-white/40 hover:text-white'}`}
-                    >
-                        Dispensas eletrônicas
-                    </button>
+                        Sair
+                    </Button>
+                </div>
+            </header>
+
+            {/* BARRA DE MODALIDADE (SUB-HEADER) */}
+            <div className="w-full bg-white border-b border-slate-200 py-6 flex flex-col items-center">
+                <div className="container mx-auto px-6 flex justify-between items-center">
+                    <div className="flex flex-col">
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Terminal de Combate</h2>
+                        <div className="flex gap-2 mt-1">
+                            <Badge variant="outline" className="text-[9px] font-black bg-slate-100 text-slate-400 border-slate-200">
+                                Δ SYNC: {Math.abs(serverOffset)}ms
+                            </Badge>
+                            <Badge className="text-[9px] font-black bg-emerald-500 text-white border-none">STATUS: OPERACIONAL</Badge>
+                        </div>
+                    </div>
+
+                    <div className="flex bg-slate-100 p-1 rounded-full border border-slate-200">
+                        <button 
+                            onClick={() => setModalityTab('PREGAO')}
+                            className={`px-8 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'PREGAO' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Pregões
+                        </button>
+                        <button 
+                            onClick={() => setModalityTab('DISPENSA')}
+                            className={`px-8 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'DISPENSA' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Dispensas
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Simulação</span>
+                             <Switch checked={simulationMode} onCheckedChange={toggleSimulation} />
+                        </div>
+                        <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-slate-200" onClick={() => setIsChatOpen(!isChatOpen)}>
+                            <Zap className={`w-5 h-5 ${isChatOpen ? 'text-emerald-500 fill-emerald-500' : 'text-slate-300'}`} />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            <main className="container mx-auto px-4 py-8 max-w-7xl">
+            <main className="container mx-auto px-4 py-8 max-w-[1800px]">
                 {!isListening ? (
                     <div className="flex flex-col items-center justify-center py-12 space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000">
                         {/* CARD DE ACESSO "MÁQUINA DE LANCES" */}
-                        <div className="bg-[#030e25] border border-white/10 p-12 rounded-[2.5rem] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.5)] text-center max-w-lg w-full backdrop-blur-2xl relative overflow-hidden group">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                            
-                            <div className="w-24 h-24 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-white/10 transform rotate-12 group-hover:rotate-0 transition-transform duration-500">
-                                <Zap className="w-12 h-12 text-white/80 fill-current" />
+                        <div className="bg-white border border-slate-200 p-12 rounded-[2.5rem] shadow-2xl text-center max-w-lg w-full relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
+                            <div className="w-24 h-24 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-slate-100 transform rotate-12 group-hover:rotate-0 transition-transform duration-500">
+                                <Zap className="w-12 h-12 text-emerald-500 fill-current" />
                             </div>
-                            
-                            <h2 className="text-3xl font-black tracking-tighter mb-4 text-white uppercase">MÁQUINA DE LANCES</h2>
-                            <p className="text-white/40 text-xs mb-10 leading-relaxed px-4 font-bold uppercase tracking-widest">
+                            <h2 className="text-3xl font-black tracking-tighter mb-4 text-slate-900 uppercase">MÁQUINA DE LANCES</h2>
+                            <p className="text-slate-500 text-xs mb-10 leading-relaxed px-4 font-bold uppercase tracking-widest">
                                 Inicie a automação visual. O robô abrirá o navegador oficial para você autenticar com seu Certificado Digital.
                             </p>
-                            
-                            <button
-                                onClick={openPortalLogin}
-                                className="w-full bg-white hover:bg-slate-100 text-black font-black py-5 rounded-2xl flex items-center justify-center space-x-4 transition-all transform hover:scale-[1.02] active:scale-95 shadow-2xl shadow-white/10 group relative overflow-hidden"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                                <Shield className="w-6 h-6" />
+                            <button onClick={openPortalLogin} className="w-full bg-black hover:bg-slate-900 text-white font-black py-5 rounded-2xl flex items-center justify-center space-x-4 transition-all shadow-xl">
+                                <Shield className="w-6 h-6 text-emerald-400" />
                                 <span className="text-lg uppercase tracking-tight">LOGIN COMPRAS.GOV.BR</span>
                             </button>
-
-                            <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-center gap-6">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Protocolo SIGA</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Latência Zero</span>
-                                </div>
-                            </div>
                         </div>
 
-                        {/* LISTA DE SALAS ATIVAS NO CACHE (SIGA STYLE) */}
+                        {/* CACHE SESSIONS */}
                         {Object.keys(sessions).length > 0 && (
-                            <div className="w-full max-w-4xl space-y-6">
-                                <div className="flex items-center gap-4 px-4">
-                                    <div className="h-[1px] flex-1 bg-white/5" />
-                                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Sessões em Cache</span>
-                                    <div className="h-[1px] flex-1 bg-white/5" />
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {Object.entries(sessions).map(([sid, s]) => (
-                                        <div 
-                                            key={sid} 
-                                            onClick={() => {
-                                                setSessionId(sid);
-                                                setItems(s.items);
-                                                setIsListening(true);
-                                            }}
-                                            className="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl cursor-pointer transition-all flex items-center justify-between group"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/5 text-xs font-black text-white/40">
-                                                    {s.items.length}
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-black text-white/80 group-hover:text-white uppercase tracking-tighter">UASG {s.uasg}</h4>
-                                                    <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Sessão {s.numero} • {s.lastUpdate}</p>
-                                                </div>
-                                            </div>
-                                            <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Target className="w-4 h-4 text-emerald-400" />
+                            <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {Object.entries(sessions).map(([sid, s]) => (
+                                    <div key={sid} onClick={() => { setSessionId(sid); setItems(s.items); setIsListening(true); }} className="bg-white border border-slate-200 p-5 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all flex items-center justify-between group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 text-xs font-black text-slate-400">{s.items.length}</div>
+                                            <div>
+                                                <h4 className="text-sm font-black text-slate-800 uppercase tracking-tighter">UASG {s.uasg}</h4>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{s.lastUpdate}</p>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                        <Target className="w-4 h-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 ) : (
-                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700 pb-20">
-                        <div className={`grid ${viewMode === 'grid' ? 'grid-cols-12' : 'grid-cols-1'} gap-6`}>
-                            {/* LISTA DE ITENS */}
-                            <div className={`${viewMode === 'grid' && isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-4`}>
-                                {items.length === 0 ? (
-                                    <div className="h-96 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-950/20">
-                                        <Target className="w-16 h-16 text-slate-800 animate-pulse mb-6" />
-                                        <h3 className="text-slate-500 font-black text-lg uppercase tracking-tighter italic">Sincronizando Sensores...</h3>
-                                        <p className="text-slate-700 text-[10px] mt-2 font-black uppercase tracking-widest">O robô está sintonizando com os dados visuais do governo.</p>
-                                    </div>
-                                ) : (
-                                    <BiddingGridView 
-                                        items={allItems} 
-                                        sessionId={sessionId || ''}
-                                        strategies={itemStrategies}
-                                        onSaveStrategy={saveStrategy}
-                                        onQuickBid={quickBid}
-                                    />
-                                )}
-                            </div>
+                    <div className="grid grid-cols-12 gap-8 animate-in fade-in duration-700">
+                        <div className={`${isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-6`}>
+                            <BiddingSigaView 
+                                items={allItems} 
+                                sessions={sessions}
+                                sessionId={sessionId || ''}
+                                onSaveStrategy={saveStrategy}
+                                onQuickBid={quickBid}
+                                onStopRadar={stopRadar}
+                            />
+                        </div>
 
-                            {/* CHAT MONITOR PERSISTENTE (GRID MODE) */}
-                            {viewMode === 'grid' && isChatOpen && (
-                                <div className="col-span-3 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl flex flex-col h-[75vh] sticky top-24 overflow-hidden">
-                                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                                        <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
-                                            <Zap className="w-3 h-3 fill-current" /> Monitor de Chat
-                                        </h3>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsChatOpen(false)}>
-                                            <XCircle className="w-3.5 h-3.5" />
-                                        </Button>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                                        {chatMessages.length === 0 ? (
-                                            <p className="text-[10px] text-slate-600 italic text-center py-10">Nenhuma mensagem interceptada.</p>
+                        {isChatOpen && (
+                            <div className="col-span-3 space-y-6 sticky top-24 h-[calc(100vh-140px)] flex flex-col">
+                                {/* NETWORK TRAFFIC LOG */}
+                                <Card className="bg-slate-900 border-none shadow-2xl rounded-2xl flex flex-col flex-1 overflow-hidden">
+                                    <CardHeader className="bg-white/5 border-b border-white/5 py-3 px-5">
+                                        <CardTitle className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Activity className="w-3 h-3 text-emerald-500" /> Fluxo de Dados (Siga Intelligence)
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-0 flex-1 overflow-y-auto font-mono text-[9px] p-2 space-y-1 custom-scrollbar">
+                                        {networkTraffic.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center text-slate-600 italic">Capturando pacotes...</div>
                                         ) : (
-                                            chatMessages.map((msg, idx) => (
-                                                <div key={idx} className="space-y-1">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[8px] font-black text-slate-500">{msg.data || msg.time}</span>
-                                                        <span className="text-[8px] font-black text-amber-600 uppercase">{msg.origem || 'PORTAL'}</span>
-                                                    </div>
-                                                    <p className="text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                                                        {msg.texto || msg.text}
-                                                    </p>
+                                            networkTraffic.map((log, idx) => (
+                                                <div key={idx} className="flex gap-2 border-b border-white/5 pb-1">
+                                                    <span className="text-slate-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                                    <span className={log.statusCode >= 400 ? 'text-red-400' : 'text-emerald-400'}>{log.statusCode}</span>
+                                                    <span className="truncate text-slate-300">GET {log.url.split('/').pop().split('?')[0]}</span>
                                                 </div>
                                             ))
                                         )}
+                                    </CardContent>
+                                    <div className="p-3 bg-white/5 border-t border-white/5 flex justify-between text-[8px] font-black text-slate-500 uppercase">
+                                        <span>Ping: {Math.abs(serverOffset)}ms</span>
+                                        <span className="text-emerald-500">SYNC: OK</span>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                </Card>
+
+                                {/* CHAT MESSAGES */}
+                                <Card className="bg-white border-slate-200 shadow-xl rounded-2xl flex-1 flex flex-col overflow-hidden">
+                                    <CardHeader className="py-3 px-5 border-b border-slate-100">
+                                        <CardTitle className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mensagens do Pregoeiro</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                                        {chatMessages.length === 0 ? (
+                                            <p className="text-[10px] text-slate-300 italic text-center py-10">Nenhuma mensagem.</p>
+                                        ) : (
+                                            chatMessages.map((msg, idx) => (
+                                                <div key={idx} className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                    <p className="text-[10px] text-slate-700">{msg.texto || msg.text}</p>
+                                                </div>
+                                            ))
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
                     </div>
                 )}
             </main>
@@ -763,8 +781,218 @@ export default function BiddingDashboardPage() {
     );
 }
 
-// v2.0 - COMPONENTE DE ELITE PARA FLUXO DE COMBATE
-// [MODO SIGA v3.2] GRID VIEW COMPONENT - HIGH DENSITY MONITORING
+
+
+// [MODO SIGA v3.3] COMPONENTE DE VISUALIZAÇÃO AGRUPADA (SIGA STYLE)
+function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar }: { 
+    items: any[], 
+    sessions: any,
+    sessionId: string,
+    onSaveStrategy: (id: string, s: ItemStrategy, sid: string) => void,
+    onQuickBid: (id: string, val: number, sid: string) => void,
+    onStopRadar: (sid: string) => void
+}) {
+    // Agrupa itens por sid (sessão/processo)
+    const groupedItems = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        items.forEach(item => {
+            if (!groups[item.sid]) groups[item.sid] = [];
+            groups[item.sid].push(item);
+        });
+        return groups;
+    }, [items]);
+
+    return (
+        <div className="space-y-8 pb-12">
+            {Object.entries(sessions).map(([sid, session]: [string, any]) => (
+                <ProcessCard 
+                    key={sid}
+                    sid={sid}
+                    session={session}
+                    items={groupedItems[sid] || []}
+                    onSaveStrategy={onSaveStrategy}
+                    onQuickBid={onQuickBid}
+                    onStopRadar={() => onStopRadar(sid)}
+                />
+            ))}
+        </div>
+    );
+}
+
+function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar }: any) {
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [tab, setTab] = useState<'WAIT' | 'DISPUTE' | 'CLOSED'>('DISPUTE');
+    
+    const filteredItems = useMemo(() => {
+        if (tab === 'WAIT') return items.filter((i: any) => i.status?.toLowerCase().includes('aguardando'));
+        if (tab === 'CLOSED') return items.filter((i: any) => i.status?.toLowerCase().includes('encerrado'));
+        return items.filter((i: any) => !i.status?.toLowerCase().includes('aguardando') && !i.status?.toLowerCase().includes('encerrado'));
+    }, [items, tab]);
+
+    const counts = {
+        wait: items.filter((i: any) => i.status?.toLowerCase().includes('aguardando')).length,
+        dispute: items.filter((i: any) => !i.status?.toLowerCase().includes('aguardando') && !i.status?.toLowerCase().includes('encerrado')).length,
+        closed: items.filter((i: any) => i.status?.toLowerCase().includes('encerrado')).length
+    };
+
+    return (
+        <Card className="bg-white border border-slate-200 shadow-lg rounded-xl overflow-hidden transition-all duration-500">
+            <CardHeader 
+                className="bg-slate-50/80 py-4 px-6 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                <div className="flex justify-between items-center">
+                    <div className="flex-1">
+                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                            Dispensa eletrônica {session.numero} | UASG {session.uasg} - {session.uasgName || 'SECRETARIA DE ADMINISTRAÇÃO'}
+                        </h3>
+                        <div className="flex gap-2 mt-2">
+                            <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
+                            <Badge className="text-[9px] font-bold bg-cyan-500 text-white border-none">ITENS EM FASE DE LANCES</Badge>
+                            <Badge className="text-[9px] font-bold bg-emerald-500 text-white border-none">EXECUTANDO ITENS</Badge>
+                        </div>
+                    </div>
+                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                </div>
+            </CardHeader>
+            
+            {isExpanded && (
+                <CardContent className="p-6 bg-white">
+                    <div className="flex justify-center items-center gap-2 mb-8 relative">
+                        <div className="flex bg-slate-100 p-1 rounded-full border border-slate-200">
+                            <button 
+                                onClick={() => setTab('WAIT')} 
+                                className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${tab === 'WAIT' ? 'bg-black text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Aguardando disputa {counts.wait > 0 && `(${counts.wait})`}
+                            </button>
+                            <button 
+                                onClick={() => setTab('DISPUTE')} 
+                                className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${tab === 'DISPUTE' ? 'bg-black text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Em disputa ({counts.dispute})
+                            </button>
+                            <button 
+                                onClick={() => setTab('CLOSED')} 
+                                className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${tab === 'CLOSED' ? 'bg-black text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Encerrados {counts.closed > 0 && `(${counts.closed})`}
+                            </button>
+                        </div>
+                        <RefreshCw className="w-4 h-4 text-slate-300 absolute right-0 cursor-pointer hover:rotate-180 transition-transform duration-700" />
+                    </div>
+
+                    <div className="space-y-4">
+                        {filteredItems.length === 0 ? (
+                            <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                                <Search className="w-10 h-10 text-slate-200 mx-auto mb-4" />
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p>
+                            </div>
+                        ) : (
+                            filteredItems.map((item: any) => (
+                                <SigaItemRow 
+                                    key={item.itemId} 
+                                    item={item} 
+                                    sid={sid} 
+                                    onSaveStrategy={onSaveStrategy} 
+                                    onQuickBid={onQuickBid} 
+                                />
+                            ))
+                        )}
+                    </div>
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
+function SigaItemRow({ item, sid, onSaveStrategy, onQuickBid }: any) {
+    const isWinning = item.ganhador === 'Você' || item.position === 1;
+    const isImminent = item.timerSeconds && item.timerSeconds < 60;
+    
+    return (
+        <div className={`p-6 rounded-xl border transition-all duration-300 ${isWinning ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+            <div className="grid grid-cols-12 gap-6 items-center">
+                {/* ITEM INFO */}
+                <div className="col-span-3">
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="text-xs font-black text-slate-900 uppercase tracking-tighter">ITEM {item.itemId}</span>
+                        <span className="text-[10px] font-bold text-slate-400 truncate max-w-[150px]">{item.desc || item.descricao || 'Descrição Indisponível'}</span>
+                    </div>
+                    <Badge className={`text-[10px] font-black uppercase px-3 py-1 rounded-sm ${isWinning ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}>
+                        {isWinning ? 'Ganhando' : 'Perdendo'}
+                    </Badge>
+                </div>
+
+                {/* INPUTS DE LANCE */}
+                <div className="col-span-3 flex gap-4">
+                    <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-[9px] font-bold text-slate-400 uppercase">Lance mínimo (R$)</label>
+                        <input 
+                            type="text" 
+                            className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-xs font-black text-slate-700 outline-none focus:border-black/20"
+                            placeholder="0,00"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1 w-20">
+                        <label className="text-[9px] font-bold text-slate-400 uppercase">Desc. (%)</label>
+                        <input 
+                            type="text" 
+                            className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-xs font-black text-slate-700 outline-none focus:border-black/20"
+                            placeholder="0,01"
+                        />
+                    </div>
+                </div>
+
+                {/* VALORES REAIS */}
+                <div className="col-span-3 grid grid-cols-1 gap-2">
+                    <div className="flex items-center justify-between px-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Melhor lance</span>
+                        <span className="text-xs font-black text-red-500">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Meu lance</span>
+                        <span className="text-xs font-black text-slate-800">R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</span>
+                    </div>
+                </div>
+
+                {/* TIMER E CONTROLE */}
+                <div className="col-span-3 flex items-center justify-end gap-6 border-l border-slate-100 pl-6">
+                    <div className="flex flex-col items-center">
+                        <span className="text-lg font-mono font-black text-slate-900 tabular-nums">
+                            {item.timeout || '00:00:00'}
+                        </span>
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Cronômetro</span>
+                    </div>
+                    
+                    <button 
+                        className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center group hover:bg-red-500 transition-all shadow-lg shadow-red-500/20"
+                        onClick={() => onSaveStrategy(item.itemId, { mode: 'manual', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' }, sid)}
+                    >
+                        <StopCircle className="w-5 h-5 text-red-500 group-hover:text-white transition-colors" />
+                    </button>
+                </div>
+            </div>
+
+            {/* CHECKBOXES ADICIONAIS */}
+            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-8">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-slate-200 accent-black" defaultChecked />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Permitir lances com 4 casas decimais</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-slate-200 accent-black" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Não aguardar os segundos finais para enviar lances</span>
+                </label>
+            </div>
+            
+            <div className="mt-3 text-[9px] font-black text-emerald-600 uppercase italic">
+                {isWinning ? '✓ Liderança mantida. Aguardando novos lances.' : '⚠ Aguardando entrar nos últimos 30 segundos para enviar lance.'}
+            </div>
+        </div>
+    );
+}
+
 function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuickBid }: { 
     items: any[], 
     sessionId: string, 
@@ -773,20 +1001,20 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
     onQuickBid: (id: string, val: number, sid: string) => void
 }) {
     return (
-        <div className="bg-slate-950/50 rounded-3xl border border-white/10 overflow-hidden backdrop-blur-xl shadow-2xl">
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-2xl">
             <table className="w-full text-left border-collapse">
                 <thead>
-                    <tr className="bg-slate-900/80 border-b border-white/10">
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Item / UASG</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status / Posição</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Melhor Valor</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Meu Lance</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Timer</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estratégia / Mínimo</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações Rápidas</th>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Item / UASG</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status / Posição</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Melhor Valor</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Meu Lance</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Timer</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estratégia / Mínimo</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações Rápidas</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                     {items.map(item => {
                         const isWinning = item.ganhador === 'Você' || item.position === 1;
                         const strategy = strategies[item.itemId] || { mode: 'manual', minPrice: 0, decrementValue: 0.01, decrementType: 'fixed' };
@@ -794,17 +1022,17 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
                         const sid = item.sid || sessionId;
 
                         return (
-                            <tr key={`${sid}-${item.itemId}`} className={`group transition-colors hover:bg-white/[0.02] ${isWinning ? 'bg-emerald-500/[0.02]' : 'bg-red-500/[0.02]'}`}>
+                            <tr key={`${sid}-${item.itemId}`} className={`group transition-colors hover:bg-slate-50 ${isWinning ? 'bg-emerald-50/30' : 'bg-red-50/30'}`}>
                                 <td className="px-4 py-2 relative">
                                     <div className={`absolute left-0 top-0 w-1 h-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'} ${isImminent ? 'animate-pulse' : ''}`} />
                                     <div className="flex flex-col">
-                                        <span className="text-[11px] font-black text-slate-200">ITEM {item.itemId}</span>
-                                        <span className="text-[9px] font-bold text-slate-500 uppercase">UASG {item.uasgName || '---'}</span>
+                                        <span className="text-[11px] font-black text-slate-700">ITEM {item.itemId}</span>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase">UASG {item.uasgName || '---'}</span>
                                     </div>
                                 </td>
                                 <td className="px-4 py-2">
                                     <div className="flex items-center gap-2">
-                                        <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${isWinning ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                        <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${isWinning ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' : 'bg-red-500/20 text-red-600 border border-red-500/30'}`}>
                                             {isWinning ? 'Vencendo' : `${item.position || '?'}º Lugar`}
                                         </div>
                                         {isImminent && (
@@ -813,12 +1041,12 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
                                     </div>
                                 </td>
                                 <td className="px-4 py-2">
-                                    <span className="text-[11px] font-mono font-bold text-white">
+                                    <span className="text-[11px] font-mono font-bold text-slate-900">
                                         R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </span>
                                 </td>
                                 <td className="px-4 py-2 text-center">
-                                    <span className={`text-[13px] font-mono font-black italic ${isWinning ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    <span className={`text-[13px] font-mono font-black italic ${isWinning ? 'text-emerald-600' : 'text-red-600'}`}>
                                         R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '---'}
                                     </span>
                                 </td>
@@ -835,25 +1063,25 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
                                                     type="checkbox" 
                                                     checked={strategy.mode === 'follower'}
                                                     onChange={(e) => onSaveStrategy(item.itemId, { ...strategy, mode: e.target.checked ? 'follower' : 'manual' }, sid)}
-                                                    className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 accent-emerald-500"
+                                                    className="w-3.5 h-3.5 rounded border-slate-200 bg-white accent-emerald-500"
                                                 />
-                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Auto</span>
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Auto</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <input 
                                                     type="checkbox" 
                                                     checked={strategy.mode === 'sniper'}
                                                     onChange={(e) => onSaveStrategy(item.itemId, { ...strategy, mode: e.target.checked ? 'sniper' : 'manual' }, sid)}
-                                                    className="w-3.5 h-3.5 rounded border-white/20 bg-slate-900 accent-orange-500"
+                                                    className="w-3.5 h-3.5 rounded border-slate-200 bg-white accent-orange-500"
                                                 />
-                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Sniper</span>
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sniper</span>
                                             </div>
                                         </div>
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="text-[8px] font-black text-slate-600 uppercase">Mínimo</span>
+                                            <span className="text-[8px] font-black text-slate-400 uppercase">Mínimo</span>
                                             <input 
                                                 type="text"
-                                                className="bg-black/40 border border-white/5 rounded px-2 py-0.5 text-[10px] font-black text-emerald-500 w-20 focus:border-emerald-500/50 outline-none"
+                                                className="bg-white border border-slate-200 rounded px-2 py-0.5 text-[10px] font-black text-emerald-600 w-20 focus:border-emerald-500/50 outline-none"
                                                 defaultValue={strategy.minPrice}
                                                 onBlur={(e) => onSaveStrategy(item.itemId, { ...strategy, minPrice: parseFloat(e.target.value.replace(',', '.')) || 0 }, sid)}
                                             />
@@ -866,7 +1094,7 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
                                             variant="outline" 
                                             size="sm" 
                                             onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 0.01, sid)}
-                                            className="h-7 px-2 text-[9px] font-black bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                                            className="h-7 px-2 text-[9px] font-black bg-emerald-500/10 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500 hover:text-white"
                                         >
                                             -0,01
                                         </Button>
@@ -874,17 +1102,9 @@ function BiddingGridView({ items, sessionId, strategies, onSaveStrategy, onQuick
                                             variant="outline" 
                                             size="sm" 
                                             onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 1.00, sid)}
-                                            className="h-7 px-2 text-[9px] font-black bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-white"
+                                            className="h-7 px-2 text-[9px] font-black bg-amber-500/10 border-amber-500/30 text-amber-600 hover:bg-amber-500 hover:text-white"
                                         >
                                             -1,00
-                                        </Button>
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => onQuickBid(item.itemId, (item.valorAtual || 0) - 0.01, sid)}
-                                            className="h-7 px-2 text-[9px] font-black bg-slate-800 border-white/10 text-white hover:bg-white hover:text-black"
-                                        >
-                                            COBRIR
                                         </Button>
                                     </div>
                                 </td>
@@ -902,8 +1122,8 @@ function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: Bidding
     const [localMinPrice, setLocalMinPrice] = useState(strategy?.minPrice?.toString() || "0");
 
     return (
-        <Card className={`relative overflow-hidden border-2 transition-all duration-300 ${isWinning ? 'border-emerald-500/30 bg-emerald-500/[0.03]' : 'border-red-500/30 bg-red-500/[0.03] shadow-[0_0_20px_rgba(239,68,68,0.05)]'}`}>
-            <div className="absolute top-0 left-0 w-1 h-full bg-slate-800" />
+        <Card className={`relative overflow-hidden border-2 transition-all duration-300 ${isWinning ? 'border-emerald-500/30 bg-white shadow-lg' : 'border-red-500/30 bg-white shadow-xl shadow-red-500/10'}`}>
+            <div className="absolute top-0 left-0 w-1 h-full bg-slate-200" />
             <div className={`absolute top-0 left-0 w-1 h-full animate-pulse ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
             
             <CardContent className="p-4">
@@ -911,38 +1131,38 @@ function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: Bidding
                     {/* STATUS E IDENTIFICAÇÃO */}
                     <div className="col-span-3">
                         <div className="flex flex-col gap-1">
-                            <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase whitespace-nowrap">
+                            <span className="text-[10px] font-black text-slate-400 tracking-tighter uppercase whitespace-nowrap">
                                 Item {item.itemId} {item.uasgName ? `• UASG ${item.uasgName}` : ''}
                             </span>
-                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-black italic tracking-tight w-fit ${isWinning ? 'bg-emerald-500 text-white' : 'bg-red-400 text-white animate-pulse'}`}>
+                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[12px] font-black italic tracking-tight w-fit ${isWinning ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>
                                 {isWinning ? <Trophy className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                                 {isWinning ? 'VENCENDO' : `PERDENDO (${item.position || '?'}º)`}
                             </div>
-                            <span className="text-[10px] text-slate-400 font-bold truncate mt-1">{item.desc || item.descricao}</span>
+                            <span className="text-[10px] text-slate-500 font-bold truncate mt-1">{item.desc || item.descricao}</span>
                         </div>
                     </div>
 
                     {/* LANCE E VALOR */}
-                    <div className="col-span-4 flex flex-col items-center justify-center border-l border-r border-white/10 px-4">
-                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Meu Lance</span>
+                    <div className="col-span-4 flex flex-col items-center justify-center border-l border-r border-slate-100 px-4">
+                        <span className="text-[10px] text-slate-400 font-black uppercase mb-1">Meu Lance</span>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-slate-400 text-xs font-bold leading-none">R$</span>
-                            <span className={`text-2xl font-black italic tracking-tighter leading-none ${isWinning ? 'text-emerald-400' : 'text-red-400'}`}>
+                            <span className="text-slate-300 text-xs font-bold leading-none">R$</span>
+                            <span className={`text-2xl font-black italic tracking-tighter leading-none ${isWinning ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '---'}
                             </span>
                         </div>
-                        <div className="text-[9px] text-slate-500 font-bold mt-1 uppercase">
-                            Melhor Geral: <span className="text-white">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <div className="text-[9px] text-slate-400 font-bold mt-1 uppercase">
+                            Melhor Geral: <span className="text-slate-800">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
 
                     {/* TIMER DE COMBATE */}
                     <div className="col-span-2 flex flex-col items-center">
-                        <span className="text-[10px] text-slate-500 font-black uppercase mb-1">Tempo</span>
-                        <div className={`text-xl font-mono font-black tracking-tighter tabular-nums ${item.timerSeconds && item.timerSeconds < 30 ? 'text-orange-500 animate-pulse' : 'text-white'}`}>
+                        <span className="text-[10px] text-slate-400 font-black uppercase mb-1">Tempo</span>
+                        <div className={`text-xl font-mono font-black tracking-tighter tabular-nums ${item.timerSeconds && item.timerSeconds < 30 ? 'text-orange-500 animate-pulse' : 'text-slate-800'}`}>
                             {item.timeout || '--:--'}
                         </div>
-                        <div className="w-full bg-slate-900 h-1 mt-2 rounded-full overflow-hidden">
+                        <div className="w-full bg-slate-100 h-1 mt-2 rounded-full overflow-hidden">
                             <div 
                                 className={`h-full transition-all duration-1000 ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`}
                                 style={{ width: `${Math.min(((item.timerSeconds || 0) / 180) * 100, 100)}%` }}
@@ -958,26 +1178,26 @@ function CombatStreamCard({ item, sessionId, strategy, onSave }: { item: Bidding
                                     type="checkbox" 
                                     checked={strategy.mode === 'follower'}
                                     onChange={(e) => onSave({ ...strategy, mode: e.target.checked ? 'follower' : 'manual' })}
-                                    className="w-4 h-4 rounded border-white/20 bg-slate-900 accent-emerald-500"
+                                    className="w-4 h-4 rounded border-slate-200 bg-white accent-emerald-500"
                                 />
-                                <span className="text-[11px] font-black text-slate-300 group-hover:text-emerald-400 transition-colors uppercase italic">Manter Aberto</span>
+                                <span className="text-[11px] font-black text-slate-400 group-hover:text-emerald-600 transition-colors uppercase italic">Manter Aberto</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input 
                                     type="checkbox" 
                                     checked={strategy.mode === 'sniper'}
                                     onChange={(e) => onSave({ ...strategy, mode: e.target.checked ? 'sniper' : 'manual' })}
-                                    className="w-4 h-4 rounded border-white/20 bg-slate-900 accent-orange-500"
+                                    className="w-4 h-4 rounded border-slate-200 bg-white accent-orange-500"
                                 />
-                                <span className="text-[11px] font-black text-slate-300 group-hover:text-orange-400 transition-colors uppercase italic">Modo Sniper</span>
+                                <span className="text-[11px] font-black text-slate-400 group-hover:text-orange-600 transition-colors uppercase italic">Modo Sniper</span>
                             </label>
                         </div>
 
                         <div className="relative group">
-                            <span className="absolute -top-2 left-2 bg-slate-900 px-1 text-[8px] font-black text-slate-500 uppercase">Preço Mínimo</span>
+                            <span className="absolute -top-2 left-2 bg-white px-1 text-[8px] font-black text-slate-400 uppercase">Preço Mínimo</span>
                             <div className="flex gap-1 h-8">
                                 <Input 
-                                    className="bg-slate-950 border-white/10 text-[11px] font-black text-emerald-400 h-full w-full focus:border-emerald-500/50"
+                                    className="bg-white border-slate-200 text-[11px] font-black text-emerald-600 h-full w-full focus:border-emerald-500/50"
                                     placeholder="0,00"
                                     value={localMinPrice}
                                     onChange={(e) => setLocalMinPrice(e.target.value)}
@@ -1005,17 +1225,17 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                     <Button 
                         size="sm" 
                         variant="outline" 
-                        className="h-7 text-[10px] font-black bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40"
+                        className="h-7 text-[10px] font-black bg-emerald-500/20 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/40"
                     >
                         CONFIGURAR LOTE
                     </Button>
                 ) : (
-                    <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/10 transition-colors h-11 w-11 border border-white/5">
+                    <Button variant="ghost" size="icon" className="rounded-xl hover:bg-slate-100 transition-colors h-11 w-11 border border-slate-200">
                         <Settings2 className="w-5 h-5 text-slate-400" />
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-slate-900 border-white/10 text-slate-100">
+            <DialogContent className="sm:max-w-[425px] bg-white border-slate-200 text-slate-900">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-3 text-2xl font-black">
                         <div className="p-2 bg-emerald-500/20 rounded-lg">
@@ -1028,17 +1248,17 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                     <div className="space-y-3">
                         <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Modo de Disputa</Label>
                         <Select value={strategy.mode} onValueChange={(v: any) => setStrategy({...strategy, mode: v})}>
-                            <SelectTrigger className="bg-slate-950/50 border-white/10 h-12 text-sm font-bold">
+                            <SelectTrigger className="bg-slate-50 border-slate-200 h-12 text-sm font-bold">
                                 <SelectValue />
                             </SelectTrigger>
-                             <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
+                             <SelectContent className="bg-white border-slate-200 text-slate-900">
                                 <SelectItem value="follower" className="text-sm font-bold">Seguidor (Reação Imediata)</SelectItem>
                                 <SelectItem value="sniper" className="text-sm font-bold">Sniper (Segundo Final)</SelectItem>
                                 <SelectItem value="shadow" className="text-sm font-bold">Modo Sombra (Manter 2º)</SelectItem>
                                 <SelectItem value="cover" className="text-sm font-bold">Cobertura (Sempre Topo)</SelectItem>
                             </SelectContent>
                         </Select>
-                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                             <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                                 {strategy.mode === 'follower' && "⚡ Reage instantaneamente a cada lance baixado por concorrentes."}
                                 {strategy.mode === 'sniper' && "🎯 Aguardará o encerramento iminente para dar o lance único."}
@@ -1052,12 +1272,12 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                         <div className="space-y-3">
                             <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Preço Reserva</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-3 text-slate-600 text-xs">R$</span>
+                                <span className="absolute left-3 top-3 text-slate-400 text-xs">R$</span>
                                 <Input 
                                     type="number" 
                                     value={strategy.minPrice} 
                                     onChange={e => setStrategy({...strategy, minPrice: parseFloat(e.target.value)})}
-                                    className="bg-slate-950 border-white/10 h-11 pl-8 font-black text-emerald-400"
+                                    className="bg-slate-50 border-slate-200 h-11 pl-8 font-black text-emerald-600"
                                 />
                             </div>
                         </div>
@@ -1067,7 +1287,7 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                                 type="number" 
                                 value={strategy.decrementValue} 
                                 onChange={e => setStrategy({...strategy, decrementValue: parseFloat(e.target.value)})}
-                                className="bg-slate-950 border-white/10 h-11 font-mono text-slate-100"
+                                className="bg-slate-50 border-slate-200 h-11 font-mono text-slate-900"
                             />
                         </div>
                     </div>
@@ -1075,10 +1295,10 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                     <div className="space-y-3">
                         <Label className="text-slate-400 text-xs font-bold uppercase tracking-widest">Tipo</Label>
                         <Select value={strategy.decrementType} onValueChange={(v: any) => setStrategy({...strategy, decrementType: v})}>
-                            <SelectTrigger className="bg-slate-950/50 border-white/10 h-11 text-sm font-bold">
+                            <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-sm font-bold">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900/95 backdrop-blur-xl border-white/10 text-slate-100">
+                            <SelectContent className="bg-white border-slate-200 text-slate-900">
                                 <SelectItem value="fixed" className="text-sm font-bold">Valor Fixo (R$)</SelectItem>
                                 <SelectItem value="percent" className="text-sm font-bold">Percentual (%)</SelectItem>
                             </SelectContent>
@@ -1086,7 +1306,7 @@ function StrategyModal({ item, initialStrategy, onSave, isBulk = false }: { item
                     </div>
                 </div>
                 <DialogFooter className="pt-2">
-                    <Button onClick={() => onSave(strategy)} className="bg-emerald-600 hover:bg-emerald-500 w-full h-12 text-white font-black rounded-xl shadow-lg shadow-emerald-900/40 transition-all active:scale-95">
+                    <Button onClick={() => onSave(strategy)} className="bg-black hover:bg-slate-900 w-full h-12 text-white font-black rounded-xl shadow-lg transition-all active:scale-95">
                         SALVAR ESTRATÉGIA
                     </Button>
                 </DialogFooter>

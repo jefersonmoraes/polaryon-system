@@ -216,8 +216,9 @@ class BiddingRunner {
                         turbo: hasItemsInDispute
                     });
 
-                    // Agendar próxima execução
-                    const nextInterval = hasItemsInDispute ? 1000 : 3000;
+                    // [SIGA CLONE v3.3] MOTOR DE DISPARO RÁPIDO
+                    // Redução de intervalo para 300ms em disputa e 2000ms em espera
+                    const nextInterval = hasItemsInDispute ? 300 : 2000;
                     this.activeSessions.get(sessionId).timeoutId = setTimeout(runPolling, nextInterval);
                 }
             } catch (error) {

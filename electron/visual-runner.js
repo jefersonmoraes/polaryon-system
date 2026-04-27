@@ -154,6 +154,20 @@ class VisualRunner {
             }
         });
 
+        // DETECÇÃO DE LOGIN COM SUCESSO (SIGA STYLE)
+        ipcMain.removeAllListeners('login-success');
+        ipcMain.on('login-success', (event, { sessionId, url }) => {
+            const session = this.sessions.get(sessionId);
+            if (session && session.window) {
+                console.log(`[POLARYON] Login bem-sucedido detectado. Ocultando janela para modo de fundo: ${url}`);
+                session.window.hide(); // Oculta em vez de fechar para manter o preload rodando
+                
+                if (this.dashboardWebContents) {
+                    this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                }
+            }
+        });
+
         // Injetor de Scripts Globais (Silenciador e Anti-Lag)
         win.webContents.on('did-start-navigation', () => {
             win.webContents.executeJavaScript(`

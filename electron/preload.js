@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hasA1Certificate: () => ipcRenderer.invoke('has-a1-certificate'),
   focusVisualBidding: (sessionId) => ipcRenderer.send('visual-focus', sessionId),
   navigateVisualBidding: (sessionId, url) => ipcRenderer.send('visual-navigate', { sessionId, url }),
+  onBiddingLoginFinished: (callback) => ipcRenderer.on('bidding-login-finished', (event, data) => callback(data)),
+  onBiddingNetworkTraffic: (callback) => ipcRenderer.on('bidding-network-traffic', (event, data) => callback(data)),
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
