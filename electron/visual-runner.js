@@ -123,6 +123,7 @@ class VisualRunner {
                 contextIsolation: true,
                 webSecurity: false,
                 allowRunningInsecureContent: true,
+                backgroundThrottling: false, // 🚀 ESSENCIAL: Mantém o scanner na velocidade máxima em segundo plano
                 partition: 'persist:comprasgov' 
             }
         });

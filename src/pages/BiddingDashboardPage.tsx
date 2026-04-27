@@ -704,6 +704,24 @@ export default function BiddingDashboardPage() {
                 </div>
             </div>
 
+            {/* [SIGA CLONE] BARRA DE SALAS ATIVAS (v2.0) */}
+            {Object.keys(sessions).length > 0 && (
+                <div className="w-full bg-slate-900 border-b border-white/5 py-2 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-2">Salas Ativas:</span>
+                    {Object.entries(sessions).map(([sid, s]) => (
+                        <button 
+                            key={sid}
+                            onClick={() => { setSessionId(sid); setItems(s.items); setIsListening(true); }}
+                            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg border transition-all whitespace-nowrap ${sessionId === sid ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                        >
+                            <Activity className={`w-3 h-3 ${sessionId === sid ? 'text-white' : 'text-emerald-500'}`} />
+                            <span className="text-[10px] font-black tracking-tight">UASG {s.uasg} | {s.items.length} Itens</span>
+                            {s.items.some(it => it.status === 'Disputa') && <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <main className="container mx-auto px-4 py-8 max-w-[1800px]">
                 {!isListening ? (
                     <div className="flex flex-col items-center justify-center py-12 space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000">
