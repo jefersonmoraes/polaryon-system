@@ -358,22 +358,45 @@ export default function BiddingDashboardPage() {
                            if (hybridItems.length > 0) {
                                const newSessions: Record<string, any> = {};
                                hybridItems.forEach((item: any) => {
-                                   const uasgCode = item.uasg || item.codigoUasg || 'SISTEMA';
+                                   const uasgCode = item.polaryon_purchaseId || item.uasg || item.codigoUasg || 'SISTEMA';
                                    const num = item.numeroCompra || item.numero || '0';
-                                   const ano = item.anoCompra || item.ano || '2026';
+                                   const ano = item.polaryon_year || item.anoCompra || item.ano || '2026';
                                    const sid = `HYBRID_${uasgCode}_${num}_${ano}`;
+                                   
                                    if (!newSessions[sid]) {
-                                       newSessions[sid] = { uasg: uasgCode, numero: num, items: [], chatMessages: [], lastUpdate: new Date().toLocaleTimeString(), isAuthenticated: true, simulationMode: true, isHybrid: true };
+                                       newSessions[sid] = { 
+                                            uasg: uasgCode, 
+                                            numero: num, 
+                                            items: [], 
+                                            chatMessages: [], 
+                                            lastUpdate: new Date().toLocaleTimeString(), 
+                                            isAuthenticated: true, 
+                                            simulationMode: true, 
+                                            isHybrid: true 
+                                       };
                                    }
+
+                                   // Se não temos nenhuma sessão ativa, foca na primeira descoberta
+                                   if (!sessionId) {
+                                       setSessionId(sid);
+                                       setIsListening(true);
+                                   }
+
                                    const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                                    const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                                    const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
                                    const isWinner = pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°';
+                                   
                                    newSessions[sid].items.push({
                                        itemId: item.identificador || item.numero.toString(),
-                                       valorAtual: melhorGeral, meuValor: melhorMeu, uasgName: uasgCode, ganhador: isWinner ? 'Você' : 'Outro',
+                                       valorAtual: melhorGeral, 
+                                       meuValor: melhorMeu, 
+                                       uasgName: uasgCode, 
+                                       ganhador: isWinner ? 'Você' : 'Outro',
                                        status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado'),
-                                       position: parseInt(pos) || 0, timerSeconds: item.segundosParaEncerramento || -1, desc: item.descricao || `Item ${item.numero}`
+                                       position: parseInt(pos) || 0, 
+                                       timerSeconds: item.segundosParaEncerramento || -1, 
+                                       desc: item.descricao || `Item ${item.numero}`
                                    });
                                });
                                setSessions(prev => {

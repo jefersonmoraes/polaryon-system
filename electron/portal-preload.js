@@ -121,6 +121,12 @@ const startHybridEngine = () => {
                for (const baseUrl of targetUrls) {
                    if (!baseUrl) continue;
                    
+                   // Extrai metadados da URL para carimbar os itens
+                   const urlParts = baseUrl.match(/\/v1\/(compras|disputas\/compras)\/(\d+)\/(\d{4})/);
+                   const currentBasePath = urlParts ? urlParts[1] : 'compras';
+                   const currentPurchaseId = urlParts ? urlParts[2] : '0';
+                   const currentYear = urlParts ? urlParts[3] : '2026';
+                   
                    let page = 0;
                    let hasMore = true;
                    
@@ -152,7 +158,16 @@ const startHybridEngine = () => {
                        const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
                        
                        if (itemsArray.length === 0) break;
-                       allFetchedItems = [...allFetchedItems, ...itemsArray];
+                       
+                       // CARIMBA OS ITENS COM A ORIGEM (Essencial para o Dashboard)
+                       const enrichedItems = itemsArray.map(it => ({
+                           ...it,
+                           polaryon_basePath: currentBasePath,
+                           polaryon_purchaseId: currentPurchaseId,
+                           polaryon_year: currentYear
+                       }));
+
+                       allFetchedItems = [...allFetchedItems, ...enrichedItems];
 
                        const sizeMatch = targetUrl.match(/tamanhoPagina=(\d+)/);
                        const pageSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
