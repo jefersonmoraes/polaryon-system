@@ -210,28 +210,41 @@ const startHybridEngine = () => {
                        data: { items: allFetchedItems }
                    });
                    
+                   // [SIGA SCANNER] AUTO-DISCOVERY: Busca novas participações a cada 30s
+                   if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 30000) {
+                       window.polaryonLastDiscovery = Date.now();
+                       
+                       const discoveryTargets = [
+                           'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100',
+                           'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/disputas/compras/participacao?pagina=0&tamanhoPagina=100'
+                       ];
+
+                       for (const discUrl of discoveryTargets) {
+                           try {
+                               const discRes = await fetch(discUrl, { headers: { 'Authorization': window.polaryonAuthBearer } });
+                               if (discRes.ok) {
+                                   const discData = await discRes.json();
+                                   const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
+                                   
+                                   const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
+                                   
+                                   certames.forEach(cert => {
+                                       const purchaseId = cert.compra || cert.id;
+                                       const year = cert.ano || new Date().getFullYear();
+                                       const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                                       
+                                       if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                                       window.polaryonHybrid_Rooms.add(itemsUrl);
+                                   });
+                               }
+                           } catch(e) {
+                               console.error("[POLARYON] Erro no Scanner de Descoberta:", e);
+                           }
+                       }
+                   }
+                   
                    window.polaryonAPIStatus = "✅ ELITE (CAMUFLADO)";
               }
-
-               // [SIGA SCANNER] AUTO-DISCOVERY: Busca novas participações a cada 30s
-               if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 30000) {
-                   window.polaryonLastDiscovery = Date.now();
-                   try {
-                       const discUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100';
-                       const discRes = await fetch(discUrl, { headers: { 'Authorization': window.polaryonAuthBearer } });
-                       if (discRes.ok) {
-                           const discData = await discRes.json();
-                           const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
-                           certames.forEach(cert => {
-                               const purchaseId = cert.compra || cert.id;
-                               const year = cert.ano || new Date().getFullYear();
-                               const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
-                               if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                               window.polaryonHybrid_Rooms.add(itemsUrl);
-                           });
-                       }
-                   } catch(e) {}
-               }
 
                // [SIGA TURBO v3.3] LATÊNCIA ULTRA-BAIXA: 
                // 150ms para combate real, 1000ms para monitoramento leve
