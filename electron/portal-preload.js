@@ -249,9 +249,20 @@ const startHybridEngine = () => {
                                        const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
                                        
                                        certames.forEach(cert => {
-                                           const purchaseId = cert.compra || cert.id || cert.codigoUasg;
+                                           // v3.5.7: CONSTRUÇÃO DE ID DE ELITE (UASG + MOD + NUM + ANO)
+                                           let purchaseId = cert.compra || cert.id || cert.codigoUasg;
                                            const year = cert.ano || cert.anoCompra || new Date().getFullYear();
+                                           
+                                           // Se o ID for curto (só UASG), tentamos compor com o número se disponível
+                                           if (purchaseId && purchaseId.toString().length < 10) {
+                                               const uasg = purchaseId.toString().padStart(6, '0');
+                                               const mod = (cert.modalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
+                                               const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
+                                               purchaseId = `${uasg}${mod}${num}${year}`;
+                                           }
+
                                            if (purchaseId) {
+                                               console.log(`🎯 [POLARYON SCANNER] Alvo Travado: ${purchaseId} (${cert.numero || '?'}/${year})`);
                                                const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
                                                if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
                                                window.polaryonHybrid_Rooms.add(itemsUrl);
