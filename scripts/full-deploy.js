@@ -17,7 +17,7 @@ async function start() {
 
         // 1. Build do Frontend (Desktop)
         console.log('\n[1/3] Gerando build do frontend para Desktop...');
-        run('set ELECTRON_BUILD=true && npm run build');
+        run('npm run build:desktop');
 
         // 2. Build do Robô (Electron)
         console.log('\n[2/3] Empacotando Robô Electron...');

@@ -5,8 +5,9 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // MODO HÍBRIDO: './' para Desktop (Electron) e '/' para Web (Produção)
-  base: (process.env.ELECTRON_BUILD === "true" || mode === "electron") ? "./" : "/",
+  // MODO HÍBRIDO: './' para Desktop e '/' para Web
+  // Usamos 'mode === "desktop"' como flag oficial de build para o robô
+  base: (mode === "desktop" || process.env.ELECTRON_BUILD === "true") ? "./" : "/",
   server: {
     host: "::",
     port: 8080,
