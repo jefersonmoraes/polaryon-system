@@ -26,11 +26,15 @@ function deploy() {
     }
 
     try {
-        // 2. Git Push local antes de tudo
+        // 2. Git Push local antes de tudo (v3.5.10: Silencioso se não houver mudanças)
         console.log('Sincronizando mudanças locais com o GitHub...');
-        execSync('git add .', { stdio: 'inherit', cwd: rootDir });
-        execSync('git commit -m "chore(deploy): release v' + version + '"', { stdio: 'inherit', cwd: rootDir });
-        execSync('git push origin main', { stdio: 'inherit', cwd: rootDir });
+        try {
+            execSync('git add .', { stdio: 'inherit', cwd: rootDir });
+            execSync('git commit -m "chore(deploy): release v' + version + '"', { stdio: 'inherit', cwd: rootDir });
+            execSync('git push origin main', { stdio: 'inherit', cwd: rootDir });
+        } catch (e) {
+            console.log('ℹ️ Sem mudanças para commitar ou erro no Git. Continuando deploy...');
+        }
 
         // 3. Upload EXE
         console.log(`uploading ${exeName} para o servidor...`);
