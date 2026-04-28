@@ -579,7 +579,19 @@ export default function BiddingDashboardPage() {
                 </Sheet>
             </div>
 
-            <BiddingSessionsMonitor groupedItems={groupedItems} sessions={sessions} onSaveStrategy={() => {}} onQuickBid={quickBid} onStopRadar={() => {}} />
+             <div className="space-y-8 pb-12">
+                {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
+                    <ProcessCard 
+                        key={sid} 
+                        sid={sid} 
+                        session={session} 
+                        items={groupedItems[sid] || []} 
+                        onSaveStrategy={onSaveStrategy} 
+                        onQuickBid={onQuickBid} 
+                        onStopRadar={() => onStopRadar(sid)} 
+                    />
+                ))}
+            </div>
                         </div>
                         {isChatOpen && (
                             <div className="col-span-3 space-y-6 sticky top-24 h-[calc(100vh-140px)] flex flex-col">
