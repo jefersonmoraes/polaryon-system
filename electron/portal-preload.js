@@ -114,74 +114,69 @@ const startHybridEngine = () => {
          }
 
          try {
-               // --- MULTI-ROOM MONITORING v4.0 ---
-               let allFetchedItems = [];
-               const targetUrls = window.polaryonHybrid_Rooms ? Array.from(window.polaryonHybrid_Rooms) : [window.polaryonHybrid_ItemsUrl];
-               
-               for (const baseUrl of targetUrls) {
-                   if (!baseUrl) continue;
-                   
-                   // Extrai metadados da URL para carimbar os itens
-                   const urlParts = baseUrl.match(/\/v1\/(compras|disputas\/compras)\/(\d+)\/(\d{4})/);
-                   const currentBasePath = urlParts ? urlParts[1] : 'compras';
-                   const currentPurchaseId = urlParts ? urlParts[2] : '0';
-                   const currentYear = urlParts ? urlParts[3] : '2026';
-                   
-                   let page = 0;
-                   let hasMore = true;
-                   
-                   while (hasMore && page < 5) {
-                       const targetUrl = baseUrl
-                           .replace(/pagina=\d+/, `pagina=${page}`)
-                           .replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
-                       
-                       const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
-                       if (!authHeader) break;
+                    // --- MULTI-ROOM MONITORING v4.5 (CASCADE MODE) ---
+                    let allFetchedItems = [];
+                    const targetUrls = window.polaryonHybrid_Rooms ? Array.from(window.polaryonHybrid_Rooms) : [window.polaryonHybrid_ItemsUrl];
+                    
+                    for (const baseUrl of targetUrls) {
+                        if (!baseUrl) continue;
+                        
+                        // v3.5.9: Extração de Metadados Robusta
+                        const urlParts = baseUrl.match(/\/v1\/(compras|disputas\/compras)\/(\d+)\/(\d{4})/);
+                        const currentPurchaseId = urlParts ? urlParts[2] : (baseUrl.split('/')[7] || '0');
+                        const currentYear = urlParts ? urlParts[3] : (baseUrl.split('/')[8] || '2026');
+                        
+                        // TENTA EM CASCATA: Primeiro 'disputas/compras', depois 'compras'
+                        const pathsToTry = baseUrl.includes('disputas') ? ['disputas/compras', 'compras'] : ['compras', 'disputas/compras'];
+                        
+                        let data = null;
+                        let successUrl = null;
 
-                       const res = await fetch(targetUrl, {
-                            method: 'GET',
-                            headers: {
-                                 'Authorization': authHeader,
-                                 'Accept': 'application/json, text/plain, */*'
+                        for (const path of pathsToTry) {
+                            const tryUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${path}/${currentPurchaseId}/${currentYear}/itens?pagina=0&tamanhoPagina=100`;
+                            
+                            const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
+                            if (!authHeader) break;
+
+                            try {
+                                const res = await fetch(tryUrl, {
+                                     method: 'GET',
+                                     headers: {
+                                          'Authorization': authHeader,
+                                          'Accept': 'application/json, text/plain, */*',
+                                          'X-Requested-With': 'XMLHttpRequest' // Assinatura de Elite
+                                     }
+                                });
+
+                                if (res.ok) {
+                                    const rawText = await res.text();
+                                    if (rawText && rawText.trim().length > 0) {
+                                        data = JSON.parse(rawText);
+                                        successUrl = tryUrl;
+                                        break; 
+                                    }
+                                }
+                            } catch(e) {
+                                console.error(`[POLARYON] Erro ao tentar rota ${path}:`, e);
                             }
-                       });
+                        }
 
-                       if (!res.ok) {
-                           if (res.status === 404 || res.status === 401 || res.status === 403 || res.status === 422) {
-                                if (window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms.delete(baseUrl);
-                                if (window.polaryonHybrid_ItemsUrl === baseUrl) window.polaryonHybrid_ItemsUrl = null;
-                           }
-                           break;
-                       }
-
-                       const rawText = await res.text();
-                       if (!rawText || rawText.trim().length === 0) break;
-                       
-                       const data = JSON.parse(rawText);
-                       const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                       
-                       if (itemsArray.length === 0) break;
-                       
-                       // CARIMBA OS ITENS COM A ORIGEM (Essencial para o Dashboard v3.5.4+)
-                       const enrichedItems = itemsArray.map(it => ({
-                           ...it,
-                           polaryon_basePath: currentBasePath,
-                           polaryon_purchaseId: currentPurchaseId || it.uasg || it.codigoUasg || it.compra,
-                           polaryon_year: currentYear || it.anoCompra || it.ano
-                       }));
-
-                       allFetchedItems = [...allFetchedItems, ...enrichedItems];
-
-                       const sizeMatch = targetUrl.match(/tamanhoPagina=(\d+)/);
-                       const pageSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
-                       if (itemsArray.length < pageSize) {
-                           hasMore = false;
-                       } else {
-                           page++;
-                           await new Promise(r => setTimeout(r, 50)); 
-                       }
-                   }
-               }
+                        if (data) {
+                            const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                            if (itemsArray.length > 0) {
+                                const enrichedItems = itemsArray.map(it => ({
+                                    ...it,
+                                    polaryon_basePath: successUrl.includes('disputas') ? 'disputas/compras' : 'compras',
+                                    polaryon_purchaseId: currentPurchaseId,
+                                    polaryon_year: currentYear
+                                }));
+                                allFetchedItems = [...allFetchedItems, ...enrichedItems];
+                            }
+                        } else {
+                            // Se falhou em todas as rotas, remove para não pesar o loop
+                            if (window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms.delete(baseUrl);
+                        }
+                    }
 
                if (allFetchedItems.length === 0 && !window.polaryonHybrid_ItemsUrl && (!window.polaryonHybrid_Rooms || window.polaryonHybrid_Rooms.size === 0)) {
                    setTimeout(pollingLoop, 2000);
