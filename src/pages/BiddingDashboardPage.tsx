@@ -99,6 +99,8 @@ export default function BiddingDashboardPage() {
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
     const [networkTraffic, setNetworkTraffic] = useState<any[]>([]);
+    const [hybridRooms, setHybridRooms] = useState<string[]>([]);
+    const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
 
     // MODO MULTI-UASG (v2.0 War Flow)
     const [sessions, setSessions] = useState<Record<string, {
@@ -544,7 +546,40 @@ export default function BiddingDashboardPage() {
                 ) : (
                     <div className="grid grid-cols-12 gap-8 animate-in fade-in duration-700">
                         <div className={`${isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-6`}>
-                            <BiddingSigaView items={allItems} sessions={sessions} sessionId={sessionId || ''} onSaveStrategy={saveStrategy} onQuickBid={quickBid} onStopRadar={stopRadar} />
+                            {/* --- MONITOR DE TRÁFEGO v3.5.10 (DIAGNÓSTICO) --- */}
+            <div className="mt-8">
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button variant="outline" size="sm" className="bg-slate-900 text-white hover:bg-black border-none gap-2 font-black text-[10px] uppercase tracking-tighter">
+                            <Activity className="w-3 h-3" /> Monitor de Tráfego {networkTraffic.length > 0 && `(${networkTraffic.length})`}
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="h-[60vh] bg-slate-950 text-white border-slate-800">
+                        <SheetHeader className="border-b border-slate-800 pb-4 mb-4">
+                            <SheetTitle className="text-white font-black uppercase text-sm flex items-center gap-2">
+                                <Activity className="w-4 h-4 text-emerald-500" /> Terminal de Diagnóstico Polaryon
+                            </SheetTitle>
+                            <SheetDescription className="text-slate-500 text-[10px] font-bold uppercase">
+                                Visualização em tempo real das requisições à API do Serpro
+                            </SheetDescription>
+                        </SheetHeader>
+                        <div className="overflow-auto h-full font-mono text-[10px] space-y-1 pb-20">
+                            {networkTraffic.length === 0 ? (
+                                <div className="text-center py-20 text-slate-700 font-bold uppercase tracking-widest">Aguardando tráfego de rede...</div>
+                            ) : networkTraffic.map((req, idx) => (
+                                <div key={idx} className="flex gap-4 border-b border-slate-900/50 py-1 hover:bg-white/5 transition-colors px-2">
+                                    <span className="text-slate-600">[{new Date(req.timestamp).toLocaleTimeString()}]</span>
+                                    <span className={`font-black ${req.statusCode === 200 ? 'text-emerald-500' : 'text-red-500'}`}>{req.statusCode}</span>
+                                    <span className="text-slate-400">GET</span>
+                                    <span className="text-slate-300 truncate flex-1">{req.url}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </SheetContent>
+                </Sheet>
+            </div>
+
+            <BiddingSessionsMonitor groupedItems={groupedItems} sessions={sessions} onSaveStrategy={() => {}} onQuickBid={quickBid} onStopRadar={() => {}} />
                         </div>
                         {isChatOpen && (
                             <div className="col-span-3 space-y-6 sticky top-24 h-[calc(100vh-140px)] flex flex-col">

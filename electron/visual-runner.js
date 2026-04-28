@@ -252,7 +252,7 @@ class VisualRunner {
             }
         });
     }
-    // --- BLACKBOX AUTOMÁTICO PARA DIAGNÓSTICO ---
+    // --- BLACKBOX AUTOMÁTICO v4.0 (DIAGNÓSTICO PROFUNDO) ---
     saveToBlackBox(url, response) {
         try {
             const logDir = path.join(process.cwd(), 'logs', 'blackbox');
@@ -260,30 +260,31 @@ class VisualRunner {
                 fs.mkdirSync(logDir, { recursive: true });
             }
 
-            // Nomeia o arquivo de forma legível
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const urlSlug = url.split('/').pop().split('?')[0] || 'api-dump';
-            const fileName = `traffic_${timestamp}_${urlSlug}.json`;
+            const urlSlug = url.split('/').slice(-3).join('_').replace(/[\W_]+/g, "_");
+            const fileName = `dump_${timestamp}_${urlSlug}.json`;
             const filePath = path.join(logDir, fileName);
 
             const payload = {
                 capturedAt: new Date().toISOString(),
                 url: url,
-                data: response
+                data: response,
+                headers_hint: "Captured via Polaryon Hybrid Sniffer"
             };
 
             fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
-            console.log(`🛰️ [BLACKBOX] Tráfego capturado e salvo em: ${fileName}`);
+            
+            // Log no console interno do Electron para sabermos que gravou
+            console.log(`[BLACKBOX] 🛰️ Dados capturados e salvos: ${fileName}`);
 
-            // Limpeza básica: remove arquivos com mais de 24h
+            // Auto-limpeza (Mantém apenas os últimos 200 logs)
             const files = fs.readdirSync(logDir);
-            if (files.length > 100) {
-                const oldest = files.sort().slice(0, 10);
-                oldest.forEach(f => fs.unlinkSync(path.join(logDir, f)));
+            if (files.length > 200) {
+                const sorted = files.sort((a, b) => fs.statSync(path.join(logDir, a)).mtimeMs - fs.statSync(path.join(logDir, b)).mtimeMs);
+                sorted.slice(0, 20).forEach(f => fs.unlinkSync(path.join(logDir, f)));
             }
-
         } catch (e) {
-            console.error("[BLACKBOX] Erro ao salvar log:", e);
+            console.error("[BLACKBOX] Erro crítico na gravação:", e);
         }
     }
 }
