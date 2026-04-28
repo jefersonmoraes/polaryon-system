@@ -434,6 +434,30 @@ export default function BiddingDashboardPage() {
         }
     }, [isDesktop, sessionId]);
 
+    // --- NOVO: AGRUPAMENTO DE ITENS POR SESSÃO v3.5.12 ---
+    const groupedItems = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        Object.entries(sessions).forEach(([sid, s]) => {
+            groups[sid] = s.items || [];
+        });
+        return groups;
+    }, [sessions]);
+
+    const onSaveStrategy = (sid: string, itemId: string, strategy: ItemStrategy) => {
+        saveStrategy(itemId, strategy, sid);
+    };
+
+    const onStopRadar = (sid: string) => {
+        if (isDesktop && (window as any).electronAPI) {
+            (window as any).electronAPI.stopLocalBidding(sid);
+            setSessions(prev => {
+                const newSessions = { ...prev };
+                delete newSessions[sid];
+                return newSessions;
+            });
+        }
+    };
+
     const saveStrategy = async (itemId: string, strategy: ItemStrategy, targetSid?: string) => {
         const sid = targetSid || sessionId;
         if (!sid) return;
