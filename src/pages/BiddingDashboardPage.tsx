@@ -611,7 +611,7 @@ export default function BiddingDashboardPage() {
                         session={session} 
                         items={groupedItems[sid] || []} 
                         onSaveStrategy={onSaveStrategy} 
-                        onQuickBid={onQuickBid} 
+                        onQuickBid={quickBid} 
                         onStopRadar={() => onStopRadar(sid)} 
                     />
                 ))}
