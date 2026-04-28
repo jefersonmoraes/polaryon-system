@@ -228,8 +228,8 @@ const startHybridEngine = () => {
                        data: { items: allFetchedItems }
                    });
                    
-                   // [SIGA SCANNER] AUTO-DISCOVERY: Busca novas participações a cada 15s (Mais agressivo)
-                   if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 15000) {
+                   // [SIGA CLONE] AUTO-DISCOVERY AGRESSIVO: Busca TODAS as participações a cada 10s
+                   if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 10000) {
                        window.polaryonLastDiscovery = Date.now();
                        
                        const discoveryTargets = [
@@ -245,33 +245,37 @@ const startHybridEngine = () => {
                                    const discRes = await fetch(discUrl, { headers: { 'Authorization': authHeader } });
                                    if (discRes.ok) {
                                        const discData = await discRes.json();
-                                       const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
+                                       // Aceita múltiplos formatos de resposta da Serpro
+                                       const certames = discData.itens || discData.items || discData.content || (Array.isArray(discData) ? discData : []);
                                        const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
                                        
                                        certames.forEach(cert => {
-                                           // v3.5.7: CONSTRUÇÃO DE ID DE ELITE (UASG + MOD + NUM + ANO)
-                                           let purchaseId = cert.compra || cert.id || cert.codigoUasg;
-                                           const year = cert.ano || cert.anoCompra || new Date().getFullYear();
+                                           // v3.5.8: Mapeamento de Precisão (Extrai IDs reais do Siga)
+                                           let purchaseId = cert.compra || cert.id || cert.codigoUasg || cert.codigoCompra;
+                                           const year = cert.ano || cert.anoCompra || cert.anoExercicio || new Date().getFullYear();
                                            
-                                           // Se o ID for curto (só UASG), tentamos compor com o número se disponível
+                                           // Se o ID for curto, compõe o ID de 17 dígitos da Lei 14.133
                                            if (purchaseId && purchaseId.toString().length < 10) {
-                                               const uasg = purchaseId.toString().padStart(6, '0');
-                                               const mod = (cert.modalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
+                                               const uasg = (cert.uasg || cert.codigoUasg || '0').toString().padStart(6, '0');
+                                               const mod = (cert.modalidade || cert.codigoModalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
                                                const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
                                                purchaseId = `${uasg}${mod}${num}${year}`;
                                            }
 
-                                           if (purchaseId) {
-                                               console.log(`🎯 [POLARYON SCANNER] Alvo Travado: ${purchaseId} (${cert.numero || '?'}/${year})`);
+                                           if (purchaseId && purchaseId !== '0') {
                                                const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                                               
                                                if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                                               window.polaryonHybrid_Rooms.add(itemsUrl);
+                                               if (!window.polaryonHybrid_Rooms.has(itemsUrl)) {
+                                                   console.log(`📡 [POLARYON DISCOVERY] Nova Sala Detectada (Estilo SIGA): ${cert.numero || '?'}/${year} - ID: ${purchaseId}`);
+                                                   window.polaryonHybrid_Rooms.add(itemsUrl);
+                                               }
                                            }
                                        });
                                    }
                                }
                            } catch(e) {
-                               console.error("[POLARYON] Erro no Scanner de Descoberta:", e);
+                               console.error("[POLARYON] Falha no Scanner de Descoberta:", e);
                            }
                        }
                    }
