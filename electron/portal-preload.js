@@ -234,9 +234,11 @@ const startHybridEngine = () => {
                        window.polaryonLastDiscovery = Date.now();
                        
                        const discoveryTargets = [
-                           'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100',
-                           'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/disputas/compras/participacao?pagina=0&tamanhoPagina=100'
-                       ];
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100',
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/disputas/compras/participacao?pagina=0&tamanhoPagina=100',
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/dispensa/participacao?pagina=0&tamanhoPagina=100',
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/divulgacao/compras?pagina=0&tamanhoPagina=100'
+                        ];
 
                        const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
 
@@ -251,15 +253,15 @@ const startHybridEngine = () => {
                                        const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
                                        
                                        certames.forEach(cert => {
-                                            // v3.5.15: Mapeamento Siga Client (Suporta múltiplos campos de ID)
-                                            let purchaseId = cert.compra || cert.id || cert.codigoCompra || cert.identificadorCompra || cert.codigoProcesso;
+                                            // v3.5.16: Mapeamento de Elite (Clonando Siga Client)
+                                            let purchaseId = cert.compra || cert.id || cert.codigoCompra || cert.identificadorCompra || cert.codigoProcesso || cert.codigoContratacao;
                                             const year = cert.ano || cert.anoCompra || cert.anoExercicio || cert.exercicio || new Date().getFullYear();
                                             
-                                            // [LEI 14.133] Composição de ID de 17 Dígitos (UASG + MOD + NUM + ANO)
+                                            // [LEI 14.133] Composição de ID (UASG + MOD + NUM + ANO)
                                             if (purchaseId && purchaseId.toString().length < 10) {
-                                                const uasg = (cert.uasg || cert.codigoUasg || cert.orgao || '0').toString().padStart(6, '0');
-                                                const mod = (cert.modalidade || cert.codigoModalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
-                                                const num = (cert.numero || cert.numeroCompra || cert.sequencial || '0').toString().padStart(5, '0');
+                                                const uasg = (cert.uasg || cert.codigoUasg || cert.orgao || cert.codigoOrgao || '0').toString().padStart(6, '0');
+                                                const mod = (cert.modalidade || cert.codigoModalidade || (discUrl.includes('dispensa') ? '06' : (discUrl.includes('disputas') ? '06' : '05'))).toString().padStart(2, '0');
+                                                const num = (cert.numero || cert.numeroCompra || cert.sequencial || cert.numeroProcesso || '0').toString().padStart(5, '0');
                                                 purchaseId = `${uasg}${mod}${num}${year}`;
                                             }
 

@@ -1,9 +1,9 @@
 @echo off
-echo [POLARYON] Iniciando Processo de Atualizacao v3.5.15 (SIGA MAPPING)...
+echo [POLARYON] Iniciando Processo de Atualizacao v3.5.16 (SIGA CLONE)...
 
 echo [POLARYON] 1/4 - Salvando no Git...
 git add .
-git commit -m "v3.5.15 - Fixed UASG 0 and Siga-style Discovery"
+git commit -m "v3.5.16 - Siga-style Universal Scanner v5.0 Activated"
 git push
 
 echo [POLARYON] 2/4 - Reconstruindo Interface (Build)...
@@ -15,6 +15,6 @@ powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Cu
 echo [POLARYON] 4/4 - Enviando para VPS...
 call npm run full-deploy
 
-echo [POLARYON] ATUALIZACAO v3.5.15 CONCLUIDA!
+echo [POLARYON] ATUALIZACAO v3.5.16 CONCLUIDA!
 echo Reinicie o robo para ver as mudancas.
 pause
