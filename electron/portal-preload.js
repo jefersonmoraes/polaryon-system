@@ -121,11 +121,17 @@ const startHybridEngine = () => {
                     for (const baseUrl of targetUrls) {
                         if (!baseUrl) continue;
                         
-                        // v3.5.9: Extração de Metadados Robusta
+                        // v3.5.15: Extração de Metadados de Alta Precisão (Evita o ID 0)
                         const urlParts = baseUrl.match(/\/v1\/(compras|disputas\/compras)\/(\d+)\/(\d{4})/);
-                        const currentPurchaseId = urlParts ? urlParts[2] : (baseUrl.split('/')[7] || '0');
-                        const currentYear = urlParts ? urlParts[3] : (baseUrl.split('/')[8] || '2026');
+                        const currentPurchaseId = urlParts ? urlParts[2] : null;
+                        const currentYear = urlParts ? urlParts[3] : (baseUrl.includes('/202') ? baseUrl.match(/\/202\d/)[0].replace('/', '') : '2026');
                         
+                        if (!currentPurchaseId || currentPurchaseId === '0' || currentPurchaseId.length < 5) {
+                            console.log("⚠️ [POLARYON] Ignorando URL inválida ou incompleta:", baseUrl);
+                            if (window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms.delete(baseUrl);
+                            continue;
+                        }
+
                         // TENTA EM CASCATA: Primeiro 'disputas/compras', depois 'compras'
                         const pathsToTry = baseUrl.includes('disputas') ? ['disputas/compras', 'compras'] : ['compras', 'disputas/compras'];
                         
@@ -245,28 +251,28 @@ const startHybridEngine = () => {
                                        const basePath = discUrl.includes('disputas') ? 'disputas/compras' : 'compras';
                                        
                                        certames.forEach(cert => {
-                                           // v3.5.8: Mapeamento de Precisão (Extrai IDs reais do Siga)
-                                           let purchaseId = cert.compra || cert.id || cert.codigoUasg || cert.codigoCompra;
-                                           const year = cert.ano || cert.anoCompra || cert.anoExercicio || new Date().getFullYear();
-                                           
-                                           // Se o ID for curto, compõe o ID de 17 dígitos da Lei 14.133
-                                           if (purchaseId && purchaseId.toString().length < 10) {
-                                               const uasg = (cert.uasg || cert.codigoUasg || '0').toString().padStart(6, '0');
-                                               const mod = (cert.modalidade || cert.codigoModalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
-                                               const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
-                                               purchaseId = `${uasg}${mod}${num}${year}`;
-                                           }
+                                            // v3.5.15: Mapeamento Siga Client (Suporta múltiplos campos de ID)
+                                            let purchaseId = cert.compra || cert.id || cert.codigoCompra || cert.identificadorCompra || cert.codigoProcesso;
+                                            const year = cert.ano || cert.anoCompra || cert.anoExercicio || cert.exercicio || new Date().getFullYear();
+                                            
+                                            // [LEI 14.133] Composição de ID de 17 Dígitos (UASG + MOD + NUM + ANO)
+                                            if (purchaseId && purchaseId.toString().length < 10) {
+                                                const uasg = (cert.uasg || cert.codigoUasg || cert.orgao || '0').toString().padStart(6, '0');
+                                                const mod = (cert.modalidade || cert.codigoModalidade || (discUrl.includes('disputas') ? '06' : '05')).toString().padStart(2, '0');
+                                                const num = (cert.numero || cert.numeroCompra || cert.sequencial || '0').toString().padStart(5, '0');
+                                                purchaseId = `${uasg}${mod}${num}${year}`;
+                                            }
 
-                                           if (purchaseId && purchaseId !== '0') {
-                                               const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
-                                               
-                                               if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                                               if (!window.polaryonHybrid_Rooms.has(itemsUrl)) {
-                                                   console.log(`📡 [POLARYON DISCOVERY] Nova Sala Detectada (Estilo SIGA): ${cert.numero || '?'}/${year} - ID: ${purchaseId}`);
-                                                   window.polaryonHybrid_Rooms.add(itemsUrl);
-                                               }
-                                           }
-                                       });
+                                            if (purchaseId && purchaseId !== '0' && purchaseId.toString().length > 10) {
+                                                const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                                                
+                                                if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                                                if (!window.polaryonHybrid_Rooms.has(itemsUrl)) {
+                                                    console.log(`📡 [POLARYON DISCOVERY] Sala Mapeada (v3.5.15): ${cert.numero || '?'}/${year} -> ID: ${purchaseId}`);
+                                                    window.polaryonHybrid_Rooms.add(itemsUrl);
+                                                }
+                                            }
+                                        });
                                    }
                                }
                            } catch(e) {

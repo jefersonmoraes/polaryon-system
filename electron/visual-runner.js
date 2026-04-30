@@ -124,13 +124,13 @@ class VisualRunner {
                 webSecurity: false,
                 allowRunningInsecureContent: true,
                 backgroundThrottling: false, // 🚀 ESSENCIAL: Mantém o scanner na velocidade máxima em segundo plano
-                partition: `persist:bidding-${sessionId}`
+                partition: 'persist:polaryon-global' 
             },
             show: true
         });
 
-        // v3.5.11: CAMUFLAGEM ANT-BOT (Bypass 422)
-        const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+        // v3.5.14: USER-AGENT REALISTA (Bypass Sicaf 422)
+        const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
         win.webContents.setUserAgent(modernUserAgent);
 
         this.sessions.set(sessionId, { window: win, config });
