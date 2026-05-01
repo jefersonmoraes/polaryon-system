@@ -68,6 +68,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const { routes, fetchBudgetDetails } = useKanbanStore();
     const [supplierSearch, setSupplierSearch] = useState('');
     const [transporterSearch, setTransporterSearch] = useState('');
+    const [localResaleInputs, setLocalResaleInputs] = useState<Record<string, string>>({});
     const [selectedSupplierArea, setSelectedSupplierArea] = useState<string | null>(null);
     const [selectedTransporterRoute, setSelectedTransporterRoute] = useState<string | null>(null);
     const [isSupplierOpen, setIsSupplierOpen] = useState(false);
@@ -76,6 +77,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const [isUfOpen, setIsUfOpen] = useState(false);
     const [isTaxTooltipOpen, setIsTaxTooltipOpen] = useState(false); // Novo state para o balão de impostos
     const [isDifalTooltipOpen, setIsDifalTooltipOpen] = useState(false); // Novo state para o balão de DIFAL
+    // --- States & Refs ---
+    const recalculateTotalRef = useRef<any>(null);
     const [isNotesExpanded, setIsNotesExpanded] = useState(false); // Estado para expandir/recolher observações
     const [isDragging, setIsDragging] = useState(false);
     const dragCounter = useRef(0);
@@ -300,6 +303,49 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         updateItem(item.id, 'items', newItems);
     };
 
+    const handleReverseMarginCalculation = useCallback((subUnitPrice: number, targetVUnitResale: number) => {
+        if (subUnitPrice <= 0 || targetVUnitResale <= 0) return;
+
+        // Get the exact cost and fixed taxes by simulating with 0 margin
+        const sim = recalculateTotal(
+            item.items || [],
+            Number(item.freightValue || 0),
+            !!item.hasCashDiscount,
+            Number(item.cashDiscount || 0),
+            item.mainCompanyId,
+            item.destinationState,
+            0, // margin = 0
+            item.type,
+            0,
+            0
+        );
+
+        const rawProductsTotal = (item.items || []).reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
+        if (rawProductsTotal <= 0) return;
+
+        // targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice)
+        const targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice);
+        
+        if (targetTotalSell <= sim.cost) {
+            updateItem(item.id, 'profitMargin', 0);
+            return;
+        }
+
+        // totalDeductionTarget = 100 * (1 - (sim.cost / targetTotalSell))
+        const totalDeductionTarget = 100 * (1 - (sim.cost / targetTotalSell));
+        
+        // fixedTaxes is the deduction when margin is 0
+        const fixedTaxes = sim.finalPrice > 0 ? 100 * (1 - (sim.cost / sim.finalPrice)) : 0;
+
+        const requiredMargin = totalDeductionTarget - fixedTaxes;
+
+        let newMargin = Math.max(0, requiredMargin);
+        if (newMargin > 99.99) newMargin = 99.99; // Cap to avoid infinity
+
+        newMargin = Number(newMargin.toFixed(2));
+        updateItem(item.id, 'profitMargin', newMargin);
+    }, [item.id, item.items, item.freightValue, item.hasCashDiscount, item.cashDiscount, item.mainCompanyId, item.destinationState, item.type, updateItem]);
+
     const recalculateTotal = useCallback((
         currentItems: QuotationSubItem[],
         freight: number,
@@ -432,6 +478,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         return { cost: effectiveCost, taxNominal, difalNominal, entryDifalValue, finalPrice, finalPriceMax, breakdown, difalBreakdown };
     }, [budgetType, mainCompanies, companies]);
+
+    // Attach recalculateTotal to the ref so handleReverseMarginCalculation can use it
+    useEffect(() => {
+        recalculateTotalRef.current = recalculateTotal;
+    }, [recalculateTotal]);
 
     const flushRecalculation = useCallback((
         subItems: QuotationSubItem[],
@@ -1541,16 +1592,30 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                                                         {formatCurrency(sub.totalPrice || 0)}
                                                     </div>
 
-                                                    {/* NEW: V. Revenda Unitário */}
+                                                    {/* NEW: V. Revenda Unitário Editável */}
                                                     <div className="w-full sm:col-span-2 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center px-3 sm:px-1 py-2 sm:py-0 bg-primary/5 sm:bg-transparent rounded-lg sm:rounded-none border-primary/10 border sm:border-none">
                                                         <label className="sm:hidden text-[9px] font-black text-primary uppercase">Revenda Unidade</label>
-                                                        <div className="flex flex-col items-end">
-                                                            <div className="text-sm sm:text-xs font-mono font-black text-primary flex items-center gap-1">
-                                                                <span className="text-[10px] hidden sm:inline">R$</span>
-                                                                {formatCurrency(vUnitResale).replace('R$ ', '')}
+                                                        <div className="flex flex-col items-end w-full sm:w-auto relative">
+                                                            <div className="relative flex items-center justify-end w-full">
+                                                                <span className="absolute left-2 sm:left-1 text-[10px] text-primary/70 font-black pointer-events-none">R$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    disabled={!canEdit}
+                                                                    value={localResaleInputs[sub.id] ?? vUnitResale.toFixed(2)}
+                                                                    onChange={(e) => setLocalResaleInputs(prev => ({...prev, [sub.id]: e.target.value}))}
+                                                                    onBlur={(e) => {
+                                                                        const val = Number(e.target.value);
+                                                                        if (val > 0) recalculateTotalRef.current && handleReverseMarginCalculation(sub.unitPrice, val);
+                                                                        setLocalResaleInputs(prev => { const n = {...prev}; delete n[sub.id]; return n; });
+                                                                    }}
+                                                                    title="Digite o valor final desejado para recalcular a Margem Mínima"
+                                                                    className="w-full sm:w-24 text-sm sm:text-xs font-mono font-black text-primary text-right bg-background sm:bg-primary/5 border border-primary/20 rounded pl-6 pr-1 py-1 focus:ring-1 focus:ring-primary/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                />
                                                             </div>
                                                             {item.profitMarginMax !== undefined && item.profitMarginMax > 0 && (
-                                                                <div className="text-[11px] sm:text-[10px] font-mono font-black text-purple-600 flex items-center gap-1 mt-0.5" title="Máximo Simulado">
+                                                                <div className="text-[11px] sm:text-[10px] font-mono font-black text-purple-600 flex items-center gap-1 mt-1 pr-1" title="Máximo Simulado">
                                                                     <span className="text-[8px] hidden sm:inline text-purple-600/70">R$</span>
                                                                     {formatCurrency(vUnitResaleMax).replace('R$ ', '')}
                                                                 </div>

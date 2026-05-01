@@ -1,15 +1,15 @@
 @echo off
 echo ========================================================
 echo   POLARYON DEPLOYMENT RESCUE TOOL
-echo   Version: v3.5.18
-echo   Feature: Fix Critical Budget Companies and Items State Sync
+echo   Version: v3.5.19
+echo   Feature: Editable Resale Value with Reverse Margin Calc
 echo ========================================================
 echo.
 echo Adicionando todos os arquivos modificados...
 git add .
 echo.
-echo Criando commit do sistema v3.5.18...
-git commit -m "v3.5.18: Fix Bug in BudgetModal empty Suppliers and missing Quote items on creation"
+echo Criando commit do sistema v3.5.19...
+git commit -m "v3.5.19: Implemented Reverse Margin Calculation on Unit Resale Value input"
 echo.
 echo Enviando para a nuvem da VPS...
 git push
