@@ -1,13 +1,20 @@
 @echo off
-echo [POLARYON] Iniciando Processo de Atualizacao v3.5.17 (FAVORITOS BAR)...
-
-echo [POLARYON] 1/4 - Salvando no Git...
+echo ========================================================
+echo   POLARYON DEPLOYMENT RESCUE TOOL
+echo   Version: v3.5.18
+echo   Feature: Fix Critical Budget Companies and Items State Sync
+echo ========================================================
+echo.
+echo Adicionando todos os arquivos modificados...
 git add .
-git commit -m "v3.5.17 - Adicionada Barra de Favoritos Global para Boards"
+echo.
+echo Criando commit do sistema v3.5.18...
+git commit -m "v3.5.18: Fix Bug in BudgetModal empty Suppliers and missing Quote items on creation"
+echo.
+echo Enviando para a nuvem da VPS...
 git push
 
 echo [POLARYON] 2/4 - Reconstruindo Interface (Build)...
-call npm run build
 
 echo [POLARYON] 3/4 - Destravando PowerShell...
 powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"

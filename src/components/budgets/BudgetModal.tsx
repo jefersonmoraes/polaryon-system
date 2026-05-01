@@ -1782,7 +1782,9 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
         boards,
         routes,
         loadAttachmentContent,
-        fetchBudgetDetails
+        fetchBudgetDetails,
+        fetchCompanies,
+        fetchMainCompanies
     } = useKanbanStore();
     const { currentUser } = useAuthStore();
     const canEdit = currentUser?.role === 'ADMIN' || currentUser?.permissions?.canEdit;
@@ -1799,6 +1801,16 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
             fetchBudgetDetails(activeBudgetId);
         }
     }, [activeBudgetId, budgetFromStore?.isSkeleton, fetchBudgetDetails]);
+
+    // Lazy load companies if they are empty when opening the modal directly
+    useEffect(() => {
+        if (companies.length === 0) {
+            fetchCompanies();
+        }
+        if (mainCompanies.length === 0) {
+            fetchMainCompanies();
+        }
+    }, [companies.length, mainCompanies.length, fetchCompanies, fetchMainCompanies]);
 
     const [formData, setFormData] = useState<Partial<Budget>>(budget || {
         title: '',
@@ -2306,6 +2318,24 @@ const BudgetModal = ({ budget, onClose, initialCardId }: BudgetModalProps) => {
                 unitPrice: 0,
                 totalPrice: 0
             }));
+        } else if (formData.items && formData.items.length > 0 && formData.items[0].items && formData.items[0].items.length > 0) {
+            // Se o card não tiver itens (ou não for encontrado), mas o orçamento já tiver uma cotação, copia os itens dela
+            initialItems = formData.items[0].items.map(subItem => ({
+                id: crypto.randomUUID(),
+                description: subItem.description || '',
+                quantity: subItem.quantity || 1,
+                unitPrice: 0,
+                totalPrice: 0
+            }));
+        } else {
+            // Fallback absoluto se não tiver de onde puxar
+            initialItems = [{
+                id: crypto.randomUUID(),
+                description: 'Novo Item',
+                quantity: 1,
+                unitPrice: 0,
+                totalPrice: 0
+            }];
         }
 
         const newGroup: BudgetItem = {
