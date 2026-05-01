@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useKanbanStore } from '@/store/kanban-store';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
+import FavoritesBar from '@/components/layout/FavoritesBar';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
@@ -106,6 +107,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-background">
             <AppHeader />
+            <FavoritesBar />
             <div className="flex flex-1 overflow-hidden">
                 <AppSidebar />
                 <main className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar">
