@@ -10,7 +10,7 @@ class VisualRunner {
         // Listener global unificado para atualizações de todas as janelas injetadas
         ipcMain.removeAllListeners('portal-update');
         ipcMain.on('portal-update', (event, data) => {
-            if (this.dashboardWebContents) {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-update', data);
             }
         });
@@ -18,7 +18,7 @@ class VisualRunner {
         // 🛡️ NOVO: Listener Híbrido Injetado (AGORA COM BLACKBOX AUTOMÁTICO v2.3)
         ipcMain.removeAllListeners('portal-hybrid-capture');
         ipcMain.on('portal-hybrid-capture', (event, data) => {
-            if (this.dashboardWebContents) {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-hybrid-dump', data);
             }
 
@@ -31,7 +31,7 @@ class VisualRunner {
         // Listener para Cliques de Elite v3 (SHADOW CLICK - CDP)
         ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);
-            if (session && session.window) {
+            if (session && session.window && !session.window.isDestroyed()) {
                 const wc = session.window.webContents;
                 const pos = { x: Math.round(x), y: Math.round(y) };
                 
@@ -149,7 +149,7 @@ class VisualRunner {
         const ses = win.webContents.session;
         ses.webRequest.onCompleted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, async (details) => {
             if (details.url.includes('/itens') || details.url.includes('/disputa')) {
-                if (this.dashboardWebContents) {
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-network-traffic', {
                         sessionId,
                         url: details.url,
@@ -166,9 +166,9 @@ class VisualRunner {
             const session = this.sessions.get(sessionId);
             if (session && session.window) {
                 console.log(`[POLARYON] Login bem-sucedido detectado. Ocultando janela para modo de fundo: ${url}`);
-                session.window.hide(); // Oculta em vez de fechar para manter o preload rodando
+                if (!session.window.isDestroyed()) session.window.hide(); // Oculta em vez de fechar para manter o preload rodando
                 
-                if (this.dashboardWebContents) {
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
                 }
             }
@@ -187,17 +187,17 @@ class VisualRunner {
 
         win.on('closed', () => {
             this.sessions.delete(sessionId);
-            if (this.dashboardWebContents) {
-                this.dashboardWebContents.send('bidding-error', { sessionId, error: 'Terminal Fechado.' });
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-error', { sessionId, error: 'Terminal Fechado pelo usuário.' });
             }
         });
 
         win.webContents.on('did-finish-load', () => {
-            win.webContents.send('init-session', { sessionId, config });
+            if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
             
             // Se entrarmos em uma URL de disputa e estivermos em modo login, avisamos o dashboard para "acordar"
             const url = win.webContents.getURL();
-            if (url.includes('/disputa') && isLoginFlow && this.dashboardWebContents) {
+            if (url.includes('/disputa') && isLoginFlow && this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                  this.dashboardWebContents.send('bidding-detected-room', { sessionId, url });
             }
         });
@@ -213,7 +213,7 @@ class VisualRunner {
     stop(sessionId) {
         if (this.sessions.has(sessionId)) {
             const session = this.sessions.get(sessionId);
-            if (session.window) session.window.close();
+            if (session.window && !session.window.isDestroyed()) session.window.close();
             this.sessions.delete(sessionId);
         }
     }
@@ -221,7 +221,7 @@ class VisualRunner {
     updateConfig(sessionId, config) {
         if (this.sessions.has(sessionId)) {
             const session = this.sessions.get(sessionId);
-            if (session.window) {
+            if (session.window && !session.window.isDestroyed()) {
                 // Send IPC to the injected preload script
                 session.window.webContents.send('update-config', config);
             }
@@ -232,7 +232,7 @@ class VisualRunner {
     setupIpc() {
         ipcMain.on('visual-focus', (event, sessionId) => {
             const session = this.sessions.get(sessionId);
-            if (session && session.window) {
+            if (session && session.window && !session.window.isDestroyed()) {
                 if (session.window.isMinimized()) session.window.restore();
                 session.window.setAlwaysOnTop(true, 'screen-saver');
                 session.window.show();
@@ -243,7 +243,7 @@ class VisualRunner {
 
         ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);
-            if (session && session.window) {
+            if (session && session.window && !session.window.isDestroyed()) {
                 if (url) {
                     session.window.loadURL(url);
                 } else {
