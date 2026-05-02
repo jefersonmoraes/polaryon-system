@@ -777,7 +777,13 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const uniqueItemsMap = new Map();
             allItems.forEach(item => {
                 const key = item.item_url || item.id || `${item.orgao_cnpj}-${item.ano}-${item.numero_sequencial}`;
-                if (!uniqueItemsMap.has(key)) uniqueItemsMap.set(key, item);
+                if (!uniqueItemsMap.has(key)) {
+                    uniqueItemsMap.set(key, item);
+                } else {
+                    const existing = uniqueItemsMap.get(key);
+                    if (item._isBll) existing._isBll = true;
+                    if (item._isPcp) existing._isPcp = true;
+                }
             });
             const uniqueItems = Array.from(uniqueItemsMap.values());
 
@@ -790,11 +796,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const descLower = (i.description || '').toLowerCase();
                 const titleLower = (i.title || '').toLowerCase();
                 const orgaoLower = (i.orgao_nome || '').toLowerCase();
-                const isPcp = (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
+                const isPcp = i._isPcp || 
+                              (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
                               (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) ||
                               descLower.includes('portal de compras públicas') ||
                               titleLower.includes('portal de compras públicas');
-                const isBll = descLower.includes('bll') || titleLower.includes('bll') || orgaoLower.includes('bll');
+                const isBll = i._isBll || descLower.includes('bll') || titleLower.includes('bll') || orgaoLower.includes('bll');
                 return {
                     ...i,
                     fonte_dados: isPcp ? 'Portal de Compras Públicas' : (isBll ? 'BLL Compras' : 'PNCP')

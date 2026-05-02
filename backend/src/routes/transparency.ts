@@ -328,7 +328,10 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
             (item.description && item.description.toLowerCase().includes('portal de compras públicas')) ||
             (item.title && item.title.toLowerCase().includes('portal de compras públicas')) ||
             (item.item_url && item.item_url.includes('portaldecompraspublicas'))
-        );
+        ).map((item: any) => ({
+            ...item,
+            _isPcp: true
+        }));
 
         res.json({
             ...response.data,
@@ -385,13 +388,13 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
             }
         });
 
-        // Filtragem estrita baseada na string "bll" ou "bll.org.br" na descrição/título.
+        // Não filtramos estritamente a BLL aqui, pois o motor do PNCP já cruza a string 'BLL' em todos os campos indexados.
+        // Se filtrarmos localmente por description.includes('bll'), perderemos os editais cuja assinatura BLL está oculta.
         let items = response.data?.items || [];
-        items = items.filter((item: any) => 
-            (item.description && (item.description.toLowerCase().includes('bll') || item.description.toLowerCase().includes('bll.org.br'))) ||
-            (item.title && (item.title.toLowerCase().includes('bll') || item.title.toLowerCase().includes('bll.org.br'))) ||
-            (item.orgao_nome && item.orgao_nome.toLowerCase().includes('bll'))
-        );
+        items = items.map((item: any) => ({
+            ...item,
+            _isBll: true
+        }));
 
         res.json({
             ...response.data,
