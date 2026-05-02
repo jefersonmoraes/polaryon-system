@@ -289,8 +289,15 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
     try {
         // Como o PCP exige PublicKey privada para sua API direta, 
         // a arquitetura mais segura é buscar a malha do PCP dentro do PNCP.
+        const newQuery = { ...req.query };
+        if (newQuery.q) {
+            newQuery.q = `${newQuery.q} [Portal de Compras Públicas]`;
+        } else {
+            newQuery.q = `[Portal de Compras Públicas]`;
+        }
+
         const response = await axios.get('https://pncp.gov.br/api/search/', {
-            params: req.query,
+            params: newQuery,
             headers: { 
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*'
@@ -315,17 +322,18 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
             }
         });
 
-        // Filtragem estrita: Garantir que SÓ retornamos itens do Portal de Compras Públicas
+        // Filtragem estrita baseada na string "Portal de Compras Públicas" na descrição/título, pois a API do PNCP esconde o sistema_origem_nome na listagem.
         let items = response.data?.items || [];
         items = items.filter((item: any) => 
-            (item.item_url && item.item_url.includes('portaldecompraspublicas')) ||
-            (item.sistema_origem_nome && item.sistema_origem_nome.toLowerCase().includes('compras públicas'))
+            (item.description && item.description.toLowerCase().includes('portal de compras públicas')) ||
+            (item.title && item.title.toLowerCase().includes('portal de compras públicas')) ||
+            (item.item_url && item.item_url.includes('portaldecompraspublicas'))
         );
 
         res.json({
             ...response.data,
-            items, // Retorna a subset apenas do PCP
-            total: items.length
+            items,
+            total: response.data?.total || 0 // Retorna o total da query unificada
         });
     } catch (error: any) {
         console.error('PCP Proxy Search Error:', error.message);

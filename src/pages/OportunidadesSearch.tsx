@@ -782,8 +782,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             // Identificar Fonte (PCP vs PNCP Genérico) para os Badges da UI
             items = items.map((i: any) => {
+                const descLower = (i.description || '').toLowerCase();
+                const titleLower = (i.title || '').toLowerCase();
                 const isPcp = (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
-                              (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'));
+                              (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) ||
+                              descLower.includes('portal de compras públicas') ||
+                              titleLower.includes('portal de compras públicas');
                 return {
                     ...i,
                     fonte_dados: isPcp ? 'Portal de Compras Públicas' : 'PNCP'
