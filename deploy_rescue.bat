@@ -1,27 +1,18 @@
 @echo off
-echo ========================================================
-echo   POLARYON DEPLOYMENT RESCUE TOOL
-echo   Version: v3.5.20
-echo   Feature: Integracao Portal de Compras Publicas e Unified Search
-echo ========================================================
+echo =======================================================
+echo POLARYON RESCUE DEPLOY - BLL COMPRAS INTEGRATION
+echo =======================================================
 echo.
-echo Adicionando todos os arquivos modificados...
+echo Adicionando arquivos modificados...
 git add .
 echo.
-echo Criando commit do sistema v3.5.20...
-git commit -m "v3.5.20: Implementado Hub Unificado de Oportunidades com suporte ao Portal de Compras Publicas"
+echo Realizando o commit...
+git commit -m "feat: Integrar BLL Compras ao hub PNCP e Oportunidades"
 echo.
-echo Enviando para a nuvem da VPS...
+echo Enviando para o repositorio (Push)...
 git push
-
-echo [POLARYON] 2/4 - Reconstruindo Interface (Build)...
-
-echo [POLARYON] 3/4 - Destravando PowerShell...
-powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"
-
-echo [POLARYON] 4/4 - Enviando para VPS...
-call npm run full-deploy
-
-echo [POLARYON] ATUALIZACAO v3.5.17 CONCLUIDA!
-echo Reinicie o robo para ver as mudancas.
+echo.
+echo =======================================================
+echo DEPLOY CONCLUIDO!
+echo =======================================================
 pause

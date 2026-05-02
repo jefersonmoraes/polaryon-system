@@ -759,6 +759,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 requests.push(api.get('/transparency/pcp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
             }
 
+            if (fonteFilter === 'Todas' || fonteFilter === 'BLL') {
+                requests.push(api.get('/transparency/bll-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
+                requests.push(api.get('/transparency/bll-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            }
+
             const responses = await Promise.all(requests);
             
             let allItems: any[] = [];
@@ -784,13 +789,15 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             items = items.map((i: any) => {
                 const descLower = (i.description || '').toLowerCase();
                 const titleLower = (i.title || '').toLowerCase();
+                const orgaoLower = (i.orgao_nome || '').toLowerCase();
                 const isPcp = (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
                               (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) ||
                               descLower.includes('portal de compras públicas') ||
                               titleLower.includes('portal de compras públicas');
+                const isBll = descLower.includes('bll') || titleLower.includes('bll') || orgaoLower.includes('bll');
                 return {
                     ...i,
-                    fonte_dados: isPcp ? 'Portal de Compras Públicas' : 'PNCP'
+                    fonte_dados: isPcp ? 'Portal de Compras Públicas' : (isBll ? 'BLL Compras' : 'PNCP')
                 };
             });
 
@@ -934,6 +941,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                         <SelectItem value="Todas" className="text-sm font-bold text-foreground">Todas Fontes (Unificado)</SelectItem>
                                         <SelectItem value="PNCP" className="text-sm font-bold text-emerald-600">Portal Nacional (PNCP)</SelectItem>
                                         <SelectItem value="PCP" className="text-sm font-bold text-blue-600">Portal de Compras Públicas</SelectItem>
+                                        <SelectItem value="BLL" className="text-sm font-bold text-orange-600">Bolsa de Licitações (BLL)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1285,9 +1293,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                             ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
                                                             : (item as any).fonte_dados === 'Portal de Compras Públicas'
                                                                 ? 'bg-violet-500/10 text-violet-600 border-violet-500/20'
-                                                                : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                                                : (item as any).fonte_dados === 'BLL Compras'
+                                                                    ? 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                                                                    : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                                                     }`}>
-                                                        {(item as any).fonte_dados === 'Portal de Compras Públicas' ? 'PCP' : ((item as any).fonte_dados || 'PNCP')}
+                                                        {(item as any).fonte_dados === 'Portal de Compras Públicas' ? 'PCP' : ((item as any).fonte_dados === 'BLL Compras' ? 'BLL' : ((item as any).fonte_dados || 'PNCP'))}
                                                     </span>
                                                 </div>
                                             </td>

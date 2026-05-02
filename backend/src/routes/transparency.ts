@@ -345,6 +345,69 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/transparency/bll-proxy
+ * Proxy Dedicado para a BLL Compras
+ */
+router.get('/bll-proxy', async (req: Request, res: Response) => {
+    try {
+        // A BLL Compras não tem campo de busca público de palavra-chave.
+        // O proxy injeta 'BLL' na busca do PNCP para pescar os editais da BLL.
+        const newQuery = { ...req.query };
+        if (newQuery.q) {
+            newQuery.q = `${newQuery.q} BLL`;
+        } else {
+            newQuery.q = `BLL`;
+        }
+
+        const response = await axios.get('https://pncp.gov.br/api/search/', {
+            params: newQuery,
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 15000,
+            paramsSerializer: (params) => {
+                const parts: string[] = [];
+                Object.entries(params).forEach(([key, val]) => {
+                    if (val === undefined || val === null || val === '') return;
+                    const cleanKey = key.replace(/\[\d*\]$/, '');
+                    if (Array.isArray(val)) {
+                        parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
+                    } else {
+                        if (typeof val === 'string' && val.includes('|')) {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
+                        } else {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
+                        }
+                    }
+                });
+                return parts.join('&');
+            }
+        });
+
+        // Filtragem estrita baseada na string "bll" ou "bll.org.br" na descrição/título.
+        let items = response.data?.items || [];
+        items = items.filter((item: any) => 
+            (item.description && (item.description.toLowerCase().includes('bll') || item.description.toLowerCase().includes('bll.org.br'))) ||
+            (item.title && (item.title.toLowerCase().includes('bll') || item.title.toLowerCase().includes('bll.org.br'))) ||
+            (item.orgao_nome && item.orgao_nome.toLowerCase().includes('bll'))
+        );
+
+        res.json({
+            ...response.data,
+            items,
+            total: response.data?.total || 0
+        });
+    } catch (error: any) {
+        console.error('BLL Proxy Search Error:', error.message);
+        res.status(error.response?.status || 500).json({ 
+            error: error.message,
+            details: error.response?.data 
+        });
+    }
+});
+
+/**
  * GET /api/transparency/licitacoes
  * Legado para compatibilidade com outras telas (Dashboard, etc)
  */
