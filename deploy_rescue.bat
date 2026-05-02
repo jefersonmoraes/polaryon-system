@@ -1,15 +1,15 @@
 @echo off
 echo ========================================================
 echo   POLARYON DEPLOYMENT RESCUE TOOL
-echo   Version: v3.5.19
-echo   Feature: Editable Resale Value with Reverse Margin Calc
+echo   Version: v3.5.20
+echo   Feature: Integracao Portal de Compras Publicas e Unified Search
 echo ========================================================
 echo.
 echo Adicionando todos os arquivos modificados...
 git add .
 echo.
-echo Criando commit do sistema v3.5.19...
-git commit -m "v3.5.19: Implemented Reverse Margin Calculation on Unit Resale Value input"
+echo Criando commit do sistema v3.5.20...
+git commit -m "v3.5.20: Implementado Hub Unificado de Oportunidades com suporte ao Portal de Compras Publicas"
 echo.
 echo Enviando para a nuvem da VPS...
 git push
