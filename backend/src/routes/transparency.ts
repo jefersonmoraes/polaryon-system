@@ -282,6 +282,61 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/transparency/pcp-proxy
+ * Proxy Dedicado para o Portal de Compras Públicas (PCP)
+ */
+router.get('/pcp-proxy', async (req: Request, res: Response) => {
+    try {
+        // Como o PCP exige PublicKey privada para sua API direta, 
+        // a arquitetura mais segura é buscar a malha do PCP dentro do PNCP.
+        const response = await axios.get('https://pncp.gov.br/api/search/', {
+            params: req.query,
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 15000,
+            paramsSerializer: (params) => {
+                const parts: string[] = [];
+                Object.entries(params).forEach(([key, val]) => {
+                    if (val === undefined || val === null || val === '') return;
+                    const cleanKey = key.replace(/\[\d*\]$/, '');
+                    if (Array.isArray(val)) {
+                        parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
+                    } else {
+                        if (typeof val === 'string' && val.includes('|')) {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
+                        } else {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
+                        }
+                    }
+                });
+                return parts.join('&');
+            }
+        });
+
+        // Filtragem estrita: Garantir que SÓ retornamos itens do Portal de Compras Públicas
+        let items = response.data?.items || [];
+        items = items.filter((item: any) => 
+            (item.item_url && item.item_url.includes('portaldecompraspublicas')) ||
+            (item.sistema_origem_nome && item.sistema_origem_nome.toLowerCase().includes('compras públicas'))
+        );
+
+        res.json({
+            ...response.data,
+            items, // Retorna a subset apenas do PCP
+            total: items.length
+        });
+    } catch (error: any) {
+        console.error('PCP Proxy Search Error:', error.message);
+        res.status(error.response?.status || 500).json({ 
+            error: error.message,
+            details: error.response?.data 
+        });
+    }
+});
+
+/**
  * GET /api/transparency/licitacoes
  * Legado para compatibilidade com outras telas (Dashboard, etc)
  */

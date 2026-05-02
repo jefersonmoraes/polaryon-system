@@ -746,23 +746,49 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return params;
             };
 
-            // Execução em Paralelo: Consulta nos ecossistemas PNCP central
+            // Execução em Paralelo: Consulta nos ecossistemas PNCP central e PCP
             const requests = [];
             
-            requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-            requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            if (fonteFilter === 'Todas' || fonteFilter === 'PNCP') {
+                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
+                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            }
+
+            if (fonteFilter === 'Todas' || fonteFilter === 'PCP') {
+                requests.push(api.get('/transparency/pcp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
+                requests.push(api.get('/transparency/pcp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            }
 
             const responses = await Promise.all(requests);
             
-            let data1 = responses[0]?.data || { items: [], total: 0 };
-            let data2 = responses[1]?.data || { items: [] };
+            let allItems: any[] = [];
+            responses.forEach(res => {
+                if (res?.data?.items) {
+                    allItems = [...allItems, ...res.data.items];
+                }
+            });
 
-            let allItems = [
-                ...(data1?.items || []), 
-                ...(data2?.items || [])
-            ];
+            // Remover duplicatas caso a busca 'Todas' traga o mesmo processo do PNCP e do proxy isolado
+            const uniqueItemsMap = new Map();
+            allItems.forEach(item => {
+                const key = item.item_url || item.id || `${item.orgao_cnpj}-${item.ano}-${item.numero_sequencial}`;
+                if (!uniqueItemsMap.has(key)) uniqueItemsMap.set(key, item);
+            });
+            const uniqueItems = Array.from(uniqueItemsMap.values());
 
-            let items = allItems;
+            let data1 = responses[0]?.data || { items: [], total: 0 }; // Apenas para referência do total bruto
+
+            let items = uniqueItems;
+
+            // Identificar Fonte (PCP vs PNCP Genérico) para os Badges da UI
+            items = items.map((i: any) => {
+                const isPcp = (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
+                              (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'));
+                return {
+                    ...i,
+                    fonte_dados: isPcp ? 'Portal de Compras Públicas' : 'PNCP'
+                };
+            });
 
             // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
             // Os detalhes agora são carregados apenas no Modal ou se já estiverem no cache.
@@ -827,7 +853,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter
+        valorMinFilter, valorMaxFilter, fonteFilter
     ]);
 
     // Auto-fetch inteligente com debounce para recarregar quando o usuário digitar ou alterar filtros
@@ -843,7 +869,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
         orgaoFilter, municipioFilter, poderFilter, unidadeFilter,
         fonteOrcamentoFilter, conteudoNacionalFilter, margemPreferenciaFilter,
-        valorMinFilter, valorMaxFilter
+        valorMinFilter, valorMaxFilter, fonteFilter
     ]);
 
     const handleSearch = useCallback((e: React.FormEvent) => {
@@ -894,6 +920,20 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                     className="w-full h-10 bg-background border border-border rounded-md pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
                                 />
                             </div>
+                            
+                            <div className="w-full md:w-56 shrink-0">
+                                <Select value={fonteFilter} onValueChange={setFonteFilter}>
+                                    <SelectTrigger className="w-full h-10 bg-background border-border text-sm font-bold shadow-sm">
+                                        <SelectValue placeholder="Fonte" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
+                                        <SelectItem value="Todas" className="text-sm font-bold text-foreground">Todas Fontes (Unificado)</SelectItem>
+                                        <SelectItem value="PNCP" className="text-sm font-bold text-emerald-600">Portal Nacional (PNCP)</SelectItem>
+                                        <SelectItem value="PCP" className="text-sm font-bold text-blue-600">Portal de Compras Públicas</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             <div className="flex flex-wrap md:flex-nowrap gap-2">
                                 <button
                                     type="button"
@@ -1239,9 +1279,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${
                                                         (item as any).fonte_dados === 'Compras.gov.br'
                                                             ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                                                            : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                                            : (item as any).fonte_dados === 'Portal de Compras Públicas'
+                                                                ? 'bg-violet-500/10 text-violet-600 border-violet-500/20'
+                                                                : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                                                     }`}>
-                                                        {(item as any).fonte_dados || 'PNCP'}
+                                                        {(item as any).fonte_dados === 'Portal de Compras Públicas' ? 'PCP' : ((item as any).fonte_dados || 'PNCP')}
                                                     </span>
                                                 </div>
                                             </td>
