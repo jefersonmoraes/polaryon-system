@@ -362,6 +362,19 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
             newQuery.q = `BLL`;
         }
 
+        // BLL falha em atualizar o status para recebendo_proposta no PNCP, deixando travado como divulgada.
+        if (newQuery.status) {
+            let statuses = Array.isArray(newQuery.status) ? newQuery.status : [newQuery.status];
+            if (statuses.includes('recebendo_proposta')) {
+                newQuery.status = [...statuses, 'divulgada', 'divulgada_pncp'];
+            }
+        }
+
+        // BLL não indexa UF corretamente no PNCP. Omitimos para pegar tudo e filtramos no frontend.
+        if (newQuery.ufs) {
+            delete newQuery.ufs;
+        }
+
         const response = await axios.get('https://pncp.gov.br/api/search/', {
             params: newQuery,
             headers: { 

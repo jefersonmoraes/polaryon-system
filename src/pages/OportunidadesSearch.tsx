@@ -814,6 +814,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             // --- Client-Side "Mega Filters" Fallback ---
             // NOTE: UF, Esfera and Modality are now handled at API level (server-side) via ufs, esferas, modalidades params.
+            // BLL Compras fails to index UF properly on PNCP, so we MUST fallback local filtering for UF too!
+            if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
+            
             if (orgaoFilter) items = items.filter((i: PncpItem) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
             if (modalidadeFilter) items = items.filter((i: PncpItem) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
             if (municipioFilter) items = items.filter((i: PncpItem) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
@@ -827,6 +830,21 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return true;
             });
             if (margemPreferenciaFilter) items = items.filter((i: any) => (i?.tipo_margem_preferencia_nome?.toLowerCase() || '').includes(margemPreferenciaFilter.toLowerCase()));
+
+            // Filtro local para corrigir a BLL presa como 'divulgada'
+            if (statusFilter === 'recebendo_proposta') {
+                const now = new Date();
+                items = items.filter((i: any) => {
+                    if (i.fonte_dados === 'BLL Compras' && (i.situacao_nome || '').toLowerCase().includes('divulga')) {
+                        const start = new Date(i.data_inicio_proposta || i.data_inicio_vigencia);
+                        const end = new Date(i.data_encerramento_proposta || i.data_fim_vigencia);
+                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                            return start <= now && end >= now;
+                        }
+                    }
+                    return true;
+                });
+            }
 
             // Valor Min/Max Filter - Ajustado para 'best-effort' (ignora itens sem valor carregado)
             if (valorMinFilter) {
