@@ -357,9 +357,9 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
         // O proxy injeta 'BLL' na busca do PNCP para pescar os editais da BLL.
         const newQuery = { ...req.query };
         if (newQuery.q) {
-            newQuery.q = `${newQuery.q} BLL`;
+            newQuery.q = `${newQuery.q} "Bolsa de Licitações"`;
         } else {
-            newQuery.q = `BLL`;
+            newQuery.q = `"Bolsa de Licitações"`;
         }
 
         // BLL falha em atualizar o status para recebendo_proposta no PNCP, deixando travado como divulgada.
