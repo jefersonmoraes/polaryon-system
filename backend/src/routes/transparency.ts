@@ -394,8 +394,8 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
             try {
                 // BLL Search Params
                 const bllParams = new URLSearchParams();
-                bllParams.append('Organization', (newQuery.q as string) || '');
-                bllParams.append('fkState', Array.isArray(newQuery.ufs) ? newQuery.ufs[0] : (newQuery.ufs as string) || '');
+                bllParams.append('Organization', typeof newQuery.q === 'string' ? newQuery.q : String(newQuery.q || ''));
+                bllParams.append('fkState', Array.isArray(newQuery.ufs) ? String(newQuery.ufs[0]) : String(newQuery.ufs || ''));
                 bllParams.append('fkStatus', '1'); // 1 = Abertas/Recebendo Propostas na BLL
                 bllParams.append('X-Requested-With', 'XMLHttpRequest');
 
