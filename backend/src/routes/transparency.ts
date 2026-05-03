@@ -370,11 +370,6 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
             }
         }
 
-        // BLL não indexa UF corretamente no PNCP. Omitimos para pegar tudo e filtramos no frontend.
-        if (newQuery.ufs) {
-            delete newQuery.ufs;
-        }
-
         const response = await axios.get('https://pncp.gov.br/api/search/', {
             params: newQuery,
             headers: { 
