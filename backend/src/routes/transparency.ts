@@ -353,9 +353,14 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
  */
 router.get('/bll-proxy', async (req: Request, res: Response) => {
     try {
-        // O proxy agora utiliza o ID oficial da BLL no PNCP (idSistemaOrigem=12)
+        // O motor do PNCP ignora idSistemaOrigem na API de busca, então injetamos o termo exato
         const newQuery = { ...req.query };
-        newQuery.idSistemaOrigem = '12';
+        if (newQuery.q) {
+            newQuery.q = `${newQuery.q} "Bolsa de Licitações"`;
+        } else {
+            newQuery.q = `"Bolsa de Licitações"`;
+        }
+        delete newQuery.idSistemaOrigem;
 
         // Melhoria de Status para BLL no PNCP
         if (newQuery.status) {
@@ -419,15 +424,20 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
 
         let items = pncpRes.data?.items || [];
         
-        // Marcar itens vindos do PNCP como BLL
-        items = items.map((item: any) => ({
+        // Filtragem estrita para garantir que apenas itens da BLL sejam marcados
+        items = items.filter((item: any) => 
+            (item.description && item.description.toLowerCase().includes('bolsa de licitações')) ||
+            (item.title && item.title.toLowerCase().includes('bolsa de licitações')) ||
+            (item.description && item.description.toLowerCase().includes('bll')) ||
+            (item.item_url && item.item_url.includes('bll')) ||
+            (item.orgao_nome && item.orgao_nome.toLowerCase().includes('bll'))
+        ).map((item: any) => ({
             ...item,
             _isBll: true
         }));
 
         // TODO: Merge bllDirectItems logic if it's proven to return a stable JSON schema
-        // Por hora, o idSistemaOrigem=12 já resolve 99% dos casos no PNCP.
-
+        
         res.json({
             ...pncpRes.data,
             items,
