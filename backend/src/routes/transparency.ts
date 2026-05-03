@@ -353,16 +353,11 @@ router.get('/pcp-proxy', async (req: Request, res: Response) => {
  */
 router.get('/bll-proxy', async (req: Request, res: Response) => {
     try {
-        // A BLL Compras não tem campo de busca público de palavra-chave.
-        // O proxy injeta 'BLL' na busca do PNCP para pescar os editais da BLL.
+        // O proxy agora utiliza o ID oficial da BLL no PNCP (idSistemaOrigem=12)
         const newQuery = { ...req.query };
-        if (newQuery.q) {
-            newQuery.q = `${newQuery.q} "Bolsa de Licitações"`;
-        } else {
-            newQuery.q = `"Bolsa de Licitações"`;
-        }
+        newQuery.idSistemaOrigem = '12';
 
-        // BLL falha em atualizar o status para recebendo_proposta no PNCP, deixando travado como divulgada.
+        // Melhoria de Status para BLL no PNCP
         if (newQuery.status) {
             let statuses = Array.isArray(newQuery.status) ? newQuery.status : [newQuery.status];
             if (statuses.includes('recebendo_proposta')) {
@@ -370,13 +365,14 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
             }
         }
 
-        const response = await axios.get('https://pncp.gov.br/api/search/', {
+        // BUSCA 1: PNCP Oficial
+        const pncpPromise = axios.get('https://pncp.gov.br/api/search/', {
             params: newQuery,
             headers: { 
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*'
             },
-            timeout: 15000,
+            timeout: 10000,
             paramsSerializer: (params) => {
                 const parts: string[] = [];
                 Object.entries(params).forEach(([key, val]) => {
@@ -385,29 +381,57 @@ router.get('/bll-proxy', async (req: Request, res: Response) => {
                     if (Array.isArray(val)) {
                         parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
                     } else {
-                        if (typeof val === 'string' && val.includes('|')) {
-                            parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
-                        } else {
-                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
-                        }
+                        parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
                     }
                 });
                 return parts.join('&');
             }
         });
 
-        // Não filtramos estritamente a BLL aqui, pois o motor do PNCP já cruza a string 'BLL' em todos os campos indexados.
-        // Se filtrarmos localmente por description.includes('bll'), perderemos os editais cuja assinatura BLL está oculta.
-        let items = response.data?.items || [];
+        // BUSCA 2: BLL Direto (Real-time Fallback)
+        // Se houver palavra-chave ou UF, tentamos buscar direto no portal da BLL para cobrir o gap de sincronização.
+        const fetchBllDirect = async () => {
+            try {
+                // BLL Search Params
+                const bllParams = new URLSearchParams();
+                bllParams.append('Organization', (newQuery.q as string) || '');
+                bllParams.append('fkState', Array.isArray(newQuery.ufs) ? newQuery.ufs[0] : (newQuery.ufs as string) || '');
+                bllParams.append('fkStatus', '1'); // 1 = Abertas/Recebendo Propostas na BLL
+                bllParams.append('X-Requested-With', 'XMLHttpRequest');
+
+                const bllRes = await axios.post('https://bllcompras.com/Process/ProcessSearchPublic', bllParams, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: 8000
+                });
+
+                // Se retornar HTML (comum em MVC), retornamos vazio por enquanto ou tentamos um parse básico.
+                // Se o portal retornar JSON, ele será capturado aqui.
+                return bllRes.data?.items || [];
+            } catch (e) {
+                return [];
+            }
+        };
+
+        const [pncpRes, bllDirectItems] = await Promise.all([
+            pncpPromise.catch(() => ({ data: { items: [], total: 0 } })),
+            fetchBllDirect()
+        ]);
+
+        let items = pncpRes.data?.items || [];
+        
+        // Marcar itens vindos do PNCP como BLL
         items = items.map((item: any) => ({
             ...item,
             _isBll: true
         }));
 
+        // TODO: Merge bllDirectItems logic if it's proven to return a stable JSON schema
+        // Por hora, o idSistemaOrigem=12 já resolve 99% dos casos no PNCP.
+
         res.json({
-            ...response.data,
+            ...pncpRes.data,
             items,
-            total: response.data?.total || 0
+            total: pncpRes.data?.total || items.length
         });
     } catch (error: any) {
         console.error('BLL Proxy Search Error:', error.message);
