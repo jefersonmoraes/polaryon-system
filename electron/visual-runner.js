@@ -19,9 +19,6 @@ class VisualRunner {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-hybrid-dump', data);
             }
-            if (data.action === 'API_DUMP' && data.data && data.data.response) {
-                this.saveToBlackBox(data.data.url, data.data.response);
-            }
         });
 
         ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
@@ -77,15 +74,19 @@ class VisualRunner {
 
         this.sessions.set(sessionId, { window: win, config });
 
-        win.webContents.setWindowOpenHandler(({ url }) => {
-            if (url.includes('comprasnet-web') || url.includes('disputa') || url.includes('idp.acesso.gov.br')) {
-                win.loadURL(url);
-                return { action: 'deny' };
+        // 🎯 [SIFÃO DE TOKEN v4.0] Captura o token direto dos headers de rede e injeta no preload
+        const ses = win.webContents.session;
+        ses.webRequest.onBeforeSendHeaders({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details, callback) => {
+            const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization'];
+            if (auth && auth.startsWith('Bearer')) {
+                // Envia o token para o Preload da página
+                if (!win.isDestroyed()) {
+                    win.webContents.send('force-token-injection', { token: auth });
+                }
             }
-            return { action: 'allow' };
+            callback({ requestHeaders: details.requestHeaders });
         });
 
-        const ses = win.webContents.session;
         ses.webRequest.onCompleted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, async (details) => {
             if (details.url.includes('/itens') || details.url.includes('/disputa')) {
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
@@ -117,17 +118,10 @@ class VisualRunner {
 
         win.on('closed', () => {
             this.sessions.delete(sessionId);
-            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                this.dashboardWebContents.send('bidding-error', { sessionId, error: 'Terminal Fechado pelo usuário.' });
-            }
         });
 
         win.webContents.on('did-finish-load', () => {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
-            const url = win.webContents.getURL();
-            if (url.includes('/disputa') && isLoginFlow && this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                 this.dashboardWebContents.send('bidding-detected-room', { sessionId, url });
-            }
         });
 
         const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
@@ -142,15 +136,6 @@ class VisualRunner {
         }
     }
 
-    updateConfig(sessionId, config) {
-        if (this.sessions.has(sessionId)) {
-            const session = this.sessions.get(sessionId);
-            if (session.window && !session.window.isDestroyed()) {
-                session.window.webContents.send('update-config', config);
-            }
-        }
-    }
-
     setupIpc() {
         ipcMain.on('visual-focus', (event, sessionId) => {
             const session = this.sessions.get(sessionId);
@@ -160,7 +145,6 @@ class VisualRunner {
                 session.window.focus();
             }
         });
-
         ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
@@ -178,11 +162,6 @@ class VisualRunner {
             const fileName = `dump_${timestamp}_${urlSlug}.json`;
             const payload = { capturedAt: new Date().toISOString(), url, data: response };
             fs.writeFileSync(path.join(logDir, fileName), JSON.stringify(payload, null, 2));
-            const files = fs.readdirSync(logDir);
-            if (files.length > 200) {
-                const sorted = files.sort((a, b) => fs.statSync(path.join(logDir, a)).mtimeMs - fs.statSync(path.join(logDir, b)).mtimeMs);
-                sorted.slice(0, 20).forEach(f => fs.unlinkSync(path.join(logDir, f)));
-            }
         } catch (e) {}
     }
 }

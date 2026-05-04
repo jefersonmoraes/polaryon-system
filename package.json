@@ -1,7 +1,7 @@
 {
   "name": "polaryon-system",
   "private": true,
-  "version": "3.5.26",
+  "version": "3.5.27",
   "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
   "author": "Polaryon Tecnologia",
   "type": "module",
