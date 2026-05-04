@@ -343,8 +343,9 @@ export default function BiddingDashboardPage() {
                              const newSessions: Record<string, any> = {};
                              hybridItems.forEach((item: any) => {
                                  if (!item) return;
-                                 const uasgCode = item.polaryon_purchaseId || item.uasg || item.codigoUasg || 'SISTEMA';
-                                 const num = item.numeroCompra || item.numero || '0';
+                                 const fullId = String(item.polaryon_purchaseId || '');
+                                 const uasgCode = fullId.length === 17 ? fullId.substring(0, 6) : (item.uasg || item.codigoUasg || 'SISTEMA');
+                                 const num = fullId.length === 17 ? parseInt(fullId.substring(8, 13), 10).toString() : (item.numeroCompra || item.numero || '0');
                                  const ano = item.polaryon_year || item.anoCompra || item.ano || '2026';
                                  const sid = `HYBRID_${uasgCode}_${num}_${ano}`;
                                  

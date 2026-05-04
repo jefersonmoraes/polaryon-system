@@ -35,7 +35,7 @@ window.addEventListener("message", (event) => {
 
                   // Se ainda não temos a URL de itens, construímos a partir do ID capturado
                   if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
-                      window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${fullId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                      window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${fullId}/itens`;
                   }
              }
 
@@ -67,7 +67,7 @@ window.addEventListener("message", (event) => {
                      const year = cert.ano || new Date().getFullYear();
                      const basePath = cert.basePath || (payload.url.includes('disputas') ? 'disputas/compras' : 'compras');
                      
-                     const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                     const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
                      
                      // Adiciona à lista de monitoramento global
                      if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
@@ -122,9 +122,9 @@ const startHybridEngine = () => {
                         if (!baseUrl) continue;
                         
                         // v3.5.15: Extração de Metadados de Alta Precisão (Evita o ID 0)
-                        const urlParts = baseUrl.match(/\/v1\/(compras|disputas\/compras)\/(\d+)\/(\d{4})/);
-                        const currentPurchaseId = urlParts ? urlParts[2] : null;
-                        const currentYear = urlParts ? urlParts[3] : (baseUrl.includes('/202') ? baseUrl.match(/\/202\d/)[0].replace('/', '') : '2026');
+                        // A URL agora é: .../v1/compras/${currentPurchaseId}/itens
+                        const urlParts = baseUrl.match(/\/v1\/compras\/(\d+)/);
+                        const currentPurchaseId = urlParts ? urlParts[1] : null;
                         
                         if (!currentPurchaseId || currentPurchaseId === '0' || currentPurchaseId.length < 5) {
                             console.log("⚠️ [POLARYON] Ignorando URL inválida ou incompleta:", baseUrl);
@@ -132,17 +132,13 @@ const startHybridEngine = () => {
                             continue;
                         }
 
-                        // TENTA EM CASCATA: Primeiro 'disputas/compras', depois 'compras'
-                        const pathsToTry = baseUrl.includes('disputas') ? ['disputas/compras', 'compras'] : ['compras', 'disputas/compras'];
-                        
                         let data = null;
                         let successUrl = null;
 
-                        for (const path of pathsToTry) {
-                            const tryUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${path}/${currentPurchaseId}/${currentYear}/itens?pagina=0&tamanhoPagina=100`;
-                            
-                            const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
-                            if (!authHeader) break;
+                        const tryUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${currentPurchaseId}/itens`;
+                        
+                        const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
+                        if (!authHeader) continue;
 
                             try {
                                 const res = await fetch(tryUrl, {
@@ -159,20 +155,19 @@ const startHybridEngine = () => {
                                     if (rawText && rawText.trim().length > 0) {
                                         data = JSON.parse(rawText);
                                         successUrl = tryUrl;
-                                        break; 
                                     }
                                 }
                             } catch(e) {
-                                console.error(`[POLARYON] Erro ao tentar rota ${path}:`, e);
+                                console.error(`[POLARYON] Erro ao tentar rota:`, e);
                             }
-                        }
 
                         if (data) {
                             const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
                             if (itemsArray.length > 0) {
+                                const currentYear = currentPurchaseId.slice(-4);
                                 const enrichedItems = itemsArray.map(it => ({
                                     ...it,
-                                    polaryon_basePath: successUrl.includes('disputas') ? 'disputas/compras' : 'compras',
+                                    polaryon_basePath: 'compras',
                                     polaryon_purchaseId: currentPurchaseId,
                                     polaryon_year: currentYear
                                 }));
@@ -234,10 +229,8 @@ const startHybridEngine = () => {
                        window.polaryonLastDiscovery = Date.now();
                        
                        const discoveryTargets = [
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100',
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/disputas/compras/participacao?pagina=0&tamanhoPagina=100',
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/dispensa/participacao?pagina=0&tamanhoPagina=100',
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/divulgacao/compras?pagina=0&tamanhoPagina=100'
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?pagina=0&tamanhoPagina=100',
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacao?pagina=0&tamanhoPagina=100'
                         ];
 
                        const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
@@ -266,7 +259,7 @@ const startHybridEngine = () => {
                                             }
 
                                             if (purchaseId && purchaseId !== '0' && purchaseId.toString().length > 10) {
-                                                const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/${basePath}/${purchaseId}/${year}/itens?pagina=0&tamanhoPagina=100`;
+                                                const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
                                                 
                                                 if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
                                                 if (!window.polaryonHybrid_Rooms.has(itemsUrl)) {
