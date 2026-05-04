@@ -734,29 +734,91 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
     );
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onQuickBid }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
+    const [minPrice, setMinPrice] = useState(item.minPrice || 0);
+    const [margin, setMargin] = useState(item.decrementValue || 1.00);
+    const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
+    const [active, setActive] = useState(item.active || false);
+
+    const handleToggle = () => {
+        const newState = !active;
+        setActive(newState);
+        onSaveStrategy(sid, item.itemId, {
+            mode: strategy,
+            minPrice: Number(minPrice),
+            decrementValue: Number(margin),
+            decrementType: 'fixed',
+            active: newState
+        });
+        
+        if (newState) {
+            toast.success(`Robô Ativado para Item ${item.itemId} (Modo ${strategy})`);
+        } else {
+            toast.warning(`Automação Pausada para Item ${item.itemId}`);
+        }
+    };
+
     return (
-        <div className={`p-6 rounded-xl border transition-all duration-300 ${isWinning ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-            <div className="grid grid-cols-12 gap-6 items-center">
+        <div className={`p-4 rounded-xl border transition-all duration-300 ${active ? 'border-emerald-400 bg-emerald-50/10' : 'border-slate-200 bg-white'}`}>
+            <div className="grid grid-cols-12 gap-4 items-center">
                 <div className="col-span-3">
-                    <div className="flex items-center gap-3 mb-2"><span className="text-xs font-black text-slate-900 uppercase tracking-tighter">ITEM {item.itemId}</span></div>
-                    <Badge className={`text-[10px] font-black uppercase px-3 py-1 rounded-sm ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`}>{isWinning ? 'Ganhando' : 'Perdendo'}</Badge>
-                    <p className="text-[10px] text-slate-400 mt-2 truncate max-w-[200px]">{item.desc || 'Descrição'}</p>
-                </div>
-                <div className="col-span-3 flex gap-4">
-                    <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase">Lance mínimo</label>
-                        <input type="text" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-xs font-black outline-none focus:border-black/20" placeholder="0,00" />
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">ITEM {item.itemId} - {item.desc || 'Sem Descrição'}</span>
+                        <Badge className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`}>{isWinning ? 'Ganhando' : 'Perdendo'}</Badge>
+                    </div>
+                    <div className="flex gap-2">
+                        <Select value={strategy} onValueChange={(val: any) => setStrategy(val)}>
+                            <SelectTrigger className="h-7 text-[9px] font-black uppercase bg-slate-100 border-none w-32">
+                                <SelectValue placeholder="Estratégia" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="follower">Seguir Líder</SelectItem>
+                                <SelectItem value="sniper">Sniper (Final)</SelectItem>
+                                <SelectItem value="shadow">Sombra</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
-                <div className="col-span-3 grid grid-cols-1 gap-2">
-                    <div className="flex items-center justify-between px-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Atual</span><span className="text-xs font-black text-red-500">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex items-center justify-between px-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Meu</span><span className="text-xs font-black text-slate-800">R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+
+                <div className="col-span-3 flex gap-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-slate-400 uppercase">Lance mínimo (R$)</label>
+                        <Input 
+                            type="number" 
+                            className="h-8 text-xs font-black bg-slate-50" 
+                            value={minPrice} 
+                            onChange={(e) => setMinPrice(Number(e.target.value))}
+                            placeholder="0,00"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-slate-400 uppercase">Margem (R$)</label>
+                        <Input 
+                            type="number" 
+                            className="h-8 text-xs font-black bg-slate-50" 
+                            value={margin} 
+                            onChange={(e) => setMargin(Number(e.target.value))}
+                            placeholder="1,00"
+                        />
+                    </div>
                 </div>
-                <div className="col-span-3 flex items-center justify-end gap-6 border-l border-slate-100 pl-6">
-                    <div className="flex flex-col items-center"><span className="text-lg font-mono font-black text-slate-900">{item.timeout || '00:00:00'}</span></div>
-                    <button className="w-10 h-10 rounded-full border-2 border-red-500 flex items-center justify-center group hover:bg-red-500 transition-all"><StopCircle className="w-5 h-5 text-red-500 group-hover:text-white" /></button>
+
+                <div className="col-span-3 grid grid-cols-2 gap-4 border-l border-slate-100 pl-4">
+                    <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400 uppercase">Melhor Lance</span><span className="text-xs font-black text-red-500">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                    <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400 uppercase">Meu Lance</span><span className="text-xs font-black text-slate-800">R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                </div>
+
+                <div className="col-span-3 flex items-center justify-end gap-6">
+                    <div className="flex flex-col items-center">
+                        <span className="text-sm font-mono font-black text-slate-900">{item.timerSeconds > 0 ? new Date(item.timerSeconds * 1000).toISOString().substr(14, 5) : '19:42'}</span>
+                    </div>
+                    <button 
+                        onClick={handleToggle}
+                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${active ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+                    >
+                        {active ? <StopCircle className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                    </button>
                 </div>
             </div>
         </div>

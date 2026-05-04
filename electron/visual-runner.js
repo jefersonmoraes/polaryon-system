@@ -144,6 +144,15 @@ class VisualRunner {
         }
     }
 
+    updateConfig(sessionId, config) {
+        const session = this.sessions.get(sessionId);
+        if (session && session.window && !session.window.isDestroyed()) {
+            session.config = { ...session.config, ...config };
+            session.window.webContents.send('update-config', config);
+            console.log(`[VISUAL-RUNNER] Configuração Atualizada para ${sessionId}:`, config);
+        }
+    }
+
     setupIpc() {
         ipcMain.on('visual-focus', (event, sessionId) => {
             const session = this.sessions.get(sessionId);

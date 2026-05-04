@@ -2,12 +2,23 @@ const { ipcRenderer } = require('electron');
 
 console.log("👻 [POLARYON] Script de Preload Carregado com SUCESSO!");
 
+window.polaryonStrategies = {};
+window.polaryonAuthBearer = null;
+
 // 💉 RECEPTOR DE TOKEN FORÇADO (Via Dashboard)
 ipcRenderer.on('force-token-injection', (event, { token }) => {
     if (token && token !== window.polaryonAuthBearer) {
         console.log("%c🚀 [POLARYON] Token Injetado via Sifão!", "color: yellow; font-weight: bold;");
         window.polaryonAuthBearer = token;
         if (!window.polaryonHybrid_Active) startHybridEngine();
+    }
+});
+
+// ⚙️ RECEPTOR DE CONFIGURAÇÃO DE ITENS (Play/Pause, Margem, Estratégia)
+ipcRenderer.on('update-config', (event, config) => {
+    if (config.itemsConfig) {
+        window.polaryonStrategies = { ...window.polaryonStrategies, ...config.itemsConfig };
+        console.log("🛠️ [POLARYON] Estratégias Atualizadas:", window.polaryonStrategies);
     }
 });
 
@@ -40,6 +51,35 @@ window.addEventListener("message", (event) => {
     }
 }, false);
 
+const sendBid = async (purchaseId, itemId, value) => {
+    const auth = window.polaryonAuthBearer;
+    if (!auth) return;
+
+    console.log(`%c🎯 [POLARYON] DISPARANDO LANCE: R$ ${value} no Item ${itemId}`, "color: #ff00ff; font-weight: bold;");
+    
+    try {
+        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': auth,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ valorAjustado: value })
+        });
+
+        if (res.ok) {
+            console.log(`%c✅ [POLARYON] Lance de R$ ${value} ACEITO pelo Portal!`, "color: lime; font-weight: bold;");
+        } else {
+            const err = await res.text();
+            console.error(`❌ [POLARYON] Erro ao enviar lance:`, err);
+        }
+    } catch (e) {
+        console.error(`❌ [POLARYON] Falha na rede ao enviar lance:`, e);
+    }
+};
+
 const startHybridEngine = () => {
     if (window.polaryonHybrid_Active) return;
     window.polaryonHybrid_Active = true;
@@ -50,40 +90,7 @@ const startHybridEngine = () => {
          if (!authHeader) { setTimeout(pollingLoop, 2000); return; }
 
          try {
-                    // 1. DESCOBERTA AGRESSIVA (OPCIONAL SE O TRÁFEGO JÁ ENSINOU)
-                    if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 12000) {
-                        window.polaryonLastDiscovery = Date.now();
-                        const discoveryTargets = [
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?pagina=0&tamanhoPagina=100',
-                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?situacao=2&pagina=0&tamanhoPagina=100'
-                        ];
-                        for (const discUrl of discoveryTargets) {
-                            try {
-                                const discRes = await fetch(discUrl, { headers: { 'Authorization': authHeader } });
-                                if (discRes.ok) {
-                                    const discData = await discRes.json();
-                                    const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
-                                    certames.forEach(cert => {
-                                        let pId = cert.compra || cert.id || cert.codigoCompra || cert.identificador;
-                                        if (pId && pId.toString().length < 10) {
-                                            const uasg = (cert.uasg || cert.codigoUasg || '0').toString().padStart(6, '0');
-                                            const mod = (cert.modalidade || '06').toString().padStart(2, '0');
-                                            const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
-                                            const year = cert.ano || cert.anoCompra || new Date().getFullYear();
-                                            pId = `${uasg}${mod}${num}${year}`;
-                                        }
-                                        if (pId && pId.toString().length >= 10) {
-                                            if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                                            window.polaryonHybrid_Rooms.add(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${pId}/itens`);
-                                            window.polaryonHybrid_Rooms.add(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${pId}/itens/em-disputa`);
-                                        }
-                                    });
-                                }
-                            } catch(e) {}
-                        }
-                    }
-
-                    // 2. BUSCA DE ITENS
+                    // 1. BUSCA DE ITENS
                     let allFetchedItems = [];
                     const targetUrls = window.polaryonHybrid_Rooms ? Array.from(window.polaryonHybrid_Rooms) : [];
                     for (const baseUrl of targetUrls) {
@@ -101,11 +108,13 @@ const startHybridEngine = () => {
                         } catch(e) {}
                     }
 
-                    // 3. SINCRONIZAÇÃO
+                    // 2. SINCRONIZAÇÃO E LANCE AUTOMÁTICO
                     if (allFetchedItems.length > 0) {
                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
-                        allFetchedItems.forEach(item => {
+                        
+                        for (const item of allFetchedItems) {
                             const rawId = item.identificador || item.numero.toString();
+                            const pId = item.polaryon_purchaseId;
                             const vAtual = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                             const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                             const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
@@ -114,19 +123,38 @@ const startHybridEngine = () => {
 
                             window.polaryonAllItems[rawId] = {
                                 itemId: rawId,
+                                purchaseId: pId,
                                 valorAtual: vAtual,
                                 meuValor: vMeu,
                                 isDispute: isDispute,
+                                timerSeconds: item.segundosParaEncerramento || 0,
                                 desc: item.descricao || ("Item " + rawId),
                                 ganhador: isWin ? 'Você' : 'Outro',
                                 status: isDispute ? 'Disputa' : 'Encerrado'
                             };
-                        });
+
+                            // --- GATILHO DE LANCE AUTOMÁTICO ---
+                            const strat = window.polaryonStrategies[rawId];
+                            if (strat && strat.active && isDispute && !isWin && vAtual > 0) {
+                                let shouldBid = false;
+                                let nextValue = vAtual - (strat.decrementValue || 1);
+
+                                if (strat.mode === 'follower') shouldBid = true;
+                                if (strat.mode === 'sniper' && (item.segundosParaEncerramento < 30)) shouldBid = true;
+                                if (strat.mode === 'shadow') { shouldBid = true; nextValue = vAtual - 0.01; }
+
+                                if (shouldBid && nextValue >= (strat.minPrice || 0) && nextValue < vMeu) {
+                                    await sendBid(pId, rawId, nextValue);
+                                    // Aguarda um pouco para não floodar
+                                    await new Promise(r => setTimeout(r, 500));
+                                }
+                            }
+                        }
 
                         ipcRenderer.send('portal-update', { sessionId: mySessionId || 'UNKNOWN', items: Object.values(window.polaryonAllItems), turbo: true });
                     }
 
-                    const hasCritical = allFetchedItems.some(i => i.isDispute);
+                    const hasCritical = allFetchedItems.some(i => i.situacao === '1' || i.situacao === '2');
                     setTimeout(pollingLoop, hasCritical ? 150 : 1000);
          } catch(e) { setTimeout(pollingLoop, 2000); }
     };
@@ -163,5 +191,8 @@ injectSniffer();
 let mySessionId = null;
 ipcRenderer.on('init-session', (event, { sessionId, config }) => {
     mySessionId = sessionId;
+    if (config.vault && config.vault.itemsConfig) {
+        window.polaryonStrategies = config.vault.itemsConfig;
+    }
     if (window.polaryonAuthBearer) startHybridEngine();
 });
