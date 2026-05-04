@@ -74,14 +74,22 @@ class VisualRunner {
 
         this.sessions.set(sessionId, { window: win, config });
 
-        // 🎯 [SIFÃO DE TOKEN v4.0] Captura o token direto dos headers de rede e injeta no preload
         const ses = win.webContents.session;
+
+        // 🎯 [SIFÃO TOTAL v4.1] Captura Token E Aprende Salas via Tráfego
         ses.webRequest.onBeforeSendHeaders({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details, callback) => {
             const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization'];
             if (auth && auth.startsWith('Bearer')) {
-                // Envia o token para o Preload da página
                 if (!win.isDestroyed()) {
+                    // Injeta Token
                     win.webContents.send('force-token-injection', { token: auth });
+                    
+                    // Aprende Sala (Extrai ID da URL se houver)
+                    const idMatch = details.url.match(/\/v1\/compras\/(\d+)/);
+                    if (idMatch) {
+                        const pId = idMatch[1];
+                        win.webContents.send('force-room-learning', { purchaseId: pId });
+                    }
                 }
             }
             callback({ requestHeaders: details.requestHeaders });
@@ -151,18 +159,6 @@ class VisualRunner {
                 if (url) session.window.loadURL(url);
             }
         });
-    }
-
-    saveToBlackBox(url, response) {
-        try {
-            const logDir = path.join(process.cwd(), 'logs', 'blackbox');
-            if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const urlSlug = url.split('/').slice(-3).join('_').replace(/[\W_]+/g, "_");
-            const fileName = `dump_${timestamp}_${urlSlug}.json`;
-            const payload = { capturedAt: new Date().toISOString(), url, data: response };
-            fs.writeFileSync(path.join(logDir, fileName), JSON.stringify(payload, null, 2));
-        } catch (e) {}
     }
 }
 

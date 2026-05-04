@@ -5,13 +5,28 @@ console.log("👻 [POLARYON] Script de Preload Carregado com SUCESSO!");
 // 💉 RECEPTOR DE TOKEN FORÇADO (Via Dashboard)
 ipcRenderer.on('force-token-injection', (event, { token }) => {
     if (token && token !== window.polaryonAuthBearer) {
-        console.log("%c🚀 [POLARYON] Token Injetado via Sifão de Rede!", "color: yellow; font-weight: bold;");
+        console.log("%c🚀 [POLARYON] Token Injetado via Sifão!", "color: yellow; font-weight: bold;");
         window.polaryonAuthBearer = token;
         if (!window.polaryonHybrid_Active) startHybridEngine();
     }
 });
 
-// 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA" NO MUNDO REAL (DOM)
+// 🧠 APRENDIZAGEM FORÇADA DE SALAS (Via Dashboard)
+ipcRenderer.on('force-room-learning', (event, { purchaseId }) => {
+    if (purchaseId) {
+        if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+        const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
+        const disputeUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+        
+        if (!window.polaryonHybrid_Rooms.has(roomUrl)) {
+            console.log(`%c🧠 [POLARYON] Aprendida nova sala via tráfego: ${purchaseId}`, "color: orange; font-weight: bold;");
+            window.polaryonHybrid_Rooms.add(roomUrl);
+            window.polaryonHybrid_Rooms.add(disputeUrl);
+        }
+    }
+});
+
+// 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA"
 window.addEventListener("message", (event) => {
     if (event.source === window && event.data && event.data.type === 'POLARYON_HYBRID_SPY') {
         const payload = event.data.payload;
@@ -21,18 +36,6 @@ window.addEventListener("message", (event) => {
              console.log("%c👻 [POLARYON] Token Capturado via Sniffer!", "color: lime; font-weight: bold;");
              window.polaryonAuthBearer = payload.token;
              if (!window.polaryonHybrid_Active) startHybridEngine();
-        }
-
-        if (payload.action === 'API_DUMP' && payload.url) {
-             const idMatch = payload.url.match(/\/v1\/compras\/(\d+)/);
-             if (idMatch) {
-                  const fullId = idMatch[1];
-                  if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                  // Mapeia tanto a rota base quanto a de disputa ativa
-                  window.polaryonHybrid_Rooms.add(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${fullId}/itens`);
-                  window.polaryonHybrid_Rooms.add(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${fullId}/itens/em-disputa`);
-                  console.log(`📡 [POLARYON] Sala detectada: ${fullId}`);
-             }
         }
     }
 }, false);
@@ -47,8 +50,8 @@ const startHybridEngine = () => {
          if (!authHeader) { setTimeout(pollingLoop, 2000); return; }
 
          try {
-                    // 1. DESCOBERTA AGRESSIVA
-                    if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 10000) {
+                    // 1. DESCOBERTA AGRESSIVA (OPCIONAL SE O TRÁFEGO JÁ ENSINOU)
+                    if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 12000) {
                         window.polaryonLastDiscovery = Date.now();
                         const discoveryTargets = [
                             'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?pagina=0&tamanhoPagina=100',
@@ -107,7 +110,7 @@ const startHybridEngine = () => {
                             const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                             const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
                             const isWin = (pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°') || (vMeu > 0 && vMeu <= vAtual);
-                            const isDispute = item.situacao === '1' || item.situacao === '2' || baseUrl.includes('em-disputa');
+                            const isDispute = item.situacao === '1' || item.situacao === '2';
 
                             window.polaryonAllItems[rawId] = {
                                 itemId: rawId,
@@ -148,9 +151,6 @@ const injectSniffer = () => {
                 }
                 if (token) { window.polaryonAuthBearer = token; send({ action: 'TOKEN_GRABBED', token: token }); }
                 const res = await oFetch.apply(this, arguments);
-                if (url && typeof url === 'string' && (url.includes('compras') || url.includes('disputa'))) {
-                    try { res.clone().json().then(d => send({ action: 'API_DUMP', url: url, response: d })); } catch(e) {}
-                }
                 return res;
             };
         })();
