@@ -66,7 +66,10 @@ const sendBid = async (purchaseId, itemId, value) => {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ valorAjustado: value })
+            body: JSON.stringify({ 
+                valorAjustado: value,
+                faseItem: 1 // 🎯 Campo obrigatório para validar o lance no portal
+            })
         });
 
         if (res.ok) {

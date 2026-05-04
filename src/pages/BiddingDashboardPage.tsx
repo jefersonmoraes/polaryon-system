@@ -741,6 +741,27 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
     const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
     const [active, setActive] = useState(item.active || false);
 
+    const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
+
+    useEffect(() => {
+        if (item.timerSeconds !== undefined) setTimeLeft(item.timerSeconds);
+    }, [item.timerSeconds]);
+
+    useEffect(() => {
+        if (timeLeft <= 0) return;
+        const interval = setInterval(() => {
+            setTimeLeft(prev => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [timeLeft]);
+
+    const formatTime = (seconds: number) => {
+        if (seconds <= 0) return '00:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
     const handleToggle = () => {
         const newState = !active;
         setActive(newState);
@@ -769,7 +790,7 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
                     </div>
                     <div className="flex gap-2">
                         <Select value={strategy} onValueChange={(val: any) => setStrategy(val)}>
-                            <SelectTrigger className="h-7 text-[9px] font-black uppercase bg-slate-100 border-none w-32">
+                            <SelectTrigger className="h-7 text-[9px] font-black uppercase bg-slate-900 text-white border-none w-32">
                                 <SelectValue placeholder="Estratégia" />
                             </SelectTrigger>
                             <SelectContent>
@@ -786,7 +807,7 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
                         <label className="text-[8px] font-bold text-slate-400 uppercase">Lance mínimo (R$)</label>
                         <Input 
                             type="number" 
-                            className="h-8 text-xs font-black bg-slate-50" 
+                            className="h-8 text-xs font-black bg-slate-50 text-slate-900 border-slate-300" 
                             value={minPrice} 
                             onChange={(e) => setMinPrice(Number(e.target.value))}
                             placeholder="0,00"
@@ -796,7 +817,7 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
                         <label className="text-[8px] font-bold text-slate-400 uppercase">Margem (R$)</label>
                         <Input 
                             type="number" 
-                            className="h-8 text-xs font-black bg-slate-50" 
+                            className="h-8 text-xs font-black bg-slate-50 text-slate-900 border-slate-300" 
                             value={margin} 
                             onChange={(e) => setMargin(Number(e.target.value))}
                             placeholder="1,00"
@@ -811,7 +832,7 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
 
                 <div className="col-span-3 flex items-center justify-end gap-6">
                     <div className="flex flex-col items-center">
-                        <span className="text-sm font-mono font-black text-slate-900">{item.timerSeconds > 0 ? new Date(item.timerSeconds * 1000).toISOString().substr(14, 5) : '19:42'}</span>
+                        <span className={`text-sm font-mono font-black ${timeLeft < 60 ? 'text-red-500 animate-pulse' : 'text-slate-900'}`}>{formatTime(timeLeft)}</span>
                     </div>
                     <button 
                         onClick={handleToggle}
