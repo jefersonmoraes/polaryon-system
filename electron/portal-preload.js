@@ -2,177 +2,140 @@ const { ipcRenderer } = require('electron');
 
 // 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA" NO MUNDO REAL (DOM)
 window.addEventListener("message", (event) => {
-    // Escuta as mensagens do nosso fantasma injetado na aplicação
     if (event.source === window && event.data && event.data.type === 'POLARYON_HYBRID_SPY') {
         const payload = event.data.payload;
         
-        // Se capturamos um token ou dados brutos, mandamos pro Backend do Electron
         ipcRenderer.send('portal-hybrid-capture', {
             sessionId: mySessionId || 'UNKNOWN',
             action: payload.action,
             data: payload
         });
         
-        // Log stealth local
         if (payload.action === 'TOKEN_GRABBED') {
              console.log("👻 [POLARYON] Token Capturado! Modo Híbrido armado.");
              window.polaryonAuthBearer = payload.token;
         }
 
         if (payload.action === 'API_DUMP' && payload.url) {
-             // 🎯 CAPTURA DE ID UNIVERSAL (v2.1.23)
-             // Tenta extrair o ID longo (10+ dígitos) de qualquer requisição à API
              const idMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/(\d+)/);
              if (idMatch) {
                   const fullId = idMatch[1];
                   const yearMatch = payload.url.match(/\/v1\/(?:compras|disputas\/compras)\/\d+\/(\d{4})/);
                   const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
-                  
                   const basePath = payload.url.includes('disputas') ? 'disputas/compras' : 'compras';
+                  
                   window.polaryonContext_PurchaseId = fullId;
                   window.polaryonContext_Year = year;
                   window.polaryonContext_BasePath = basePath;
 
-                  // Se ainda não temos a URL de itens, construímos a partir do ID capturado
                   if (!window.polaryonHybrid_ItemsUrl || window.polaryonHybrid_ItemsUrl.includes('/participacao')) {
                       window.polaryonHybrid_ItemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${fullId}/itens`;
                   }
              }
 
-             // FILTRO CIRÚRGICO: Detecta se esta URL é a lista de itens real
              const isItemsList = (payload.url.includes('/itens') || payload.url.includes('/disputa')) && !payload.url.includes('/totalizadores');
              const isMetadata = payload.url.includes('/participacao') || payload.url.includes('/sessao') || payload.url.includes('/usuario');
 
              if (isItemsList && !isMetadata) {
-                  // Força tamanhoPagina=100 para evitar limitação de tela
                   window.polaryonHybrid_ItemsUrl = payload.url.replace(/tamanhoPagina=\d+/, 'tamanhoPagina=100');
                   if (!window.polaryonHybrid_ItemsUrl.includes('tamanhoPagina')) {
                       window.polaryonHybrid_ItemsUrl += (window.polaryonHybrid_ItemsUrl.includes('?') ? '&' : '?') + 'tamanhoPagina=100';
                   }
-                  
-                  if (!window.polaryonHybrid_Active) {
-                        startHybridEngine();
-                  }
+                  if (!window.polaryonHybrid_Active) startHybridEngine();
              }
 
-             // 🕵️ AUTO-CRAWLER: Se capturamos a lista de participações, processamos todos os certames
              if (payload.url.includes('/participacao')) {
                  const content = payload.response;
                  const certames = content.itens || content.items || (Array.isArray(content) ? content : []);
-                 console.log(`🕵️ [POLARYON CRAWLER] Detectados ${certames.length} certames ativos. Sincronizando...`);
+                 console.log(`🕵️ [POLARYON CRAWLER] Detectados ${certames.length} certames. Sincronizando...`);
                  
                  certames.forEach(cert => {
-                     // Gera a URL de itens para cada certame detectado
-                     const purchaseId = cert.compra || cert.id;
-                     const year = cert.ano || new Date().getFullYear();
-                     const basePath = cert.basePath || (payload.url.includes('disputas') ? 'disputas/compras' : 'compras');
+                     let purchaseId = cert.compra || cert.id || cert.codigoCompra;
+                     const year = cert.ano || cert.anoCompra || new Date().getFullYear();
                      
-                     const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
-                     
-                     // Adiciona à lista de monitoramento global
-                     if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                     window.polaryonHybrid_Rooms.add(itemsUrl);
+                     if (purchaseId && purchaseId.toString().length > 10) {
+                        const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
+                        if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                        window.polaryonHybrid_Rooms.add(itemsUrl);
+                     }
                  });
-
                  if (!window.polaryonHybrid_Active) startHybridEngine();
              }
         }
     }
 }, false);
 
-// 🚀 FASE 2: MOTOR DE TRAÇÃO FANTASMA (Adaptive Polling)
 const startHybridEngine = () => {
     if (window.polaryonHybrid_Active) return;
     window.polaryonHybrid_Active = true;
-    console.log("🔥 [POLARYON PHANTOM] Modo Combate Ativado! Polling adaptativo iniciado.");
+    console.log("🔥 [POLARYON PHANTOM] Modo Combate Ativado!");
 
     const pollingLoop = async () => {
-         // SCANNER DE REDE REATIVO: Se não temos URL, vasculhamos o histórico de rede do navegador
          if (!window.polaryonBadUrls) window.polaryonBadUrls = new Set();
-
-         if (!window.polaryonHybrid_ItemsUrl) {
-             try {
-                 const resources = performance.getEntriesByType('resource');
-                 const itemsResource = [...resources].reverse().find(r => 
-                     (r.name.includes('/itens') || r.name.includes('/disputa')) && 
-                     !r.name.includes('/totalizadores') &&
-                     r.name.includes('/v1/compras/') &&
-                     !window.polaryonBadUrls.has(r.name.split('?')[0])
-                 );
-                 if (itemsResource) {
-                     window.polaryonHybrid_ItemsUrl = itemsResource.name;
-                     console.log("👻 [POLARYON] Scanner de Rede Encontrou o Link Real:", itemsResource.name);
-                 }
-             } catch(e) {}
-         }
-
-         if (!window.polaryonAuthBearer) {
-              setTimeout(pollingLoop, 2000);
-              return;
-         }
+         if (!window.polaryonAuthBearer) { setTimeout(pollingLoop, 2000); return; }
 
          try {
-                    // --- MULTI-ROOM MONITORING v4.5 (CASCADE MODE) ---
+                    const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
+
+                    // [VITAL FIX] DESCOBERTA AGRESSIVA AGORA RODA NO INÍCIO DO LOOP
+                    if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 10000) {
+                        window.polaryonLastDiscovery = Date.now();
+                        const discoveryTargets = [
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?pagina=0&tamanhoPagina=100',
+                            'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?situacao=2&pagina=0&tamanhoPagina=100'
+                        ];
+                        for (const discUrl of discoveryTargets) {
+                            try {
+                                const discRes = await fetch(discUrl, { headers: { 'Authorization': authHeader } });
+                                if (discRes.ok) {
+                                    const discData = await discRes.json();
+                                    const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
+                                    certames.forEach(cert => {
+                                        let purchaseId = cert.compra || cert.id || cert.codigoCompra || cert.codigoProcesso;
+                                        const year = cert.ano || cert.anoCompra || new Date().getFullYear();
+                                        if (purchaseId && purchaseId.toString().length < 10) {
+                                            const uasg = (cert.uasg || cert.codigoUasg || '0').toString().padStart(6, '0');
+                                            const mod = (cert.modalidade || '06').toString().padStart(2, '0');
+                                            const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
+                                            purchaseId = `${uasg}${mod}${num}${year}`;
+                                        }
+                                        if (purchaseId && purchaseId.toString().length > 10) {
+                                            const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
+                                            if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
+                                            window.polaryonHybrid_Rooms.add(itemsUrl);
+                                        }
+                                    });
+                                }
+                            } catch(e) {}
+                        }
+                    }
+
                     let allFetchedItems = [];
                     const targetUrls = window.polaryonHybrid_Rooms ? Array.from(window.polaryonHybrid_Rooms) : [window.polaryonHybrid_ItemsUrl];
                     
                     for (const baseUrl of targetUrls) {
                         if (!baseUrl) continue;
-                        
                         const urlParts = baseUrl.match(/\/v1\/compras\/(\d+)/);
                         const currentPurchaseId = urlParts ? urlParts[1] : null;
-                        
-                        if (!currentPurchaseId || currentPurchaseId === '0' || currentPurchaseId.length < 5) {
-                            if (window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms.delete(baseUrl);
-                            continue;
-                        }
+                        if (!currentPurchaseId || currentPurchaseId.length < 10) continue;
 
-                        let data = null;
-                        const tryUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${currentPurchaseId}/itens`;
-                        const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
-                        
-                        if (authHeader) {
-                            try {
-                                const res = await fetch(tryUrl, {
-                                     method: 'GET',
-                                     headers: {
-                                          'Authorization': authHeader,
-                                          'Accept': 'application/json',
-                                          'X-Requested-With': 'XMLHttpRequest'
-                                     }
-                                });
-
-                                if (res.ok) {
-                                    const rawText = await res.text();
-                                    if (rawText && rawText.trim().length > 0) {
-                                        data = JSON.parse(rawText);
-                                    }
+                        try {
+                            const res = await fetch(baseUrl, {
+                                 headers: { 'Authorization': authHeader, 'Accept': 'application/json' }
+                            });
+                            if (res.ok) {
+                                const data = await res.json();
+                                const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
+                                if (itemsArray.length > 0) {
+                                    const currentYear = currentPurchaseId.slice(-4);
+                                    allFetchedItems = [...allFetchedItems, ...itemsArray.map(it => ({
+                                        ...it,
+                                        polaryon_purchaseId: currentPurchaseId,
+                                        polaryon_year: currentYear
+                                    }))];
                                 }
-                            } catch(e) {
-                                console.error(`[POLARYON] Erro ao tentar rota:`, e);
                             }
-                        }
-
-                        if (data) {
-                            const itemsArray = Array.isArray(data) ? data : (data.itens || data.items || []);
-                            if (itemsArray.length > 0) {
-                                const currentYear = currentPurchaseId.slice(-4);
-                                const enrichedItems = itemsArray.map(it => ({
-                                    ...it,
-                                    polaryon_basePath: 'compras',
-                                    polaryon_purchaseId: currentPurchaseId,
-                                    polaryon_year: currentYear
-                                }));
-                                allFetchedItems = [...allFetchedItems, ...enrichedItems];
-                            }
-                        } else {
-                            // Se falhou e não temos itens, podemos tentar remover da lista de polling se for persistente
-                        }
-                    }
-
-                    if (allFetchedItems.length === 0 && !window.polaryonHybrid_ItemsUrl && (!window.polaryonHybrid_Rooms || window.polaryonHybrid_Rooms.size === 0)) {
-                        setTimeout(pollingLoop, 2000);
-                        return;
+                        } catch(e) {}
                     }
 
                     if (allFetchedItems.length > 0) {
@@ -206,79 +169,31 @@ const startHybridEngine = () => {
                             action: 'HYBRID_API_RESULTS',
                             data: { items: allFetchedItems }
                         });
-                        
-                        // [SIGA CLONE] AUTO-DISCOVERY AGRESSIVO: Busca TODAS as participações (incluindo filtros de disputa)
-                        if (!window.polaryonLastDiscovery || Date.now() - window.polaryonLastDiscovery > 8000) {
-                            window.polaryonLastDiscovery = Date.now();
-                            const discoveryTargets = [
-                                'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?pagina=0&tamanhoPagina=100',
-                                'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/participacao?situacao=2&pagina=0&tamanhoPagina=100'
-                            ];
-                            const authHeader = window.polaryonAuthBearer || window.polaryonAuthBearer_Last;
-                            for (const discUrl of discoveryTargets) {
-                                try {
-                                    if (authHeader) {
-                                        const discRes = await fetch(discUrl, { headers: { 'Authorization': authHeader } });
-                                        if (discRes.ok) {
-                                            const discData = await discRes.json();
-                                            const certames = discData.itens || discData.items || (Array.isArray(discData) ? discData : []);
-                                            certames.forEach(cert => {
-                                                let purchaseId = cert.compra || cert.id || cert.codigoCompra || cert.identificadorCompra || cert.codigoProcesso;
-                                                const year = cert.ano || cert.anoCompra || new Date().getFullYear();
-                                                if (purchaseId && purchaseId.toString().length < 10) {
-                                                    const uasg = (cert.uasg || cert.codigoUasg || '0').toString().padStart(6, '0');
-                                                    const mod = (cert.modalidade || '06').toString().padStart(2, '0');
-                                                    const num = (cert.numero || cert.numeroCompra || '0').toString().padStart(5, '0');
-                                                    purchaseId = `${uasg}${mod}${num}${year}`;
-                                                }
-                                                if (purchaseId && purchaseId.toString().length > 10) {
-                                                    const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
-                                                    if (!window.polaryonHybrid_Rooms) window.polaryonHybrid_Rooms = new Set();
-                                                    if (!window.polaryonHybrid_Rooms.has(itemsUrl)) {
-                                                        console.log(`📡 [POLARYON DISCOVERY] Sala Mapeada: ${purchaseId}`);
-                                                        window.polaryonHybrid_Rooms.add(itemsUrl);
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    }
-                                } catch(e) {}
-                            }
-                        }
-
-                        // --- AUTO-FILTER UI (FORÇA SELEÇÃO DE 'DISPUTA' NA TELA) ---
-                        try {
-                            const filterSelect = document.querySelector('.br-select, [placeholder*="andamento"], .select-etapa');
-                            if (filterSelect && !filterSelect.innerText.toUpperCase().includes('DISPUTA')) {
-                                console.log("🎯 [POLARYON] Forçando filtro de 'Disputa' para expor itens quentes...");
-                                filterSelect.click();
-                                setTimeout(() => {
-                                    const options = Array.from(document.querySelectorAll('.br-item, li, .option'));
-                                    const disputeOpt = options.find(o => o.innerText.toUpperCase().includes('DISPUTA'));
-                                    if (disputeOpt) disputeOpt.click();
-                                }, 500);
-                            }
-                        } catch(e) {}
-                        
                         window.polaryonAPIStatus = "✅ ELITE (CAMUFLADO)";
                     }
 
-               // [SIGA TURBO v3.3] LATÊNCIA ULTRA-BAIXA: 
-               // 150ms para combate real, 1000ms para monitoramento leve
+                    // --- AUTO-FILTER UI ---
+                    try {
+                        const filterSelect = document.querySelector('.br-select, [placeholder*="andamento"], .select-etapa');
+                        if (filterSelect && !filterSelect.innerText.toUpperCase().includes('DISPUTA')) {
+                            filterSelect.click();
+                            setTimeout(() => {
+                                const disputeOpt = Array.from(document.querySelectorAll('.br-item, li, .option')).find(o => o.innerText.toUpperCase().includes('DISPUTA'));
+                                if (disputeOpt) disputeOpt.click();
+                            }, 500);
+                        }
+                    } catch(e) {}
+                    
                const items = Object.values(window.polaryonAllItems || {});
                const hasCritical = items.some(it => it.status === 'Disputa' || it.status === 'Iminência' || it.isDispute);
-               const delay = hasCritical ? 150 : 1000;
-               
-               setTimeout(pollingLoop, delay);
+               setTimeout(pollingLoop, hasCritical ? 150 : 1000);
          } catch(e) {
               window.polaryonAPIStatus = "❌ OFFLINE";
               setTimeout(pollingLoop, 2000);
          }
     };
-
     pollingLoop();
 };
-
 
 const injectSniffer = () => {
     const script = document.createElement('script');
@@ -286,666 +201,151 @@ const injectSniffer = () => {
         (function() {
             if (window.__polaryon_sniffed) return;
             window.__polaryon_sniffed = true;
-
-            const sendToPreload = (data) => {
-                window.postMessage({ type: 'POLARYON_HYBRID_SPY', payload: data }, '*');
-            };
-
-            // Intercept XHR
+            const sendToPreload = (data) => window.postMessage({ type: 'POLARYON_HYBRID_SPY', payload: data }, '*');
             const OrigXHR = window.XMLHttpRequest;
             window.XMLHttpRequest = function() {
                 const xhr = new OrigXHR();
                 const origOpen = xhr.open;
                 const origSetReqHeader = xhr.setRequestHeader;
-                
                 xhr._url = '';
-                
-                xhr.open = function(method, url) {
-                    this._url = url;
-                    return origOpen.apply(this, arguments);
-                };
-                
+                xhr.open = function(method, url) { this._url = url; return origOpen.apply(this, arguments); };
                 xhr.setRequestHeader = function(header, value) {
                     if (header.toLowerCase() === 'authorization' || header.toLowerCase() === 'bearer') {
                         window.polaryonAuthBearer = value;
-                        window.polaryonAuthBearer_Last = value;
                         sendToPreload({ action: 'TOKEN_GRABBED', token: value, url: this._url });
                     }
                     return origSetReqHeader.apply(this, arguments);
                 };
-                
                 xhr.addEventListener('load', function() {
                     const url = this._url || '';
-                    if (url.includes('compras') || url.includes('disputa') || url.includes('/api/')) {
-                        try {
-                            const jsonContent = JSON.parse(this.responseText);
-                            sendToPreload({ action: 'API_DUMP', url: url, response: jsonContent });
-                        } catch(e) {}
+                    if (url.includes('compras') || url.includes('disputa')) {
+                        try { sendToPreload({ action: 'API_DUMP', url: url, response: JSON.parse(this.responseText) }); } catch(e) {}
                     }
                 });
-                
                 return xhr;
             };
-
-            // Intercept Fetch
             const origFetch = window.fetch;
             window.fetch = async function() {
                 const url = arguments[0];
                 const options = arguments[1] || {};
-                
                 if (options.headers) {
                     try {
-                        if (options.headers.get && typeof options.headers.get === 'function') {
-                            const tk = options.headers.get('authorization') || options.headers.get('Authorization');
-                            if (tk) { 
-                                window.polaryonAuthBearer = tk;
-                                sendToPreload({ action: 'TOKEN_GRABBED', token: tk, url: url }); 
-                            }
-                        } else {
-                            for (const [k, v] of Object.entries(options.headers)) {
-                                if (k.toLowerCase() === 'authorization') {
-                                    window.polaryonAuthBearer = v;
-                                    sendToPreload({ action: 'TOKEN_GRABBED', token: v, url: url });
-                                }
-                            }
-                        }
+                        const tk = options.headers['Authorization'] || options.headers['authorization'];
+                        if (tk) { window.polaryonAuthBearer = tk; sendToPreload({ action: 'TOKEN_GRABBED', token: tk, url: url }); }
                     } catch(e){}
                 }
-                
                 const response = await origFetch.apply(this, arguments);
-                if (url && typeof url === 'string' && (url.includes('compras') || url.includes('disputa') || url.includes('/api/'))) {
-                    try {
-                        const clone = response.clone();
-                        clone.json().then(data => {
-                             sendToPreload({ action: 'API_DUMP', url: url, response: data });
-                        }).catch(e=>{});
-                    } catch(e) {}
+                if (url && typeof url === 'string' && (url.includes('compras') || url.includes('disputa'))) {
+                    try { const clone = response.clone(); clone.json().then(data => sendToPreload({ action: 'API_DUMP', url: url, response: data })); } catch(e) {}
                 }
                 return response;
             };
-            
-            console.log("👻 [POLARYON] Interceptador de Rede Ativado.");
         })();
     `;
-    
-    const inject = () => {
-        const root = document.head || document.documentElement;
-        if (root) {
-            root.appendChild(script);
-            script.remove();
-        } else {
-            setTimeout(inject, 50);
-        }
-    };
+    const inject = () => { const root = document.head || document.documentElement; if (root) { root.appendChild(script); script.remove(); } else { setTimeout(inject, 50); } };
     inject();
 };
 injectSniffer();
 
 function scrapeChatAndTimers() {
     try {
-        const timerEls = Array.from(document.querySelectorAll('span, div, b')).filter(el => {
-            const txt = el.innerText.trim();
-            return /^\d{2}:\d{2}:\d{2}$/.test(txt);
-        });
-
+        const timerEls = Array.from(document.querySelectorAll('span, div, b')).filter(el => /^\d{2}:\d{2}:\d{2}$/.test(el.innerText.trim()));
         if (timerEls.length > 0) {
-            const globalTimer = timerEls[0].innerText;
-            ipcRenderer.send('portal-update', {
-                sessionId: mySessionId,
-                action: 'TIMER_UPDATE',
-                data: { time: globalTimer }
-            });
+            ipcRenderer.send('portal-update', { sessionId: mySessionId, action: 'TIMER_UPDATE', data: { time: timerEls[0].innerText } });
         }
-
-        const chatMessages = [];
         const chatRows = document.querySelectorAll('.chat-msg, .mensagem-pregoeiro, .br-item.chat');
-        chatRows.forEach(row => {
-            chatMessages.push({
-                text: row.innerText.trim(),
-                time: new Date().toLocaleTimeString()
-            });
-        });
-
-        if (chatMessages.length > 0) {
-            ipcRenderer.send('portal-update', {
-                sessionId: mySessionId,
-                action: 'CHAT_EXTRACTED',
-                data: { messages: chatMessages }
-            });
+        if (chatRows.length > 0) {
+            const chatMessages = Array.from(chatRows).map(row => ({ text: row.innerText.trim(), time: new Date().toLocaleTimeString() }));
+            ipcRenderer.send('portal-update', { sessionId: mySessionId, action: 'CHAT_EXTRACTED', data: { messages: chatMessages } });
         }
     } catch (e) {}
 }
-
 setInterval(scrapeChatAndTimers, 500);
 
-let scrapingInterval = null;
-let serverOffset = 0;
-
-ipcRenderer.on('portal-server-time', (event, { serverTime, localTime }) => {
-    try {
-        const sTime = new Date(serverTime).getTime();
-        serverOffset = sTime - localTime;
-        console.log(`⏱️ [TACTICAL] Relógio Sincronizado. Offset: ${serverOffset}ms`);
-    } catch(e) {}
-});
-
-function getServerTime() {
-    return Date.now() + serverOffset;
-}
-
-let currentVault = {
-    simulationMode: true,
-    itemsConfig: {}
-};
-let isBiddingActive = false;
-let itemLimits = {};
-
-window.polaryonUpdateLimit = function(itemId, val) {
-    if (!itemLimits[itemId]) itemLimits[itemId] = { price: '', mode: 'follower' };
-    itemLimits[itemId].price = val;
-};
-window.polaryonUpdateMode = function(itemId, val) {
-    if (!itemLimits[itemId]) itemLimits[itemId] = { price: '', mode: 'follower' };
-    itemLimits[itemId].mode = val;
-};
-
-setInterval(() => {
-    const url = window.location.href;
-    if (url.includes('/disputa') && url.includes('compra=')) {
-        if (window.lastDetectedRoom !== url) {
-            window.lastDetectedRoom = url;
-            console.log("🎯 [POLARYON] Sala de Disputa Detectada:", url);
-            ipcRenderer.send('portal-detected-room', { url });
-        }
-    }
-
-    if (url.includes('intro.htm') || url.includes('index.asp?servico=226')) {
-        if (!window.loginNotified) {
-            window.loginNotified = true;
-            ipcRenderer.send('portal-update', {
-                sessionId: mySessionId,
-                statusMessage: "Conectado com Sucesso! 🟢",
-                isAuthenticated: true
-            });
-        }
-    }
-}, 1000);
-
 let mySessionId = null;
-let currentConfig = {
-    uasg: '',
-    numero: '',
-    ano: '',
-    modality: '05'
-};
+let currentConfig = { uasg: '', numero: '', ano: '', modality: '05' };
 let isManualLogin = false;
 let loginSuccessDetected = false;
 
 function scrapeDisputeRoom() {
     if (!mySessionId) return;
-
-    window.alert = () => { console.log("[POLARYON] Alert silenciado"); };
-    window.confirm = () => { console.log("[POLARYON] Confirm silenciado"); return true; };
-    window.prompt = () => { console.log("[POLARYON] Prompt silenciado"); return null; };
-
     try {
         const bodyText = document.body.innerText || "";
         const currentUrl = window.location.href;
         
         if (!loginSuccessDetected && (currentUrl.includes('servico=226') || currentUrl.includes('/disputa') || currentUrl.includes('intro.htm'))) {
-             console.log("%c[POLARYON] LOGIN DETECTADO COM SUCESSO!", "color: #00ff00; font-weight: bold; font-size: 14px;");
              loginSuccessDetected = true;
              ipcRenderer.send('login-success', { sessionId: mySessionId, url: currentUrl });
         }
 
-        if (!isManualLogin && (bodyText.includes('A Secretaria de Gestão e Inovação informa') || 
-            bodyText.includes('Comunicado') || 
-            bodyText.includes('Aviso Importante') ||
-            currentUrl.includes('AvisoPortal'))) {
-            
-            const skipBtns = Array.from(document.querySelectorAll('button, a, input[type="button"], tr, td')).find(el => {
-                const txt = (el.innerText || el.value || "").toUpperCase();
-                return txt.includes('PROSSEGUIR') || txt.includes('CONTINUAR') || txt.includes('FECHAR') || 
-                       txt.includes('OK') || txt.includes('ENTENDI') || txt.includes('CLIQUE AQUI');
+        if (currentUrl.includes('AvisoPortal') || bodyText.includes('Comunicado')) {
+            const skip = Array.from(document.querySelectorAll('button, a')).find(el => {
+                const t = el.innerText.toUpperCase();
+                return t.includes('PROSSEGUIR') || t.includes('FECHAR') || t.includes('ENTENDI');
             });
-
-            if (skipBtns) {
-                if (typeof skipBtns.click === 'function') skipBtns.click();
-                else window.location.href = skipBtns.href || window.location.href;
-                return;
-            }
-
-            if (currentUrl.includes('Aviso') || currentUrl.includes('Comunicado')) {
-                window.location.href = 'https://www.comprasnet.gov.br/intro.htm';
-                return;
-            }
+            if (skip) skip.click();
+            else if (currentUrl.includes('Aviso')) window.location.href = 'https://www.comprasnet.gov.br/intro.htm';
         }
 
-        if (currentUrl.includes('index.asp') && !currentUrl.includes('servico=226') && bodyText.includes('Joelison')) {
-             window.location.href = 'https://www.comprasnet.gov.br/seguro/index.asp?servico=226';
-             return;
-        }
-
-        if (!isManualLogin) {
-            if (bodyText.includes('Acesse sua Conta') && bodyText.includes('Fornecedor Brasileiro')) {
-                const entrarBtn = Array.from(document.querySelectorAll('button, a')).find(el => 
-                    el.innerText.toUpperCase().includes('ENTRAR COM GOV.BR')
-                );
-                if (entrarBtn) entrarBtn.click();
-                return;
+        // [VITAL FIX] SANITIZAÇÃO DE ID PARA EVITAR JUMPS MALFORMADOS
+        if (currentUrl.includes('cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras')) {
+            const uasg = (currentConfig.uasg || "").toString();
+            const numero = (currentConfig.numero || "").toString();
+            // Só pula se for um ID numérico válido
+            if (/^\d+$/.test(uasg) && /^\d+$/.test(numero)) {
+                const uasgStr = uasg.padStart(6, '0');
+                const numStr = numero.padStart(5, '0');
+                const anoStr = (currentConfig.ano || "2026").toString();
+                let mod = (currentConfig.modality || "06").toString();
+                if (mod === "14") mod = "06"; 
+                const modalityCode = mod.padStart(2, '0');
+                window.location.href = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${uasgStr}${modalityCode}${numStr}${anoStr}`;
             }
-
-            if (bodyText.includes('Identifique-se no gov.br') || bodyText.includes('Acesso Gov.br') || bodyText.includes('Certificado digital')) {
-                const certButton = document.querySelector('button#login-certificate, .cert-login-button, [alt="Certificado Digital"], #label-certificate');
-                const certLink = Array.from(document.querySelectorAll('button, a, div, span, img')).find(el => {
-                    const txt = (el.innerText || el.getAttribute('alt') || '').toUpperCase();
-                    return txt.includes('CERTIFICADO DIGITAL') || txt === 'SEU CERTIFICADO DIGITAL';
-                });
-
-                const finalBtn = certButton || certLink;
-                if (finalBtn && typeof finalBtn.click === 'function') finalBtn.click();
-                return;
-            }
-        }
-
-        let foundMenu = false;
-        try {
-            const searchAndClickMenu = (win) => {
-                if (foundMenu) return;
-                try {
-                    const allElements = Array.from(win.document.querySelectorAll('a, td, div, span, li, button'));
-                    const matches = allElements.filter(el => {
-                        const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        return txt.includes('LICITAÇÃO E DISPENSA (NOVO)');
-                    });
-
-                    const submenuMatch = matches.sort((a, b) => (a.innerText?.length || 0) - (b.innerText?.length || 0))[0];
-
-                    if (submenuMatch) {
-                        const target = (submenuMatch.tagName === 'A' ? submenuMatch : submenuMatch.querySelector('a')) || submenuMatch;
-                        let rect = target.getBoundingClientRect();
-                        let x = (rect.left + rect.right) / 2;
-                        let y = (rect.top + rect.bottom) / 2;
-                        
-                        let currentWin = win;
-                        while (currentWin !== window.top) {
-                            let frameEl = currentWin.frameElement;
-                            if (frameEl) {
-                                let fRect = frameEl.getBoundingClientRect();
-                                x += fRect.left;
-                                y += fRect.top;
-                            }
-                            currentWin = currentWin.parent;
-                        }
-
-                        setTimeout(() => {
-                            ipcRenderer.send('portal-native-click', { sessionId: mySessionId, x, y });
-                            foundMenu = true;
-                        }, 100);
-                        return;
-                    }
-
-                    const mainBtn = allElements.find(el => {
-                        const txt = (el.innerText || el.textContent || "").toUpperCase().trim();
-                        return txt === 'COMPRAS' || txt === 'MENU COMPRAS';
-                    });
-
-                    if (mainBtn) mainBtn.click();
-
-                    if (win.frames && win.frames.length > 0) {
-                        for (let i = 0; i < win.frames.length; i++) {
-                            try { searchAndClickMenu(win.frames[i]); } catch(e) {}
-                        }
-                    }
-                } catch(err) {}
-            };
-            
-            if (window === window.top && (window.location.href.includes('intro.htm') || bodyText.includes('Área de Trabalho do Fornecedor'))) {
-                searchAndClickMenu(window.top);
-            }
-        } catch(e) {}
-
-
-        if (window.location.href.includes('cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras')) {
-            const uasgStr = (currentConfig.uasg || "150002").toString().padStart(6, '0');
-            const numStr = (currentConfig.numero || "67").toString().padStart(5, '0');
-            const anoStr = (currentConfig.ano || "2026").toString();
-            let mod = (currentConfig.modality || "06").toString();
-            if (mod === "14") mod = "06"; 
-            const modalityCode = mod.padStart(2, '0');
-            const compraCode = `${uasgStr}${modalityCode}${numStr}${anoStr}`;
-            window.location.href = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`;
-            return;
-        }
-
-        if (bodyText.includes('Pesquisa de Dispensa') || bodyText.includes('Pesquisar Dispensa')) {
-            const uasgInput = document.querySelector('input[name="uasg"], #uasg, [placeholder*="UASG"]');
-            const numInput = document.querySelector('input[name="numero"], #numero, [placeholder*="Número"]');
-            const searchBtn = document.querySelector('button.btn-pesquisar, #btnPesquisar, .br-button.primary');
-
-            if (uasgInput && numInput && currentConfig?.uasg) {
-                if (uasgInput.value !== currentConfig.uasg) {
-                    uasgInput.value = currentConfig.uasg;
-                    uasgInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (numInput.value !== currentConfig.numero) {
-                    numInput.value = currentConfig.numero;
-                    numInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (searchBtn && uasgInput.value === currentConfig.uasg) searchBtn.click();
-            }
-        }
-
-        if (bodyText.includes('Resultado da Pesquisa')) {
-            const disputeLink = Array.from(document.querySelectorAll('a, button')).find(el => {
-                const txt = el.innerText.toUpperCase();
-                return txt.includes('ACESSAR SALA') || txt.includes('DETALHES') || txt.includes(currentConfig?.numero);
-            });
-            if (disputeLink) disputeLink.click();
         }
 
         const items = [];
-        let hasItemsInDispute = false;
-
-        if (!window.polaryonObserver && document.body) {
-            let lastMutationTime = 0;
-            window.polaryonObserver = new MutationObserver(() => {
-                const now = Date.now();
-                if (now - lastMutationTime > 250) {
-                    lastMutationTime = now;
-                    scrapeDisputeRoom();
-                }
-            });
-            window.polaryonObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
-        }
-
-        const possibleRows = Array.from(document.querySelectorAll('div, tr, li, article, mat-expansion-panel'));
-        let itemCards = possibleRows.filter(el => {
-            const txt = (el.innerText || "").trim();
-            const isBiddingArea = (txt.includes('Melhor valor') || txt.includes('Meu valor') || txt.includes('Valor final')) && txt.includes('R$');
-            const hasId = txt.match(/^\s*(\d+)\s+/) || txt.match(/(?:Item)\s*(\d+)/i) || txt.match(/(?:GRUPO)\s*(\d+)/i);
-            return isBiddingArea && hasId && txt.length < 3000;
+        const itemCards = Array.from(document.querySelectorAll('div, tr, li')).filter(el => {
+            const txt = el.innerText;
+            return (txt.includes('Melhor valor') || txt.includes('Meu valor')) && txt.match(/(?:Item|GRUPO)\s*(\d+)/i);
         });
 
-        itemCards = itemCards.filter(el => {
-             const children = Array.from(el.querySelectorAll('*'));
-             return !children.some(child => itemCards.includes(child));
-        });
-
-        if (itemCards.length > 0) {
-            itemCards.forEach(card => {
-                const text = card.innerText.trim();
-                const isDispensaItem = text.includes('Melhor valor') || text.includes('Meu valor') || text.includes('Valor final');
-                const isGeneralItem = text.includes('R$');
-
-                if (isDispensaItem || isGeneralItem) {
-                    const isDispute = text.toUpperCase().includes('EM DISPUTA') || 
-                                     text.toUpperCase().includes('ABERTO') ||
-                                     text.toUpperCase().includes('IMINÊNCIA') ||
-                                     text.toUpperCase().includes('FASE DE LANCES ABERTA');
-
-                    if (isDispute) hasItemsInDispute = true;
-                    let valorAtual = 0;
-                    let meuValor = 0;
-
-                    if (isDispensaItem) {
-                        const melhorMatch = text.match(/Melhor valor[^\d,]+([\d,.]+)/i);
-                        const meuMatch = text.match(/Meu valor[^\d,]+([\d,.]+)/i);
-                        if (melhorMatch) valorAtual = parseFloat(melhorMatch[1].replace(/\./g, '').replace(',', '.'));
-                        if (meuMatch) meuValor = parseFloat(meuMatch[1].replace(/\./g, '').replace(',', '.'));
-                    } else {
-                        const matches = text.match(/R\$\s*([\d,.]+)/g);
-                        if (matches && matches.length >= 1) {
-                             valorAtual = parseFloat(matches[0].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
-                             if (matches.length >= 2) meuValor = parseFloat(matches[1].replace('R$', '').trim().replace(/\./g, '').replace(',', '.'));
-                        }
-                    }
-
-                    if (valorAtual === 0 && !text.includes('R$')) return;
-
-                    const idMatch = text.match(/^\s*(\d+)\s+/) || text.match(/(?:Item)\s*(\d+)/i) || text.match(/(?:GRUPO)\s*(\d+)/i);
-                    const isGrupo = text.toUpperCase().includes('GRUPO');
-                    const itemId = idMatch ? (isGrupo ? 'G' + idMatch[1] : idMatch[1]) : "1";
-                    
-                    let desc = "";
-                    try {
-                        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
-                        desc = lines.find(l => !l.includes('R$') && !l.match(/^\d+$/) && l.length > 20) || "";
-                    } catch(e) {}
-
-                    const hasWinnerVisual = card.querySelector('.fa-trophy, .fa-star, .icon-vencedor, .vencedor-lance, [class*="badge-vencedor"], [class*="melhor-lance"]') !== null || 
-                                          text.toUpperCase().includes('VENCEDOR') || 
-                                          text.toUpperCase().includes('MELHOR LANCE');
-                    
-                    const hasLoserVisual = card.querySelector('.fa-thumbs-down, .icon-perdedor, [class*="lance-coberto"]') !== null || 
-                                          text.toUpperCase().includes('LANCE COBERTO');
-                    
-                    let ganhador = hasWinnerVisual ? 'Você' : 'Outro';
-                    if (!hasWinnerVisual && !hasLoserVisual) {
-                        ganhador = (meuValor > 0 && meuValor <= (valorAtual + 0.0001)) ? 'Você' : 'Outro';
-                    }
-
-                    items.push({
-                        itemId: itemId,
-                        valorAtual: valorAtual,
-                        meuValor: meuValor,
-                        ganhador: ganhador,
-                        descricao: desc.substring(0, 100) + (desc.length > 100 ? "..." : ""),
-                        status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
-                        tempoRestante: -1, 
-                        isVisual: true,
-                        position: ganhador === 'Você' ? 1 : 0
-                    });
-
-                    if (!window.polaryonAllItems) window.polaryonAllItems = {};
-                    window.polaryonAllItems[itemId] = {
-                        itemId: itemId,
-                        valorAtual: valorAtual,
-                        meuValor: meuValor,
-                        ganhador: ganhador,
-                        descricao: desc.substring(0, 100) + (desc.length > 100 ? "..." : ""),
-                        status: isDispute ? 'Disputa' : (text.toUpperCase().includes('ENCERRADO') ? 'Encerrado' : 'Aguardando'),
-                        tempoRestante: -1, 
-                        position: ganhador === 'Você' ? 1 : 0
-                    };
-                }
-            });
-        }
-
-        const allAccumulatedItems = Object.values(window.polaryonAllItems || {});
-        const itemsToReport = allAccumulatedItems.length > 0 ? allAccumulatedItems : items;
-
-        if (itemsToReport.length > 0) {
-            const biddableItems = itemsToReport.filter(it => !it.itemId.toString().toUpperCase().startsWith('G'));
-            renderBiddingPanel(biddableItems.length > 0 ? biddableItems : itemsToReport);
-            
-            if (isBiddingActive) {
-                itemsToReport.forEach(it => {
-                    const limit = itemLimits[it.itemId];
-                    if (!limit || !limit.price) return;
-                    const valLim = parseFloat(limit.price.replace(/\./g, '').replace(',', '.'));
-                    if (isNaN(valLim)) return;
-
-                    if (it.ganhador !== 'Você' && it.status === 'Disputa') {
-                        if (Date.now() - (window.lastBidTime || 0) < 2000) return;
-                        let targetBid = it.valorAtual - 0.01; 
-                        if (limit.mode === 'sniper') {
-                            if (it.status !== 'Iminência' && it.tempoRestante > 2) return;
-                            targetBid = valLim; 
-                        }
-                        if (targetBid >= valLim && targetBid < it.valorAtual) {
-                            enviarLanceHibrido(it.itemId, targetBid);
-                            window.lastBidTime = Date.now();
-                        }
-                    }
-                });
+        itemCards.forEach(card => {
+            const text = card.innerText;
+            const idMatch = text.match(/(?:Item|GRUPO)\s*(\d+)/i);
+            if (idMatch) {
+                const itemId = text.includes('GRUPO') ? 'G' + idMatch[1] : idMatch[1];
+                const valorMatch = text.match(/Melhor valor[^\d,]+([\d,.]+)/i);
+                const meuMatch = text.match(/Meu valor[^\d,]+([\d,.]+)/i);
+                const valorAtual = valorMatch ? parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
+                const meuValor = meuMatch ? parseFloat(meuMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
+                
+                if (!window.polaryonAllItems) window.polaryonAllItems = {};
+                window.polaryonAllItems[itemId] = {
+                    itemId: itemId,
+                    valorAtual: valorAtual,
+                    meuValor: meuValor,
+                    ganhador: (meuValor > 0 && meuValor <= (valorAtual + 0.0001)) ? 'Você' : 'Outro',
+                    status: text.toUpperCase().includes('DISPUTA') ? 'Disputa' : 'Aguardando'
+                };
             }
-            
+        });
+
+        if (Object.keys(window.polaryonAllItems || {}).length > 0) {
             ipcRenderer.send('portal-update', {
                 sessionId: mySessionId,
-                items: itemsToReport,
-                actions: [],
+                items: Object.values(window.polaryonAllItems),
                 timestamp: new Date().toISOString(),
-                source: 'VISUAL_AUTOMATION',
-                turbo: hasItemsInDispute
+                turbo: true
             });
-        } else {
-             ipcRenderer.send('portal-update', {
-                sessionId: mySessionId,
-                items: [],
-                statusMessage: "Aguardando abertura da sala de lances ou navegação para o pregão..."
-            });
-        }
-    } catch (e) {
-        console.error("Erro no Portal Injector:", e);
-    }
-}
-
-window.addEventListener('load', () => {
-    scrapingInterval = setInterval(scrapeDisputeRoom, 2000);
-});
-
-ipcRenderer.on('init-session', (event, { sessionId, config }) => {
-    mySessionId = sessionId;
-    currentVault = config.vault || currentVault;
-    currentConfig = {
-        uasg: config.uasg,
-        numero: config.numero,
-        ano: config.ano,
-        modality: config.modality
-    };
-    isManualLogin = config.modality === 'LOGIN_FLOW';
-    if (window.polaryonAuthBearer && !window.polaryonHybrid_ItemsUrl) {
-         if (!window.polaryonHybrid_Active) startHybridEngine();
-    }
-});
-
-ipcRenderer.on('update-config', (event, config) => {
-    currentVault = { ...currentVault, ...config };
-    if (config.simulationMode !== undefined) window.isSimulationMode = config.simulationMode;
-    if (config.itemsConfig) {
-        Object.keys(config.itemsConfig).forEach(itemId => {
-            const strat = config.itemsConfig[itemId];
-            const priceStr = strat.minPrice.toFixed(2).replace('.', ',');
-            if (!itemLimits[itemId]) itemLimits[itemId] = { price: priceStr, mode: strat.mode };
-            else { itemLimits[itemId].price = priceStr; itemLimits[itemId].mode = strat.mode; }
-        });
-    }
-});
-
-function renderBiddingPanel(items) {
-    let panel = document.getElementById('polaryon-combat-panel');
-    if (!panel) {
-        panel = document.createElement('div');
-        panel.id = 'polaryon-combat-panel';
-        panel.style.cssText = `position: fixed; top: 20px; right: 20px; width: 320px; max-height: 90vh; background: rgba(11, 16, 30, 0.9); backdrop-filter: blur(12px) saturate(180%); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 12px; box-shadow: 0 0 30px rgba(16, 185, 129, 0.15), 0 20px 50px rgba(0,0,0,0.8); z-index: 2147483647; display: flex; flex-direction: column; color: #fff; font-family: 'JetBrains Mono', monospace; overflow: hidden;`;
-        
-        const header = document.createElement('div');
-        header.style.cssText = 'padding: 15px; border-bottom: 1px solid rgba(16,185,129,0.2); background: rgba(16,185,129,0.1); font-weight: 800; display: flex; align-items: center; justify-content: space-between;';
-        header.innerHTML = `<div><span id="polaryon-led" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#eab308;"></span> MÁQUINA DE LANCES</div><div style="font-size:9px; opacity:0.5;">V3.5</div>`;
-        
-        const listContainer = document.createElement('div');
-        listContainer.id = 'polaryon-items-list';
-        listContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px;';
-        
-        const footer = document.createElement('div');
-        footer.style.cssText = 'padding: 15px; background: rgba(0,0,0,0.4);';
-        
-        const startBtn = document.createElement('button');
-        startBtn.id = 'polaryon-combat-btn';
-        startBtn.innerText = '▶ AUTORIZAR MÁQUINA DE LANCE';
-        startBtn.style.cssText = 'width: 100%; padding: 12px; background: #10b981; color: #000; font-weight: 900; border: none; border-radius: 6px; cursor: pointer;';
-        
-        startBtn.onclick = () => {
-            isBiddingActive = !isBiddingActive;
-            const led = document.getElementById('polaryon-led');
-            if (isBiddingActive) {
-                startBtn.innerText = '🛑 ABORTAR OPERAÇÃO';
-                startBtn.style.background = '#ef4444'; startBtn.style.color = '#fff';
-                if (led) led.style.background = '#ef4444';
-            } else {
-                startBtn.innerText = '▶ AUTORIZAR MÁQUINA';
-                startBtn.style.background = '#10b981'; startBtn.style.color = '#000';
-                if (led) led.style.background = '#eab308';
-            }
-        };
-
-        footer.appendChild(startBtn);
-        panel.appendChild(header);
-        panel.appendChild(listContainer);
-        panel.appendChild(footer);
-        document.body.appendChild(panel);
-    }
-    
-    const list = document.getElementById('polaryon-items-list');
-    if (list) {
-        items.forEach(it => {
-            let itemDiv = document.getElementById('pol-item-' + it.itemId);
-            if (!itemDiv) {
-                itemDiv = document.createElement('div');
-                itemDiv.id = 'pol-item-' + it.itemId;
-                itemDiv.style.cssText = 'background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);';
-                const limit = itemLimits[it.itemId] || { price: '', mode: 'follower' };
-                itemDiv.innerHTML = `<div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px;"><span>Item ${it.itemId}</span><span id="pol-item-val-${it.itemId}" style="color:#10b981;">R$ ${it.valorAtual.toFixed(2)}</span></div>
-                <div style="display:flex; gap:5px;"><input type="text" class="polaryon-limit-input" value="${limit.price}" style="flex:1; background:#000; border:1px solid #10b981; color:#fff; font-size:10px; padding:4px;"/><select class="polaryon-mode-select" style="background:#000; border:1px solid #10b981; color:#10b981; font-size:9px;"><option value="follower" ${limit.mode==='follower'?'selected':''}>FOLLOWER</option><option value="sniper" ${limit.mode==='sniper'?'selected':''}>SNIPER</option></select></div>`;
-                const inputEl = itemDiv.querySelector('.polaryon-limit-input');
-                const selectEl = itemDiv.querySelector('.polaryon-mode-select');
-                inputEl.addEventListener('change', (e) => window.polaryonUpdateLimit(it.itemId, e.target.value));
-                selectEl.addEventListener('change', (e) => window.polaryonUpdateMode(it.itemId, e.target.value));
-                list.appendChild(itemDiv);
-            } else {
-                const valSpan = document.getElementById('pol-item-val-' + it.itemId);
-                if (valSpan) valSpan.innerText = 'R$ ' + it.valorAtual.toFixed(2);
-            }
-        });
-    }
-}
-
-async function enviarLanceHibrido(itemId, valor) {
-    if (window.isSimulationMode) return false;
-    let apiSuccess = false;
-    if (window.polaryonAuthBearer && window.polaryonContext_PurchaseId && window.polaryonContext_Year) {
-        try {
-            const uasg = window.polaryonContext_PurchaseId;
-            const ano = window.polaryonContext_Year;
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa-externa/v1/compras/${uasg}/${ano}/itens/${itemId}/lances`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Authorization': window.polaryonAuthBearer, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ valorLance: valor })
-            });
-            if (res.ok) apiSuccess = true;
-        } catch(e) {}
-    }
-    enviarLanceVisual(itemId, valor);
-    return apiSuccess;
-}
-
-function enviarLanceVisual(itemId, valor) {
-    try {
-        const possibleRows = Array.from(document.querySelectorAll('div, tr, li, article'));
-        const itemRow = possibleRows.find(el => {
-            const txt = el.innerText.trim();
-            return (txt.match(new RegExp(`^\\s*${itemId}\\s+`)) || txt.match(new RegExp(`(?:Item)\\s*${itemId}`, 'i'))) && txt.includes('R$');
-        });
-        if (itemRow) {
-            const input = itemRow.querySelector('input[type="text"]:not([disabled])');
-            if (input) {
-                const cleanValue = valor.toFixed(2).replace('.', ',');
-                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-                if (setter) setter.call(input, cleanValue); else input.value = cleanValue;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                const submitBtn = Array.from(itemRow.querySelectorAll('button')).find(b => b.innerText.toUpperCase().includes('LANCE') || b.innerText.toUpperCase().includes('ENVIAR'));
-                if (submitBtn) {
-                    submitBtn.click();
-                    setTimeout(() => {
-                        const btnConfirma = Array.from(document.querySelectorAll('button')).find(b => b.innerText.toUpperCase() === 'CONFIRMAR' || b.innerText.toUpperCase() === 'SIM');
-                        if (btnConfirma) btnConfirma.click();
-                    }, 500);
-                }
-            }
         }
     } catch (e) {}
 }
 
-// -------------- FIM DO INJETOR v1.2.55 --------------
+window.addEventListener('load', () => setInterval(scrapeDisputeRoom, 2000));
+
+ipcRenderer.on('init-session', (event, { sessionId, config }) => {
+    mySessionId = sessionId;
+    currentConfig = { uasg: config.uasg, numero: config.numero, ano: config.ano, modality: config.modality };
+    isManualLogin = config.modality === 'LOGIN_FLOW';
+    if (window.polaryonAuthBearer) startHybridEngine();
+});
