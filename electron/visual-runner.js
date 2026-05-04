@@ -7,7 +7,6 @@ class VisualRunner {
         this.dashboardWebContents = dashboardWebContents;
         this.sessions = new Map();
 
-        // Listener global unificado para atualizações de todas as janelas injetadas
         ipcMain.removeAllListeners('portal-update');
         ipcMain.on('portal-update', (event, data) => {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
@@ -15,92 +14,36 @@ class VisualRunner {
             }
         });
 
-        // 🛡️ NOVO: Listener Híbrido Injetado (AGORA COM BLACKBOX AUTOMÁTICO v2.3)
         ipcMain.removeAllListeners('portal-hybrid-capture');
         ipcMain.on('portal-hybrid-capture', (event, data) => {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-hybrid-dump', data);
             }
-
-            // GRAVAÇÃO DE DIAGNÓSTICO (BLACKBOX)
             if (data.action === 'API_DUMP' && data.data && data.data.response) {
                 this.saveToBlackBox(data.data.url, data.data.response);
             }
         });
 
-        // Listener para Cliques de Elite v3 (SHADOW CLICK - CDP)
         ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
                 const wc = session.window.webContents;
                 const pos = { x: Math.round(x), y: Math.round(y) };
-                
-                console.log(`[POLARYON-WAR] Executando SHADOW CLICK (CDP) em: X=${pos.x}, Y=${pos.y}`);
-
                 try {
-                    // Tenta anexar o debugger se ainda não estiver
-                    if (!wc.debugger.isAttached()) {
-                        wc.debugger.attach('1.3');
-                    }
-
-                    // Sequência nativa de protocolo (mesma do Puppeteer)
-                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-                        type: 'mouseMoved', x: pos.x, y: pos.y
-                    });
-                    
+                    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pos.x, y: pos.y });
                     await new Promise(r => setTimeout(r, 50));
-                    
-                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-                        type: 'mousePressed', x: pos.x, y: pos.y, button: 'left', clickCount: 1
-                    });
-                    
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x: pos.x, y: pos.y, button: 'left', clickCount: 1 });
                     await new Promise(r => setTimeout(r, 50));
-                    
-                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-                        type: 'mouseReleased', x: pos.x, y: pos.y, button: 'left', clickCount: 1
-                    });
-
+                    await wc.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pos.x, y: pos.y, button: 'left', clickCount: 1 });
                 } catch (e) {
-                    console.error("[POLARYON-WAR] Falha no Shadow Click:", e);
-                    // Fallback para o sendInputEvent se o CDP falhar
                     wc.sendInputEvent({ type: 'mouseDown', ...pos, button: 'left', clickCount: 1 });
-                    setTimeout(() => {
-                        wc.sendInputEvent({ type: 'mouseUp', ...pos, button: 'left', clickCount: 1 });
-                    }, 50);
+                    setTimeout(() => wc.sendInputEvent({ type: 'mouseUp', ...pos, button: 'left', clickCount: 1 }), 50);
                 }
             }
         });
 
-        ipcMain.on('save-battle-almanac', (event, data) => {
-            this.saveAlmanac(data);
-        });
-
         this.setupIpc();
-    }
-
-    saveAlmanac(data) {
-        try {
-            const almanacDir = path.join(process.cwd(), 'logs', 'almanaque');
-            if (!fs.existsSync(almanacDir)) {
-                fs.mkdirSync(almanacDir, { recursive: true });
-            }
-
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const uasg = data.config?.uasg || 'unknown';
-            const baseFileName = `almanaque_${uasg}_${timestamp}`;
-            
-            // Salva JSON completo
-            fs.writeFileSync(path.join(almanacDir, `${baseFileName}.json`), JSON.stringify(data, null, 2));
-            
-            // Salva HTML para inspeção visual rápida
-            if (data.domSnapshot) {
-                fs.writeFileSync(path.join(almanacDir, `${baseFileName}.html`), data.domSnapshot);
-            }
-
-            console.log(`🛡️ [ALMANAQUE] Missão de Coleta de Dados Concluída: ${baseFileName}`);
-        } catch (e) {
-            console.error("[ALMANAQUE] Falha na gravação:", e);
-        }
     }
 
     startVisualSession(sessionId, config) {
@@ -115,7 +58,7 @@ class VisualRunner {
         const win = new BrowserWindow({
             width: 1280,
             height: 900,
-            title: isLoginFlow ? 'Polaryon - Autenticação Compras.gov.br' : `Polaryon - Modo Visual (Pregão/Dispensa ${config.numero}/${config.ano})`,
+            title: isLoginFlow ? 'Polaryon - Autenticação' : `Polaryon - Modo Visual (${config.numero}/${config.ano})`,
             autoHideMenuBar: true,
             webPreferences: {
                 preload: path.join(__dirname, 'portal-preload.js'),
@@ -123,58 +66,45 @@ class VisualRunner {
                 contextIsolation: true,
                 webSecurity: false,
                 allowRunningInsecureContent: true,
-                backgroundThrottling: false, // 🚀 ESSENCIAL: Mantém o scanner na velocidade máxima em segundo plano
+                backgroundThrottling: false, 
                 partition: 'persist:polaryon-global' 
             },
             show: true
         });
 
-        // v3.5.14: USER-AGENT REALISTA (Bypass Sicaf 422)
         const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
         win.webContents.setUserAgent(modernUserAgent);
 
         this.sessions.set(sessionId, { window: win, config });
 
-        // --- INTERCEPTADOR DE POPUPS E NAVEGAÇÃO ---
         win.webContents.setWindowOpenHandler(({ url }) => {
             if (url.includes('comprasnet-web') || url.includes('disputa') || url.includes('idp.acesso.gov.br')) {
-                console.log('[POLARYON-NAV] Redirecionando fluxo para janela principal:', url);
                 win.loadURL(url);
                 return { action: 'deny' };
             }
             return { action: 'allow' };
         });
 
-        // 🎯 [TACTICAL v3.1] MONITOR DE TRÁFEGO DE ELITE
         const ses = win.webContents.session;
         ses.webRequest.onCompleted({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, async (details) => {
             if (details.url.includes('/itens') || details.url.includes('/disputa')) {
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                    this.dashboardWebContents.send('bidding-network-traffic', {
-                        sessionId,
-                        url: details.url,
-                        statusCode: details.statusCode,
-                        timestamp: Date.now()
-                    });
+                    this.dashboardWebContents.send('bidding-network-traffic', { sessionId, url: details.url, statusCode: details.statusCode, timestamp: Date.now() });
                 }
             }
         });
 
-        // DETECÇÃO DE LOGIN COM SUCESSO (SIGA STYLE)
         ipcMain.removeAllListeners('login-success');
         ipcMain.on('login-success', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);
-            if (session && session.window) {
-                console.log(`[POLARYON] Login bem-sucedido detectado. Ocultando janela para modo de fundo: ${url}`);
-                if (!session.window.isDestroyed()) session.window.hide(); // Oculta em vez de fechar para manter o preload rodando
-                
+            if (session && session.window && !session.window.isDestroyed()) {
+                session.window.hide(); 
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
                 }
             }
         });
 
-        // Injetor de Scripts Globais (Silenciador e Anti-Lag)
         win.webContents.on('did-start-navigation', () => {
             win.webContents.executeJavaScript(`
                 window.alert = () => { console.log("Alert silenciado") };
@@ -183,7 +113,7 @@ class VisualRunner {
             `);
         });
 
-        win.webContents.openDevTools();
+        win.webContents.openDevTools({ mode: 'detach' });
 
         win.on('closed', () => {
             this.sessions.delete(sessionId);
@@ -194,19 +124,13 @@ class VisualRunner {
 
         win.webContents.on('did-finish-load', () => {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
-            
-            // Se entrarmos em uma URL de disputa e estivermos em modo login, avisamos o dashboard para "acordar"
             const url = win.webContents.getURL();
             if (url.includes('/disputa') && isLoginFlow && this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                  this.dashboardWebContents.send('bidding-detected-room', { sessionId, url });
             }
         });
 
-        const startUrl = isLoginFlow 
-            ? 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp'
-            : 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp'; // Fallback link
-        
-        console.log(`[VISUAL RUNNER] Iniciando em: ${startUrl} (Modo: ${config.modality})`);
+        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
         win.loadURL(startUrl);
     }
 
@@ -222,75 +146,44 @@ class VisualRunner {
         if (this.sessions.has(sessionId)) {
             const session = this.sessions.get(sessionId);
             if (session.window && !session.window.isDestroyed()) {
-                // Send IPC to the injected preload script
                 session.window.webContents.send('update-config', config);
             }
         }
     }
 
-    // --- NOVOS MÉTODOS PARA PARIDADE SIGA PREGÃO ---
     setupIpc() {
         ipcMain.on('visual-focus', (event, sessionId) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
                 if (session.window.isMinimized()) session.window.restore();
-                session.window.setAlwaysOnTop(true, 'screen-saver');
                 session.window.show();
                 session.window.focus();
-                session.window.setAlwaysOnTop(false);
             }
         });
 
         ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
-                if (url) {
-                    session.window.loadURL(url);
-                } else {
-                    const config = session.config;
-                    const uasgStr = (config.uasg || "").toString().padStart(6, '0');
-                    const numStr = (config.numero || "").toString().padStart(5, '0');
-                    const anoStr = (config.ano || "").toString();
-                    const compraCode = `${uasgStr}06${numStr}${anoStr}`;
-                    session.window.loadURL(`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${compraCode}`);
-                }
+                if (url) session.window.loadURL(url);
             }
         });
     }
-    // --- BLACKBOX AUTOMÁTICO v4.0 (DIAGNÓSTICO PROFUNDO) ---
+
     saveToBlackBox(url, response) {
         try {
             const logDir = path.join(process.cwd(), 'logs', 'blackbox');
-            if (!fs.existsSync(logDir)) {
-                fs.mkdirSync(logDir, { recursive: true });
-            }
-
+            if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const urlSlug = url.split('/').slice(-3).join('_').replace(/[\W_]+/g, "_");
             const fileName = `dump_${timestamp}_${urlSlug}.json`;
-            const filePath = path.join(logDir, fileName);
-
-            const payload = {
-                capturedAt: new Date().toISOString(),
-                url: url,
-                data: response,
-                headers_hint: "Captured via Polaryon Hybrid Sniffer"
-            };
-
-            fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
-            
-            // Log no console interno do Electron para sabermos que gravou
-            console.log(`[BLACKBOX] 🛰️ Dados capturados e salvos: ${fileName}`);
-
-            // Auto-limpeza (Mantém apenas os últimos 200 logs)
+            const payload = { capturedAt: new Date().toISOString(), url, data: response };
+            fs.writeFileSync(path.join(logDir, fileName), JSON.stringify(payload, null, 2));
             const files = fs.readdirSync(logDir);
             if (files.length > 200) {
                 const sorted = files.sort((a, b) => fs.statSync(path.join(logDir, a)).mtimeMs - fs.statSync(path.join(logDir, b)).mtimeMs);
                 sorted.slice(0, 20).forEach(f => fs.unlinkSync(path.join(logDir, f)));
             }
-        } catch (e) {
-            console.error("[BLACKBOX] Erro crítico na gravação:", e);
-        }
+        } catch (e) {}
     }
 }
 

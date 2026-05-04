@@ -147,7 +147,7 @@ app.whenReady().then(async () => {
   };
 
   const { session } = require('electron');
-  session.fromPartition('persist:comprasgov').webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+  session.fromPartition('persist:polaryon-global').webRequest.onBeforeSendHeaders(filter, (details, callback) => {
     // Se a requisição for de handoff ou login, injetamos a autoridade necessária
     if (details.url.includes('servico=226') || details.url.includes('login_f.asp')) {
       details.requestHeaders['Referer'] = 'https://www.comprasnet.gov.br/seguro/intro.htm';

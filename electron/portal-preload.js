@@ -1,5 +1,7 @@
 const { ipcRenderer } = require('electron');
 
+console.log("👻 [POLARYON] Script de Preload Carregado com SUCESSO!");
+
 // 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA" NO MUNDO REAL (DOM)
 window.addEventListener("message", (event) => {
     if (event.source === window && event.data && event.data.type === 'POLARYON_HYBRID_SPY') {
