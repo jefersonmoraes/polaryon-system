@@ -604,18 +604,70 @@ export default function BiddingDashboardPage() {
                 </Sheet>
             </div>
 
-             <div className="space-y-8 pb-12">
-                {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                    <ProcessCard 
-                        key={sid} 
-                        sid={sid} 
-                        session={session} 
-                        items={groupedItems[sid] || []} 
-                        onSaveStrategy={onSaveStrategy} 
-                        onQuickBid={quickBid} 
-                        onStopRadar={() => onStopRadar(sid)} 
-                    />
+                      <div className="space-y-6">
+                {Object.values(sessions).map((session: any) => (
+                    <Accordion type="single" collapsible key={session.id} defaultValue="items">
+                        <AccordionItem value="items" className="border rounded-xl bg-white shadow-sm overflow-hidden">
+                            <AccordionTrigger className="px-6 py-4 hover:bg-slate-50 transition-all border-b">
+                                <div className="flex items-center gap-4 w-full text-left">
+                                    <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                                        <Briefcase className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm font-black text-slate-900 uppercase">
+                                                UASG {session.uasg} - {session.numero}/{session.ano}
+                                            </h3>
+                                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-emerald-600 border-emerald-200 bg-emerald-50">Sessão Ativa</Badge>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                                            {session.items?.length || 0} Itens Detectados • Sincronização Estável
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-6 mr-4">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase">Status</span>
+                                            <span className="text-[10px] font-black text-emerald-500 uppercase">Operacional</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="p-4 bg-slate-50/30">
+                                <div className="space-y-3">
+                                    {session.items?.length > 0 ? (
+                                        session.items.map((item: any) => (
+                                            <SigaItemRow 
+                                                key={item.itemId} 
+                                                item={item} 
+                                                sid={session.id} 
+                                                onSaveStrategy={saveStrategy}
+                                                onManualBid={handleManualBid}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="p-12 text-center">
+                                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Search className="w-8 h-8 text-slate-300" />
+                                            </div>
+                                            <h4 className="text-sm font-bold text-slate-600 uppercase">Buscando Itens...</h4>
+                                            <p className="text-xs text-slate-400 mt-1">Aguarde a sincronização com o portal do governo.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 ))}
+
+                {Object.keys(sessions).length === 0 && (
+                    <div className="p-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Zap className="w-12 h-12 text-emerald-500 animate-pulse" />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Aguardando Conexão</h3>
+                        <p className="text-slate-400 mt-2 max-w-sm mx-auto font-medium">Nenhuma sala detectada. Navegue até uma disputa no portal para iniciar o monitoramento automático.</p>
+                    </div>
+                )}
             </div>
                         </div>
                         {isChatOpen && (
@@ -736,8 +788,14 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
 
 function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
+    
+    // 🎯 Inteligência de Margem: Usa a oficial do portal se disponível
+    const defaultMargin = item.officialMargin || 1.00;
+    const defaultType = item.officialMarginType || 'fixed';
+
     const [minPrice, setMinPrice] = useState(item.minPrice || 0);
-    const [margin, setMargin] = useState(item.decrementValue || 1.00);
+    const [margin, setMargin] = useState(item.decrementValue || defaultMargin);
+    const [marginType, setMarginType] = useState(item.decrementType || defaultType);
     const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
     const [active, setActive] = useState(item.active || false);
     const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
@@ -768,7 +826,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
             mode: strategy,
             minPrice: Number(minPrice),
             decrementValue: Number(margin),
-            decrementType: 'fixed',
+            decrementType: marginType,
             active: newState
         });
         
@@ -780,8 +838,14 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     };
 
     const handleManualBid = () => {
-        const val = item.valorAtual - Number(margin);
-        if (val < Number(minPrice)) {
+        let marginVal = Number(margin);
+        if (marginType === 'percentage') {
+            marginVal = item.valorAtual * (marginVal / 100);
+        }
+        
+        const val = item.valorAtual - marginVal;
+        
+        if (minPrice > 0 && val < Number(minPrice)) {
             toast.error("Erro: Lance manual abaixo do seu preço limite!");
             return;
         }
@@ -822,7 +886,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
                         />
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-slate-400 uppercase">Margem (R$)</label>
+                        <label className="text-[8px] font-bold text-slate-400 uppercase">
+                            Margem {marginType === 'percentage' ? '(%)' : '(R$)'} 
+                            {item.officialMargin && <span className="ml-1 text-emerald-600">[PORTAL: {item.officialMargin}{item.officialMarginType === 'percentage' ? '%' : ''}]</span>}
+                        </label>
                         <Input 
                             type="number" 
                             className="h-8 text-xs font-black bg-slate-50 text-slate-900 border-slate-300" 

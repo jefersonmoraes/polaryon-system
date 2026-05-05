@@ -6,54 +6,39 @@ window.polaryonStrategies = {};
 window.polaryonAuthBearer = null;
 window.polaryonHybrid_Rooms = new Set();
 
-// 💉 RECEPTOR DE TOKEN FORÇADO (Via Dashboard)
+// 💉 RECEPTOR DE TOKEN FORÇADO
 ipcRenderer.on('force-token-injection', (event, { token }) => {
     if (token && token !== window.polaryonAuthBearer) {
-        console.log("%c🚀 [POLARYON] Token Injetado via Sifão!", "color: yellow; font-weight: bold;");
         window.polaryonAuthBearer = token;
         if (!window.polaryonHybrid_Active) startHybridEngine();
     }
 });
 
-// ⚙️ RECEPTOR DE CONFIGURAÇÃO DE ITENS (Play/Pause, Margem, Estratégia)
+// ⚙️ RECEPTOR DE CONFIGURAÇÃO
 ipcRenderer.on('update-config', (event, config) => {
     if (config.itemsConfig) {
         window.polaryonStrategies = { ...window.polaryonStrategies, ...config.itemsConfig };
     }
 });
 
-// 🧠 APRENDIZAGEM FORÇADA DE SALAS (Via Dashboard)
+// 🧠 APRENDIZAGEM DE SALAS
 ipcRenderer.on('force-room-learning', (event, { purchaseId }) => {
     if (purchaseId) {
         const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${purchaseId}/itens`;
         const disputeUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
         
         if (!window.polaryonHybrid_Rooms.has(roomUrl)) {
-            console.log(`%c🧠 [POLARYON] Aprendida nova sala via tráfego: ${purchaseId}`, "color: orange; font-weight: bold;");
+            console.log(`%c🧠 [POLARYON] Nova sala detectada: ${purchaseId}`, "color: orange; font-weight: bold;");
             window.polaryonHybrid_Rooms.add(roomUrl);
             window.polaryonHybrid_Rooms.add(disputeUrl);
         }
     }
 });
 
-// ⚡ LANCE MANUAL (Gatilho Imediato)
+// ⚡ LANCE MANUAL
 ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
-    console.log(`%c🚀 [POLARYON] DISPARO MANUAL EXECUTADO: R$ ${value}`, "color: cyan; font-weight: bold;");
     await sendBid(purchaseId, itemId, value);
 });
-
-// 🛡️ MODO HÍBRIDO: INJEÇÃO DO "FANTASMA"
-window.addEventListener("message", (event) => {
-    if (event.source === window && event.data && event.data.type === 'POLARYON_HYBRID_SPY') {
-        const payload = event.data.payload;
-        ipcRenderer.send('portal-hybrid-capture', { sessionId: mySessionId || 'UNKNOWN', action: payload.action, data: payload });
-        
-        if (payload.action === 'TOKEN_GRABBED') {
-             window.polaryonAuthBearer = payload.token;
-             if (!window.polaryonHybrid_Active) startHybridEngine();
-        }
-    }
-}, false);
 
 const sendBid = async (purchaseId, itemId, value) => {
     const auth = window.polaryonAuthBearer;
@@ -88,7 +73,7 @@ const sendBid = async (purchaseId, itemId, value) => {
 const startHybridEngine = () => {
     if (window.polaryonHybrid_Active) return;
     window.polaryonHybrid_Active = true;
-    console.log("%c🔥 [POLARYON] Motor de Combate Iniciado (Modo Anti-Ban).", "color: cyan; font-weight: bold;");
+    console.log("%c🔥 [POLARYON] Motor de Combate Iniciado.", "color: cyan; font-weight: bold;");
 
     const pollingLoop = async () => {
          const authHeader = window.polaryonAuthBearer;
@@ -101,13 +86,6 @@ const startHybridEngine = () => {
                     for (const baseUrl of targetUrls) {
                         try {
                             const res = await fetch(baseUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
-                            
-                            if (res.status === 429) {
-                                console.warn("🛑 [POLARYON] BLOQUEIO 429 DETECTADO! Reduzindo velocidade drasticamente...");
-                                await new Promise(r => setTimeout(r, 5000)); // Espera 5s
-                                continue;
-                            }
-
                             if (res.ok) {
                                 const data = await res.json();
                                 const items = Array.isArray(data) ? data : (data.itens || data.items || []);
@@ -132,8 +110,9 @@ const startHybridEngine = () => {
                             const isWin = (pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°') || (vMeu > 0 && vMeu <= vAtual);
                             const isDispute = item.situacao === '1' || item.situacao === '2';
 
-                            // Tenta ler o timer de múltiplas fontes da API
-                            const tSec = item.segundosParaEncerramento || item.segundosRestantes || 0;
+                            // 🎯 CAPTURA DE MARGEM OFICIAL (Intervalo Mínimo)
+                            const intervalValue = item.intervaloMinimoEntreLances || 1;
+                            const intervalType = item.tipoIntervaloLance === 2 ? 'percentage' : 'fixed';
 
                             window.polaryonAllItems[rawId] = {
                                 itemId: rawId,
@@ -141,19 +120,29 @@ const startHybridEngine = () => {
                                 valorAtual: vAtual,
                                 meuValor: vMeu,
                                 isDispute: isDispute,
-                                timerSeconds: tSec,
+                                timerSeconds: item.segundosParaEncerramento || 0,
                                 desc: item.descricao || ("Item " + rawId),
                                 ganhador: isWin ? 'Você' : 'Outro',
-                                status: isDispute ? 'Disputa' : 'Encerrado'
+                                status: isDispute ? 'Disputa' : 'Encerrado',
+                                // Envia dados da margem oficial para o painel
+                                officialMargin: intervalValue,
+                                officialMarginType: intervalType
                             };
 
                             const strat = window.polaryonStrategies[rawId];
                             if (strat && strat.active && isDispute && !isWin && vAtual > 0) {
                                 let shouldBid = false;
-                                let nextValue = vAtual - (strat.decrementValue || 1);
+                                let marginToUse = strat.decrementValue || intervalValue;
+                                
+                                // Se for porcentagem, calcula o valor real
+                                if (strat.decrementType === 'percentage' || intervalType === 'percentage') {
+                                    const perc = strat.decrementType === 'percentage' ? strat.decrementValue : intervalValue;
+                                    marginToUse = vAtual * (perc / 100);
+                                }
 
+                                let nextValue = vAtual - marginToUse;
                                 if (strat.mode === 'follower') shouldBid = true;
-                                if (strat.mode === 'sniper' && (tSec > 0 && tSec < 30)) shouldBid = true;
+                                if (strat.mode === 'sniper' && (item.segundosParaEncerramento < 30)) shouldBid = true;
                                 if (strat.mode === 'shadow') { shouldBid = true; nextValue = vAtual - 0.01; }
 
                                 if (shouldBid && nextValue >= (strat.minPrice || 0) && nextValue < vMeu) {
@@ -167,9 +156,7 @@ const startHybridEngine = () => {
                     }
 
                     const isUrgent = allFetchedItems.some(i => (i.segundosParaEncerramento > 0 && i.segundosParaEncerramento < 60));
-                    // Inteligência de Polling: 1.2s normal, 400ms se for urgente, com jitter de 100ms
-                    const delay = (isUrgent ? 400 : 1200) + Math.random() * 100;
-                    setTimeout(pollingLoop, delay);
+                    setTimeout(pollingLoop, (isUrgent ? 500 : 1500) + Math.random() * 200);
          } catch(e) { setTimeout(pollingLoop, 3000); }
     };
     pollingLoop();
