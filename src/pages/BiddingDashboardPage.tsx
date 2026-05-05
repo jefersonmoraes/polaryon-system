@@ -734,13 +734,12 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
     );
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     const [minPrice, setMinPrice] = useState(item.minPrice || 0);
     const [margin, setMargin] = useState(item.decrementValue || 1.00);
     const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
     const [active, setActive] = useState(item.active || false);
-
     const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
 
     useEffect(() => {
@@ -778,6 +777,15 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
         } else {
             toast.warning(`Automação Pausada para Item ${item.itemId}`);
         }
+    };
+
+    const handleManualBid = () => {
+        const val = item.valorAtual - Number(margin);
+        if (val < Number(minPrice)) {
+            toast.error("Erro: Lance manual abaixo do seu preço limite!");
+            return;
+        }
+        onManualBid(item.purchaseId, item.itemId, val);
     };
 
     return (
@@ -830,15 +838,23 @@ function SigaItemRow({ item, sid, onSaveStrategy }: any) {
                     <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400 uppercase">Meu Lance</span><span className="text-xs font-black text-slate-800">R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                 </div>
 
-                <div className="col-span-3 flex items-center justify-end gap-6">
-                    <div className="flex flex-col items-center">
-                        <span className={`text-sm font-mono font-black ${timeLeft < 60 ? 'text-red-500 animate-pulse' : 'text-slate-900'}`}>{formatTime(timeLeft)}</span>
+                <div className="col-span-3 flex items-center justify-end gap-3">
+                    <div className="flex flex-col items-center mr-2">
+                        <span className={`text-sm font-mono font-black ${timeLeft < 60 && timeLeft > 0 ? 'text-red-500 animate-pulse' : 'text-slate-900'}`}>{formatTime(timeLeft)}</span>
                     </div>
+                    <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        className="h-8 px-2 text-[9px] font-black uppercase bg-red-600 hover:bg-red-700"
+                        onClick={handleManualBid}
+                    >
+                        Gatilho
+                    </Button>
                     <button 
                         onClick={handleToggle}
-                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${active ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${active ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
                     >
-                        {active ? <StopCircle className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                        {active ? <StopCircle className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                     </button>
                 </div>
             </div>

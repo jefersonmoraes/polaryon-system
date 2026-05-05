@@ -136,6 +136,14 @@ class VisualRunner {
         win.loadURL(startUrl);
     }
 
+    sendManualBid({ purchaseId, itemId, value }) {
+        this.sessions.forEach(session => {
+            if (session.window && !session.window.isDestroyed()) {
+                session.window.webContents.send('manual-bid', { purchaseId, itemId, value });
+            }
+        });
+    }
+
     stop(sessionId) {
         if (this.sessions.has(sessionId)) {
             const session = this.sessions.get(sessionId);

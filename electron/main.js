@@ -263,6 +263,13 @@ ipcMain.on('portal-detected-room', (event, data) => {
     }
 });
 
+// [GATILHO MANUAL] RELAY PARA O VISUAL RUNNER
+ipcMain.on('manual-bid', (event, data) => {
+    if (visualRunner) {
+        visualRunner.sendManualBid(data);
+    }
+});
+
 // GESTÃO DE CERTIFICADO A1
 ipcMain.handle('save-a1-certificate', async (event, { fileName, buffer, password }) => {
   return certHelper.saveCertificate(fileName, Buffer.from(buffer), password);
