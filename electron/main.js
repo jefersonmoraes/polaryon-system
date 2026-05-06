@@ -292,12 +292,16 @@ ipcMain.handle('get-restored-sessions', () => {
 // AUTO-UPDATER EVENTS
 autoUpdater.on('checking-for-update', () => {
     console.log('[POLARYON-UPDATE] Verificando se há atualizações...');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('bidding-update-log', '🔎 Verificando servidores da Polaryon...');
+    }
 });
 
 autoUpdater.on('update-available', (info) => {
     console.log('[POLARYON-UPDATE] Atualização disponível v' + info.version);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', info);
+        mainWindow.webContents.send('bidding-update-log', `✅ Nova versão v${info.version} encontrada! Iniciando download...`);
     }
     new Notification({
         title: 'Polaryon - Atualização detectada',
@@ -309,6 +313,7 @@ autoUpdater.on('update-not-available', (info) => {
     console.log('[POLARYON-UPDATE] Nenhuma atualização pendente (v' + app.getVersion() + ')');
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-not-available', info);
+        mainWindow.webContents.send('bidding-update-log', '👌 Você já está na versão mais recente (v' + app.getVersion() + ')');
     }
 });
 
@@ -316,6 +321,7 @@ autoUpdater.on('error', (err) => {
     console.error('[POLARYON-UPDATE] Erro no atualizador:', err);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-error', err.message);
+        mainWindow.webContents.send('bidding-update-log', '❌ Erro na atualização: ' + (err.message || 'Falha de rede'));
     }
 });
 
@@ -323,6 +329,7 @@ autoUpdater.on('download-progress', (progressObj) => {
     console.log(`[POLARYON-UPDATE] Baixando: ${Math.round(progressObj.percent)}%`);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('download-progress', progressObj);
+        mainWindow.webContents.send('bidding-update-log', `⏳ Baixando: ${Math.round(progressObj.percent)}% (${Math.round(progressObj.bytesPerSecond / 1024)} KB/s)`);
     }
 });
 
@@ -330,6 +337,7 @@ autoUpdater.on('update-downloaded', (info) => {
     console.log('[POLARYON-UPDATE] Atualização v' + info.version + ' baixada.');
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
+        mainWindow.webContents.send('bidding-update-log', '🚀 Download concluído! Pronto para instalar.');
     }
     new Notification({
         title: 'Polaryon - Tudo pronto!',
@@ -339,6 +347,11 @@ autoUpdater.on('update-downloaded', (info) => {
 
 ipcMain.on('install-update', () => {
     autoUpdater.quitAndInstall();
+});
+
+ipcMain.on('check-for-updates', () => {
+    console.log('[POLARYON-UPDATE] Verificação manual solicitada.');
+    autoUpdater.checkForUpdatesAndNotify();
 });
 
 ipcMain.handle('get-app-version', () => {

@@ -198,31 +198,56 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
     const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
     const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
 
-    const [detail, setDetail] = useState(pncpDetailCache[cacheKey]?.data || null);
+    const [detail, setDetail] = useState(() => {
+        // Tenta recuperar do cache persistente primeiro
+        const cached = localStorage.getItem(`pncp_detail_${cacheKey}`);
+        if (cached) {
+            try { return JSON.parse(cached); } catch { return null; }
+        }
+        return pncpDetailCache[cacheKey]?.data || null;
+    });
+    
+    const [isVisible, setIsVisible] = useState(false);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Dispara busca em background se não houver no cache nem no item original
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                setIsVisible(true);
+                observer.disconnect();
+            }
+        }, { threshold: 0.1 });
+
+        if (containerRef.current) observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [cacheKey]);
+
+    useEffect(() => {
         const hasInitialValue = item.valorTotalEstimado || item.valor_global;
-        if (!detail && !hasInitialValue) {
-            queuePncpFetch(item);
+        if (isVisible && !detail && !hasInitialValue) {
+            queuePncpFetch(item).then(res => {
+                if (res) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(res));
+            });
         }
 
         const handleUpdate = (e: any) => {
             if (e.detail.cacheKey === cacheKey) {
-                setDetail(pncpDetailCache[cacheKey]?.data || null);
+                const newData = pncpDetailCache[cacheKey]?.data || null;
+                setDetail(newData);
+                if (newData) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(newData));
             }
         };
 
         window.addEventListener('pncp-cache-updated', handleUpdate as any);
         return () => window.removeEventListener('pncp-cache-updated', handleUpdate as any);
-    }, [cacheKey, item, detail]);
+    }, [cacheKey, item, detail, isVisible]);
 
     const valor = detail?.valor || item.valorTotalEstimado || item.valor_global;
     const isLoading = !valor && pncpDetailCache[cacheKey]?.promise;
 
     if (isMobile) {
         return (
-            <div className="flex flex-col items-end gap-1 shrink-0">
+            <div ref={containerRef} className="flex flex-col items-end gap-1 shrink-0">
                 <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border shadow-sm ${
                     isLoading 
                     ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
@@ -236,7 +261,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
     }
 
     return (
-        <td className="px-4 py-3.5 align-top text-right min-w-[140px]">
+        <td ref={containerRef} className="px-4 py-3.5 align-top text-right min-w-[140px]">
             <div className="flex flex-col items-end">
                 <div className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${
                     isLoading 
@@ -258,31 +283,55 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
     const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
     const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
     
-    const [detail, setDetail] = useState(pncpDetailCache[cacheKey]?.data || null);
+    const [detail, setDetail] = useState(() => {
+        const cached = localStorage.getItem(`pncp_detail_${cacheKey}`);
+        if (cached) {
+            try { return JSON.parse(cached); } catch { return null; }
+        }
+        return pncpDetailCache[cacheKey]?.data || null;
+    });
+
+    const [isVisible, setIsVisible] = useState(false);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Dispara busca se não houver dados detalhados (itemCount/hasMeEppBenefit)
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                setIsVisible(true);
+                observer.disconnect();
+            }
+        }, { threshold: 0.1 });
+
+        if (containerRef.current) observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [cacheKey]);
+
+    useEffect(() => {
         const hasInitialExtra = item.itemCount !== undefined || item.hasMeEppBenefit !== undefined;
-        if (!detail && !hasInitialExtra) {
-            queuePncpFetch(item);
+        if (isVisible && !detail && !hasInitialExtra) {
+            queuePncpFetch(item).then(res => {
+                if (res) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(res));
+            });
         }
 
         const handleUpdate = (e: any) => {
             if (e.detail.cacheKey === cacheKey) {
-                setDetail(pncpDetailCache[cacheKey]?.data || null);
+                const newData = pncpDetailCache[cacheKey]?.data || null;
+                setDetail(newData);
+                if (newData) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(newData));
             }
         };
 
         window.addEventListener('pncp-cache-updated', handleUpdate as any);
         return () => window.removeEventListener('pncp-cache-updated', handleUpdate as any);
-    }, [cacheKey, item, detail]);
+    }, [cacheKey, item, detail, isVisible]);
 
     const itemCount = detail?.itemCount || item.itemCount;
     const hasMeEppBenefit = detail?.hasMeEppBenefit || item.hasMeEppBenefit;
     const isLoading = itemCount === undefined && pncpDetailCache[cacheKey]?.promise;
 
     return (
-        <div className="flex flex-col gap-1.5 min-w-[120px]">
+        <div ref={containerRef} className="flex flex-col gap-1.5 min-w-[120px]">
              <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold border truncate ${getStatusStyle(item.situacao_nome)}`}>
                 {item.situacao_nome}
             </span>
@@ -466,6 +515,7 @@ export default function OportunidadesSearch() {
     }, [selectedItem]);
 
     // --- Kanban Export States ---
+    // --- Kanban Export States ---
     const folders = useKanbanStore(state => state?.folders) || [];
     const boards = useKanbanStore(state => state?.boards) || [];
     const lists = useKanbanStore(state => state?.lists) || [];
@@ -473,11 +523,47 @@ export default function OportunidadesSearch() {
     const allMembers = useKanbanStore(state => state?.members);
     const currentUser = (allMembers || [])[0] || null;
 
-    // Helper to check if item is already in Kanban
-    const isAlreadyInKanban = useCallback((item: PncpItem) => {
-        const pncpId = item.numero_controle_pncp || item.orgao_cnpj;
-        return cards.some(c => c.pncpId === pncpId || (c.customLink && item.item_url && c.customLink.includes(item.item_url)));
+    // Sincronização automática com Kanban ao entrar na tela para garantir marcação de "Já Importado"
+    const fetchKanbanData = useKanbanStore(state => state.fetchKanbanData);
+    useEffect(() => {
+        fetchKanbanData();
+    }, [fetchKanbanData]);
+
+    // OTIMIZAÇÃO v3.5.51: Cria um índice (Set) para busca instantânea de itens importados
+    const importedPncpIds = useMemo(() => {
+        const set = new Set<string>();
+        cards.forEach(c => {
+            if (c.pncpId) set.add(c.pncpId.trim().toLowerCase());
+        });
+        return set;
     }, [cards]);
+
+    const importedLinks = useMemo(() => {
+        const set = new Set<string>();
+        cards.forEach(c => {
+            if (c.customLink) set.add(c.customLink.trim().toLowerCase());
+        });
+        return set;
+    }, [cards]);
+
+    const isAlreadyInKanban = useCallback((item: PncpItem) => {
+        if (!item) return false;
+        const pncpId = (item.numero_controle_pncp || item.orgao_cnpj || '').trim().toLowerCase();
+        const itemUrl = (item.item_url || '').trim().toLowerCase();
+        
+        // Busca Instantânea por ID
+        if (pncpId && importedPncpIds.has(pncpId)) return true;
+        
+        // Busca Instantânea por Link (mais flexível)
+        if (itemUrl) {
+            // Verifica se algum link importado contém a URL do item
+            for (const link of Array.from(importedLinks)) {
+                if (link.includes(itemUrl)) return true;
+            }
+        }
+        
+        return false;
+    }, [importedPncpIds, importedLinks]);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [directExportItem, setDirectExportItem] = useState<PncpItem | null>(null);
     const [exportFolderId, setExportFolderId] = useState('');

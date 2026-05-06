@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  checkForUpdates: () => ipcRenderer.send('check-for-updates'),
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, info) => callback(info)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, info) => callback(info)),

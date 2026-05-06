@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle, Briefcase } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
     AlertDialog,
@@ -49,6 +49,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CertificateManager } from '@/components/terminal/CertificateManager';
 import { Badge } from '@/components/ui/badge';
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface BiddingItem {
     itemId: string;
@@ -117,6 +123,17 @@ export default function BiddingDashboardPage() {
     const [viewMode, setViewMode] = useState<'card' | 'grid'>('grid');
     const [isChatOpen, setIsChatOpen] = useState(true);
     const [modalityTab, setModalityTab] = useState<'PREGAO' | 'DISPENSA'>('DISPENSA');
+
+    // --- MONITOR DE ATUALIZAÇÃO v3.5.37 ---
+    const [updateInfo, setUpdateInfo] = useState<any>(null);
+    const [downloadProgress, setDownloadProgress] = useState<number>(0);
+
+    const handleManualBid = (purchaseId: string, itemId: string, value: number) => {
+        if (isDesktop && (window as any).electronAPI) {
+            (window as any).electronAPI.manualBid(purchaseId, itemId, value);
+            toast.info(`🚀 Gatilho Disparado: R$ ${value.toFixed(2)}`);
+        }
+    };
 
     const quickBid = async (itemId: string, value: number, sid?: string) => {
         const targetSid = sid || sessionId;
@@ -282,7 +299,10 @@ export default function BiddingDashboardPage() {
                     [sid]: {
                         ...(prev[sid] || {}),
                         items: Array.isArray(newItems) ? newItems : [],
-                        lastUpdate: timestamp
+                        lastUpdate: timestamp,
+                        uasg: data.uasg || (prev[sid]?.uasg) || '---',
+                        numero: data.numero || (prev[sid]?.numero) || '---',
+                        ano: data.ano || (prev[sid]?.ano) || '---'
                     }
                 }));
             };
@@ -499,12 +519,32 @@ export default function BiddingDashboardPage() {
         } catch (e) { console.error(e); }
     };
 
+    const checkUpdate = () => {
+        if (isDesktop && (window as any).electronAPI) {
+            (window as any).electronAPI.getAppVersion().then((v: string) => {
+                toast.info(`Versão Atual: v${v}. Verificando servidores...`);
+                (window as any).electronAPI.checkForUpdates();
+            });
+        } else {
+            toast.warning("Verificação manual disponível apenas no Polaryon Desktop.");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-100 text-slate-900 font-sans overflow-x-hidden">
             <header className="w-full h-16 bg-black flex items-center justify-between px-8 shadow-xl sticky top-0 z-50">
                 <div className="flex items-center gap-3">
                     <div className="bg-white p-1.5 rounded-md flex items-center justify-center"><Zap className="w-5 h-5 text-black fill-current" /></div>
                     <h1 className="text-white font-black italic text-xl tracking-tighter">SIGA <span className="text-emerald-400">POLARYON</span></h1>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="ml-4 h-7 text-[9px] font-black uppercase bg-transparent border-white/20 text-white hover:bg-white/10"
+                        onClick={checkUpdate}
+                    >
+                        <RefreshCw className={`w-3 h-3 mr-2 ${updateInfo ? 'animate-spin' : ''}`} />
+                        {updateInfo ? `Baixando ${downloadProgress}%` : 'Verificar Atualização'}
+                    </Button>
                 </div>
                 <div className="flex items-center gap-6">
                     <div className="hidden md:flex flex-col items-end">
@@ -843,13 +883,14 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
             marginVal = item.valorAtual * (marginVal / 100);
         }
         
-        const val = item.valorAtual - marginVal;
+        let val = item.valorAtual - marginVal;
         
+        // Se o valor calculado for menor que o mínimo configurado, usamos o mínimo para não perder a disputa
         if (minPrice > 0 && val < Number(minPrice)) {
-            toast.error("Erro: Lance manual abaixo do seu preço limite!");
-            return;
+            val = Number(minPrice);
         }
-        onManualBid(item.purchaseId, item.itemId, val);
+        
+        onManualBid(item.purchaseId, item.itemId, item.bidId, val);
     };
 
     return (

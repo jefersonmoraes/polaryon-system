@@ -35,17 +35,34 @@ ipcRenderer.on('force-room-learning', (event, { purchaseId }) => {
     }
 });
 
-// ⚡ LANCE MANUAL
-ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
-    await sendBid(purchaseId, itemId, value);
+// ⚡ LANCE MANUAL / AUTOMÁTICO
+ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value }) => {
+    // itemId = número sequencial (ex: 1)
+    // bidId = identificador longo (ex: UUID)
+    await sendBid(purchaseId, itemId, bidId, value);
 });
 
-const sendBid = async (purchaseId, itemId, value) => {
+const sendBid = async (purchaseId, itemNum, bidId, value) => {
     const auth = window.polaryonAuthBearer;
-    if (!auth) return;
+    if (!auth) {
+        console.error("❌ [POLARYON] Token não encontrado. Faça login novamente.");
+        return;
+    }
 
     try {
-        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances`;
+        // ❗ ESTRATÉGIA v3.5.50: URL usa o número sequencial, Body usa o ID longo
+        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemNum}/lances`;
+        
+        const valFormatted = Number(value.toFixed(2));
+        const payload = {
+            valor: valFormatted,
+            valorAjustado: valFormatted,
+            identificadorItem: bidId || itemNum,
+            faseItem: 1 
+        };
+
+        console.log(`🚀 [POLARYON] Tentando lance no Item ${itemNum}:`, payload);
+
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -53,20 +70,23 @@ const sendBid = async (purchaseId, itemId, value) => {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ 
-                valorAjustado: value,
-                faseItem: 1 
-            })
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-            console.log(`%c✅ [POLARYON] Lance de R$ ${value} ACEITO!`, "color: lime; font-weight: bold;");
+            console.log(`%c✅ [POLARYON] Lance de R$ ${valFormatted} ACEITO!`, "color: lime; font-weight: bold;");
         } else {
             const err = await res.json();
-            console.error(`❌ [POLARYON] Erro no lance:`, err);
+            console.error(`❌ [POLARYON] Erro no lance (Status ${res.status}):`, err);
+            // Se o erro for de fase, tentamos faseItem 2 como fallback
+            if (JSON.stringify(err).includes('fase')) {
+                 console.log("🔄 [POLARYON] Tentando fallback para fase 2...");
+                 payload.faseItem = 2;
+                 await fetch(url, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            }
         }
     } catch (e) {
-        console.error(`❌ [POLARYON] Falha na rede:`, e);
+        console.error(`❌ [POLARYON] Falha crítica na execução do lance:`, e);
     }
 };
 
@@ -102,8 +122,14 @@ const startHybridEngine = () => {
                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
                         
                         for (const item of allFetchedItems) {
-                            const rawId = item.identificador || item.numero.toString();
+                            const realId = String(item.identificador || item.id || '');
+                            const displayNum = String(item.numero || '');
                             const pId = item.polaryon_purchaseId;
+                            
+                            // ❗ CRITICAL: O ID para o lance DEVE ser o identificador longo
+                            const bidId = realId; 
+                            const rawId = displayNum; // Usamos o número para a UI ficar bonita
+
                             const vAtual = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                             const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                             const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
@@ -116,6 +142,7 @@ const startHybridEngine = () => {
 
                             window.polaryonAllItems[rawId] = {
                                 itemId: rawId,
+                                bidId: bidId, // Guardamos o ID real para o lance
                                 purchaseId: pId,
                                 valorAtual: vAtual,
                                 meuValor: vMeu,
@@ -124,40 +151,60 @@ const startHybridEngine = () => {
                                 desc: item.descricao || ("Item " + rawId),
                                 ganhador: isWin ? 'Você' : 'Outro',
                                 status: isDispute ? 'Disputa' : 'Encerrado',
-                                // Envia dados da margem oficial para o painel
                                 officialMargin: intervalValue,
                                 officialMarginType: intervalType
                             };
 
                             const strat = window.polaryonStrategies[rawId];
                             if (strat && strat.active && isDispute && !isWin && vAtual > 0) {
-                                let shouldBid = false;
+                                // ... (logic same but using bidId if sending)
                                 let marginToUse = strat.decrementValue || intervalValue;
-                                
-                                // Se for porcentagem, calcula o valor real
                                 if (strat.decrementType === 'percentage' || intervalType === 'percentage') {
                                     const perc = strat.decrementType === 'percentage' ? strat.decrementValue : intervalValue;
                                     marginToUse = vAtual * (perc / 100);
                                 }
 
                                 let nextValue = vAtual - marginToUse;
-                                if (strat.mode === 'follower') shouldBid = true;
-                                if (strat.mode === 'sniper' && (item.segundosParaEncerramento < 30)) shouldBid = true;
-                                if (strat.mode === 'shadow') { shouldBid = true; nextValue = vAtual - 0.01; }
-
-                                if (shouldBid && nextValue >= (strat.minPrice || 0) && nextValue < vMeu) {
-                                    await sendBid(pId, rawId, nextValue);
-                                    await new Promise(r => setTimeout(r, 1000));
+                                if (strat.mode === 'follower') {
+                                    if (nextValue >= (strat.minPrice || 0) && nextValue < vMeu) {
+                                        await sendBid(pId, bidId, nextValue);
+                                        await new Promise(r => setTimeout(r, 1000));
+                                    }
                                 }
                             }
                         }
 
-                        ipcRenderer.send('portal-update', { sessionId: mySessionId || 'UNKNOWN', items: Object.values(window.polaryonAllItems), turbo: true });
+                        // 📦 AGRUPAMENTO POR SALA PARA INTERFACE MULTI-DROP
+                        const roomsData = {};
+                        for (const item of Object.values(window.polaryonAllItems)) {
+                            const pId = item.purchaseId || 'GLOBAL';
+                            if (!roomsData[pId]) roomsData[pId] = [];
+                            roomsData[pId].push(item);
+                        }
+
+                        for (const [pId, roomItems] of Object.entries(roomsData)) {
+                            if (roomItems && roomItems.length > 0) {
+                                const sid = `HYBRID_${pId}`;
+                                ipcRenderer.send('portal-update', { 
+                                    sessionId: sid, 
+                                    items: roomItems, 
+                                    turbo: true,
+                                    uasg: pId.length > 6 ? pId.substring(0, 6) : pId 
+                                });
+                            }
+                        }
                     }
 
+                    // 🏎️ RATE LIMIT DINÂMICO (v3.5.44) - Evita Erro 429
+                    const numRooms = window.polaryonHybrid_Rooms.size / 2; // Divide por 2 porque adicionamos 2 URLs por sala
+                    const baseDelay = numRooms > 3 ? 2000 : 1000;
                     const isUrgent = allFetchedItems.some(i => (i.segundosParaEncerramento > 0 && i.segundosParaEncerramento < 60));
-                    setTimeout(pollingLoop, (isUrgent ? 500 : 1500) + Math.random() * 200);
-         } catch(e) { setTimeout(pollingLoop, 3000); }
+                    
+                    setTimeout(pollingLoop, (isUrgent ? 600 : baseDelay) + Math.random() * 500);
+          } catch(e) {
+              console.log("%c⚠️ [POLARYON] Falha de Sessão. Re-tentando em 5s...", "color: yellow;");
+              setTimeout(pollingLoop, 5000);
+          }
     };
     pollingLoop();
 };
@@ -180,8 +227,38 @@ const injectSniffer = () => {
                 }
                 if (token) { window.polaryonAuthBearer = token; send({ action: 'TOKEN_GRABBED', token: token }); }
                 const res = await oFetch.apply(this, arguments);
+                
+                // 🕵️ SNIFFER DE SALAS EM MASSA (v3.5.38)
+                if (url.includes('minhas-participacoes')) {
+                    const clone = res.clone();
+                    clone.json().then(data => {
+                        const compras = data.compras || [];
+                        compras.forEach(c => {
+                            if (c.situacaoCompra === 2 || c.situacaoCompra === 1) { // 1 ou 2 = Aberto/Disputa
+                                const pId = c.identificador;
+                                if (pId) {
+                                    window.postMessage({ type: 'POLARYON_LEARN_ROOM', purchaseId: pId }, '*');
+                                }
+                            }
+                        });
+                    }).catch(() => {});
+                }
+
                 return res;
             };
+
+            window.addEventListener('message', (e) => {
+                if (e.data && e.data.type === 'POLARYON_LEARN_ROOM') {
+                     const pId = e.data.purchaseId;
+                     const roomUrl = \`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/\${pId}/itens\`;
+                     const disputeUrl = \`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/\${pId}/itens/em-disputa\`;
+                     if (!window.polaryonHybrid_Rooms.has(roomUrl)) {
+                         console.log("%c🚀 [POLARYON SCANNER] Detectada Sala em Massa: " + pId, "color: #00ff00; font-weight: bold;");
+                         window.polaryonHybrid_Rooms.add(roomUrl);
+                         window.polaryonHybrid_Rooms.add(disputeUrl);
+                     }
+                }
+            });
         })();
     `;
     const root = document.head || document.documentElement;
