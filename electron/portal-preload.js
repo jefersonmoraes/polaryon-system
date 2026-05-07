@@ -124,13 +124,19 @@ const startHybridEngine = () => {
                         if (!window.polaryonAllItems) window.polaryonAllItems = {};
                         
                         for (const item of allFetchedItems) {
-                            const realId = String(item.identificador || item.id || '');
+                            // 🕵️ ESTRATÉGIA DE DESCOBERTA DE ID v3.5.54
+                            const realId = String(item.identificador || item.identificadorItem || item.id || item.item_id || item.uuid || '');
                             const displayNum = String(item.numero || '');
                             const pId = item.polaryon_purchaseId;
                             
-                            // ❗ CRITICAL: O ID para o lance DEVE ser o identificador longo
                             const bidId = realId; 
-                            const rawId = displayNum; // Usamos o número para a UI ficar bonita
+                            const rawId = displayNum;
+
+                            // 🛠️ LOG DE DEPURAÇÃO (Aparece no F12 do Robô)
+                            if (displayNum === "1" || !window._polaryon_logged_once) {
+                                console.log(`[POLARYON DEBUG] Dados do Item ${displayNum}:`, item);
+                                window._polaryon_logged_once = true;
+                            }
 
                             const vAtual = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                             const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
