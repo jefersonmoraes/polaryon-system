@@ -50,10 +50,12 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
     }
 
     try {
-        // ❗ ESTRATÉGIA v3.5.50: URL usa o número sequencial, Body usa o ID longo
+        // ❗ ESTRATÉGIA v3.5.53: Blindagem de Valor (Previne erro toFixed)
+        const numValue = Number(value) || 0;
+        const valFormatted = Number(numValue.toFixed(2));
+        
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemNum}/lances`;
         
-        const valFormatted = Number(value.toFixed(2));
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,

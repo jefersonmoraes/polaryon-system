@@ -136,10 +136,10 @@ class VisualRunner {
         win.loadURL(startUrl);
     }
 
-    sendManualBid({ purchaseId, itemId, value }) {
+    sendManualBid({ purchaseId, itemId, bidId, value }) {
         this.sessions.forEach(session => {
             if (session.window && !session.window.isDestroyed()) {
-                session.window.webContents.send('manual-bid', { purchaseId, itemId, value });
+                session.window.webContents.send('manual-bid', { purchaseId, itemId, bidId, value });
             }
         });
     }

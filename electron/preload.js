@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   navigateVisualBidding: (sessionId, url) => ipcRenderer.send('visual-navigate', { sessionId, url }),
   onBiddingLoginFinished: (callback) => ipcRenderer.on('bidding-login-finished', (event, data) => callback(data)),
   onBiddingNetworkTraffic: (callback) => ipcRenderer.on('bidding-network-traffic', (event, data) => callback(data)),
-  manualBid: (purchaseId, itemId, value) => ipcRenderer.send('manual-bid', { purchaseId, itemId, value }),
+  manualBid: (purchaseId, itemId, bidId, value) => ipcRenderer.send('manual-bid', { purchaseId, itemId, bidId, value }),
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),

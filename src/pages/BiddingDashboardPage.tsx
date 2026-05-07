@@ -128,9 +128,9 @@ export default function BiddingDashboardPage() {
     const [updateInfo, setUpdateInfo] = useState<any>(null);
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
-    const handleManualBid = (purchaseId: string, itemId: string, value: number) => {
+    const handleManualBid = (purchaseId: string, itemId: string, bidId: string, value: number) => {
         if (isDesktop && (window as any).electronAPI) {
-            (window as any).electronAPI.manualBid(purchaseId, itemId, value);
+            (window as any).electronAPI.manualBid(purchaseId, itemId, bidId, value);
             toast.info(`🚀 Gatilho Disparado: R$ ${value.toFixed(2)}`);
         }
     };
