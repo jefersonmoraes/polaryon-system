@@ -92,6 +92,14 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         } else {
             const err = await res.json();
             console.error(`❌ [POLARYON] Erro no lance (Status ${res.status}):`, err);
+            
+            // 🔍 DETALHAMENTO DO ERRO (v3.5.57)
+            if (err.errors && Array.isArray(err.errors)) {
+                err.errors.forEach((e, i) => {
+                    console.error(`👉 Detalhe do Erro ${i+1}:`, e.message || e.defaultMessage || e);
+                });
+            }
+
             // Fallback para fase 2 se necessário
             if (JSON.stringify(err).toLowerCase().includes('fase')) {
                  console.log("🔄 [POLARYON] Tentando fallback para fase 2...");
