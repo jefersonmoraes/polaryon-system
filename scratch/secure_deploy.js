@@ -9,7 +9,7 @@ const config = {
     password: 'Jaguar2018jolela#'
 };
 
-const version = '3.5.51';
+const version = '3.5.52';
 const remotePath = '/var/www/polaryon/storage/download/';
 const localDir = './dist_desktop/';
 

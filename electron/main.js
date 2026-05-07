@@ -319,6 +319,15 @@ autoUpdater.on('update-not-available', (info) => {
 
 autoUpdater.on('error', (err) => {
     console.error('[POLARYON-UPDATE] Erro no atualizador:', err);
+    
+    // 🛡️ TRATAMENTO EBUSY: Se o Windows travar o arquivo, tentamos avisar e limpar
+    if (err.message.includes('EBUSY') || err.message.includes('locked')) {
+        console.log('[POLARYON-UPDATE] Detectado recurso travado. Sugerindo limpeza manual.');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('bidding-update-log', '⚠️ O Windows travou o instalador. Por favor, reinicie o computador ou feche o app e tente novamente.');
+        }
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-error', err.message);
         mainWindow.webContents.send('bidding-update-log', '❌ Erro na atualização: ' + (err.message || 'Falha de rede'));
