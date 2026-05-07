@@ -56,11 +56,15 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemNum}/lances`;
         
+        const cached = window.polaryonAllItems ? window.polaryonAllItems[bidId] : null;
+        
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
             identificadorItem: bidId || itemNum,
-            faseItem: 1 
+            faseItem: 1,
+            versaoItem: cached?.versaoItem || 1,
+            versaoParticipante: cached?.versaoParticipante || 1
         };
 
         console.log(`🚀 [POLARYON] Tentando lance no Item ${itemNum}:`, payload);
@@ -131,6 +135,8 @@ const startHybridEngine = () => {
                             
                             const bidId = realId; 
                             const rawId = displayNum;
+                            const vItem = item.versaoItem || 1;
+                            const vPart = item.versaoParticipante || 1;
 
                             // 🛠️ LOG DE DEPURAÇÃO (Aparece no F12 do Robô)
                             if (displayNum === "1" || !window._polaryon_logged_once) {

@@ -79,6 +79,15 @@ class VisualRunner {
         // 🎯 [SIFÃO TOTAL v4.1] Captura Token E Aprende Salas via Tráfego
         ses.webRequest.onBeforeSendHeaders({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details, callback) => {
             const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization'];
+            
+            // 🕵️ ESPIONAGEM DE ESTRUTURA (v3.5.55)
+            if (details.method === 'POST' && details.url.includes('/lances')) {
+                console.log(`[POLARYON SPY] Estrutura detectada em: ${details.url}`);
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                    this.dashboardWebContents.send('bidding-update-log', `🔍 Espião: Capturando estrutura de lance oficial...`);
+                }
+            }
+
             if (auth && auth.startsWith('Bearer')) {
                 if (!win.isDestroyed()) {
                     // Injeta Token
