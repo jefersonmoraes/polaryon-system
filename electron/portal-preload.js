@@ -50,21 +50,29 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
     }
 
     try {
-        // ❗ ESTRATÉGIA v3.5.53: Blindagem de Valor (Previne erro toFixed)
         const numValue = Number(value) || 0;
         const valFormatted = Number(numValue.toFixed(2));
         
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemNum}/lances`;
         
-        const cached = window.polaryonAllItems ? window.polaryonAllItems[bidId] : null;
+        // 🔍 BUSCA MULTI-CHAVE NO CACHE (v3.5.56)
+        const cache = window.polaryonAllItems || {};
+        const cached = cache[bidId] || cache[itemNum] || Object.values(cache).find(i => i.numero == itemNum);
         
+        if (cached) {
+            console.log(`[POLARYON] Item encontrado no cache. Usando Versão Item: ${cached.versaoItem}`);
+        } else {
+            console.warn(`[POLARYON] Aviso: Item não encontrado no cache. Usando valores padrão.`);
+        }
+
+        // 🛡️ PAYLOAD ATÔMICO (Tipagem Numérica Rígida)
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
-            identificadorItem: bidId || itemNum,
+            identificadorItem: isNaN(Number(bidId)) ? (bidId || itemNum) : Number(bidId || itemNum),
             faseItem: 1,
-            versaoItem: cached?.versaoItem || 1,
-            versaoParticipante: cached?.versaoParticipante || 1
+            versaoItem: Number(cached?.versaoItem || 1),
+            versaoParticipante: Number(cached?.versaoParticipante || 1)
         };
 
         console.log(`🚀 [POLARYON] Tentando lance no Item ${itemNum}:`, payload);
@@ -84,11 +92,15 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         } else {
             const err = await res.json();
             console.error(`❌ [POLARYON] Erro no lance (Status ${res.status}):`, err);
-            // Se o erro for de fase, tentamos faseItem 2 como fallback
-            if (JSON.stringify(err).includes('fase')) {
+            // Fallback para fase 2 se necessário
+            if (JSON.stringify(err).toLowerCase().includes('fase')) {
                  console.log("🔄 [POLARYON] Tentando fallback para fase 2...");
                  payload.faseItem = 2;
-                 await fetch(url, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                 await fetch(url, { 
+                     method: 'POST', 
+                     headers: { 'Authorization': auth, 'Content-Type': 'application/json' }, 
+                     body: JSON.stringify(payload) 
+                 });
             }
         }
     } catch (e) {
