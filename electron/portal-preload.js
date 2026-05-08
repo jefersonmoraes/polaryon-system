@@ -42,31 +42,25 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.69)
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.70)
 if (!window.polaryonSnifferInjected) {
     window.polaryonSnifferInjected = true;
     window.polaryonServerOffset = 0;
 
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
-        // 📡 SNIFFER DE LANCES (Intercepta TUDO: Robô e Humano)
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Tráfego de Lance Detectado!", "color: #ff00ff; font-weight: bold; font-size: 12px;");
-            console.log("URL:", args[0]);
+            console.log("%c📡 [POLARYON SNIFFER] Lance Detectado!", "color: #ff00ff; font-weight: bold;");
             if (args[1]?.body) {
                 try {
                     const parsed = JSON.parse(args[1].body);
-                    console.log("📦 PAYLOAD (Objeto):", parsed);
-                } catch(e) {
-                    console.log("📦 PAYLOAD (Raw):", args[1].body);
-                }
+                    console.log("📦 PAYLOAD:", parsed);
+                } catch(e) { console.log("📦 PAYLOAD (Raw):", args[1].body); }
             }
-            if (args[1]?.headers) console.log("📑 HEADERS:", args[1].headers);
         }
 
         const res = await originalFetch(...args);
         
-        // 🕒 SINCRONIZAÇÃO DE RELÓGIO
         const serverDateStr = res.headers.get('Date');
         if (serverDateStr) {
             const sTime = new Date(serverDateStr).getTime();
@@ -78,7 +72,7 @@ if (!window.polaryonSnifferInjected) {
             try {
                 const clone = res.clone();
                 const body = await clone.json();
-                console.log("📥 RESPOSTA SERPRO:", body);
+                console.log("📥 RESPOSTA:", body);
             } catch(e) {}
         }
         return res;
@@ -86,17 +80,14 @@ if (!window.polaryonSnifferInjected) {
 }
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.69
+    // 💡 Normalização v3.5.70
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
     const serverOffset = window.polaryonServerOffset || 0;
 
     const auth = window.polaryonAuthBearer;
-    if (!auth) {
-        console.error("❌ [POLARYON] Token não encontrado.");
-        return;
-    }
+    if (!auth) return console.error("❌ Token ausente.");
     
     const getFreshItem = (id) => {
         const cache = window.polaryonAllItems || {};
@@ -110,23 +101,23 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const cached = getFreshItem(finalBidId || finalItemNum);
         const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
 
-        // 🛡️ SUPER-PAYLOAD SHOTGUN v3.5.69 (Ataca todas as variações para evitar erro de Null)
+        // 🛡️ PAYLOAD v3.5.70 (Fase como String para evitar erro de Null Enum)
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
             identificadorItem: String(finalBidId || finalItemNum),
-            // Variações de Fase (Enum ou ID)
-            faseItem: cached?.fase || 2, 
-            itemFase: cached?.fase || 2,
+            // Tentando String para o Enum (comum em APIs Java/Serpro)
+            faseItem: "2", 
+            itemFase: "2",
             fase: cached?.fase || "LA", 
-            // Versões dinâmicas (Crítico!)
+            // Sincronia rigorosa de versão
             versaoItem: Number(cached?.versaoItem || 1),
             versaoParticipante: Number(cached?.versaoParticipante || 1),
             tipoLance: 'V', 
             dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.69) [Offset: ${serverOffset}ms]:`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO (v3.5.70):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -134,7 +125,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
                 'Authorization': auth, 
                 'Content-Type': 'application/json', 
                 'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+                'User-Agent': navigator.userAgent
             },
             body: JSON.stringify(payload)
         });
@@ -142,18 +133,12 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const responseData = await res.json().catch(() => ({}));
 
         if (res.ok) {
-            console.log(`✅ [POLARYON] LANCE ACEITO: R$ ${valFormatted}`);
-            const sid = window.polaryonSessionId || `HYBRID_${purchaseId}`;
-            fetch(`https://polaryon.com.br/api/bidding/sessions/${sid}/items/${finalItemNum}/bid`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-                body: JSON.stringify({ value: valFormatted, status: 'SUCCESS', response: responseData, itemId: String(finalItemNum) })
-            }).catch(() => {});
+            console.log(`✅ ACEITO: R$ ${valFormatted}`);
         } else {
-            console.error(`❌ [POLARYON] REJEITADO (VEJA O SNIFFER):`, responseData);
+            console.error(`❌ REJEITADO:`, responseData);
         }
     } catch (e) {
-        console.error(`❌ [POLARYON] Erro fatal:`, e);
+        console.error(`❌ Erro:`, e);
     }
 };
 
