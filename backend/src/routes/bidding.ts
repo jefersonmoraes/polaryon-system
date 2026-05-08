@@ -241,4 +241,29 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
     }
 });
 
+// Persistence for Bid History (Fixes 404) ⚒️🚀
+router.post('/sessions/:id/items/:itemId/bid', requireAuth, async (req: AuthRequest | any, res: Response) => {
+    try {
+        const { id, itemId } = req.params;
+        const { value, type, status, reason } = req.body;
+
+        const bid = await prisma.biddingAction.create({
+            data: {
+                sessionId: id,
+                itemId,
+                value,
+                type: type || 'MANUAL',
+                status: status || 'success',
+                reason: reason || 'Lance disparado pelo usuário via Painel de Controle.',
+                timestamp: new Date()
+            }
+        });
+
+        res.json({ success: true, bid });
+    } catch (error: any) {
+        console.error('Error persisting bid:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
