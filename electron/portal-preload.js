@@ -42,25 +42,26 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.68)
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.69)
 if (!window.polaryonSnifferInjected) {
     window.polaryonSnifferInjected = true;
     window.polaryonServerOffset = 0;
 
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
-        // 📡 SNIFFER DE LANCES (Global)
+        // 📡 SNIFFER DE LANCES (Intercepta TUDO: Robô e Humano)
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Requisição Detectada!", "color: #ff00ff; font-weight: bold;");
+            console.log("%c📡 [POLARYON SNIFFER] Tráfego de Lance Detectado!", "color: #ff00ff; font-weight: bold; font-size: 12px;");
             console.log("URL:", args[0]);
             if (args[1]?.body) {
                 try {
                     const parsed = JSON.parse(args[1].body);
-                    console.log("Payload Enviado:", parsed);
+                    console.log("📦 PAYLOAD (Objeto):", parsed);
                 } catch(e) {
-                    console.log("Payload (Raw):", args[1].body);
+                    console.log("📦 PAYLOAD (Raw):", args[1].body);
                 }
             }
+            if (args[1]?.headers) console.log("📑 HEADERS:", args[1].headers);
         }
 
         const res = await originalFetch(...args);
@@ -77,7 +78,7 @@ if (!window.polaryonSnifferInjected) {
             try {
                 const clone = res.clone();
                 const body = await clone.json();
-                console.log("Resposta Serpro:", body);
+                console.log("📥 RESPOSTA SERPRO:", body);
             } catch(e) {}
         }
         return res;
@@ -85,22 +86,15 @@ if (!window.polaryonSnifferInjected) {
 }
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.68
+    // 💡 Normalização de Argumentos v3.5.69
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
     const serverOffset = window.polaryonServerOffset || 0;
 
-    if (typeof bidId === 'number' && (value === undefined || value === null)) {
-        finalValue = bidId;
-        finalBidId = itemNum;
-        const cached = Object.values(window.polaryonAllItems || {}).find(i => String(i.bidId) === String(finalBidId));
-        finalItemNum = cached ? cached.itemId : finalBidId;
-    }
-
     const auth = window.polaryonAuthBearer;
     if (!auth) {
-        console.error("❌ [POLARYON] Token não encontrado. Faça login novamente.");
+        console.error("❌ [POLARYON] Token não encontrado.");
         return;
     }
     
@@ -114,53 +108,52 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${finalItemNum}/lances`;
         
         const cached = getFreshItem(finalBidId || finalItemNum);
-        const isDispute = cached?.isDispute || true;
         const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
 
-        // 🛡️ PAYLOAD REFORÇADO v3.5.68 (String IDs para evitar perda de precisão)
+        // 🛡️ SUPER-PAYLOAD SHOTGUN v3.5.69 (Ataca todas as variações para evitar erro de Null)
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
-            identificadorItem: String(finalBidId || finalItemNum), // 🎯 FIX: String evita truncamento
-            faseItem: isDispute ? 2 : 1, 
-            itemFase: isDispute ? 2 : 1, 
-            idFaseItem: isDispute ? 2 : 1, 
-            fase: isDispute ? 2 : 1,     
+            identificadorItem: String(finalBidId || finalItemNum),
+            // Variações de Fase (Enum ou ID)
+            faseItem: cached?.fase || 2, 
+            itemFase: cached?.fase || 2,
+            fase: cached?.fase || "LA", 
+            // Versões dinâmicas (Crítico!)
             versaoItem: Number(cached?.versaoItem || 1),
             versaoParticipante: Number(cached?.versaoParticipante || 1),
             tipoLance: 'V', 
             dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.68) [Offset: ${serverOffset}ms]:`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.69) [Offset: ${serverOffset}ms]:`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Authorization': auth, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            headers: { 
+                'Authorization': auth, 
+                'Content-Type': 'application/json', 
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            },
             body: JSON.stringify(payload)
         });
 
         const responseData = await res.json().catch(() => ({}));
 
         if (res.ok) {
-            console.log(`%c✅ [POLARYON] LANCE ACEITO NO SERPRO: R$ ${valFormatted}`, "color: #00ff00; font-weight: bold; font-size: 14px;");
-            
+            console.log(`✅ [POLARYON] LANCE ACEITO: R$ ${valFormatted}`);
             const sid = window.polaryonSessionId || `HYBRID_${purchaseId}`;
             fetch(`https://polaryon.com.br/api/bidding/sessions/${sid}/items/${finalItemNum}/bid`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-                body: JSON.stringify({
-                    value: valFormatted,
-                    status: 'SUCCESS',
-                    response: responseData,
-                    itemId: String(finalItemNum)
-                })
-            }).catch(e => console.warn("Erro persistência:", e));
+                body: JSON.stringify({ value: valFormatted, status: 'SUCCESS', response: responseData, itemId: String(finalItemNum) })
+            }).catch(() => {});
         } else {
-            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO (VEJA O SNIFFER ACIMA):`, responseData);
+            console.error(`❌ [POLARYON] REJEITADO (VEJA O SNIFFER):`, responseData);
         }
     } catch (e) {
-        console.error(`❌ [POLARYON] Falha na execução do lance:`, e);
+        console.error(`❌ [POLARYON] Erro fatal:`, e);
     }
 };
 
