@@ -56,8 +56,40 @@ const setupDiagnosticSniffer = () => {
 };
 setupDiagnosticSniffer();
 
+// 🕵️ SNIFFER E SINCRONIZADOR DE RELÓGIO (v3.5.66)
+let serverOffset = 0;
+
+const setupDiagnosticSniffer = () => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+        const res = await originalFetch(...args);
+        
+        // 🕒 CAPTURA DE RELÓGIO ATÔMICO (Sincroniza com Brasília/Serpro)
+        const serverDateStr = res.headers.get('Date');
+        if (serverDateStr) {
+            const sTime = new Date(serverDateStr).getTime();
+            const lTime = Date.now();
+            const newOffset = sTime - lTime;
+            if (Math.abs(newOffset) > 1000) { // Só ajusta se a diferença for > 1s
+                serverOffset = newOffset;
+            }
+        }
+
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
+            console.log("%c📡 [POLARYON SNIFFER] Payload do Governo Capturado:", "color: #ff00ff; font-weight: bold;");
+            try {
+                const clone = res.clone();
+                const body = await clone.json();
+                console.log("Resposta Serpro:", body);
+            } catch(e) {}
+        }
+        return res;
+    };
+};
+setupDiagnosticSniffer();
+
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.65
+    // 💡 Normalização de Argumentos v3.5.66
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
@@ -87,22 +119,24 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const cached = getFreshItem(finalBidId || finalItemNum);
         const isDispute = cached?.isDispute || true;
 
-        // 🛡️ PAYLOAD BLINDADO (v3.5.65) - TENTA TODAS AS COMBINAÇÕES CONHECIDAS
+        // 🕒 DATA HORA SINCRONIZADA (Resolve rejeição por relógio atrasado)
+        const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
+
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
             identificadorItem: Number(finalBidId || finalItemNum),
-            faseItem: isDispute ? 2 : 1, // Prioridade 1
-            itemFase: isDispute ? 2 : 1, // Variação 1
-            idFaseItem: isDispute ? 2 : 1, // Variação 2
-            fase: isDispute ? 2 : 1,     // Variação 3
+            faseItem: isDispute ? 2 : 1, 
+            itemFase: isDispute ? 2 : 1, 
+            idFaseItem: isDispute ? 2 : 1, 
+            fase: isDispute ? 2 : 1,     
             versaoItem: Number(cached?.versaoItem || 1),
             versaoParticipante: Number(cached?.versaoParticipante || 1),
             tipoLance: 'V', 
-            dataHoraLance: new Date().toISOString()
+            dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.65):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.66) [Offset: ${serverOffset}ms]:`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -127,7 +161,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
                 })
             }).catch(e => console.warn("Erro persistência:", e));
         } else {
-            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO (DICA: VERIFIQUE O SNIFFER):`, responseData);
+            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO:`, responseData);
         }
     } catch (e) {
         console.error(`❌ [POLARYON] Falha na execução do lance:`, e);
