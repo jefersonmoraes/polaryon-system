@@ -217,15 +217,30 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
         const { id, itemId } = req.params;
         const config = req.body;
 
-        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        let session = await prisma.biddingSession.findUnique({ where: { id } });
+        
+        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.63)
+        if (!session && id.startsWith('HYBRID_')) {
+            const pId = id.replace('HYBRID_', '');
+            session = await prisma.biddingSession.create({
+                data: {
+                    id,
+                    uasg: pId.substring(0, 6),
+                    numeroPregao: pId.length > 11 ? pId.substring(8, 13) : 'AUTO',
+                    anoPregao: '2026',
+                    portal: 'compras_gov',
+                    credentialId: 'hybrid-local',
+                    itemsConfig: {}
+                }
+            });
+        }
+
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         const currentConfig = (session.itemsConfig as any) || {};
         
-        // If itemId is __global__, we update the global sim mode
         if (itemId === '__global__') {
             currentConfig.__global__ = { ...(currentConfig.__global__ || {}), ...config };
-            // Also update the session status if needed or just sync
         } else {
             currentConfig[itemId] = { ...(currentConfig[itemId] || {}), ...config };
         }
