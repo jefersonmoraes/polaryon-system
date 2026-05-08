@@ -42,17 +42,29 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
+// 🕵️ SNIFFER DE DIAGNÓSTICO (v3.5.65) - CAPTURA O PAYLOAD OFICIAL DO GOVERNO
+const setupDiagnosticSniffer = () => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
+            console.log("%c📡 [POLARYON SNIFFER] Requisição de Lance detectada!", "color: #ff00ff; font-weight: bold;");
+            console.log("URL:", args[0]);
+            console.log("Payload:", args[1]?.body);
+        }
+        return originalFetch(...args);
+    };
+};
+setupDiagnosticSniffer();
+
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.63
-    // Se o valor for passado como 3º argumento (auto-bid)
+    // 💡 Normalização de Argumentos v3.5.65
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
 
     if (typeof bidId === 'number' && (value === undefined || value === null)) {
         finalValue = bidId;
-        finalBidId = itemNum; // O 2º argumento era o bidId/UUID
-        // Inferir o itemNum (sequencial) do cache
+        finalBidId = itemNum;
         const cached = Object.values(window.polaryonAllItems || {}).find(i => String(i.bidId) === String(finalBidId));
         finalItemNum = cached ? cached.itemId : finalBidId;
     }
@@ -73,21 +85,24 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${finalItemNum}/lances`;
         
         const cached = getFreshItem(finalBidId || finalItemNum);
-        const isDispute = cached?.isDispute || true; // Se não souber, assume disputa
+        const isDispute = cached?.isDispute || true;
 
+        // 🛡️ PAYLOAD BLINDADO (v3.5.65) - TENTA TODAS AS COMBINAÇÕES CONHECIDAS
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
             identificadorItem: Number(finalBidId || finalItemNum),
-            faseItem: isDispute ? 2 : 1, // 🎯 FIX: 2 é Disputa, 1 é Aberto. Serpro Mobile exige 2 para lances.
-            fase: isDispute ? 2 : 1,     // Compatibilidade extra
+            faseItem: isDispute ? 2 : 1, // Prioridade 1
+            itemFase: isDispute ? 2 : 1, // Variação 1
+            idFaseItem: isDispute ? 2 : 1, // Variação 2
+            fase: isDispute ? 2 : 1,     // Variação 3
             versaoItem: Number(cached?.versaoItem || 1),
             versaoParticipante: Number(cached?.versaoParticipante || 1),
             tipoLance: 'V', 
             dataHoraLance: new Date().toISOString()
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.64):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.65):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -100,7 +115,6 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         if (res.ok) {
             console.log(`%c✅ [POLARYON] LANCE ACEITO NO SERPRO: R$ ${valFormatted}`, "color: #00ff00; font-weight: bold; font-size: 14px;");
             
-            // Persistência no Backend Polaryon
             const sid = window.polaryonSessionId || `HYBRID_${purchaseId}`;
             fetch(`https://polaryon.com.br/api/bidding/sessions/${sid}/items/${finalItemNum}/bid`, {
                 method: 'POST',
@@ -113,7 +127,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
                 })
             }).catch(e => console.warn("Erro persistência:", e));
         } else {
-            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO:`, responseData);
+            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO (DICA: VERIFIQUE O SNIFFER):`, responseData);
         }
     } catch (e) {
         console.error(`❌ [POLARYON] Falha na execução do lance:`, e);
