@@ -42,35 +42,26 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.71)
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.72)
 if (!window.polaryonSnifferInjected) {
     window.polaryonSnifferInjected = true;
     window.polaryonServerOffset = 0;
 
-    // 🎣 HOOK FETCH
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
             console.log("%c📡 [SNIFFER FETCH] Detectado!", "color: #ff00ff; font-weight: bold;");
             if (args[1]?.body) console.log("📦 PAYLOAD:", JSON.parse(args[1].body));
         }
-        const res = await originalFetch(...args);
-        const serverDateStr = res.headers.get('Date');
-        if (serverDateStr) {
-            window.polaryonServerOffset = new Date(serverDateStr).getTime() - Date.now();
-        }
-        return res;
+        return await originalFetch(...args);
     };
 
-    // 🎣 HOOK XHR (Para capturar lances manuais que não usam fetch)
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
         if (url.includes('/lances')) {
-            this.addEventListener('load', () => {
-                console.log("%c📡 [SNIFFER XHR] Lance Manual Detectado!", "color: #00ffff; font-weight: bold;");
-            });
             const originalSend = this.send;
             this.send = function(body) {
+                console.log("%c📡 [SNIFFER XHR] Detectado!", "color: #00ffff; font-weight: bold;");
                 console.log("📦 PAYLOAD XHR:", JSON.parse(body));
                 return originalSend.apply(this, arguments);
             };
@@ -80,44 +71,27 @@ if (!window.polaryonSnifferInjected) {
 }
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    const serverOffset = window.polaryonServerOffset || 0;
     const auth = window.polaryonAuthBearer;
     if (!auth) return console.error("❌ Token ausente.");
 
-    // 🎯 ABSOLUTE VERSION SYNC (v3.5.71)
     const getFreshItem = (id) => {
         const cache = window.polaryonAllItems || {};
-        const item = cache[String(id)] || Object.values(cache).find(i => String(i.numero) === String(id) || String(i.identificador) === String(id) || String(i.bidId) === String(id));
-        return item;
+        return cache[String(id)] || Object.values(cache).find(i => String(i.numero) === String(id) || String(i.identificador) === String(id));
     };
 
     try {
         const valFormatted = Number(Number(value).toFixed(2));
         const item = getFreshItem(bidId || itemNum);
-        
-        if (!item) {
-            console.warn("⚠️ Item não encontrado no cache. Tentando com valores padrão.");
-        }
-
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${item?.itemId || itemNum}/lances`;
-        const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
 
-        // 🛡️ PAYLOAD SINCRONIZADO (v3.5.71)
+        // 🛡️ PAYLOAD RÉPLICA HUMANA (v3.5.72) - Especial para Dispensa Eletrônica
+        // Baseado no log capturado: { valorInformado: 990, faseItem: "LA" }
         const payload = {
-            valor: valFormatted,
-            valorAjustado: valFormatted,
-            identificadorItem: String(item?.identificador || bidId || itemNum),
-            faseItem: String(item?.faseItem || "2"), 
-            itemFase: String(item?.faseItem || "2"),
-            fase: item?.fase || "LA", 
-            // 🚀 VERSÃO REAL DO ITEM (Resolve o Erro 400)
-            versaoItem: Number(item?.versaoItem || 1),
-            versaoParticipante: Number(item?.versaoParticipante || 1),
-            tipoLance: 'V', 
-            dataHoraLance: synchronizedDate
+            valorInformado: valFormatted,
+            faseItem: "LA"
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO v3.5.71 (Versão Item: ${payload.versaoItem}):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO v3.5.72 (RÉPLICA HUMANA):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -134,7 +108,27 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         if (res.ok) {
             console.log(`✅ LANCE ACEITO: R$ ${valFormatted}`);
         } else {
-            console.error(`❌ REJEITADO (Versão esperada pode ser diferente):`, responseData);
+            console.error(`❌ REJEITADO (Mesmo com payload réplica):`, responseData);
+            
+            // 🔄 FALLBACK: Se falhar com o payload de dispensa, tenta o payload completo (Shotgun)
+            if (responseData?.message?.includes("incluirLanceCommand")) {
+                console.warn("⚠️ Detectado erro de comando completo. Tentando Payload Shotgun...");
+                const fullPayload = {
+                    valor: valFormatted,
+                    valorAjustado: valFormatted,
+                    identificadorItem: String(item?.identificador || bidId || itemNum),
+                    faseItem: "LA",
+                    versaoItem: Number(item?.versaoItem || 1),
+                    versaoParticipante: Number(item?.versaoParticipante || 1),
+                    tipoLance: 'V',
+                    dataHoraLance: new Date().toISOString()
+                };
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fullPayload)
+                });
+            }
         }
     } catch (e) {
         console.error(`❌ Erro:`, e);
