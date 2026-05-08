@@ -42,82 +42,82 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.70)
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.71)
 if (!window.polaryonSnifferInjected) {
     window.polaryonSnifferInjected = true;
     window.polaryonServerOffset = 0;
 
+    // 🎣 HOOK FETCH
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Lance Detectado!", "color: #ff00ff; font-weight: bold;");
-            if (args[1]?.body) {
-                try {
-                    const parsed = JSON.parse(args[1].body);
-                    console.log("📦 PAYLOAD:", parsed);
-                } catch(e) { console.log("📦 PAYLOAD (Raw):", args[1].body); }
-            }
+            console.log("%c📡 [SNIFFER FETCH] Detectado!", "color: #ff00ff; font-weight: bold;");
+            if (args[1]?.body) console.log("📦 PAYLOAD:", JSON.parse(args[1].body));
         }
-
         const res = await originalFetch(...args);
-        
         const serverDateStr = res.headers.get('Date');
         if (serverDateStr) {
-            const sTime = new Date(serverDateStr).getTime();
-            const lTime = Date.now();
-            window.polaryonServerOffset = sTime - lTime;
-        }
-
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            try {
-                const clone = res.clone();
-                const body = await clone.json();
-                console.log("📥 RESPOSTA:", body);
-            } catch(e) {}
+            window.polaryonServerOffset = new Date(serverDateStr).getTime() - Date.now();
         }
         return res;
+    };
+
+    // 🎣 HOOK XHR (Para capturar lances manuais que não usam fetch)
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        if (url.includes('/lances')) {
+            this.addEventListener('load', () => {
+                console.log("%c📡 [SNIFFER XHR] Lance Manual Detectado!", "color: #00ffff; font-weight: bold;");
+            });
+            const originalSend = this.send;
+            this.send = function(body) {
+                console.log("📦 PAYLOAD XHR:", JSON.parse(body));
+                return originalSend.apply(this, arguments);
+            };
+        }
+        return originalOpen.apply(this, arguments);
     };
 }
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização v3.5.70
-    let finalValue = value;
-    let finalBidId = bidId;
-    let finalItemNum = itemNum;
     const serverOffset = window.polaryonServerOffset || 0;
-
     const auth = window.polaryonAuthBearer;
     if (!auth) return console.error("❌ Token ausente.");
-    
+
+    // 🎯 ABSOLUTE VERSION SYNC (v3.5.71)
     const getFreshItem = (id) => {
         const cache = window.polaryonAllItems || {};
-        return cache[String(id)] || Object.values(cache).find(i => String(i.numero) === String(id) || String(i.identificador) === String(id) || String(i.bidId) === String(id));
+        const item = cache[String(id)] || Object.values(cache).find(i => String(i.numero) === String(id) || String(i.identificador) === String(id) || String(i.bidId) === String(id));
+        return item;
     };
 
     try {
-        const valFormatted = Number(Number(finalValue).toFixed(2));
-        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${finalItemNum}/lances`;
+        const valFormatted = Number(Number(value).toFixed(2));
+        const item = getFreshItem(bidId || itemNum);
         
-        const cached = getFreshItem(finalBidId || finalItemNum);
+        if (!item) {
+            console.warn("⚠️ Item não encontrado no cache. Tentando com valores padrão.");
+        }
+
+        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${item?.itemId || itemNum}/lances`;
         const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
 
-        // 🛡️ PAYLOAD v3.5.70 (Fase como String para evitar erro de Null Enum)
+        // 🛡️ PAYLOAD SINCRONIZADO (v3.5.71)
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
-            identificadorItem: String(finalBidId || finalItemNum),
-            // Tentando String para o Enum (comum em APIs Java/Serpro)
-            faseItem: "2", 
-            itemFase: "2",
-            fase: cached?.fase || "LA", 
-            // Sincronia rigorosa de versão
-            versaoItem: Number(cached?.versaoItem || 1),
-            versaoParticipante: Number(cached?.versaoParticipante || 1),
+            identificadorItem: String(item?.identificador || bidId || itemNum),
+            faseItem: String(item?.faseItem || "2"), 
+            itemFase: String(item?.faseItem || "2"),
+            fase: item?.fase || "LA", 
+            // 🚀 VERSÃO REAL DO ITEM (Resolve o Erro 400)
+            versaoItem: Number(item?.versaoItem || 1),
+            versaoParticipante: Number(item?.versaoParticipante || 1),
             tipoLance: 'V', 
             dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO (v3.5.70):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO v3.5.71 (Versão Item: ${payload.versaoItem}):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -131,11 +131,10 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         });
 
         const responseData = await res.json().catch(() => ({}));
-
         if (res.ok) {
-            console.log(`✅ ACEITO: R$ ${valFormatted}`);
+            console.log(`✅ LANCE ACEITO: R$ ${valFormatted}`);
         } else {
-            console.error(`❌ REJEITADO:`, responseData);
+            console.error(`❌ REJEITADO (Versão esperada pode ser diferente):`, responseData);
         }
     } catch (e) {
         console.error(`❌ Erro:`, e);
