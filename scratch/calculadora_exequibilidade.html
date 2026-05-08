@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polaryon | Calculadora de Exequibilidade</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card: #141417;
+            --primary: #3b82f6;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --text: #e2e8f0;
+            --border: #27272a;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            color: var(--primary);
+            text-transform: uppercase;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+
+        input {
+            width: 100%;
+            background: #000;
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .results {
+            background: #1e1e22;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2d2d33;
+        }
+
+        .result-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-align: center;
+            display: block;
+            margin-top: 1rem;
+        }
+
+        .status-ok { background: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+        .status-warn { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); }
+
+        .footer-note {
+            margin-top: 2rem;
+            font-size: 0.7rem;
+            color: #64748b;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Polaryon <span style="color: #fff; font-weight: 400;">Exequibilidade</span></h1>
+            <div style="font-size: 0.7rem; background: #27272a; padding: 4px 8px; border-radius: 4px;">v1.0 - LEI 14.133</div>
+        </header>
+
+        <div class="grid">
+            <div class="inputs">
+                <div class="input-group">
+                    <label>Valor de Referência (Edital)</label>
+                    <input type="number" id="refValue" value="1000" oninput="calculate()">
+                </div>
+                <div class="input-group">
+                    <label>Custo Direto (Compra + Frete)</label>
+                    <input type="number" id="cost" value="500" oninput="calculate()">
+                </div>
+                <div class="input-group">
+                    <label>Impostos (%)</label>
+                    <input type="number" id="taxes" value="12" oninput="calculate()">
+                </div>
+                <div class="input-group">
+                    <label>Margem de Lucro Desejada (%)</label>
+                    <input type="number" id="profit" value="10" oninput="calculate()">
+                </div>
+            </div>
+
+            <div class="results-container">
+                <div class="results" id="resCard">
+                    <div class="result-item">
+                        <span>Preço de Venda Sugerido:</span>
+                        <span class="result-value" id="finalPrice">R$ 0,00</span>
+                    </div>
+                    <div class="result-item">
+                        <span>% em relação ao Edital:</span>
+                        <span class="result-value" id="percRef">0%</span>
+                    </div>
+                    <div class="result-item" style="border: none;">
+                        <span>Margem Bruta Real:</span>
+                        <span class="result-value" id="realMargin">R$ 0,00</span>
+                    </div>
+                    
+                    <div id="status" class="status-badge">CALCULANDO...</div>
+                </div>
+                <p class="footer-note">Cálculo baseado em margem sobre venda (markup reverso). Essencial para defesas em diligências de licitações.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function calculate() {
+            const ref = parseFloat(document.getElementById('refValue').value) || 0;
+            const cost = parseFloat(document.getElementById('cost').value) || 0;
+            const taxes = parseFloat(document.getElementById('taxes').value) / 100 || 0;
+            const profit = parseFloat(document.getElementById('profit').value) / 100 || 0;
+
+            // Preço = Custo / (1 - Impostos - Lucro)
+            const finalPrice = cost / (1 - taxes - profit);
+            const percRef = (finalPrice / ref) * 100;
+            const realMargin = finalPrice - cost - (finalPrice * taxes);
+
+            document.getElementById('finalPrice').innerText = `R$ ${finalPrice.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('percRef').innerText = `${percRef.toFixed(2)}%`;
+            document.getElementById('realMargin').innerText = `R$ ${realMargin.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            const status = document.getElementById('status');
+            if (percRef < 75) {
+                status.innerText = "RISCO DE INEXEQUÍVEL (ABAIXO DE 75%)";
+                status.className = "status-badge status-warn";
+            } else {
+                status.innerText = "PROPOSTA EXEQUÍVEL";
+                status.className = "status-badge status-ok";
+            }
+        }
+        calculate();
+    </script>
+</body>
+</html>

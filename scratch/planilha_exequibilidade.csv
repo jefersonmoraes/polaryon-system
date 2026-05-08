@@ -1,0 +1,2 @@
+Item;Custo_Fornecedor;Quantidade;Frete;Impostos_Perc;Margem_Lucro_Perc;BDI_Perc;Preco_Venda_Sugerido;Valor_Referencia_Orgao;Percentual_da_Referencia;Status_Exequibilidade
+Item 01 - Exemplo;100.00;10;50.00;12.00;15.00;25.00;162.50;200.00;81.25;EXEQUIVEL

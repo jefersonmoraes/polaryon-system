@@ -225,7 +225,8 @@ router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Resp
             itemCount: itemCount || detailData.quantidadeItens || 0,
             hasMeEppBenefit,
             minItemValue: minItemValue === Infinity ? 0 : minItemValue,
-            maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue
+            maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue,
+            items: items // Adicionando a lista de itens para cálculo rápido no frontend
         });
     } catch (error: any) {
         if (error.response?.status === 404) return res.status(404).json({ error: 'PNCP detail not found' });

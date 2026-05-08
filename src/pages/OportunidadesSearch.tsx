@@ -60,6 +60,7 @@ interface PncpItem {
     hasMeEppBenefit?: boolean;
     minItemValue?: number;
     maxItemValue?: number;
+    itens?: any[]; // Adicionado para cálculo rápido
 }
 
 const ESTADOS_BR = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -126,6 +127,7 @@ async function processPncpQueue() {
             hasMeEppBenefit: detail.hasMeEppBenefit,
             minItemValue: detail.minItemValue,
             maxItemValue: detail.maxItemValue,
+            itens: detail.items || [], // Adicionado
             raw: detail
         };
         
@@ -198,8 +200,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
     const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
     const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
 
-    const [detail, setDetail] = useState(() => {
-        // Tenta recuperar do cache persistente primeiro
+    const [detail, setDetail] = useState<any>(() => {
         const cached = localStorage.getItem(`pncp_detail_${cacheKey}`);
         if (cached) {
             try { return JSON.parse(cached); } catch { return null; }
@@ -223,7 +224,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
     }, [cacheKey]);
 
     useEffect(() => {
-        const hasInitialValue = item.valorTotalEstimado || item.valor_global;
+        const hasInitialValue = (item.valorTotalEstimado || item.valor_global || 0) > 0;
         if (isVisible && !detail && !hasInitialValue) {
             queuePncpFetch(item).then(res => {
                 if (res) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(res));
@@ -242,19 +243,39 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
         return () => window.removeEventListener('pncp-cache-updated', handleUpdate as any);
     }, [cacheKey, item, detail, isVisible]);
 
-    const valor = detail?.valor || item.valorTotalEstimado || item.valor_global;
-    const isLoading = !valor && pncpDetailCache[cacheKey]?.promise;
+    // Lógica de Cálculo em Tempo Real (Solicitado pelo Usuário)
+    const valorOficial = detail?.valor || item.valorTotalEstimado || item.valor_global;
+    
+    const valorCalculado = useMemo(() => {
+        const itemsToSum = detail?.itens || item.itens; // Tenta pegar itens do detalhe ou do objeto base (se houver)
+        if (!itemsToSum || !Array.isArray(itemsToSum) || itemsToSum.length === 0) return null;
+        
+        return itemsToSum.reduce((acc: number, it: any) => {
+            const vUnit = it.valorUnitarioEstimated || it.valorUnitarioEstimado || it.valorUnitario || 0;
+            const qtd = it.quantidade || 0;
+            return acc + (vUnit * qtd);
+        }, 0);
+    }, [detail, item]);
+
+    const finalValue = valorOficial || valorCalculado;
+    const isCalculated = !valorOficial && !!valorCalculado;
+    const isLoading = !finalValue && pncpDetailCache[cacheKey]?.promise;
 
     if (isMobile) {
         return (
             <div ref={containerRef} className="flex flex-col items-end gap-1 shrink-0">
-                <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border shadow-sm ${
-                    isLoading 
-                    ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
-                    : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                }`}>
-                    <DollarSign className="h-2.5 w-2.5" />
-                    <span>{valor ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Carregando...' : 'V. não inf.')}</span>
+                <div className={`flex flex-col items-end gap-0.5`}>
+                    <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded border shadow-sm ${
+                        isLoading 
+                        ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
+                        : isCalculated
+                            ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'
+                            : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    }`}>
+                        <DollarSign className="h-2.5 w-2.5" />
+                        <span>{finalValue ? finalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Calculando...' : 'V. não inf.')}</span>
+                    </div>
+                    {isCalculated && <span className="text-[7px] font-black text-amber-500 uppercase tracking-tighter">Soma de Itens</span>}
                 </div>
             </div>
         );
@@ -262,15 +283,26 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
 
     return (
         <td ref={containerRef} className="px-4 py-3.5 align-top text-right min-w-[140px]">
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1">
                 <div className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${
                     isLoading 
                     ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' 
-                    : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : isCalculated
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'
+                        : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                 }`}>
                     <DollarSign className="h-3 w-3" />
-                    <span>{valor ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Carregando...' : 'V. não inf.')}</span>
+                    <span>{finalValue ? finalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (isLoading ? 'Somando itens...' : 'V. não inf.')}</span>
                 </div>
+                {isCalculated && (
+                    <motion.span 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-[8px] font-black text-amber-500 bg-amber-500/5 px-1 rounded uppercase tracking-tighter border border-amber-500/10"
+                    >
+                        Total Calculado
+                    </motion.span>
+                )}
             </div>
         </td>
     );
