@@ -42,33 +42,38 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.67)
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.68)
 if (!window.polaryonSnifferInjected) {
     window.polaryonSnifferInjected = true;
-    let serverOffset = 0;
+    window.polaryonServerOffset = 0;
 
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
+        // 📡 SNIFFER DE LANCES (Global)
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
+            console.log("%c📡 [POLARYON SNIFFER] Requisição Detectada!", "color: #ff00ff; font-weight: bold;");
+            console.log("URL:", args[0]);
+            if (args[1]?.body) {
+                try {
+                    const parsed = JSON.parse(args[1].body);
+                    console.log("Payload Enviado:", parsed);
+                } catch(e) {
+                    console.log("Payload (Raw):", args[1].body);
+                }
+            }
+        }
+
         const res = await originalFetch(...args);
         
-        // 🕒 SINCRONIZAÇÃO DE RELÓGIO (Brasília/Serpro)
+        // 🕒 SINCRONIZAÇÃO DE RELÓGIO
         const serverDateStr = res.headers.get('Date');
         if (serverDateStr) {
             const sTime = new Date(serverDateStr).getTime();
             const lTime = Date.now();
-            const newOffset = sTime - lTime;
-            if (Math.abs(newOffset) > 1000) {
-                serverOffset = newOffset;
-                window.polaryonServerOffset = serverOffset;
-            }
+            window.polaryonServerOffset = sTime - lTime;
         }
 
-        // 📡 SNIFFER DE LANCES
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Requisição Detectada!", "color: #ff00ff; font-weight: bold;");
-            console.log("URL:", args[0]);
-            if (args[1]?.body) console.log("Payload Enviado:", args[1].body);
-            
             try {
                 const clone = res.clone();
                 const body = await clone.json();
@@ -80,7 +85,7 @@ if (!window.polaryonSnifferInjected) {
 }
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.67
+    // 💡 Normalização de Argumentos v3.5.68
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
@@ -110,14 +115,13 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         
         const cached = getFreshItem(finalBidId || finalItemNum);
         const isDispute = cached?.isDispute || true;
-
-        // 🕒 DATA HORA SINCRONIZADA (Resolve rejeição por relógio atrasado)
         const synchronizedDate = new Date(Date.now() + serverOffset).toISOString();
 
+        // 🛡️ PAYLOAD REFORÇADO v3.5.68 (String IDs para evitar perda de precisão)
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
-            identificadorItem: Number(finalBidId || finalItemNum),
+            identificadorItem: String(finalBidId || finalItemNum), // 🎯 FIX: String evita truncamento
             faseItem: isDispute ? 2 : 1, 
             itemFase: isDispute ? 2 : 1, 
             idFaseItem: isDispute ? 2 : 1, 
@@ -128,7 +132,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
             dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.67) [Offset: ${serverOffset}ms]:`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.68) [Offset: ${serverOffset}ms]:`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -153,7 +157,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
                 })
             }).catch(e => console.warn("Erro persistência:", e));
         } else {
-            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO:`, responseData);
+            console.error(`❌ [POLARYON] REJEITADO PELO SERPRO (VEJA O SNIFFER ACIMA):`, responseData);
         }
     } catch (e) {
         console.error(`❌ [POLARYON] Falha na execução do lance:`, e);

@@ -219,9 +219,9 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
 
         let session = await prisma.biddingSession.findUnique({ where: { id } });
         
-        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.64)
+        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.68)
         if (!session && id.startsWith('HYBRID_')) {
-            const parts = id.split('_'); // HYBRID, UASG, NUM, ANO
+            const parts = id.split('_'); 
             const uasg = parts[1] || '000000';
             const num = parts[2] || '00000';
             const ano = parts[3] || '2026';
@@ -233,7 +233,7 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
                     numeroPregao: num,
                     anoPregao: ano,
                     portal: 'compras_gov',
-                    credentialId: 'hybrid-local',
+                    credentialId: null, // 🎯 FIX: Evita erro de chave estrangeira
                     itemsConfig: {}
                 }
             });
