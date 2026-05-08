@@ -73,19 +73,21 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
         const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${finalItemNum}/lances`;
         
         const cached = getFreshItem(finalBidId || finalItemNum);
-        
+        const isDispute = cached?.isDispute || true; // Se não souber, assume disputa
+
         const payload = {
             valor: valFormatted,
             valorAjustado: valFormatted,
             identificadorItem: Number(finalBidId || finalItemNum),
-            faseItem: Number(cached?.fase || 1),
+            faseItem: isDispute ? 2 : 1, // 🎯 FIX: 2 é Disputa, 1 é Aberto. Serpro Mobile exige 2 para lances.
+            fase: isDispute ? 2 : 1,     // Compatibilidade extra
             versaoItem: Number(cached?.versaoItem || 1),
             versaoParticipante: Number(cached?.versaoParticipante || 1),
             tipoLance: 'V', 
             dataHoraLance: new Date().toISOString()
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.63):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.64):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',

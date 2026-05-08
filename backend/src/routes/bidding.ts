@@ -219,15 +219,19 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
 
         let session = await prisma.biddingSession.findUnique({ where: { id } });
         
-        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.63)
+        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.64)
         if (!session && id.startsWith('HYBRID_')) {
-            const pId = id.replace('HYBRID_', '');
+            const parts = id.split('_'); // HYBRID, UASG, NUM, ANO
+            const uasg = parts[1] || '000000';
+            const num = parts[2] || '00000';
+            const ano = parts[3] || '2026';
+
             session = await prisma.biddingSession.create({
                 data: {
                     id,
-                    uasg: pId.substring(0, 6),
-                    numeroPregao: pId.length > 11 ? pId.substring(8, 13) : 'AUTO',
-                    anoPregao: '2026',
+                    uasg: uasg,
+                    numeroPregao: num,
+                    anoPregao: ano,
                     portal: 'compras_gov',
                     credentialId: 'hybrid-local',
                     itemsConfig: {}
