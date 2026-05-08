@@ -591,3 +591,14 @@ model BiddingSession {
 
   @@unique([portal, uasg, numeroPregao, anoPregao])
 }
+
+model BiddingAction {
+  id        String   @id @default(uuid())
+  sessionId String
+  itemId    String
+  value     Float
+  type      String   // MANUAL, AUTO
+  status    String   // success, error
+  reason    String?  @db.Text
+  timestamp DateTime @default(now())
+}
