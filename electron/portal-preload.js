@@ -42,41 +42,33 @@ ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value })
     await sendBid(purchaseId, itemId, bidId, value);
 });
 
-// 🕵️ SNIFFER DE DIAGNÓSTICO (v3.5.65) - CAPTURA O PAYLOAD OFICIAL DO GOVERNO
-const setupDiagnosticSniffer = () => {
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Requisição de Lance detectada!", "color: #ff00ff; font-weight: bold;");
-            console.log("URL:", args[0]);
-            console.log("Payload:", args[1]?.body);
-        }
-        return originalFetch(...args);
-    };
-};
-setupDiagnosticSniffer();
+// 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.67)
+if (!window.polaryonSnifferInjected) {
+    window.polaryonSnifferInjected = true;
+    let serverOffset = 0;
 
-// 🕵️ SNIFFER E SINCRONIZADOR DE RELÓGIO (v3.5.66)
-let serverOffset = 0;
-
-const setupDiagnosticSniffer = () => {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         const res = await originalFetch(...args);
         
-        // 🕒 CAPTURA DE RELÓGIO ATÔMICO (Sincroniza com Brasília/Serpro)
+        // 🕒 SINCRONIZAÇÃO DE RELÓGIO (Brasília/Serpro)
         const serverDateStr = res.headers.get('Date');
         if (serverDateStr) {
             const sTime = new Date(serverDateStr).getTime();
             const lTime = Date.now();
             const newOffset = sTime - lTime;
-            if (Math.abs(newOffset) > 1000) { // Só ajusta se a diferença for > 1s
+            if (Math.abs(newOffset) > 1000) {
                 serverOffset = newOffset;
+                window.polaryonServerOffset = serverOffset;
             }
         }
 
+        // 📡 SNIFFER DE LANCES
         if (args[0] && typeof args[0] === 'string' && args[0].includes('/lances')) {
-            console.log("%c📡 [POLARYON SNIFFER] Payload do Governo Capturado:", "color: #ff00ff; font-weight: bold;");
+            console.log("%c📡 [POLARYON SNIFFER] Requisição Detectada!", "color: #ff00ff; font-weight: bold;");
+            console.log("URL:", args[0]);
+            if (args[1]?.body) console.log("Payload Enviado:", args[1].body);
+            
             try {
                 const clone = res.clone();
                 const body = await clone.json();
@@ -85,14 +77,14 @@ const setupDiagnosticSniffer = () => {
         }
         return res;
     };
-};
-setupDiagnosticSniffer();
+}
 
 const sendBid = async (purchaseId, itemNum, bidId, value) => {
-    // 💡 Normalização de Argumentos v3.5.66
+    // 💡 Normalização de Argumentos v3.5.67
     let finalValue = value;
     let finalBidId = bidId;
     let finalItemNum = itemNum;
+    const serverOffset = window.polaryonServerOffset || 0;
 
     if (typeof bidId === 'number' && (value === undefined || value === null)) {
         finalValue = bidId;
@@ -136,7 +128,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
             dataHoraLance: synchronizedDate
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.66) [Offset: ${serverOffset}ms]:`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO LANCE (v3.5.67) [Offset: ${serverOffset}ms]:`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
