@@ -645,8 +645,8 @@ export default function BiddingDashboardPage() {
             </div>
 
                       <div className="space-y-6">
-                {Object.values(sessions).map((session: any) => (
-                    <Accordion type="single" collapsible key={session.id} defaultValue="items">
+                {Object.entries(sessions).map(([sid, session]: [string, any]) => (
+                    <Accordion type="single" collapsible key={sid} defaultValue="items">
                         <AccordionItem value="items" className="border rounded-xl bg-white shadow-sm overflow-hidden">
                             <AccordionTrigger className="px-6 py-4 hover:bg-slate-50 transition-all border-b">
                                 <div className="flex items-center gap-4 w-full text-left">
@@ -677,10 +677,10 @@ export default function BiddingDashboardPage() {
                                     {session.items?.length > 0 ? (
                                         session.items.map((item: any) => (
                                             <SigaItemRow 
-                                                key={item.itemId} 
+                                                key={item.itemId || item.numero} 
                                                 item={item} 
-                                                sid={session.id} 
-                                                onSaveStrategy={saveStrategy}
+                                                sid={sid} 
+                                                onSaveStrategy={onSaveStrategy}
                                                 onManualBid={handleManualBid}
                                             />
                                         ))
@@ -817,7 +817,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} />
                         ))}
                     </div>
                 </CardContent>
