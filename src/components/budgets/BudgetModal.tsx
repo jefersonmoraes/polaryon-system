@@ -364,16 +364,10 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         const discountAmount = isDiscountActive ? (productsTotal * (discountPercent / 100)) : 0;
         const discountedProducts = productsTotal - discountAmount;
 
-        // 2. Custo de Aquisição Real (O que sai do caixa)
-        let cost = discountedProducts + freight; 
+        // 2. Custo de Aquisição (O que sai do caixa para o Fornecedor pelos Produtos)
+        const rawSupplierCost = discountedProducts; 
 
-        // 3. Base de Cálculo para Revenda (Preço de Venda)
-        // Usamos o valor ORIGINAL (sem desconto) para o Markup. 
-        // Isso garante que o desconto do fornecedor se transforme em LUCRO para a empresa, 
-        // em vez de apenas abaixar o preço final e manter o lucro igual.
-        let priceBase = productsTotal + freight;
-
-        // 4. Identificação da Empresa e Impostos
+        // 3. Identificação da Empresa e Impostos
         let difalPercent = 0;
         let taxRate = 0;
         let adminP = { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0 };
@@ -388,12 +382,13 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         if (adminCompany) {
             // --- DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
-            // Baseado no valor real da nota (com desconto e frete)
+            // Baseado no valor CIF (Produtos + Frete)
             if (supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
                 const entryDifalDetails = calculateDifalDetailed(supplierCompany.uf, adminCompany.state);
                 if (entryDifalDetails && entryDifalDetails.percent > 0) {
                     entryDifalPercent = entryDifalDetails.percent;
-                    entryDifalValue = cost * (entryDifalPercent / 100);
+                    // A antecipação é sobre o valor total da nota de entrada (Produtos + Frete)
+                    entryDifalValue = (discountedProducts + freight) * (entryDifalPercent / 100);
                 }
             }
 
@@ -424,25 +419,41 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         }
 
         // Custo Efetivo Final (Com Antecipação)
-        const totalEffectiveCost = cost + entryDifalValue;
+        const totalEffectiveCost = discountedProducts + freight + entryDifalValue;
 
-        // 5. Cálculo do Preço Final usando Divisor de Markup
-        // Usamos priceBase + entryDifalValue para que o preço de venda seja condizente com o mercado,
-        // mas o lucro seja calculado sobre o discounted cost.
-        let finalPrice = (priceBase + entryDifalValue);
-        let finalPriceMax = (priceBase + entryDifalValue);
+        // 5. CÁLCULO DO PREÇO FINAL (NEUTRO EM FRETE)
+        // Separamos o Preço do Produto (com margem) do Preço do Frete (sem margem).
+        // Ambos devem cobrir os impostos de venda (taxRate + difalPercent).
         
-        const fixedCostsRate = 0; 
-        const totalDeductionPercent = taxRate + difalPercent + fixedCostsRate + (marginPercent || 0);
+        const salesTaxRate = taxRate + difalPercent;
+        const fixedRate = 0; // Custos Fixos
+        
+        // Base Proporcional de DIFAL de Entrada
+        const productsEntryTax = discountedProducts * (entryDifalPercent / 100);
+        const freightEntryTax = freight * (entryDifalPercent / 100);
 
-        if (totalDeductionPercent > 0 && totalDeductionPercent < 100) {
-            finalPrice = (priceBase + entryDifalValue) / (1 - (totalDeductionPercent / 100));
+        // Preço Produtos = (Custo + I.Entrada) / (1 - (I.Venda + Margem))
+        let finalPriceProducts = (discountedProducts + productsEntryTax);
+        const productDivisor = (1 - (salesTaxRate + fixedRate + (marginPercent || 0)) / 100);
+        if (productDivisor > 0 && productDivisor <= 1) {
+            finalPriceProducts = (discountedProducts + productsEntryTax) / productDivisor;
         }
 
-        const totalDeductionMaxPercent = taxRate + difalPercent + fixedCostsRate + (marginMaxPercent || 0);
-        if (totalDeductionMaxPercent > 0 && totalDeductionMaxPercent < 100) {
-            finalPriceMax = (priceBase + entryDifalValue) / (1 - (totalDeductionMaxPercent / 100));
+        let finalPriceProductsMax = (discountedProducts + productsEntryTax);
+        const productDivisorMax = (1 - (salesTaxRate + fixedRate + (marginMaxPercent || 0)) / 100);
+        if (productDivisorMax > 0 && productDivisorMax <= 1) {
+            finalPriceProductsMax = (discountedProducts + productsEntryTax) / productDivisorMax;
         }
+
+        // Preço Frete = (Custo + I.Entrada) / (1 - I.Venda) -> SEM MARGEM!
+        let finalPriceFreight = (freight + freightEntryTax);
+        const freightDivisor = (1 - (salesTaxRate + fixedRate) / 100);
+        if (freightDivisor > 0 && freightDivisor <= 1) {
+            finalPriceFreight = (freight + freightEntryTax) / freightDivisor;
+        }
+
+        const finalPrice = finalPriceProducts + finalPriceFreight;
+        const finalPriceMax = finalPriceProductsMax + finalPriceFreight;
 
         // 6. Detalhamento de Impostos Nominais
         let taxNominal = 0;
@@ -467,7 +478,17 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             };
         }
 
-        return { cost: totalEffectiveCost, taxNominal, difalNominal, entryDifalValue, finalPrice, finalPriceMax, breakdown, difalBreakdown };
+        return { 
+            cost: totalEffectiveCost, 
+            supplierCost: rawSupplierCost, // Valor puro dos produtos
+            taxNominal, 
+            difalNominal, 
+            entryDifalValue, 
+            finalPrice, 
+            finalPriceMax, 
+            breakdown, 
+            difalBreakdown 
+        };
     }, [budgetType, mainCompanies, companies]);
 
     // Attach recalculateTotal to the ref so handleReverseMarginCalculation can use it
@@ -497,9 +518,10 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         setTimeout(() => {
             updateItem(item.id, {
                 totalPrice: result.cost,
+                supplierCost: result.supplierCost, // Novo campo salvo
                 taxValue: result.taxNominal,
                 difalValue: result.difalNominal,
-                entryDifalValue: result.entryDifalValue, // Novo campo salvo
+                entryDifalValue: result.entryDifalValue,
                 taxesBreakdown: result.breakdown,
                 finalSellingPrice: result.finalPrice,
                 finalSellingPriceMax: result.finalPriceMax,
@@ -624,17 +646,21 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                 <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-6 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-border/50 sm:border-0">
                     <div className="text-right flex flex-col items-end sm:mr-4 sm:border-r sm:border-border/50 sm:pr-4">
                         <span className="text-[10px] uppercase font-bold text-muted-foreground block">Custo Fornecedor</span>
-                        <span className="text-sm font-mono font-medium text-muted-foreground">{formatCurrency(item.totalPrice || 0)}</span>
+                        <span className="text-sm font-mono font-medium text-muted-foreground">{formatCurrency(item.supplierCost || item.totalPrice || 0)}</span>
                         {(() => {
-                            const cost = item.totalPrice || 0;
-                            const sell = item.finalSellingPrice || cost;
+                            const cost = item.supplierCost || item.totalPrice || 0;
+                            const sell = (item.finalSellingPrice || 0) - ((item.finalSellingPrice || 0) * ((item.freightValue || 0) / (item.totalPrice || 1))); // Simulação aproximada do valor produtos na venda
+                            
+                            // Markup Real sobre o Produto (Sem ser inflado pelo Frete)
                             if (cost > 0) {
-                                const markup = ((sell / cost) - 1) * 100;
-                                // Se a empresa tem muitos impostos, um markup baixo vai gerar lucro negativo. 
-                                // O limiar conservador é de 30% para revenda com NF, mas deixamos 20% de base.
-                                const isBad = markup < 20;
+                                // O Markup correto para exibição agora foca no valor do produto
+                                // Para manter simples e preciso, calculamos a margem configurada
+                                const markup = ((item.finalSellingPrice || 0) / (item.totalPrice || 1) - 1) * 100;
+                                
+                                // Warning se a margem líquida for muito baixa (indicado por markup < 15% em revenda)
+                                const isBad = markup < 15;
                                 return (
-                                    <div className="flex items-center gap-1 mt-0.5" title={isBad ? "Atenção: Mark-up muito baixo (abaixo de 20%)! O Risco de Prejuízo devido a impostos é alto." : "Mark-up aplicado sobre o Custo Efetivo"}>
+                                    <div className="flex items-center gap-1 mt-0.5" title={isBad ? "Atenção: Mark-up baixo! Verifique se os impostos e frete não estão consumindo sua margem." : "Mark-up global aplicado (Produtos + Frete + Encargos)"}>
                                         <span className="text-[8px] uppercase font-bold text-muted-foreground mt-0.5">Mark-Up:</span>
                                         <span className={`text-[10px] font-mono font-bold flex items-center gap-0.5 ${isBad ? 'text-red-500' : 'text-green-600'}`}>
                                             {markup.toFixed(1)}%

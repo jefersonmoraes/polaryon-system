@@ -106,6 +106,7 @@ export interface BudgetItem {
 
   items: QuotationSubItem[]; // The products/services inside this quote
   attachments?: Attachment[]; // Attached images/PDFs specifically for this supplier/quote
+  supplierCost: number; // NOVO: Valor puro dos produtos (com desconto, sem frete/impostos) para exibição clara no header
   totalPrice: number; // Sum of all inner items + freightValue - cashDiscount + Installments (CUSTO INICIAL)
 }
 
