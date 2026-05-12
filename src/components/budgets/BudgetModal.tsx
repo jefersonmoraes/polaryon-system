@@ -359,16 +359,21 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         marginMaxPercent?: number
     ) => {
         const productsTotal = currentItems.reduce((sum: number, sub: any) => sum + (sub.totalPrice || 0), 0);
-        let baseTotal = productsTotal + freight;
+        
+        // 1. Cálculo de Desconto (Apenas sobre os Produtos, nunca sobre o Frete)
+        const discountAmount = isDiscountActive ? (productsTotal * (discountPercent / 100)) : 0;
+        const discountedProducts = productsTotal - discountAmount;
 
-        if (isDiscountActive && discountPercent > 0) {
-            baseTotal -= baseTotal * (discountPercent / 100);
-        }
+        // 2. Custo de Aquisição Real (O que sai do caixa)
+        let cost = discountedProducts + freight; 
 
-        // 1. Calculate Base Cost before taxes
-        let cost = Math.max(0, baseTotal);
+        // 3. Base de Cálculo para Revenda (Preço de Venda)
+        // Usamos o valor ORIGINAL (sem desconto) para o Markup. 
+        // Isso garante que o desconto do fornecedor se transforme em LUCRO para a empresa, 
+        // em vez de apenas abaixar o preço final e manter o lucro igual.
+        let priceBase = productsTotal + freight;
 
-        // 2. Identify Admin Company and Calculate Taxes
+        // 4. Identificação da Empresa e Impostos
         let difalPercent = 0;
         let taxRate = 0;
         let adminP = { pis: 0, cofins: 0, csll: 0, irpj: 0, cpp: 0, iss: 0, icms: 0, ipi: 0 };
@@ -382,20 +387,17 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         let entryDifalPercent = 0;
 
         if (adminCompany) {
-            // --- 1. DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
-            // Se o fornecedor é de outro estado, a empresa do DF (ou qualquer estado) 
-            // paga a diferença de alíquota na entrada. Isso é um CUSTO.
+            // --- DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
+            // Baseado no valor real da nota (com desconto e frete)
             if (supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
                 const entryDifalDetails = calculateDifalDetailed(supplierCompany.uf, adminCompany.state);
                 if (entryDifalDetails && entryDifalDetails.percent > 0) {
                     entryDifalPercent = entryDifalDetails.percent;
-                    // O DIFAL de entrada incide sobre o valor da compra (productsTotal + freight)
-                    entryDifalValue = (productsTotal + freight) * (entryDifalPercent / 100);
+                    entryDifalValue = cost * (entryDifalPercent / 100);
                 }
             }
 
-            // --- 2. DIFAL DE SAÍDA (EC 87/15) ---
-            // Reativado para Simples Nacional/MEI conforme pedido do usuário.
+            // --- DIFAL DE SAÍDA (EC 87/15) ---
             const currentType = itemType || budgetType;
             if (currentType === 'Produto' && adminCompany.state && destState && adminCompany.state !== destState) {
                 const difalDetails = calculateDifalDetailed(adminCompany.state, destState);
@@ -407,15 +409,12 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
             // Normal Taxes if NOT MEI
             if (adminCompany.porte !== 'MEI') {
-                // Apply specific rule: Services pay ISS, Products pay ICMS and IPI
                 const isService = currentType === 'Serviço';
-
                 adminP.pis = adminCompany.pis || 0;
                 adminP.cofins = adminCompany.cofins || 0;
                 adminP.csll = adminCompany.csll || 0;
                 adminP.irpj = adminCompany.irpj || 0;
                 adminP.cpp = adminCompany.cpp || 0;
-
                 adminP.iss = isService ? (adminCompany.iss || 0) : 0;
                 adminP.icms = !isService ? (adminCompany.icms || 0) : 0;
                 adminP.ipi = !isService ? (adminCompany.ipi || 0) : 0;
@@ -424,35 +423,28 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             }
         }
 
-        // Custo Efetivo de Aquisição/Transferência: 
-        // Agora inclui o DIFAL de Entrada (Antecipação) no custo base.
-        const effectiveCost = cost + entryDifalValue;
+        // Custo Efetivo Final (Com Antecipação)
+        const totalEffectiveCost = cost + entryDifalValue;
 
-        // 3. Aplicação do Markup Divisor Contábil Real (Preço de Venda)
-        // O imposto no Brasil (Simples/Presumido e DIFAL EC 87/15) recai sobre o RECEITA BRUTA (Preço Final), não sobre Custo.
-        // Formula: Preço = Custo / (1 - (AlíquotaImposto% + AliquotaDIFAL% + MargemLucro%) / 100)
-
-        let finalPrice = effectiveCost;
-        let finalPriceMax = effectiveCost;
-        // The fixed cost allocation is a vital metric; if not provided, assume 0 for exact cost mode.
-        const fixedCostsRate = 0; // In future updates, we can let user input this. For now, it secures the parameter.
+        // 5. Cálculo do Preço Final usando Divisor de Markup
+        // Usamos priceBase + entryDifalValue para que o preço de venda seja condizente com o mercado,
+        // mas o lucro seja calculado sobre o discounted cost.
+        let finalPrice = (priceBase + entryDifalValue);
+        let finalPriceMax = (priceBase + entryDifalValue);
+        
+        const fixedCostsRate = 0; 
         const totalDeductionPercent = taxRate + difalPercent + fixedCostsRate + (marginPercent || 0);
 
         if (totalDeductionPercent > 0 && totalDeductionPercent < 100) {
-            finalPrice = effectiveCost / (1 - (totalDeductionPercent / 100));
-        } else if (totalDeductionPercent >= 100) {
-            // Safety against division by zero or negative pricing
-            finalPrice = effectiveCost; // Fallback
+            finalPrice = (priceBase + entryDifalValue) / (1 - (totalDeductionPercent / 100));
         }
 
         const totalDeductionMaxPercent = taxRate + difalPercent + fixedCostsRate + (marginMaxPercent || 0);
         if (totalDeductionMaxPercent > 0 && totalDeductionMaxPercent < 100) {
-            finalPriceMax = effectiveCost / (1 - (totalDeductionMaxPercent / 100));
-        } else if (totalDeductionMaxPercent >= 100) {
-            finalPriceMax = effectiveCost; // Fallback
+            finalPriceMax = (priceBase + entryDifalValue) / (1 - (totalDeductionMaxPercent / 100));
         }
 
-        // 4. Agora calculamos o valor Nominal dos impostos a partir do Preço Final
+        // 6. Detalhamento de Impostos Nominais
         let taxNominal = 0;
         let difalNominal = 0;
 
@@ -462,7 +454,6 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         if (taxRate > 0) {
             taxNominal = finalPrice * (taxRate / 100);
-
             breakdown = {
                 pis: finalPrice * (adminP.pis / 100),
                 cofins: finalPrice * (adminP.cofins / 100),
@@ -476,7 +467,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             };
         }
 
-        return { cost: effectiveCost, taxNominal, difalNominal, entryDifalValue, finalPrice, finalPriceMax, breakdown, difalBreakdown };
+        return { cost: totalEffectiveCost, taxNominal, difalNominal, entryDifalValue, finalPrice, finalPriceMax, breakdown, difalBreakdown };
     }, [budgetType, mainCompanies, companies]);
 
     // Attach recalculateTotal to the ref so handleReverseMarginCalculation can use it
