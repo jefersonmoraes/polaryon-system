@@ -303,59 +303,6 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         updateItem(item.id, 'items', newItems);
     };
 
-    const handleReverseMarginCalculation = useCallback((subUnitPrice: number, targetVUnitResale: number) => {
-        if (subUnitPrice <= 0 || targetVUnitResale <= 0) return;
-
-        // 1. Simulação base com margem zero para descobrir custos e impostos fixos
-        const sim = recalculateTotal(
-            item.items || [],
-            Number(item.freightValue || 0),
-            !!item.hasCashDiscount,
-            Number(item.cashDiscount || 0),
-            item.mainCompanyId,
-            item.destinationState,
-            0, // margin = 0
-            item.type,
-            0,
-            0
-        );
-
-        const rawProductsTotal = (item.items || []).reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
-        if (rawProductsTotal <= 0) return;
-
-        // 2. Definir o Preço de Venda Global Alvo
-        // targetTotalSell = total que o cliente quer cobrar pela cotação inteira
-        const targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice);
-        
-        // 3. Isolar a parte dos Produtos
-        // PreçoProdutosAlvo = PreçoTotalAlvo - PreçoFrete(já com impostos)
-        const targetProductsSell = targetTotalSell - sim.finalPriceFreight;
-
-        // 4. Identificar a carga tributária de saída (T)
-        // No nosso divisor, o markup fixo é (1 - T - M). Com M=0, divisor é (1 - T).
-        // Logo, T = 1 - (CustoEfetivoProdutos / PreçoProdutosComMargemZero)
-        // Mas podemos pegar sim.salesTaxRate diretamente se retornarmos no result.
-        const T = sim.salesTaxRate / 100;
-        const A = sim.productsEffectiveCost; // Custo de aquisição + Antecipação dos produtos
-
-        if (targetProductsSell <= A) {
-            updateItem(item.id, 'profitMargin', 0);
-            return;
-        }
-
-        // 5. Resolver para M (Margem):
-        // targetProductsSell = A / (1 - T - M)
-        // (1 - T - M) = A / targetProductsSell
-        // M = 1 - T - (A / targetProductsSell)
-        const requiredMargin = (1 - T - (A / targetProductsSell)) * 100;
-
-        let newMargin = Math.max(0, requiredMargin);
-        if (newMargin > 99.99) newMargin = 99.99; // Cap para evitar divisão por zero no recalculate
-
-        newMargin = Number(newMargin.toFixed(2));
-        updateItem(item.id, 'profitMargin', newMargin);
-    }, [item.id, item.items, item.freightValue, item.hasCashDiscount, item.cashDiscount, item.mainCompanyId, item.destinationState, item.type, updateItem, recalculateTotal]);
-
     const recalculateTotal = useCallback((
         currentItems: QuotationSubItem[],
         freight: number,
@@ -503,6 +450,59 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             difalBreakdown 
         };
     }, [budgetType, mainCompanies, companies]);
+
+    const handleReverseMarginCalculation = useCallback((subUnitPrice: number, targetVUnitResale: number) => {
+        if (subUnitPrice <= 0 || targetVUnitResale <= 0) return;
+
+        // 1. Simulação base com margem zero para descobrir custos e impostos fixos
+        const sim = recalculateTotal(
+            item.items || [],
+            Number(item.freightValue || 0),
+            !!item.hasCashDiscount,
+            Number(item.cashDiscount || 0),
+            item.mainCompanyId,
+            item.destinationState,
+            0, // margin = 0
+            item.type,
+            0,
+            0
+        );
+
+        const rawProductsTotal = (item.items || []).reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
+        if (rawProductsTotal <= 0) return;
+
+        // 2. Definir o Preço de Venda Global Alvo
+        // targetTotalSell = total que o cliente quer cobrar pela cotação inteira
+        const targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice);
+        
+        // 3. Isolar a parte dos Produtos
+        // PreçoProdutosAlvo = PreçoTotalAlvo - PreçoFrete(já com impostos)
+        const targetProductsSell = targetTotalSell - sim.finalPriceFreight;
+
+        // 4. Identificar a carga tributária de saída (T)
+        // No nosso divisor, o markup fixo é (1 - T - M). Com M=0, divisor é (1 - T).
+        // Logo, T = 1 - (CustoEfetivoProdutos / PreçoProdutosComMargemZero)
+        // Mas podemos pegar sim.salesTaxRate diretamente se retornarmos no result.
+        const T = sim.salesTaxRate / 100;
+        const A = sim.productsEffectiveCost; // Custo de aquisição + Antecipação dos produtos
+
+        if (targetProductsSell <= A) {
+            updateItem(item.id, 'profitMargin', 0);
+            return;
+        }
+
+        // 5. Resolver para M (Margem):
+        // targetProductsSell = A / (1 - T - M)
+        // (1 - T - M) = A / targetProductsSell
+        // M = 1 - T - (A / targetProductsSell)
+        const requiredMargin = (1 - T - (A / targetProductsSell)) * 100;
+
+        let newMargin = Math.max(0, requiredMargin);
+        if (newMargin > 99.99) newMargin = 99.99; // Cap para evitar divisão por zero no recalculate
+
+        newMargin = Number(newMargin.toFixed(2));
+        updateItem(item.id, 'profitMargin', newMargin);
+    }, [item.id, item.items, item.freightValue, item.hasCashDiscount, item.cashDiscount, item.mainCompanyId, item.destinationState, item.type, updateItem, recalculateTotal]);
 
     // Attach recalculateTotal to the ref so handleReverseMarginCalculation can use it
     useEffect(() => {
