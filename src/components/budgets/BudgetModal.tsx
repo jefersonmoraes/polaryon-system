@@ -306,7 +306,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
     const handleReverseMarginCalculation = useCallback((subUnitPrice: number, targetVUnitResale: number) => {
         if (subUnitPrice <= 0 || targetVUnitResale <= 0) return;
 
-        // Get the exact cost and fixed taxes by simulating with 0 margin
+        // 1. Simulação base com margem zero para descobrir custos e impostos fixos
         const sim = recalculateTotal(
             item.items || [],
             Number(item.freightValue || 0),
@@ -323,28 +323,38 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         const rawProductsTotal = (item.items || []).reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
         if (rawProductsTotal <= 0) return;
 
-        // targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice)
+        // 2. Definir o Preço de Venda Global Alvo
+        // targetTotalSell = total que o cliente quer cobrar pela cotação inteira
         const targetTotalSell = rawProductsTotal * (targetVUnitResale / subUnitPrice);
         
-        if (targetTotalSell <= sim.cost) {
+        // 3. Isolar a parte dos Produtos
+        // PreçoProdutosAlvo = PreçoTotalAlvo - PreçoFrete(já com impostos)
+        const targetProductsSell = targetTotalSell - sim.finalPriceFreight;
+
+        // 4. Identificar a carga tributária de saída (T)
+        // No nosso divisor, o markup fixo é (1 - T - M). Com M=0, divisor é (1 - T).
+        // Logo, T = 1 - (CustoEfetivoProdutos / PreçoProdutosComMargemZero)
+        // Mas podemos pegar sim.salesTaxRate diretamente se retornarmos no result.
+        const T = sim.salesTaxRate / 100;
+        const A = sim.productsEffectiveCost; // Custo de aquisição + Antecipação dos produtos
+
+        if (targetProductsSell <= A) {
             updateItem(item.id, 'profitMargin', 0);
             return;
         }
 
-        // totalDeductionTarget = 100 * (1 - (sim.cost / targetTotalSell))
-        const totalDeductionTarget = 100 * (1 - (sim.cost / targetTotalSell));
-        
-        // fixedTaxes is the deduction when margin is 0
-        const fixedTaxes = sim.finalPrice > 0 ? 100 * (1 - (sim.cost / sim.finalPrice)) : 0;
-
-        const requiredMargin = totalDeductionTarget - fixedTaxes;
+        // 5. Resolver para M (Margem):
+        // targetProductsSell = A / (1 - T - M)
+        // (1 - T - M) = A / targetProductsSell
+        // M = 1 - T - (A / targetProductsSell)
+        const requiredMargin = (1 - T - (A / targetProductsSell)) * 100;
 
         let newMargin = Math.max(0, requiredMargin);
-        if (newMargin > 99.99) newMargin = 99.99; // Cap to avoid infinity
+        if (newMargin > 99.99) newMargin = 99.99; // Cap para evitar divisão por zero no recalculate
 
         newMargin = Number(newMargin.toFixed(2));
         updateItem(item.id, 'profitMargin', newMargin);
-    }, [item.id, item.items, item.freightValue, item.hasCashDiscount, item.cashDiscount, item.mainCompanyId, item.destinationState, item.type, updateItem]);
+    }, [item.id, item.items, item.freightValue, item.hasCashDiscount, item.cashDiscount, item.mainCompanyId, item.destinationState, item.type, updateItem, recalculateTotal]);
 
     const recalculateTotal = useCallback((
         currentItems: QuotationSubItem[],
@@ -481,11 +491,14 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         return { 
             cost: totalEffectiveCost, 
             supplierCost: rawSupplierCost, // Valor puro dos produtos
+            productsEffectiveCost: discountedProducts + productsEntryTax,
             taxNominal, 
             difalNominal, 
             entryDifalValue, 
             finalPrice, 
             finalPriceMax, 
+            finalPriceFreight,
+            salesTaxRate,
             breakdown, 
             difalBreakdown 
         };
