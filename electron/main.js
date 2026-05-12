@@ -346,11 +346,16 @@ autoUpdater.on('update-downloaded', (info) => {
     console.log('[POLARYON-UPDATE] Atualização v' + info.version + ' baixada.');
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-downloaded', info);
-        mainWindow.webContents.send('bidding-update-log', '🚀 Download concluído! Pronto para instalar.');
+        mainWindow.webContents.send('bidding-update-log', `🚀 v${info.version} PRONTA! Reiniciando em 10s para aplicar...`);
+        
+        // ⚡ INSTALAÇÃO AUTOMÁTICA FORÇADA
+        setTimeout(() => {
+            autoUpdater.quitAndInstall(false, true);
+        }, 10000);
     }
     new Notification({
-        title: 'Polaryon - Tudo pronto!',
-        body: 'A nova versão foi baixada. O robô será atualizado ao fechar.'
+        title: 'Polaryon - Atualização Pronta',
+        body: 'O robô será reiniciado em 10 segundos para aplicar a v' + info.version
     }).show();
 });
 

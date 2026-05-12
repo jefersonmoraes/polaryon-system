@@ -1,6 +1,12 @@
+
 import { Client } from 'ssh2';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
 
 const config = {
     host: '204.168.151.231',
@@ -9,64 +15,65 @@ const config = {
     password: 'Jaguar2018jolela#'
 };
 
-const version = '3.5.72';
-const remotePath = '/var/www/polaryon/storage/download/';
-const localDir = './dist_desktop/';
+const remotePath = "/var/www/polaryon/storage/download/";
 
-const files = [
-    `Polaryon-v${version}-Setup.exe`,
-    `Polaryon-v${version}-Setup.exe.blockmap`,
-    'latest.yml'
-];
+async function deploy() {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+    const version = packageJson.version;
+    const exeName = `Polaryon-v${version}-Setup.exe`;
+    const filesToUpload = [
+        { local: path.join(rootDir, 'dist_desktop', exeName), remote: path.join(remotePath, exeName) },
+        { local: path.join(rootDir, 'dist_desktop', `${exeName}.blockmap`), remote: path.join(remotePath, `${exeName}.blockmap`) },
+        { local: path.join(rootDir, 'dist_desktop', 'latest.yml'), remote: path.join(remotePath, 'latest.yml') }
+    ];
 
-const conn = new Client();
+    console.log(`🚀 Iniciando Deploy SEGURO para v${version}...`);
 
-conn.on('ready', () => {
-    console.log('🚀 Conectado ao VPS. Iniciando upload...');
-    
-    conn.sftp((err, sftp) => {
-        if (err) throw err;
+    const conn = new Client();
+
+    conn.on('ready', () => {
+        console.log('✅ Conexão SSH Estabelecida.');
         
-        let completed = 0;
-        
-        files.forEach(file => {
-            const localPath = path.join(localDir, file);
-            const remoteFilePath = remotePath + file;
-            
-            console.log(`📦 Enviando ${file}...`);
-            
-            sftp.fastPut(localPath, remoteFilePath, (err) => {
-                if (err) {
-                    console.error(`❌ Erro no upload de ${file}:`, err);
-                    conn.end();
-                    return;
-                }
-                
-                console.log(`✅ ${file} enviado com sucesso.`);
-                completed++;
-                
-                if (completed === files.length) {
-                    console.log('🎉 Todos os arquivos enviados. Executando comandos remotos...');
-                    executeRemoteCommands();
-                }
+        conn.sftp((err, sftp) => {
+            if (err) throw err;
+
+            let uploadedCount = 0;
+            filesToUpload.forEach(file => {
+                console.log(`📤 Enviando: ${path.basename(file.local)}...`);
+                sftp.fastPut(file.local, file.remote, (err) => {
+                    if (err) {
+                        console.error(`❌ Erro ao enviar ${file.local}:`, err);
+                        conn.end();
+                        process.exit(1);
+                    }
+                    console.log(`✅ Concluído: ${path.basename(file.local)}`);
+                    uploadedCount++;
+
+                    if (uploadedCount === filesToUpload.length) {
+                        console.log('🚀 Todos os arquivos enviados. Executando comandos remotos...');
+                        runRemoteCommands(conn);
+                    }
+                });
             });
         });
-    });
-}).connect(config);
+    }).connect(config);
+}
 
-function executeRemoteCommands() {
+function runRemoteCommands(conn) {
     const remoteCmd = `cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && cd backend && npx prisma@6 db push && cd .. && npm run build && rm -rf dist/download && ln -s /var/www/polaryon/storage/download dist/download && pm2 restart polaryon-backend`;
     
     conn.exec(remoteCmd, (err, stream) => {
         if (err) throw err;
         stream.on('close', (code, signal) => {
-            console.log(`🏁 Comandos remotos finalizados com código ${code}`);
+            console.log(`\n✅ DEPLOY COMPLETO! Código de saída: ${code}`);
             conn.end();
             process.exit(0);
         }).on('data', (data) => {
-            console.log('STDOUT: ' + data);
+            process.stdout.write(data);
         }).stderr.on('data', (data) => {
-            console.log('STDERR: ' + data);
+            process.stderr.write(data);
         });
     });
 }
+
+deploy().catch(console.error);

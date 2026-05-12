@@ -28,11 +28,7 @@ function updateVersion() {
     packageJson.version = newVersion;
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
-    // 3. Atualizar DesktopDownloadPage.tsx
-    let downloadPage = fs.readFileSync(downloadPagePath, 'utf8');
-    const versionRegex = /const version = "[^"]*";/;
-    downloadPage = downloadPage.replace(versionRegex, `const version = "${newVersion}";`);
-    fs.writeFileSync(downloadPagePath, downloadPage);
+    // 3. (Removido: DesktopDownloadPage agora é dinâmico)
 
     console.log('✅ Versões sincronizadas com sucesso.');
 

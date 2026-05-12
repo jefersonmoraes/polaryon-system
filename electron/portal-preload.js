@@ -1,5 +1,39 @@
 const { ipcRenderer } = require('electron');
 
+// 🔍 FUNÇÃO DE SCRAPING GLOBAL (v3.5.78)
+const scrapeTimerFromDOM = () => {
+    try {
+        const allTextElements = document.querySelectorAll('span, p, label, div.cp-valor-item, .ng-star-inserted');
+        for (const el of Array.from(allTextElements)) {
+            const text = el.textContent || '';
+            if (!text.includes(':')) continue;
+            let dateStr = '', timeStr = '';
+            const matchA = text.match(/(\d{2}\/\d{2}\/\d{4}).*at[eé]\s+(\d{2}:\d{2}(?::\d{2})?)/i);
+            if (matchA) { dateStr = matchA[1]; timeStr = matchA[2]; }
+            else {
+                const matchB = text.match(/at[eé]\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2}(?::\d{2})?)/i);
+                if (matchB) { dateStr = matchB[1]; timeStr = matchB[2]; }
+            }
+            if (dateStr && timeStr) {
+                const [day, month, year] = dateStr.split('/');
+                const timeParts = timeStr.split(':');
+                const endDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2] ? parseInt(timeParts[2]) : 0);
+                const diff = Math.floor((endDate.getTime() - Date.now()) / 1000);
+                if (diff > 0) return diff;
+            }
+        }
+    } catch (e) { }
+    return 0;
+};
+
+// ⏱️ SINCRONIA DE TEMPO REAL
+setInterval(() => {
+    if (window.polaryonHybrid_Active) {
+        const domTime = scrapeTimerFromDOM();
+        if (domTime > 0) window.polaryonLastSyncTime = domTime;
+    }
+}, 1000);
+
 console.log("👻 [POLARYON] Script de Preload Carregado com SUCESSO!");
 
 window.polaryonStrategies = {};
@@ -80,9 +114,15 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
     };
 
     try {
-        const valFormatted = Number(Number(value).toFixed(2));
+        const strat = window.polaryonStrategies[itemNum];
+        const decimals = strat?.useFourDecimals ? 4 : 2;
+        const valFormatted = Number(Number(value).toFixed(decimals));
         const item = getFreshItem(bidId || itemNum);
-        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${item?.itemId || itemNum}/lances`;
+        
+        // 🛠️ CORREÇÃO DE ENDEREÇAMENTO (v3.5.87)
+        // Usamos o bidId (ID interno do Serpro) como prioridade absoluta para a URL
+        const targetId = bidId || item?.bidId || item?.itemId || itemNum;
+        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${targetId}/lances`;
 
         // 🛡️ PAYLOAD RÉPLICA HUMANA (v3.5.72) - Especial para Dispensa Eletrônica
         // Baseado no log capturado: { valorInformado: 990, faseItem: "LA" }
@@ -91,7 +131,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
             faseItem: "LA"
         };
 
-        console.log(`🚀 [POLARYON] DISPARANDO v3.5.72 (RÉPLICA HUMANA):`, payload);
+        console.log(`🚀 [POLARYON] DISPARANDO (RÉPLICA HUMANA):`, payload);
 
         const res = await fetch(url, {
             method: 'POST',
@@ -183,34 +223,93 @@ const startHybridEngine = () => {
                                 window._polaryon_logged_once = true;
                             }
 
-                            const vAtual = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
-                            const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
-                            const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
-                            const isWin = (pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°') || (vMeu > 0 && vMeu <= vAtual);
-                            const isDispute = item.situacao === '1' || item.situacao === '2';
+                             const vAtual = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
+                             const vMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
+                             
+                             // 🏆 CAPTURA DE POSIÇÃO ULTRA-ROBUSTA (v3.5.95)
+                             let pos = String(item.posicaoParticipanteDisputa || item.posicao || item.classificacao || '').trim().toUpperCase();
+                             
+                             // Fallback: Se a posição estiver vazia, tenta buscar no DOM
+                             if (!pos || pos === '0') {
+                                 const itemRow = document.querySelector(`[data-item-id="${rawId}"], tr:contains("${rawId}")`);
+                                 if (itemRow) {
+                                     const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2)');
+                                     if (posCell) pos = posCell.textContent.trim().replace('º', '');
+                                 }
+                             }
+
+                             const currentTitle = document.querySelector('.br-header-title')?.textContent?.trim() || 
+                                     document.querySelector('.titulo-servico')?.textContent?.trim() || 
+                                     document.querySelector('h1')?.textContent?.trim() ||
+                                     document.querySelector('.breadcrumb')?.textContent?.replace(/\s+/g, ' ').trim() ||
+                                     document.title;
+
+                             const isWin = (pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°') || (vMeu > 0 && vMeu <= vAtual);
+                             const isDispute = item.situacao === '1' || item.situacao === '2';
 
                             // 🎯 CAPTURA DE MARGEM OFICIAL (Intervalo Mínimo)
                             const intervalValue = item.intervaloMinimoEntreLances || 1;
                             const intervalType = item.tipoIntervaloLance === 2 ? 'percentage' : 'fixed';
 
-                            window.polaryonAllItems[rawId] = {
-                                itemId: rawId,
-                                bidId: bidId, // Guardamos o ID real para o lance
-                                purchaseId: pId,
-                                valorAtual: vAtual,
-                                meuValor: vMeu,
-                                isDispute: isDispute,
-                                timerSeconds: item.segundosParaEncerramento || 0,
-                                desc: item.descricao || ("Item " + rawId),
-                                ganhador: isWin ? 'Você' : 'Outro',
-                                status: isDispute ? 'Disputa' : 'Encerrado',
-                                officialMargin: intervalValue,
-                                officialMarginType: intervalType
-                            };
+                                let rawSeconds = item.segundosParaEncerramento ?? 
+                                                 item.segundosEncerramento ?? 
+                                                 item.segundosRestantes ?? 
+                                                 item.tempoRestante ?? 
+                                                 item.segundosRestantesParaFimFase ??
+                                                 (item.disputaItem?.segundosParaEncerramento) ?? 
+                                                 (item.situacaoItem?.segundosParaEncerramento) ?? 0;
+
+                                // 📅 FALLBACK POR DATA (Se os segundos falharem)
+                                if (!rawSeconds || rawSeconds <= 0) {
+                                    const dataFim = item.dataFimFase || item.dataHoraFimFase || (item.disputaItem?.dataHoraFimFase);
+                                    if (dataFim) {
+                                        const now = new Date().getTime();
+                                        const end = new Date(dataFim).getTime();
+                                        if (end > now) {
+                                            rawSeconds = Math.floor((end - now) / 1000);
+                                        }
+                                    }
+                                }
+
+                                // 🕵️‍♂️ ÚLTIMA INSTÂNCIA: SCRAPER DE TELA (v3.5.78)
+                                if (!rawSeconds || rawSeconds <= 0) {
+                                    rawSeconds = scrapeTimerFromDOM();
+                                }
+
+                                window.polaryonAllItems[rawId] = {
+                                    itemId: rawId,
+                                    bidId: bidId,
+                                    purchaseId: pId,
+                                    valorAtual: vAtual,
+                                    meuValor: vMeu,
+                                    isDispute: isDispute,
+                                    timerSeconds: Number(rawSeconds),
+                                    desc: item.descricao || ("Item " + rawId),
+                                    ganhador: isWin ? 'Você' : 'Outro',
+                                    status: isDispute ? 'Disputa' : 'Encerrado',
+                                    officialMargin: intervalValue,
+                                    officialMarginType: intervalType,
+                                    posicao: pos
+                                };
+
+                                // 🚀 BROADCAST EM TEMPO REAL (v3.5.95)
+                                let num = '---', ano = '---';
+                                const urlMatch = window.location.href.match(/compra=(\d{6})06(\d{5})(\d{4})/);
+                                if (urlMatch) {
+                                    num = parseInt(urlMatch[2], 10).toString();
+                                    ano = urlMatch[3];
+                                }
+
+                                ipcRenderer.send('portal-update', { 
+                                    items: Object.values(window.polaryonAllItems),
+                                    sessionTitle: currentTitle,
+                                    uasg: pId,
+                                    numero: num,
+                                    ano: ano
+                                });
 
                             const strat = window.polaryonStrategies[rawId];
                             if (strat && strat.active && isDispute && !isWin && vAtual > 0) {
-                                // ... (logic same but using bidId if sending)
                                 let marginToUse = strat.decrementValue || intervalValue;
                                 if (strat.decrementType === 'percentage' || intervalType === 'percentage') {
                                     const perc = strat.decrementType === 'percentage' ? strat.decrementValue : intervalValue;
@@ -220,8 +319,17 @@ const startHybridEngine = () => {
                                 let nextValue = vAtual - marginToUse;
                                 if (strat.mode === 'follower') {
                                     if (nextValue >= (strat.minPrice || 0) && nextValue < vMeu) {
-                                        await sendBid(pId, bidId, nextValue);
-                                        await new Promise(r => setTimeout(r, 1000));
+                                        // 🧨 LÓGICA KAMIKAZE: Sem delay se faltar pouco tempo ou se forçado
+                                        const secondsLeft = Number(item.segundosParaEncerramento || 0);
+                                        const isKamikaze = strat.kamikazeMode || (secondsLeft > 0 && secondsLeft < 3);
+                                        
+                                        if (isKamikaze) {
+                                            console.log("%c🧨 [KAMIKAZE] Disparo imediato!", "color: red; font-weight: bold;");
+                                        } else {
+                                            await new Promise(r => setTimeout(r, 100 + Math.random() * 200)); // Delay humano reduzido
+                                        }
+
+                                        await sendBid(pId, rawId, bidId, nextValue);
                                     }
                                 }
                             }
@@ -327,3 +435,17 @@ ipcRenderer.on('init-session', (event, { sessionId, config }) => {
     }
     if (window.polaryonAuthBearer) startHybridEngine();
 });
+
+// 🔄 SINCRONIZAÇÃO DE TIMER EM SEGUNDO PLANO (v3.5.78)
+setInterval(() => {
+    if (window.polaryonAllItems) {
+        const emergencySeconds = scrapeTimerFromDOM();
+        if (emergencySeconds > 0) {
+            Object.keys(window.polaryonAllItems).forEach(id => {
+                if (!window.polaryonAllItems[id].timerSeconds || window.polaryonAllItems[id].timerSeconds <= 0) {
+                    window.polaryonAllItems[id].timerSeconds = emergencySeconds;
+                }
+            });
+        }
+    }
+}, 5000);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle, Briefcase } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -65,6 +65,7 @@ interface BiddingItem {
     ganhador: string;
     status: string;
     position: number;
+    posicao?: string; 
     timerSeconds?: number;
     timeout?: string;
     desc?: string;
@@ -107,6 +108,123 @@ export default function BiddingDashboardPage() {
     const [networkTraffic, setNetworkTraffic] = useState<any[]>([]);
     const [hybridRooms, setHybridRooms] = useState<string[]>([]);
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
+    const [uasgFilter, setUasgFilter] = useState('');
+    const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
+    const [appVersion, setAppVersion] = useState('3.5.97');
+
+    useEffect(() => {
+        if (isDesktop && (window as any).electronAPI) {
+            (window as any).electronAPI.getAppVersion().then((v: string) => setAppVersion(v));
+        }
+    }, [isDesktop]);
+    
+    // 🧠 REFERÊNCIAS ESTÁVEIS PARA AUTOMAÇÃO (v3.5.89)
+    const itemsRef = useRef(items);
+    const configsRef = useRef<any>({});
+    const lastBidTimesRef = useRef<Record<string, number>>({});
+
+    useEffect(() => { 
+        if (items && items.length > 0) {
+            itemsRef.current = items; 
+        }
+    }, [items]);
+    
+    useEffect(() => { 
+        configsRef.current = itemStrategies; 
+        (window as any).polaryonStrategies = itemStrategies;
+    }, [itemStrategies]);
+
+    useEffect(() => { lastBidTimesRef.current = lastAutoBidTimes; }, [lastAutoBidTimes]);
+
+    // 🎯 MOTOR DE DISPARO INDEPENDENTE (v3.5.89)
+    useEffect(() => {
+        const fetchVersion = async () => {
+            if (isDesktop && (window as any).electronAPI) {
+                const v = await (window as any).electronAPI.getAppVersion();
+                console.log(`%c🚀 [POLARYON] Motor Sniper v${v} Ativo e Monitorando.`, "color: #0ea5e9; font-weight: bold; font-size: 12px;");
+            }
+        };
+        fetchVersion();
+        
+        const autoBidInterval = setInterval(() => {
+            const currentItems = itemsRef.current;
+            const configs = configsRef.current;
+            const lastAutoBidTimesLocal = lastBidTimesRef.current;
+
+            if (!currentItems || currentItems.length === 0) return;
+
+            currentItems.forEach(item => {
+                // Garantimos que o ID bata (String ou Number)
+                const sId = String(item.itemId);
+                const strat = configs[sId] || configs[item.itemId] || {};
+                const isActive = strat.active || false;
+                
+                if (!isActive) return;
+
+                const tSeconds = Number(item.timerSeconds);
+                if (isNaN(tSeconds)) return;
+
+                // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
+                if (tSeconds <= 40 && tSeconds > 0) {
+                    console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${tSeconds}s | Perdedor: ${item.posicao !== '1'}`);
+                }
+
+                // 30 Segundos Finais
+                if (tSeconds <= 30 && tSeconds > 0) {
+                    const isLosing = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
+                    
+                    if (isLosing) {
+                        const now = Date.now();
+                        const lastBid = lastAutoBidTimesLocal[sId] || lastAutoBidTimesLocal[item.itemId] || 0;
+                        
+                        const myMin = Number(strat.minPrice || 0);
+                        const margin = Number(strat.decrementValue || 1);
+                        const isKamikaze = strat.kamikazeMode || false;
+                        const allow4 = strat.useFourDecimals || false;
+
+                        let cooldown = isKamikaze ? 350 : 1500;
+                        if (tSeconds <= 10) cooldown = 250; 
+
+                        if (now - lastBid > cooldown) {
+                            const currentBest = Number(item.valorAtual || 0);
+                            const myCurrentBid = Number(item.meuValor || 999999999);
+                            
+                            const isLeaderBeatable = (currentBest > 0 && currentBest - margin >= myMin);
+                            let nextBid = isLeaderBeatable ? (currentBest - margin) : (myCurrentBid - margin);
+                            
+                            if (nextBid < myMin) nextBid = myMin;
+                            nextBid = allow4 ? Math.round(nextBid * 10000) / 10000 : Math.round(nextBid * 100) / 100;
+
+                            if (nextBid < myCurrentBid && nextBid >= myMin) {
+                                console.log(`%c🎯 [SNIPER] DISPARANDO LANCE: R$ ${nextBid} para Item ${sId}`, "color: #10b981; font-weight: bold;");
+                                
+                                toast.success(`Sniper Disparando R$ ${nextBid} no Item ${sId}`, {
+                                    position: "bottom-right",
+                                    autoClose: 3000
+                                });
+
+                                // Notifica no painel de mensagens
+                                setChatMessages(prev => [...prev, {
+                                    id: Date.now(),
+                                    sender: 'SISTEMA',
+                                    text: `[SNIPER] Disparando Lance Automático: R$ ${nextBid} no Item ${sId}`,
+                                    timestamp: new Date().toLocaleTimeString()
+                                }]);
+
+                                handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
+                                
+                                const nowUpdate = Date.now();
+                                lastBidTimesRef.current[sId] = nowUpdate;
+                                setLastAutoBidTimes(prev => ({ ...prev, [sId]: nowUpdate }));
+                            }
+                        }
+                    }
+                }
+            });
+        }, 600); 
+
+        return () => clearInterval(autoBidInterval);
+    }, []);
 
     // MODO MULTI-UASG (v2.0 War Flow)
     const [sessions, setSessions] = useState<Record<string, {
@@ -301,8 +419,9 @@ export default function BiddingDashboardPage() {
                         items: Array.isArray(newItems) ? newItems : [],
                         lastUpdate: timestamp,
                         uasg: data.uasg || (prev[sid]?.uasg) || '---',
-                        numero: data.numero || (prev[sid]?.numero) || '---',
-                        ano: data.ano || (prev[sid]?.ano) || '---'
+                        numero: data.numero !== '---' ? data.numero : (prev[sid]?.numero || '---'),
+                        ano: data.ano !== '---' ? data.ano : (prev[sid]?.ano || '---'),
+                        sessionTitle: data.sessionTitle || (prev[sid]?.sessionTitle) || ''
                     }
                 }));
             };
@@ -483,7 +602,7 @@ export default function BiddingDashboardPage() {
         const sid = targetSid || sessionId;
         if (!sid) return;
         try {
-            await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, { ...strategy, simulationMode });
+            await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
             if (isLocalRunning && (window as any).electronAPI) {
                 (window as any).electronAPI.updateLocalBiddingConfig(sid, { itemsConfig: { ...itemStrategies, [itemId]: strategy } });
@@ -491,18 +610,13 @@ export default function BiddingDashboardPage() {
         } catch (error) { console.error(error); }
     };
 
-    const toggleSimulation = async (val: boolean) => {
-        setSimulationMode(val);
-        if (sessionId) {
-            try {
-                await api.patch(`/bidding/sessions/${sessionId}/items/__global__`, { simulationMode: val });
-                if (isLocalRunning && (window as any).electronAPI) {
-                    (window as any).electronAPI.updateLocalBiddingConfig(sessionId, { simulationMode: val });
-                }
-                toast.info(`Modo ${val ? 'SIMULADO' : 'REAL'} ativado.`);
-            } catch (e) { console.error(e); }
+    useEffect(() => {
+        if (sessionId && isLocalRunning && (window as any).electronAPI) {
+            (window as any).electronAPI.updateLocalBiddingConfig(sessionId, { 
+                itemsConfig: itemStrategies
+            });
         }
-    };
+    }, [itemStrategies, sessionId, isLocalRunning]);
 
     const startRadar = async (u: string, n: string, a: string) => {
         try {
@@ -512,7 +626,7 @@ export default function BiddingDashboardPage() {
                 setSessionId(sid);
                 setIsListening(true);
                 if (isDesktop && (window as any).electronAPI) {
-                    (window as any).electronAPI.startVisualBidding({ sessionId: sid, uasg: u, numero: n, ano: a, vault: { simulationMode, itemsConfig: itemStrategies } });
+                    (window as any).electronAPI.startVisualBidding({ sessionId: sid, uasg: u, numero: n, ano: a, vault: { itemsConfig: itemStrategies } });
                     setIsLocalRunning(true);
                 }
             }
@@ -531,54 +645,42 @@ export default function BiddingDashboardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-100 text-slate-900 font-sans overflow-x-hidden">
-            <header className="w-full h-16 bg-black flex items-center justify-between px-8 shadow-xl sticky top-0 z-50">
-                <div className="flex items-center gap-3">
-                    <div className="bg-white p-1.5 rounded-md flex items-center justify-center"><Zap className="w-5 h-5 text-black fill-current" /></div>
-                    <h1 className="text-white font-black italic text-xl tracking-tighter">SIGA <span className="text-emerald-400">POLARYON</span></h1>
+        <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-x-hidden">
+            <header className="w-full h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50">
+                <div className="flex items-center gap-4">
+                    <div className="bg-emerald-500 p-2 rounded-lg flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v{appVersion}</span>
+                        </h1>
+                        <div className="flex items-center gap-2">
+                            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SISTEMA OPERACIONAL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3 pr-6 border-r border-slate-100">
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black text-slate-400 uppercase">STATUS API</span>
+                            <span className="text-xs font-bold text-emerald-600">CONECTADO</span>
+                        </div>
+                    </div>
+                    
                     <Button 
                         variant="outline" 
                         size="sm" 
-                        className="ml-4 h-7 text-[9px] font-black uppercase bg-transparent border-white/20 text-white hover:bg-white/10"
                         onClick={checkUpdate}
+                        className="h-9 border-slate-200 text-slate-600 hover:bg-slate-50 font-bold"
                     >
-                        <RefreshCw className={`w-3 h-3 mr-2 ${updateInfo ? 'animate-spin' : ''}`} />
-                        {updateInfo ? `Baixando ${downloadProgress}%` : 'Verificar Atualização'}
+                        Verificar Atualizações
                     </Button>
-                </div>
-                <div className="flex items-center gap-6">
-                    <div className="hidden md:flex flex-col items-end">
-                        <span className="text-[10px] font-black text-white uppercase tracking-tight">{authUser?.name || 'OPERADOR TÁTICO'}</span>
-                        <span className="text-[9px] font-bold text-slate-400">{authUser?.email || 'conexão.segura@polaryon.com'}</span>
-                    </div>
-                    <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] h-8 px-4" onClick={() => useAuthStore.getState().logout()}>Sair</Button>
                 </div>
             </header>
 
-            <div className="w-full bg-white border-b border-slate-200 py-6 flex flex-col items-center">
-                <div className="container mx-auto px-6 flex justify-between items-center">
-                    <div className="flex flex-col">
-                        <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Terminal de Combate</h2>
-                        <div className="flex gap-2 mt-1">
-                            <Badge variant="outline" className="text-[9px] font-black bg-slate-100 text-slate-400 border-slate-200">Δ SYNC: {Math.abs(serverOffset)}ms</Badge>
-                            <Badge className="text-[9px] font-black bg-emerald-500 text-white border-none">STATUS: OPERACIONAL</Badge>
-                        </div>
-                    </div>
-                    <div className="flex bg-slate-100 p-1 rounded-full border border-slate-200">
-                        <button onClick={() => setModalityTab('PREGAO')} className={`px-8 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'PREGAO' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'}`}>Pregões</button>
-                        <button onClick={() => setModalityTab('DISPENSA')} className={`px-8 py-2 rounded-full text-[10px] font-black uppercase transition-all duration-300 tracking-widest ${modalityTab === 'DISPENSA' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'}`}>Dispensas</button>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Simulação</span>
-                             <Switch checked={simulationMode} onCheckedChange={toggleSimulation} />
-                        </div>
-                        <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-slate-200" onClick={() => setIsChatOpen(!isChatOpen)}>
-                            <Zap className={`w-5 h-5 ${isChatOpen ? 'text-emerald-500 fill-emerald-500' : 'text-slate-300'}`} />
-                        </Button>
-                    </div>
-                </div>
-            </div>
 
             {Object.keys(sessions).length > 0 && (
                 <div className="w-full bg-slate-900 border-b border-white/5 py-2 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
@@ -656,7 +758,7 @@ export default function BiddingDashboardPage() {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-sm font-black text-slate-900 uppercase">
-                                                UASG {session.uasg} - {session.numero}/{session.ano}
+                                                {session.sessionTitle || `UASG ${session.uasg} - ${session.numero}/${session.ano}`}
                                             </h3>
                                             <Badge variant="outline" className="text-[10px] uppercase font-bold text-emerald-600 border-emerald-200 bg-emerald-50">Sessão Ativa</Badge>
                                         </div>
@@ -797,10 +899,12 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
             <CardHeader className="bg-slate-50/80 py-4 px-6 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setIsExpanded(!isExpanded)}>
                 <div className="flex justify-between items-center">
                     <div className="flex-1">
-                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">Dispensa {session.numero} | UASG {session.uasg} - {session.uasgName || 'Sessão Detectada'}</h3>
+                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                            {session.sessionTitle || `Dispensa ${session.numero}`} | UASG {session.uasg}
+                        </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="text-[9px] font-bold bg-emerald-500 text-white border-none">EXECUTANDO ITENS</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.5.97</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
@@ -829,7 +933,6 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
 function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     
-    // 🎯 Inteligência de Margem: Usa a oficial do portal se disponível
     const defaultMargin = item.officialMargin || 1.00;
     const defaultType = item.officialMarginType || 'fixed';
 
@@ -840,17 +943,86 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     const [active, setActive] = useState(item.active || false);
     const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
 
+    const [useFourDecimals, setUseFourDecimals] = useState(item.useFourDecimals || false);
+    const [kamikazeMode, setKamikazeMode] = useState(item.kamikazeMode || false);
+    const [manualTime, setManualTime] = useState('');
+
+    // 🔥 FIX CRONÔMETRO: Sincronia absoluta
     useEffect(() => {
-        if (item.timerSeconds !== undefined) setTimeLeft(item.timerSeconds);
+        if (item.timerSeconds !== undefined && item.timerSeconds !== null && item.timerSeconds > 0) {
+            setTimeLeft(item.timerSeconds);
+        }
     }, [item.timerSeconds]);
 
+    // ✨ AJUSTE MANUAL DE TEMPO (v3.5.80)
+    const handleManualTimeSync = (val: string) => {
+        setManualTime(val);
+        if (val.length >= 4) {
+            try {
+                const parts = val.replace(/\D/g, '').match(/.{1,2}/g);
+                if (parts && parts.length >= 2) {
+                    const h = parseInt(parts[0]);
+                    const m = parseInt(parts[1]);
+                    const s = parts[2] ? parseInt(parts[2]) : 0;
+                    
+                    const now = new Date();
+                    const target = new Date();
+                    target.setHours(h, m, s, 0);
+                    
+                    // Se o horário já passou hoje, assume que é para o dia seguinte (ex: amanhã cedo)
+                    if (target.getTime() <= now.getTime()) {
+                        target.setDate(target.getDate() + 1);
+                    }
+                    
+                    const diff = Math.floor((target.getTime() - now.getTime()) / 1000);
+                    if (diff > 0) {
+                        setTimeLeft(diff);
+                        toast.success(`CRONÔMETRO SINCRONIZADO PARA ${h}:${m}:${s}`);
+                    }
+                }
+            } catch (e) { console.error('Erro ao sincronizar tempo manual', e); }
+        }
+    };
+
     useEffect(() => {
-        if (timeLeft <= 0) return;
-        const interval = setInterval(() => {
-            setTimeLeft(prev => Math.max(0, prev - 1));
-        }, 1000);
+        let interval: any;
+        if (timeLeft > 0) {
+            interval = setInterval(() => {
+                setTimeLeft(prev => Math.max(0, prev - 1));
+            }, 1000);
+        }
         return () => clearInterval(interval);
     }, [timeLeft]);
+
+    const handleSave = (extraParams = {}) => {
+        onSaveStrategy(sid, item.itemId, {
+            mode: strategy,
+            minPrice: Number(minPrice),
+            decrementValue: Number(margin),
+            decrementType: marginType,
+            active: active,
+            useFourDecimals,
+            kamikazeMode,
+            ...extraParams
+        });
+    };
+
+    const handleToggle = () => {
+        const newState = !active;
+        setActive(newState);
+        handleSave({ active: newState });
+        
+        if (newState) toast.success(`ITEM ${item.itemId} ATIVO`);
+        else toast.warning(`ITEM ${item.itemId} PAUSADO`);
+    };
+
+    const handleManualBid = () => {
+        let marginVal = Number(margin);
+        if (marginType === 'percentage') marginVal = item.valorAtual * (marginVal / 100);
+        let val = item.valorAtual - marginVal;
+        if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+        onManualBid(item.purchaseId, item.itemId, item.bidId, val);
+    };
 
     const formatTime = (seconds: number) => {
         if (seconds <= 0) return '00:00';
@@ -859,111 +1031,133 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleToggle = () => {
-        const newState = !active;
-        setActive(newState);
-        onSaveStrategy(sid, item.itemId, {
-            mode: strategy,
-            minPrice: Number(minPrice),
-            decrementValue: Number(margin),
-            decrementType: marginType,
-            active: newState
-        });
-        
-        if (newState) {
-            toast.success(`Robô Ativado para Item ${item.itemId} (Modo ${strategy})`);
-        } else {
-            toast.warning(`Automação Pausada para Item ${item.itemId}`);
-        }
-    };
-
-    const handleManualBid = () => {
-        let marginVal = Number(margin);
-        if (marginType === 'percentage') {
-            marginVal = item.valorAtual * (marginVal / 100);
-        }
-        
-        let val = item.valorAtual - marginVal;
-        
-        // Se o valor calculado for menor que o mínimo configurado, usamos o mínimo para não perder a disputa
-        if (minPrice > 0 && val < Number(minPrice)) {
-            val = Number(minPrice);
-        }
-        
-        onManualBid(item.purchaseId, item.itemId, item.bidId, val);
-    };
-
     return (
-        <div className={`p-4 rounded-xl border transition-all duration-300 ${active ? 'border-emerald-400 bg-emerald-50/10' : 'border-slate-200 bg-white'}`}>
-            <div className="grid grid-cols-12 gap-4 items-center">
+        <div className={`p-5 rounded-2xl border transition-all duration-300 mb-4 ${
+            active 
+                ? 'bg-white border-emerald-400 shadow-[0_10px_30px_-15px_rgba(16,185,129,0.2)]' 
+                : 'bg-white border-slate-100 shadow-sm'
+        }`}>
+            <div className="grid grid-cols-12 gap-8 items-center">
                 <div className="col-span-3">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">ITEM {item.itemId} - {item.desc || 'Sem Descrição'}</span>
-                        <Badge className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`}>{isWinning ? 'Ganhando' : 'Perdendo'}</Badge>
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                            ITEM {item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
+                        </span>
                     </div>
                     <div className="flex gap-2">
-                        <Select value={strategy} onValueChange={(val: any) => setStrategy(val)}>
-                            <SelectTrigger className="h-7 text-[9px] font-black uppercase bg-slate-900 text-white border-none w-32">
-                                <SelectValue placeholder="Estratégia" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="follower">Seguir Líder</SelectItem>
-                                <SelectItem value="sniper">Sniper (Final)</SelectItem>
-                                <SelectItem value="shadow">Sombra</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Badge variant="secondary" className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                            isWinning ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                            {isWinning ? 'LIDERANDO' : 'PERDENDO'}
+                        </Badge>
+                        
+                        {/* 🏅 CAMPO DE CLASSIFICAÇÃO EM TEMPO REAL (v3.5.95) */}
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-all ${
+                            timeLeft < 30 && timeLeft > 0 && !isWinning 
+                                ? 'bg-red-500 text-white border-red-600 animate-bounce shadow-lg shadow-red-500/50' 
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                            <span className="text-[9px] font-black uppercase opacity-60">POSIÇÃO</span>
+                            <span className="text-xs font-black">{item.posicao || '?'}º</span>
+                        </div>
                     </div>
                 </div>
 
-                <div className="col-span-3 flex gap-3">
-                    <div className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-slate-400 uppercase">Lance mínimo (R$)</label>
+                <div className="col-span-3 flex gap-4">
+                    <div className="flex flex-col gap-1.5 flex-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Mínimo (R$)</label>
                         <Input 
                             type="number" 
-                            className="h-8 text-xs font-black bg-slate-50 text-slate-900 border-slate-300" 
+                            className="h-10 text-xs font-bold bg-slate-50 border-slate-200" 
                             value={minPrice} 
                             onChange={(e) => setMinPrice(Number(e.target.value))}
-                            placeholder="0,00"
+                            onBlur={() => handleSave()}
+                            step={useFourDecimals ? "0.0001" : "0.01"}
                         />
                     </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-slate-400 uppercase">
-                            Margem {marginType === 'percentage' ? '(%)' : '(R$)'} 
-                            {item.officialMargin && <span className="ml-1 text-emerald-600">[PORTAL: {item.officialMargin}{item.officialMarginType === 'percentage' ? '%' : ''}]</span>}
-                        </label>
+                    <div className="flex flex-col gap-1.5 flex-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Margem</label>
                         <Input 
                             type="number" 
-                            className="h-8 text-xs font-black bg-slate-50 text-slate-900 border-slate-300" 
+                            className="h-10 text-xs font-bold bg-slate-50 border-slate-200" 
                             value={margin} 
                             onChange={(e) => setMargin(Number(e.target.value))}
-                            placeholder="1,00"
+                            onBlur={() => handleSave()}
+                            step={useFourDecimals ? "0.0001" : "0.01"}
                         />
                     </div>
                 </div>
 
-                <div className="col-span-3 grid grid-cols-2 gap-4 border-l border-slate-100 pl-4">
-                    <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400 uppercase">Melhor Lance</span><span className="text-xs font-black text-red-500">R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400 uppercase">Meu Lance</span><span className="text-xs font-black text-slate-800">R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                <div className="col-span-3 grid grid-cols-2 gap-4 border-l border-slate-100 pl-6">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Melhor</span>
+                        <span className={`text-lg font-bold tracking-tight ${isWinning ? 'text-emerald-500' : 'text-red-500'}`}>
+                            R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
+                        </span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Meu Lance</span>
+                        <span className="text-lg font-bold tracking-tight text-slate-800">
+                            R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
+                        </span>
+                    </div>
                 </div>
 
-                <div className="col-span-3 flex items-center justify-end gap-3">
-                    <div className="flex flex-col items-center mr-2">
-                        <span className={`text-sm font-mono font-black ${timeLeft < 60 && timeLeft > 0 ? 'text-red-500 animate-pulse' : 'text-slate-900'}`}>{formatTime(timeLeft)}</span>
+                <div className="col-span-3 flex items-center justify-end gap-5">
+                    <div className="flex flex-col gap-1">
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                            timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
+                        }`}>
+                            <Clock className="w-4 h-4" />
+                            <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
+                        </div>
+                        <input 
+                            type="text" 
+                            placeholder="Ajuste HH:mm"
+                            className="text-[9px] font-bold text-center bg-transparent border-b border-slate-200 outline-none focus:border-emerald-400 text-slate-400"
+                            value={manualTime}
+                            onChange={(e) => handleManualTimeSync(e.target.value)}
+                        />
                     </div>
+                    
                     <Button 
                         size="sm" 
-                        variant="destructive" 
-                        className="h-8 px-2 text-[9px] font-black uppercase bg-red-600 hover:bg-red-700"
                         onClick={handleManualBid}
+                        className="h-10 px-4 text-[10px] font-bold uppercase bg-slate-900 hover:bg-black text-white"
                     >
                         Gatilho
                     </Button>
+                    
                     <button 
                         onClick={handleToggle}
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${active ? 'border-red-500 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                            active 
+                                ? 'bg-red-500 text-white shadow-lg shadow-red-200' 
+                                : 'bg-emerald-500 text-white shadow-lg shadow-emerald-200'
+                        }`}
                     >
-                        {active ? <StopCircle className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        {active ? <StopCircle className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5 fill-current" />}
                     </button>
+                </div>
+
+                <div className="col-span-12 flex gap-6 mt-2 pt-4 border-t border-slate-50">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            id={`4dec-${item.itemId}`} 
+                            checked={useFourDecimals}
+                            onCheckedChange={(val) => { setUseFourDecimals(!!val); handleSave({ useFourDecimals: !!val }); }}
+                        />
+                        <label htmlFor={`4dec-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Permitir 4 casas decimais</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            id={`kamikaze-${item.itemId}`} 
+                            checked={kamikazeMode}
+                            onCheckedChange={(val) => { setKamikazeMode(!!val); handleSave({ kamikazeMode: !!val }); }}
+                        />
+                        <label htmlFor={`kamikaze-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Modo Kamikaze (Sem Espera)</label>
+                    </div>
                 </div>
             </div>
         </div>

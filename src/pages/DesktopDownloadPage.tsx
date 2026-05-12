@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
     Zap, 
@@ -14,8 +14,15 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 
 export default function DesktopDownloadPage() {
-    const version = "3.5.21";
-    const downloadUrl = `/download/Polaryon-v${version}-Setup.exe`;
+    const [version, setVersion] = useState('3.5.97');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && (window as any).electronAPI) {
+            (window as any).electronAPI.getAppVersion().then((v: string) => setVersion(v));
+        }
+    }, []);
+
+    const downloadUrl = `https://polaryon.com.br/download/Polaryon-v${version}-Setup.exe`;
 
     // 🚀 Download Automático v2.2.5
     useEffect(() => {

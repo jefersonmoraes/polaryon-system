@@ -138,6 +138,14 @@ const AppSidebar = () => {
   };
 
 
+  const [appVersion, setAppVersion] = useState('3.5.97');
+
+  useEffect(() => {
+    if (isElectron && (window as any).electronAPI) {
+      (window as any).electronAPI.getAppVersion().then((v: string) => setAppVersion(v));
+    }
+  }, [isElectron]);
+
   return (
     <>
       {/* Mobile Drawer Overlay */}
@@ -428,7 +436,7 @@ const AppSidebar = () => {
             >
               <Monitor className={`h-4 w-4 shrink-0 group-hover:bounce-y`} /> 
               {!isCollapsed && <span>CENTRAL DO BOT</span>}
-              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">v3.0.0 ELITE TACTICAL</div>}
+              {!isCollapsed && <div className="ml-auto bg-green-500 text-[8px] px-1 rounded-sm text-white font-bold animate-pulse">v{appVersion} ELITE TACTICAL</div>}
             </Link>
           </div>
         )}
