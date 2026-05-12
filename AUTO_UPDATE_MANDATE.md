@@ -8,15 +8,13 @@ Este documento é a **MEMÓRIA PERMANENTE** do robô Polaryon. Nenhuma atualiza�
 
 Sempre que você (IA ou Desenvolvedor) for subir uma nova versão, você **DEVE** seguir estes passos sem pular nenhum:
 
-### 1. Sincronia de Versão (Telas)
-- O número da versão no `package.json` DEVE ser o mesmo em:
-    - `AppSidebar.tsx` (Rodapé lateral)
-    - `DesktopDownloadPage.tsx` (Página de download)
+### 1. Sincronia de Versão (Zero-Touch)
+- **NÃO HARDCODE VERSÕES**: Use sempre `app.getVersion()` (Backend) ou o Hook `appVersion` (Frontend) que busca do Electron API. Isso evita que o robô mostre "v3.5.95" quando já está na "v3.5.98".
 
 ### 2. O Caminho do Servidor (Storage)
 - O instalador (`.exe`) e o arquivo `latest.yml` DEVEM ser enviados para:
     - VPS Path: `/var/www/polaryon/storage/download/`
-- **POR QUE?** Porque o servidor web (Nginx) está configurado para olhar um link simbólico que aponta especificamente para essa pasta.
+- **BARRA PARA LINUX**: Se estiver desenvolvendo no Windows, **NUNCA** use `path.join` para caminhos remotos. Use sempre strings manuais com barras normais `/`. O Windows usa `\` e isso cria arquivos "fantasmas" no servidor Linux.
 
 ### 3. A URL de Busca (Bússola)
 - O robô sempre deve olhar para: `https://polaryon.com.br/download/`
@@ -27,10 +25,10 @@ Sempre que você (IA ou Desenvolvedor) for subir uma nova versão, você **DEVE*
 ## 🛠️ CHECKLIST DE DEPLOY (Obrigatório)
 
 1. [ ] Bump da versão no `package.json`.
-2. [ ] Atualizar versão nos arquivos de UI (`src/`).
-3. [ ] Rodar o build: `npm run electron:build:terminal`.
-4. [ ] Rodar o deploy: `npm run deploy:terminal`.
+2. [ ] Rodar o build: `npm run electron:build:terminal`.
+3. [ ] Rodar o deploy: `node scripts/deploy.js` (ou o script seguro de deploy).
+4. [ ] **PERMISSÕES**: Garanta que o comando `chown www-data:www-data` e `chmod 755` seja executado na pasta de download do VPS após o upload.
 5. [ ] **VERIFICAÇÃO FINAL:** Abrir `https://polaryon.com.br/download/latest.yml` no navegador e ver se a versão bate com a que você acabou de subir.
 
 ---
-**AVISO PARA IAs:** Se você ignorar este documento, o Jefão vai reclamar. Leia isso toda vez que for mexer no Electron! 🐯🛡️
+**AVISO PARA IAs:** O erro das barras invertidas (`\`) causou uma falha de atualização crítica em Maio/2026. Respeite as barras `/` para o Linux! 🐯🛡️

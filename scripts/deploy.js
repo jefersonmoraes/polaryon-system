@@ -38,20 +38,21 @@ function deploy() {
 
         // 3. Upload EXE
         console.log(`uploading ${exeName} para o servidor...`);
-        execSync(`scp dist_desktop/${exeName} root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
+        execSync(`scp dist_desktop/${exeName} root@${vpsIp}:${remotePath}${exeName}`, { stdio: 'inherit', cwd: rootDir });
 
         // 3.1 Upload Blockmap (Essencial para integridade)
         console.log(`uploading ${exeName}.blockmap para o servidor...`);
-        execSync(`scp dist_desktop/${exeName}.blockmap root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
+        execSync(`scp dist_desktop/${exeName}.blockmap root@${vpsIp}:${remotePath}${exeName}.blockmap`, { stdio: 'inherit', cwd: rootDir });
 
         // 4. Upload latest.yml
         console.log(`uploading latest.yml...`);
-        execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}`, { stdio: 'inherit', cwd: rootDir });
+        execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}latest.yml`, { stdio: 'inherit', cwd: rootDir });
 
         // 5. Sync Git, Build Web e Sincronização de Pastas de Download
         console.log(`Puxando código no VPS, gerando build web e sincronizando pastas de download...`);
         // Ajuste v2.2.5.4: Build PRIMEIRO, depois cria o Symlink (Vite apaga a pasta dist, então o link tem que vir depois)
-        const remoteCmd = `cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && cd backend && npx prisma@6 db push && cd .. && npm run build && rm -rf dist/download && ln -s /var/www/polaryon/storage/download dist/download && pm2 restart polaryon-backend`;
+        // Adicionado v3.5.98: chown e chmod para garantir que o Nginx consiga ler os arquivos de download
+        const remoteCmd = `chown -R www-data:www-data /var/www/polaryon/storage/download && chmod -R 755 /var/www/polaryon/storage/download && cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && cd backend && npx prisma@6 db push && cd .. && npm run build && rm -rf dist/download && ln -s /var/www/polaryon/storage/download dist/download && pm2 restart polaryon-backend`;
         execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
 
         console.log('\n✅ DEPLOY COMPLETO! A versão v' + version + ' está ao vivo e pronta para download/update.');
