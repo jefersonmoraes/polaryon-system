@@ -231,10 +231,13 @@ const startHybridEngine = () => {
                              
                              // Fallback: Se a posição estiver vazia, tenta buscar no DOM
                              if (!pos || pos === '0') {
-                                 const itemRow = document.querySelector(`[data-item-id="${rawId}"], tr:contains("${rawId}")`);
+                                 // Procura a linha que contém o número do item em uma célula
+                                 const rows = Array.from(document.querySelectorAll('tr, .cp-item-row'));
+                                 const itemRow = rows.find(r => r.textContent.includes(`Item ${rawId}`) || r.textContent.includes(`Item: ${rawId}`));
+                                 
                                  if (itemRow) {
-                                     const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2)');
-                                     if (posCell) pos = posCell.textContent.trim().replace('º', '');
+                                     const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2), .posicao-label');
+                                     if (posCell) pos = posCell.textContent.trim().replace('º', '').replace('°', '');
                                  }
                              }
 
