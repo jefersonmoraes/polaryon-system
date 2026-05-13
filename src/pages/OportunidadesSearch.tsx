@@ -932,28 +932,38 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             let total = 0;
 
             if (fonteFilter === 'unificado' || fonteFilter === 'Todas') {
-                const [pncpRes1, pncpRes2, pcpRes, bllRes, comprasRes, licRes] = await Promise.all([
+                const [pncpRes1, pncpRes2, pcpRes, bllRes, comprasRes, licRes, sigaRes, rsRes] = await Promise.all([
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } }))
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 10, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } }))
                 ]);
 
                 const pncpItems = [...(pncpRes1.data?.items || []), ...(pncpRes2.data?.items || [])];
-                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true }));
-                const bllItems = (bllRes.data?.items || []).map((i: any) => ({ ...i, _isBll: true }));
-                const comprasItems = (comprasRes.data?.items || []).map((i: any) => ({ ...i, _isCompras: true }));
-                const licItems = (licRes.data?.items || []).map((i: any) => ({ ...i, _isLic: true }));
+                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 })); // PCP via Proxy
+                const bllItems = (bllRes.data?.items || []).map((i: any) => ({ ...i, _isBll: true, sistema_origem_id: 12 }));
+                const comprasItems = (comprasRes.data?.items || []).map((i: any) => ({ ...i, _isCompras: true, sistema_origem_id: 1 }));
+                const licItems = (licRes.data?.items || []).map((i: any) => ({ ...i, _isLic: true, sistema_origem_id: 2 }));
+                const sigaItems = (sigaRes.data?.items || []).map((i: any) => ({ ...i, sistema_origem_id: 3 }));
+                const rsItems = (rsRes.data?.items || []).map((i: any) => ({ ...i, sistema_origem_id: 10 }));
 
-                const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...comprasItems, ...licItems];
+                const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...comprasItems, ...licItems, ...sigaItems, ...rsItems];
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
-                    const key = item.numero_controle_pncp || item.id || `${item.orgao_cnpj}-${item.ano}-${item.numero_sequencial}`;
+                    // Chave composta robusta para evitar duplicatas entre portais e PNCP
+                    const cnpj = item.orgao_cnpj || '';
+                    const ano = (item as any).ano || (item as any).ano_compra || '';
+                    const seq = (item as any).numero_sequencial || (item as any).numero_compra || '';
+                    const key = item.numero_controle_pncp || `${cnpj}-${ano}-${seq}` || item.id;
+                    
                     if (!uniqueMap.has(key)) {
                         uniqueMap.set(key, item);
                     } else {
+                        // Merge inteligente: preserva flags de origem específica se o PNCP retornar o mesmo item
                         uniqueMap.set(key, { ...uniqueMap.get(key), ...item });
                     }
                 });
@@ -979,17 +989,22 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const titleLower = (i.title || '').toLowerCase();
                 const orgaoLower = (i.orgao_nome || '').toLowerCase();
                 const urlLower = (i.item_url || '').toLowerCase();
+                const sid = i.sistema_origem_id || i.id_sistema_origem;
                 
-                const isPcp = i._isPcp || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) || descLower.includes('portal de compras públicas');
-                const isBll = i._isBll || urlLower.includes('bll') || orgaoLower.includes('bll') || descLower.includes('bolsa de licitações') || descLower.includes('bll');
-                const isCompras = i._isCompras || (i.unidade_codigo && i.unidade_codigo.length === 6 && /^\d+$/.test(i.unidade_codigo)) || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br');
-                const isLic = i._isLic || urlLower.includes('licitacoes-e') || descLower.includes('licitações-e') || titleLower.includes('licitacoes-e');
+                const isPcp = i._isPcp || sid === 999 || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'));
+                const isBll = i._isBll || sid === 12 || urlLower.includes('bll') || orgaoLower.includes('bll');
+                const isCompras = i._isCompras || sid === 1 || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br');
+                const isLic = i._isLic || sid === 2 || urlLower.includes('licitacoes-e');
+                const isSiga = sid === 3 || urlLower.includes('siga.pr') || urlLower.includes('siga.df');
+                const isRs = sid === 10 || urlLower.includes('compras.rs');
 
                 let fonteLabel = 'PNCP';
                 if (isCompras) fonteLabel = 'Compras.gov.br';
                 else if (isLic) fonteLabel = 'Licitações-e';
                 else if (isPcp) fonteLabel = 'Portal de Compras Públicas';
                 else if (isBll) fonteLabel = 'BLL Compras';
+                else if (isSiga) fonteLabel = 'SIGA';
+                else if (isRs) fonteLabel = 'Compras RS';
                 else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
                     fonteLabel = i.sistema_origem_nome;
                 } else if (urlLower.startsWith('/')) {
