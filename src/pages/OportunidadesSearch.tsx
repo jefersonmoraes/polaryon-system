@@ -429,7 +429,7 @@ export default function OportunidadesSearch() {
     const [dataFinalFilter, setDataFinalFilter] = useState('');
     const [valorMinFilter, setValorMinFilter] = useState('');
     const [valorMaxFilter, setValorMaxFilter] = useState('');
-    const [fonteFilter, setFonteFilter] = useState('Todas'); // Novo filtro de Fonte (Unified Hub)
+    const [fonteFilter, setFonteFilter] = useState('unificado'); // Novo filtro de Fonte (Unified Hub)
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -841,33 +841,20 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         setError('');
         setLoadingMessage('');
         try {
-            // PNCP API hard-caps /search/ results to 50 items.
-            // To fulfill the 100 items requirement, we must double-fetch pages concurrently.
-            const pncpPage1 = (currentPage * 2) - 1;
-            const pncpPage2 = currentPage * 2;
-
             const buildParams = (p: number) => {
                 const params: any = {
                     tam_pagina: 50,
                     pagina: p
                 };
-
                 if (keyword.trim()) params.q = keyword.trim();
-
-                // Status: PNCP API expects textual states like recebendo_proposta, encerradas
                 const fallbackStatus = 'recebendo_proposta,propostas_encerradas,encerradas,suspensas,canceladas';
                 const statusVals = (statusFilter || fallbackStatus).split(',').filter(Boolean);
                 params.status = statusVals;
-
-                // Documentos
                 const fallbackDocumentos = 'edital,aviso_contratacao_direta,ata,contrato';
                 const docVals = (instrumentoFilter || fallbackDocumentos).split(',').filter(Boolean);
                 params.tipos_documento = docVals;
-
-                // PNCP API Plural filters (ufs, esferas, modalidades)
                 if (ufFilter) params.ufs = [ufFilter];
                 if (esferaFilter) params.esferas = [esferaFilter];
-                
                 if (modalidadeFilter) {
                     const modMap: Record<string, string[]> = {
                         'Pregão': ['6', '7', '18', '19'],
@@ -875,152 +862,137 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         'Concorrência': ['4', '5', '16', '17'],
                         'Inexigibilidade': ['9']
                     };
-                    if (modMap[modalidadeFilter]) {
-                        params.modalidades = modMap[modalidadeFilter];
-                    }
+                    if (modMap[modalidadeFilter]) params.modalidades = modMap[modalidadeFilter];
                 }
-
                 if (dataInicialFilter) params.data_publicacao_inicial = dataInicialFilter.replace(/-/g, '');
                 if (dataFinalFilter) params.data_publicacao_final = dataFinalFilter.replace(/-/g, '');
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
-
                 return params;
             };
 
-            // Execução em Paralelo: Consulta nos ecossistemas PNCP central e PCP
-            const requests = [];
-            
-            if (fonteFilter === 'Todas' || fonteFilter === 'PNCP') {
-                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-                requests.push(api.get('/transparency/pncp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
+            const searchParams = buildParams(currentPage);
+            let items: any[] = [];
+            let total = 0;
+
+            if (fonteFilter === 'unificado' || fonteFilter === 'Todas') {
+                const [pncpRes, pcpRes, bllRes, comprasRes, licRes] = await Promise.all([
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } }))
+                ]);
+
+                const pncpItems = pncpRes.data?.items || [];
+                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true }));
+                const bllItems = (bllRes.data?.items || []).map((i: any) => ({ ...i, _isBll: true }));
+                const comprasItems = (comprasRes.data?.items || []).map((i: any) => ({ ...i, _isCompras: true }));
+                const licItems = (licRes.data?.items || []).map((i: any) => ({ ...i, _isLic: true }));
+
+                const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...comprasItems, ...licItems];
+                const uniqueMap = new Map();
+                allItems.forEach(item => {
+                    const key = item.numero_controle_pncp || item.id || `${item.orgao_cnpj}-${item.ano}-${item.numero_sequencial}`;
+                    if (!uniqueMap.has(key)) {
+                        uniqueMap.set(key, item);
+                    } else {
+                        uniqueMap.set(key, { ...uniqueMap.get(key), ...item });
+                    }
+                });
+                items = Array.from(uniqueMap.values());
+                total = items.length;
+            } else {
+                let endpoint = '/transparency/pncp-proxy';
+                const params: any = { ...searchParams };
+                if (fonteFilter === 'pcp') endpoint = '/transparency/pcp-proxy';
+                else if (fonteFilter === 'bll') endpoint = '/transparency/bll-proxy';
+                else if (fonteFilter === 'comprasnet') params.id_sistema_origem = 1;
+                else if (fonteFilter === 'licitacoese') params.id_sistema_origem = 2;
+                else if (fonteFilter === 'siga') params.id_sistema_origem = 3;
+                else if (fonteFilter === 'compras-rs') params.id_sistema_origem = 10;
+
+                const response = await api.get(endpoint, { params });
+                items = response.data?.items || [];
+                total = response.data?.total || 0;
             }
 
-            if (fonteFilter === 'Todas' || fonteFilter === 'PCP') {
-                requests.push(api.get('/transparency/pcp-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-                requests.push(api.get('/transparency/pcp-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
-            }
-
-            if (fonteFilter === 'Todas' || fonteFilter === 'BLL') {
-                requests.push(api.get('/transparency/bll-proxy', { params: buildParams(pncpPage1) }).catch(() => ({ data: { items: [] } })));
-                requests.push(api.get('/transparency/bll-proxy', { params: buildParams(pncpPage2) }).catch(() => ({ data: { items: [] } })));
-            }
-
-            const responses = await Promise.all(requests);
-            
-            let allItems: any[] = [];
-            responses.forEach(res => {
-                if (res?.data?.items) {
-                    allItems = [...allItems, ...res.data.items];
-                }
-            });
-
-            // Remover duplicatas caso a busca 'Todas' traga o mesmo processo do PNCP e do proxy isolado
-            const uniqueItemsMap = new Map();
-            allItems.forEach(item => {
-                const key = item.item_url || item.id || `${item.orgao_cnpj}-${item.ano}-${item.numero_sequencial}`;
-                if (!uniqueItemsMap.has(key)) {
-                    uniqueItemsMap.set(key, item);
-                } else {
-                    const existing = uniqueItemsMap.get(key);
-                    if (item._isBll) existing._isBll = true;
-                    if (item._isPcp) existing._isPcp = true;
-                }
-            });
-            const uniqueItems = Array.from(uniqueItemsMap.values());
-
-            let data1 = responses[0]?.data || { items: [], total: 0 }; // Apenas para referência do total bruto
-
-            let items = uniqueItems;
-
-            // Identificar Fonte (PCP vs PNCP Genérico) para os Badges da UI
             items = items.map((i: any) => {
                 const descLower = (i.description || '').toLowerCase();
                 const titleLower = (i.title || '').toLowerCase();
                 const orgaoLower = (i.orgao_nome || '').toLowerCase();
-                const isPcp = i._isPcp || 
-                              (i.item_url && i.item_url.includes('portaldecompraspublicas')) || 
-                              (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) ||
-                              descLower.includes('portal de compras públicas') ||
-                              titleLower.includes('portal de compras públicas');
-                const isBll = i._isBll || descLower.includes('bll') || titleLower.includes('bll') || orgaoLower.includes('bll');
-                return {
-                    ...i,
-                    fonte_dados: isPcp ? 'Portal de Compras Públicas' : (isBll ? 'BLL Compras' : 'PNCP')
-                };
+                const urlLower = (i.item_url || '').toLowerCase();
+                
+                const isPcp = i._isPcp || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas')) || descLower.includes('portal de compras públicas');
+                const isBll = i._isBll || urlLower.includes('bll') || orgaoLower.includes('bll') || descLower.includes('bolsa de licitações') || descLower.includes('bll');
+                const isCompras = i._isCompras || (i.unidade_codigo && i.unidade_codigo.length === 6 && /^\d+$/.test(i.unidade_codigo)) || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br');
+                const isLic = i._isLic || urlLower.includes('licitacoes-e') || descLower.includes('licitações-e') || titleLower.includes('licitacoes-e');
+
+                let fonteLabel = 'PNCP';
+                if (isCompras) fonteLabel = 'Compras.gov.br';
+                else if (isLic) fonteLabel = 'Licitações-e';
+                else if (isPcp) fonteLabel = 'Portal de Compras Públicas';
+                else if (isBll) fonteLabel = 'BLL Compras';
+                else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
+                    fonteLabel = i.sistema_origem_nome;
+                } else if (urlLower.startsWith('/')) {
+                    const segments = urlLower.split('/').filter(Boolean);
+                    if (segments.length > 0 && segments[0] !== 'compras' && segments[0] !== 'app' && segments[0] !== 'editais') {
+                        fonteLabel = segments[0].toUpperCase().replace(/-/g, ' ');
+                    }
+                }
+
+                // Fallback para Órgãos Estaduais/Municipais específicos se a fonte for genérica
+                if (fonteLabel === 'PNCP') {
+                    if (orgaoLower.includes('prefeitura')) fonteLabel = 'Portal Municipal';
+                    else if (i.uf && i.uf !== 'BR') fonteLabel = `Portal ${i.uf}`;
+                }
+
+                return { ...i, fonte_dados: fonteLabel };
             });
 
-            // REMOVIDO GREEDY FETCH por performance (requisito usuário). 
-            // Os detalhes agora são carregados apenas no Modal ou se já estiverem no cache.
-
-
-            // --- Client-Side "Mega Filters" Fallback ---
-            // NOTE: UF, Esfera and Modality are now handled at API level (server-side) via ufs, esferas, modalidades params.
-            // BLL Compras fails to index UF properly on PNCP, so we MUST fallback local filtering for UF too!
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
-            
-            if (orgaoFilter) items = items.filter((i: PncpItem) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
-            if (modalidadeFilter) items = items.filter((i: PncpItem) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
-            if (municipioFilter) items = items.filter((i: PncpItem) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
+            if (orgaoFilter) items = items.filter((i: any) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
+            if (modalidadeFilter) items = items.filter((i: any) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
+            if (municipioFilter) items = items.filter((i: any) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
             if (poderFilter) items = items.filter((i: any) => (i?.poder_nome?.toLowerCase() || '') === poderFilter.toLowerCase());
 
-            if (unidadeFilter) items = items.filter((i: any) => (i?.unidade_nome?.toLowerCase() || '').includes(unidadeFilter.toLowerCase()) || (i?.unidade_codigo || '').includes(unidadeFilter));
-            if (fonteOrcamentoFilter) items = items.filter((i: any) => (i?.fonte_orcamentaria?.toLowerCase() || '').includes(fonteOrcamentoFilter.toLowerCase()));
-            if (conteudoNacionalFilter) items = items.filter((i: any) => {
-                if (conteudoNacionalFilter === 'Sim') return i?.exigencia_conteudo_nacional === true;
-                if (conteudoNacionalFilter === 'Não') return i?.exigencia_conteudo_nacional === false;
-                return true;
-            });
-            if (margemPreferenciaFilter) items = items.filter((i: any) => (i?.tipo_margem_preferencia_nome?.toLowerCase() || '').includes(margemPreferenciaFilter.toLowerCase()));
-
-            // Filtro local para corrigir a BLL presa como 'divulgada'
             if (statusFilter === 'recebendo_proposta') {
                 const now = new Date();
                 items = items.filter((i: any) => {
                     if (i.fonte_dados === 'BLL Compras' && (i.situacao_nome || '').toLowerCase().includes('divulga')) {
                         const start = new Date(i.data_inicio_proposta || i.data_inicio_vigencia);
                         const end = new Date(i.data_encerramento_proposta || i.data_fim_vigencia);
-                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                            return start <= now && end >= now;
-                        }
+                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) return start <= now && end >= now;
                     }
                     return true;
                 });
             }
 
-            // Valor Min/Max Filter - Ajustado para 'best-effort' (ignora itens sem valor carregado)
             if (valorMinFilter) {
                 const min = parseFloat(valorMinFilter.replace(/[^\d.]/g, ''));
-                if (!isNaN(min)) {
-                    items = items.filter((i: any) => {
-                        const val = i.valorTotalEstimado || i.valor_global;
-                        return val === undefined || val === null || val >= min;
-                    });
-                }
+                if (!isNaN(min)) items = items.filter((i: any) => {
+                    const val = i.valorTotalEstimado || i.valor_global;
+                    return val === undefined || val === null || val >= min;
+                });
             }
             if (valorMaxFilter) {
                 const max = parseFloat(valorMaxFilter.replace(/[^\d.]/g, ''));
-                if (!isNaN(max)) {
-                    items = items.filter((i: any) => {
-                        const val = i.valorTotalEstimado || i.valor_global;
-                        return val === undefined || val === null || val <= max;
-                    });
-                }
+                if (!isNaN(max)) items = items.filter((i: any) => {
+                    const val = i.valorTotalEstimado || i.valor_global;
+                    return val === undefined || val === null || val <= max;
+                });
             }
 
-            // Client-Side Ordering
-            if (ordenacaoFilter === '-data_publicacao_pncp') {
-                items.sort((a, b) => new Date(b.data_publicacao_pncp || 0).getTime() - new Date(a.data_publicacao_pncp || 0).getTime());
-            } else if (ordenacaoFilter === 'data_publicacao_pncp') {
-                items.sort((a, b) => new Date(a.data_publicacao_pncp || 0).getTime() - new Date(b.data_publicacao_pncp || 0).getTime());
-            }
+            if (ordenacaoFilter === '-data_publicacao_pncp') items.sort((a, b) => new Date(b.data_publicacao_pncp || 0).getTime() - new Date(a.data_publicacao_pncp || 0).getTime());
+            else if (ordenacaoFilter === 'data_publicacao_pncp') items.sort((a, b) => new Date(a.data_publicacao_pncp || 0).getTime() - new Date(b.data_publicacao_pncp || 0).getTime());
 
             setResults(items);
-            setTotalResults(data1?.total || 0);
+            setTotalResults(total || items.length);
             setPage(currentPage);
             setPageInput(currentPage.toString());
         } catch (err: any) {
-            setError(err.message || 'Erro inesperado na busca.');
-            setResults([]);
+            console.error('Fetch error:', err);
+            setError('Não foi possível carregar as oportunidades. Tente novamente.');
         } finally {
             setLoading(false);
             setLoadingMessage('');
@@ -1033,14 +1005,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         valorMinFilter, valorMaxFilter, fonteFilter
     ]);
 
-    // Auto-fetch inteligente com debounce para recarregar quando o usuário digitar ou alterar filtros
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchOportunidades(1);
-        }, 500); // 500ms de atraso para evitar flood na API enquanto o usuário digita
-        
+        }, 500); 
         return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         keyword, ufFilter, modalidadeFilter, statusFilter, instrumentoFilter,
         esferaFilter, dataInicialFilter, dataFinalFilter, ordenacaoFilter,
@@ -1053,8 +1022,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         e.preventDefault();
         fetchOportunidades(1);
     }, [fetchOportunidades]);
-
-
 
     const handlePageInputSubmit = () => {
         let p = parseInt(pageInput);
@@ -1074,7 +1041,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
     return (
         <div className="flex-1 overflow-hidden flex flex-col bg-background text-foreground min-h-full">
 
-            {/* Action Bar & Filters (Sticky/Fixed Header) */}
             <div className="bg-card border-b border-border shrink-0 z-10 shadow-sm">
                 <div className="p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-2 mb-1">
@@ -1083,7 +1049,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     </div>
 
                     <form onSubmit={handleSearch} className="flex flex-col gap-3">
-                        {/* Top Line: Search & Main Filters */}
                         <div className="flex flex-col lg:flex-row gap-2">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1104,10 +1069,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                         <SelectValue placeholder="Fonte" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                                        <SelectItem value="Todas" className="text-sm font-bold text-foreground">Todas Fontes (Unificado)</SelectItem>
-                                        <SelectItem value="PNCP" className="text-sm font-bold text-emerald-600">Portal Nacional (PNCP)</SelectItem>
-                                        <SelectItem value="PCP" className="text-sm font-bold text-blue-600">Portal de Compras Públicas</SelectItem>
-                                        <SelectItem value="BLL" className="text-sm font-bold text-orange-600">Bolsa de Licitações (BLL)</SelectItem>
+                                        <SelectItem value="unificado">Todas Fontes (Unificado)</SelectItem>
+                                        <SelectItem value="comprasnet">Compras.gov.br (Federal)</SelectItem>
+                                        <SelectItem value="licitacoese">Licitações-e (BB)</SelectItem>
+                                        <SelectItem value="pcp" className="text-blue-600">Portal de Compras Públicas</SelectItem>
+                                        <SelectItem value="bll" className="text-orange-600">BLL Compras</SelectItem>
+                                        <SelectItem value="pncp">Outros Portais (via PNCP)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1454,17 +1421,36 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                     <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
                                                         {item.modalidade_licitacao_nome}
                                                     </span>
-                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${
-                                                        (item as any).fonte_dados === 'Compras.gov.br'
-                                                            ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                                                            : (item as any).fonte_dados === 'Portal de Compras Públicas'
-                                                                ? 'bg-violet-500/10 text-violet-600 border-violet-500/20'
-                                                                : (item as any).fonte_dados === 'BLL Compras'
-                                                                    ? 'bg-orange-500/10 text-orange-600 border-orange-500/20'
-                                                                    : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                                    }`}>
-                                                        {(item as any).fonte_dados === 'Portal de Compras Públicas' ? 'PCP' : ((item as any).fonte_dados === 'BLL Compras' ? 'BLL' : ((item as any).fonte_dados || 'PNCP'))}
-                                                    </span>
+                                                    {(() => {
+                                                        const fonte = (item as any).fonte_dados || 'PNCP';
+                                                        let style = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                                                        let label = fonte.toUpperCase();
+
+                                                        if (fonte === 'Compras.gov.br') {
+                                                            style = "bg-blue-500/10 text-blue-600 border-blue-500/20";
+                                                            label = "COMPRAS.GOV";
+                                                        } else if (fonte === 'Licitações-e') {
+                                                            style = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                                            label = "LICITAÇÕES-E";
+                                                        } else if (fonte === 'Portal de Compras Públicas') {
+                                                            style = "bg-orange-500/10 text-orange-600 border-orange-500/20";
+                                                            label = "PCP";
+                                                        } else if (fonte === 'BLL Compras') {
+                                                            style = "bg-purple-500/10 text-purple-600 border-purple-500/20";
+                                                            label = "BLL";
+                                                        } else if (fonte.includes('SIGA')) {
+                                                            style = "bg-red-500/10 text-red-600 border-red-500/20";
+                                                            label = "SIGA";
+                                                        } else if (fonte.includes('RS') || fonte.includes('RIO GRANDE')) {
+                                                            style = "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
+                                                        }
+
+                                                        return (
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${style}`}>
+                                                                {label}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3.5 align-top">
@@ -1548,6 +1534,36 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                         <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-bold uppercase">
                                             {item.modalidade_licitacao_nome}
                                         </span>
+                                        {(() => {
+                                            const fonte = (item as any).fonte_dados || 'PNCP';
+                                            let style = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                                            let label = fonte.toUpperCase();
+
+                                            if (fonte === 'Compras.gov.br') {
+                                                style = "bg-blue-500/10 text-blue-600 border-blue-500/20";
+                                                label = "COMPRAS.GOV";
+                                            } else if (fonte === 'Licitações-e') {
+                                                style = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
+                                                label = "LICITAÇÕES-E";
+                                            } else if (fonte === 'Portal de Compras Públicas') {
+                                                style = "bg-orange-500/10 text-orange-600 border-orange-500/20";
+                                                label = "PCP";
+                                            } else if (fonte === 'BLL Compras') {
+                                                style = "bg-purple-500/10 text-purple-600 border-purple-500/20";
+                                                label = "BLL";
+                                            } else if (fonte.includes('SIGA')) {
+                                                style = "bg-red-500/10 text-red-600 border-red-500/20";
+                                                label = "SIGA";
+                                            } else if (fonte.includes('RS') || fonte.includes('RIO GRANDE')) {
+                                                style = "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
+                                            }
+
+                                            return (
+                                                <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${style}`}>
+                                                    {label}
+                                                </span>
+                                            );
+                                        })()}
                                         <div className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/10">
                                             <MapPin className="h-3 w-3" />
                                             {item.uf || '-'}
