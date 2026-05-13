@@ -1042,6 +1042,30 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return { ...i, fonte_dados: fonteLabel };
             });
 
+            // Filtragem pós-fetch por portal selecionado (quando não está no modo unificado)
+            if (!fonteFilter.includes('unificado') && fonteFilter.length > 0) {
+                const FONTE_MAP: Record<string, string[]> = {
+                    'comprasnet': ['Compras.gov.br'],
+                    'licitacoese': ['Licitações-e'],
+                    'pcp': ['Portal de Compras Públicas'],
+                    'bll': ['BLL Compras'],
+                    'siga': ['SIGA'],
+                    'compras-rs': ['Compras RS'],
+                    'pncp': ['PNCP', 'Portal Municipal'],
+                };
+                const allowedFontes = new Set<string>();
+                fonteFilter.forEach(f => {
+                    (FONTE_MAP[f] || []).forEach(label => allowedFontes.add(label));
+                });
+                // Se 'pncp' estiver selecionado, inclui também portais estaduais/municipais genéricos
+                if (fonteFilter.includes('pncp')) {
+                    items.forEach((i: any) => {
+                        if ((i.fonte_dados || '').startsWith('Portal ')) allowedFontes.add(i.fonte_dados);
+                    });
+                }
+                items = items.filter((i: any) => allowedFontes.has(i.fonte_dados || 'PNCP'));
+            }
+
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             if (orgaoFilter) items = items.filter((i: any) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
             if (modalidadeFilter) items = items.filter((i: any) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
