@@ -941,7 +941,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 12, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
@@ -985,7 +985,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (fonteFilter.includes('bll')) {
                     taggedFetches.push(
-                        api.get('/transparency/bll-proxy', { params: searchParams })
+                        api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 12, tam_pagina: 100 } })
                             .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isBll: true, sistema_origem_id: 12 })))
                             .catch(() => [])
                     );
