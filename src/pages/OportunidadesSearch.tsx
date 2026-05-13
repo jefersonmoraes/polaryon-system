@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock, CheckSquare } from 'lucide-react';
+import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock, CheckSquare, LogIn } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader, DialogDescription } from '@/components/ui/dialog';
 import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
@@ -488,6 +488,33 @@ export default function OportunidadesSearch() {
         name: '',
     });
 
+    const getPortalLoginUrl = useCallback((item: PncpItem) => {
+        if (!item) return '#';
+        const fonte = (item as any).fonte_dados || 'PNCP';
+        const urlLower = (item.item_url || '').toLowerCase();
+        
+        if (fonte === 'Compras.gov.br' || urlLower.includes('compras.gov.br') || urlLower.includes('comprasnet.gov.br')) {
+            return 'https://www.gov.br/compras/pt-br/acesso-a-sistemas';
+        }
+        if (fonte === 'BLL Compras' || urlLower.includes('bll')) {
+            return 'https://bllcompras.com/Home/Login';
+        }
+        if (fonte === 'Portal de Compras Públicas' || urlLower.includes('portaldecompraspublicas')) {
+            return 'https://www.portaldecompraspublicas.com.br/login';
+        }
+        if (fonte === 'Licitações-e' || urlLower.includes('licitacoes-e')) {
+            return 'https://www.licitacoes-e.com.br/aop/login.jsp';
+        }
+        if (fonte.includes('SIGA') || urlLower.includes('siga.pr.gov.br')) {
+            return 'https://www.siga.pr.gov.br/login';
+        }
+        if (fonte.includes('RS') || urlLower.includes('compras.rs.gov.br')) {
+            return 'https://www.compras.rs.gov.br/';
+        }
+        
+        return 'https://pncp.gov.br/app/editais';
+    }, []);
+
     const getOfficialLink = useCallback((item: PncpItem) => {
         if (!item?.item_url) return '#';
         if (item.item_url.startsWith('http')) return item.item_url;
@@ -870,20 +897,23 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return params;
             };
 
+            const pncpPage1 = (currentPage * 2) - 1;
+            const pncpPage2 = currentPage * 2;
             const searchParams = buildParams(currentPage);
             let items: any[] = [];
             let total = 0;
 
             if (fonteFilter === 'unificado' || fonteFilter === 'Todas') {
-                const [pncpRes, pcpRes, bllRes, comprasRes, licRes] = await Promise.all([
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                const [pncpRes1, pncpRes2, pcpRes, bllRes, comprasRes, licRes] = await Promise.all([
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 30 } }).catch(() => ({ data: { items: [] } }))
                 ]);
 
-                const pncpItems = pncpRes.data?.items || [];
+                const pncpItems = [...(pncpRes1.data?.items || []), ...(pncpRes2.data?.items || [])];
                 const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true }));
                 const bllItems = (bllRes.data?.items || []).map((i: any) => ({ ...i, _isBll: true }));
                 const comprasItems = (comprasRes.data?.items || []).map((i: any) => ({ ...i, _isCompras: true }));
@@ -900,7 +930,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     }
                 });
                 items = Array.from(uniqueMap.values());
-                total = items.length;
+                total = pncpRes1.data?.total || items.length;
             } else {
                 let endpoint = '/transparency/pncp-proxy';
                 const params: any = { ...searchParams };
@@ -2057,6 +2087,16 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                         Fechar
                                     </button>
                                 </DialogClose>
+                                {selectedItem && (
+                                    <a
+                                        href={getPortalLoginUrl(selectedItem)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-md hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-sm order-4 sm:order-none"
+                                    >
+                                        <LogIn className="h-4 w-4" /> Login no Portal
+                                    </a>
+                                )}
                                 <a
                                     href={getOfficialLink(selectedItem)}
                                     target="_blank"
