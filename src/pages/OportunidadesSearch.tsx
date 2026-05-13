@@ -493,6 +493,7 @@ export default function OportunidadesSearch() {
         const fonte = (item as any).fonte_dados || 'PNCP';
         const urlLower = (item.item_url || '').toLowerCase();
         
+        // 1. Portais Nacionais Consolidados
         if (fonte === 'Compras.gov.br' || urlLower.includes('compras.gov.br') || urlLower.includes('comprasnet.gov.br')) {
             return 'https://www.gov.br/compras/pt-br/acesso-a-sistemas';
         }
@@ -505,11 +506,38 @@ export default function OportunidadesSearch() {
         if (fonte === 'Licitações-e' || urlLower.includes('licitacoes-e')) {
             return 'https://www.licitacoes-e.com.br/aop/login.jsp';
         }
-        if (fonte.includes('SIGA') || urlLower.includes('siga.pr.gov.br')) {
-            return 'https://www.siga.pr.gov.br/login';
+
+        // 2. Heurísticas Específicas por UF ou Domínio
+        if (fonte.includes('SIGA') || urlLower.includes('siga.pr.gov.br') || urlLower.includes('siga.df.gov.br')) {
+            return urlLower.includes('df.gov.br') ? 'https://www.siga.df.gov.br/login' : 'https://www.siga.pr.gov.br/login';
         }
-        if (fonte.includes('RS') || urlLower.includes('compras.rs.gov.br')) {
-            return 'https://www.compras.rs.gov.br/';
+        if (fonte.includes('RS') || urlLower.includes('rs.gov.br') || urlLower.includes('compras.rs')) {
+            return 'https://www.compras.rs.gov.br/login';
+        }
+        if (fonte.includes('SC') || urlLower.includes('sc.gov.br') || urlLower.includes('compras.sc')) {
+            return 'https://www.compras.sc.gov.br/login';
+        }
+        if (fonte.includes('MG') || urlLower.includes('mg.gov.br') || urlLower.includes('compras.mg')) {
+            return 'https://www.compras.mg.gov.br/login';
+        }
+        if (fonte.includes('SP') || urlLower.includes('sp.gov.br') || urlLower.includes('bec.sp')) {
+            return 'https://www.bec.sp.gov.br/';
+        }
+        if (fonte.includes('RJ') || urlLower.includes('rj.gov.br') || urlLower.includes('compras.rj')) {
+            return 'https://www.compras.rj.gov.br/login';
+        }
+        if (fonte.includes('PR') || urlLower.includes('pr.gov.br') || urlLower.includes('comprasweb.pr')) {
+            return 'https://www.comprasweb.pr.gov.br/login';
+        }
+        
+        // 3. Fallback Dinâmico: Extrai o domínio base de URLs externas
+        if (urlLower.startsWith('http') && !urlLower.includes('pncp.gov.br')) {
+            try {
+                const urlObj = new URL(item.item_url);
+                return `${urlObj.protocol}//${urlObj.hostname}`;
+            } catch {
+                // fallback normal
+            }
         }
         
         return 'https://pncp.gov.br/app/editais';
