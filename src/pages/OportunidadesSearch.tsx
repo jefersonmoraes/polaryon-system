@@ -18,6 +18,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 // --- Helper: Safe ID Generation (Works in non-HTTPS/secure contexts) ---
 const generateSafeId = () => {
@@ -429,7 +432,7 @@ export default function OportunidadesSearch() {
     const [dataFinalFilter, setDataFinalFilter] = useState('');
     const [valorMinFilter, setValorMinFilter] = useState('');
     const [valorMaxFilter, setValorMaxFilter] = useState('');
-    const [fonteFilter, setFonteFilter] = useState('unificado'); // Novo filtro de Fonte (Unified Hub)
+    const [fonteFilter, setFonteFilter] = useState<string[]>(['unificado']); // Multi-seleção de Portais
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -448,7 +451,7 @@ export default function OportunidadesSearch() {
         setDataFinalFilter('');
         setValorMinFilter('');
         setValorMaxFilter('');
-        setFonteFilter('Todas');
+        setFonteFilter(['unificado']);
         setPage(1);
     }, []);
 
@@ -931,7 +934,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             let items: any[] = [];
             let total = 0;
 
-            if (fonteFilter === 'unificado' || fonteFilter === 'Todas') {
+            const isAll = fonteFilter.includes('unificado');
+            
+            if (isAll) {
                 const [pncpRes1, pncpRes2, pcpRes, bllRes, comprasRes, licRes, sigaRes, rsRes] = await Promise.all([
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
@@ -944,7 +949,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 ]);
 
                 const pncpItems = [...(pncpRes1.data?.items || []), ...(pncpRes2.data?.items || [])];
-                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 })); // PCP via Proxy
+                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }));
                 const bllItems = (bllRes.data?.items || []).map((i: any) => ({ ...i, _isBll: true, sistema_origem_id: 12 }));
                 const comprasItems = (comprasRes.data?.items || []).map((i: any) => ({ ...i, _isCompras: true, sistema_origem_id: 1 }));
                 const licItems = (licRes.data?.items || []).map((i: any) => ({ ...i, _isLic: true, sistema_origem_id: 2 }));
@@ -954,7 +959,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...comprasItems, ...licItems, ...sigaItems, ...rsItems];
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
-                    // Chave composta robusta para evitar duplicatas entre portais e PNCP
                     const cnpj = item.orgao_cnpj || '';
                     const ano = (item as any).ano || (item as any).ano_compra || '';
                     const seq = (item as any).numero_sequencial || (item as any).numero_compra || '';
@@ -963,25 +967,40 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     if (!uniqueMap.has(key)) {
                         uniqueMap.set(key, item);
                     } else {
-                        // Merge inteligente: preserva flags de origem específica se o PNCP retornar o mesmo item
                         uniqueMap.set(key, { ...uniqueMap.get(key), ...item });
                     }
                 });
                 items = Array.from(uniqueMap.values());
                 total = pncpRes1.data?.total || items.length;
             } else {
-                let endpoint = '/transparency/pncp-proxy';
-                const params: any = { ...searchParams };
-                if (fonteFilter === 'pcp') endpoint = '/transparency/pcp-proxy';
-                else if (fonteFilter === 'bll') endpoint = '/transparency/bll-proxy';
-                else if (fonteFilter === 'comprasnet') params.id_sistema_origem = 1;
-                else if (fonteFilter === 'licitacoese') params.id_sistema_origem = 2;
-                else if (fonteFilter === 'siga') params.id_sistema_origem = 3;
-                else if (fonteFilter === 'compras-rs') params.id_sistema_origem = 10;
+                // Busca em Paralelo apenas dos selecionados
+                const fetchers: Promise<any>[] = [];
+                
+                if (fonteFilter.includes('pcp')) fetchers.push(api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('bll')) fetchers.push(api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('comprasnet')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('licitacoese')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('siga')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('compras-rs')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 10, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
+                if (fonteFilter.includes('pncp')) fetchers.push(api.get('/transparency/pncp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
 
-                const response = await api.get(endpoint, { params });
-                items = response.data?.items || [];
-                total = response.data?.total || 0;
+                const responses = await Promise.all(fetchers);
+                const allItems: any[] = [];
+                responses.forEach(r => {
+                    if (r.data?.items) allItems.push(...r.data.items);
+                });
+
+                const uniqueMap = new Map();
+                allItems.forEach(item => {
+                    const cnpj = item.orgao_cnpj || '';
+                    const ano = (item as any).ano || (item as any).ano_compra || '';
+                    const seq = (item as any).numero_sequencial || (item as any).numero_compra || '';
+                    const key = item.numero_controle_pncp || `${cnpj}-${ano}-${seq}` || item.id;
+                    if (!uniqueMap.has(key)) uniqueMap.set(key, item);
+                });
+
+                items = Array.from(uniqueMap.values());
+                total = items.length;
             }
 
             items = items.map((i: any) => {
@@ -1136,20 +1155,88 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                 />
                             </div>
                             
-                            <div className="w-full md:w-56 shrink-0">
-                                <Select value={fonteFilter} onValueChange={setFonteFilter}>
-                                    <SelectTrigger className="w-full h-10 bg-background border-border text-sm font-bold shadow-sm">
-                                        <SelectValue placeholder="Fonte" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                                        <SelectItem value="unificado">Todas Fontes (Unificado)</SelectItem>
-                                        <SelectItem value="comprasnet">Compras.gov.br (Federal)</SelectItem>
-                                        <SelectItem value="licitacoese">Licitações-e (BB)</SelectItem>
-                                        <SelectItem value="pcp" className="text-blue-600">Portal de Compras Públicas</SelectItem>
-                                        <SelectItem value="bll" className="text-orange-600">BLL Compras</SelectItem>
-                                        <SelectItem value="pncp">Outros Portais (via PNCP)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="w-full md:w-64 shrink-0">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 font-bold shadow-sm">
+                                            <div className="flex items-center gap-2 truncate">
+                                                <Building2 className="h-4 w-4 text-primary shrink-0" />
+                                                <span className="truncate">
+                                                    {fonteFilter.includes('unificado') 
+                                                        ? 'Todos os Portais' 
+                                                        : fonteFilter.length === 0 
+                                                            ? 'Nenhum Selecionado' 
+                                                            : `${fonteFilter.length} Portais Selecionados`}
+                                                </span>
+                                            </div>
+                                            <ChevronRight className="h-4 w-4 opacity-50 rotate-90" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0 bg-card/95 backdrop-blur-xl border-border shadow-2xl z-[150]" align="start">
+                                        <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Fontes de Dados</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => setFonteFilter(['unificado'])}
+                                                className="text-[10px] font-bold text-primary hover:underline"
+                                            >
+                                                Resetar
+                                            </button>
+                                        </div>
+                                        <div className="p-2 space-y-1 max-h-[350px] overflow-auto">
+                                            <div 
+                                                className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                                                onClick={() => setFonteFilter(['unificado'])}
+                                            >
+                                                <Checkbox checked={fonteFilter.includes('unificado')} id="all-portals" />
+                                                <label htmlFor="all-portals" className="text-xs font-bold leading-none cursor-pointer flex-1">
+                                                    Todos Portais (Unificado)
+                                                </label>
+                                            </div>
+                                            <div className="h-px bg-border my-2 mx-2" />
+                                            {[
+                                                { id: 'comprasnet', label: 'Compras.gov.br (Federal)', color: 'text-blue-500' },
+                                                { id: 'licitacoese', label: 'Licitações-e (BB)', color: 'text-yellow-600' },
+                                                { id: 'pcp', label: 'Portal de Compras Públicas', color: 'text-blue-500' },
+                                                { id: 'bll', label: 'BLL Compras', color: 'text-orange-600' },
+                                                { id: 'siga', label: 'SIGA (Paraná/DF)', color: 'text-red-600' },
+                                                { id: 'compras-rs', label: 'Compras RS', color: 'text-cyan-600' },
+                                                { id: 'pncp', label: 'Municipais (via PNCP)', color: 'text-emerald-600' },
+                                            ].map((portal) => (
+                                                <div 
+                                                    key={portal.id}
+                                                    className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                                                    onClick={() => {
+                                                        const isCurrentlyAll = fonteFilter.includes('unificado');
+                                                        let newSelection = isCurrentlyAll ? [] : [...fonteFilter];
+                                                        
+                                                        if (newSelection.includes(portal.id)) {
+                                                            newSelection = newSelection.filter(id => id !== portal.id);
+                                                        } else {
+                                                            newSelection.push(portal.id);
+                                                        }
+                                                        
+                                                        if (newSelection.length === 0) {
+                                                            setFonteFilter(['unificado']);
+                                                        } else {
+                                                            setFonteFilter(newSelection);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Checkbox checked={fonteFilter.includes(portal.id) && !fonteFilter.includes('unificado')} />
+                                                    <label className={`text-xs font-semibold leading-none cursor-pointer flex-1 ${portal.color}`}>
+                                                        {portal.label}
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="p-3 border-t border-border bg-muted/30">
+                                            <p className="text-[9px] text-muted-foreground leading-relaxed">
+                                                * Selecione múltiplos portais para uma busca simultânea e unificada em todos os diários oficiais.
+                                            </p>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
 
                             <div className="flex flex-wrap md:flex-nowrap gap-2">
