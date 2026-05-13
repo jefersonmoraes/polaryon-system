@@ -19,6 +19,22 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
+// --- Helper: Safe ID Generation (Works in non-HTTPS/secure contexts) ---
+const generateSafeId = () => {
+    try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+    } catch (e) {}
+    
+    // Fallback simple UUID v4 format
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
 const getStatusStyle = (situacao: string) => {
     const lower = (situacao || '').toLowerCase();
     if (lower.includes('divulgada')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
@@ -638,7 +654,10 @@ export default function OportunidadesSearch() {
         if (!exportTarget) return;
 
         setIsExporting(true);
-        const exportId = exportTarget.numero_controle_pncp || exportTarget.orgao_cnpj;
+        
+        // Otimização v3.5.99.2: Garantir ID único mesmo para itens sem numero_controle_pncp (ex: BLL)
+        const exportId = exportTarget.numero_controle_pncp || 
+                         `${exportTarget.orgao_cnpj}-${(exportTarget as any).ano || new Date().getFullYear()}-${(exportTarget as any).numero_sequencial || exportTarget.id || Math.random().toString(36).substring(7)}`;
 
         try {
             // --- BLINDAGEM v2.2: Busca reativa de dados faltantes ---
@@ -670,7 +689,11 @@ export default function OportunidadesSearch() {
             }
 
             const board = boards.find(b => b.id === exportBoardId);
-            if (!board) return;
+            if (!board) {
+                toast.error("Quadro de destino não encontrado. Tente selecionar novamente.");
+                setIsExporting(false);
+                return;
+            }
 
             // Formatação Rica do Markdown
             const descriptionMD = `
@@ -729,7 +752,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const cardAttachments: any[] = [];
             for (const file of finalFiles) {
                 cardAttachments.push({
-                    id: crypto.randomUUID(),
+                    id: generateSafeId(),
                     name: file.titulo || file.tipoDocumentoNome,
                     url: file.url,
                     type: "pdf", 
@@ -742,7 +765,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (finalItems && finalItems.length > 0) {
                 finalItems.forEach((item: any) => {
                     cardItems.push({
-                        id: crypto.randomUUID(),
+                        id: generateSafeId(),
                         name: item.descricao || "Item sem descrição",
                         unitValue: item.valorUnitarioEstimado || 0,
                         quantity: item.quantidade || 1
@@ -761,7 +784,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const d = new Date(endDateTime);
                 if (!isNaN(d.getTime())) {
                     cardMilestones.push({
-                        id: crypto.randomUUID(),
+                        id: generateSafeId(),
                         title: "LANCES",
                         dueDate: d.toISOString().split('T')[0],
                         hour: d.toTimeString().split(' ')[0].substring(0, 5),
@@ -771,7 +794,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             }
 
             const newCardData = {
-                id: crypto.randomUUID(),
+                id: generateSafeId(),
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 comments: [],
