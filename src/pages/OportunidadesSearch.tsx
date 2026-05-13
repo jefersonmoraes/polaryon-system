@@ -973,22 +973,61 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 items = Array.from(uniqueMap.values());
                 total = pncpRes1.data?.total || items.length;
             } else {
-                // Busca em Paralelo apenas dos selecionados
-                const fetchers: Promise<any>[] = [];
-                
-                if (fonteFilter.includes('pcp')) fetchers.push(api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('bll')) fetchers.push(api.get('/transparency/bll-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('comprasnet')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('licitacoese')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('siga')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('compras-rs')) fetchers.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 10, tam_pagina: 100 } }).catch(() => ({ data: { items: [] } })));
-                if (fonteFilter.includes('pncp')) fetchers.push(api.get('/transparency/pncp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })));
+                // Busca em Paralelo apenas dos selecionados — cada resposta é TAGGEADA com a fonte antes do merge
+                const taggedFetches: Promise<any[]>[] = [];
 
-                const responses = await Promise.all(fetchers);
-                const allItems: any[] = [];
-                responses.forEach(r => {
-                    if (r.data?.items) allItems.push(...r.data.items);
-                });
+                if (fonteFilter.includes('pcp')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pcp-proxy', { params: searchParams })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('bll')) {
+                    taggedFetches.push(
+                        api.get('/transparency/bll-proxy', { params: searchParams })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isBll: true, sistema_origem_id: 12 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('comprasnet')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 100 } })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isCompras: true, sistema_origem_id: 1 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('licitacoese')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 100 } })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isLic: true, sistema_origem_id: 2 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('siga')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 100 } })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, sistema_origem_id: 3 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('compras-rs')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 10, tam_pagina: 100 } })
+                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, sistema_origem_id: 10 })))
+                            .catch(() => [])
+                    );
+                }
+                if (fonteFilter.includes('pncp')) {
+                    taggedFetches.push(
+                        api.get('/transparency/pncp-proxy', { params: searchParams })
+                            .then(r => r.data?.items || [])
+                            .catch(() => [])
+                    );
+                }
+
+                const taggedResults = await Promise.all(taggedFetches);
+                const allItems: any[] = taggedResults.flat();
 
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
