@@ -967,7 +967,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     }
                 });
                 items = Array.from(uniqueMap.values());
-                total = pncpRes1.data?.total || items.length;
+                total = p1.data?.total || items.length;
             } else {
                 // Busca em Paralelo apenas dos selecionados — cada resposta é TAGGEADA com a fonte antes do merge
                 const taggedFetches: Promise<any[]>[] = [];
@@ -997,9 +997,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (fonteFilter.includes('compras-rs')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Compras RS` : 'Compras RS', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('pcp')) {
-                    taggedFetches.push(api.get('/transparency/pcp-proxy', { params: searchParams }).then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))).catch(() => []));
                 }
                 if (fonteFilter.includes('pncp')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: searchParams }).then(r => r.data?.items || []).catch(() => []));
