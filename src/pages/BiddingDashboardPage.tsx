@@ -110,7 +110,7 @@ export default function BiddingDashboardPage() {
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
-    const [appVersion, setAppVersion] = useState('3.6.4');
+    const [appVersion, setAppVersion] = useState('...');
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -666,6 +666,37 @@ export default function BiddingDashboardPage() {
         }
     };
 
+    // --- MONITOR DE ATUALIZAÇÃO AUTOMÁTICA v3.6.10 ---
+    useEffect(() => {
+        if (isDesktop && (window as any).electronAPI) {
+            const electron = (window as any).electronAPI;
+            
+            if (electron.onUpdateLog) {
+                electron.onUpdateLog((msg: string) => {
+                    console.log("[UPDATE-LOG]", msg);
+                });
+            }
+
+            if (electron.onUpdateAvailable) {
+                electron.onUpdateAvailable((info: any) => {
+                    toast.success(`🚀 Nova versão v${info.version} disponível! Baixando automaticamente...`, {
+                        position: "top-center",
+                        autoClose: 10000
+                    });
+                });
+            }
+
+            if (electron.onUpdateDownloaded) {
+                electron.onUpdateDownloaded((info: any) => {
+                    toast.success(`✅ Versão v${info.version} baixada! O robô será reiniciado em instantes.`, {
+                        position: "top-center",
+                        autoClose: false
+                    });
+                });
+            }
+        }
+    }, [isDesktop]);
+
     return (
         <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-x-hidden">
             <header className="w-full h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50">
@@ -675,7 +706,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.9</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.10</span>
                         </h1>
                         <div className="flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -926,7 +957,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.9</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.10</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}

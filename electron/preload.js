@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   navigateVisualBidding: (sessionId, url) => ipcRenderer.send('visual-navigate', { sessionId, url }),
   onBiddingLoginFinished: (callback) => ipcRenderer.on('bidding-login-finished', (event, data) => callback(data)),
   onBiddingNetworkTraffic: (callback) => ipcRenderer.on('bidding-network-traffic', (event, data) => callback(data)),
-  manualBid: (purchaseId, itemId, bidId, value) => ipcRenderer.send('manual-bid', { purchaseId, itemId, bidId, value }),
+  manualBid: (purchaseId, itemId, bidId, value, options) => ipcRenderer.send('manual-bid', { purchaseId, itemId, bidId, value, options }),
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
@@ -29,5 +29,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, info) => callback(info)),
   onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (event, progress) => callback(progress)),
   onUpdateError: (callback) => ipcRenderer.on('update-error', (event, error) => callback(error)),
+  onUpdateLog: (callback) => ipcRenderer.on('bidding-update-log', (event, msg) => callback(msg)),
   getRestoredSessions: () => ipcRenderer.invoke('get-restored-sessions')
 });
