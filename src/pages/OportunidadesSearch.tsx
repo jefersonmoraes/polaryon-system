@@ -967,7 +967,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     }
                 });
                 items = Array.from(uniqueMap.values());
-                total = p1.data?.total || items.length;
+                total = pncpResults[0]?.data?.total || items.length;
             } else {
                 // Busca em Paralelo apenas dos selecionados — cada resposta é TAGGEADA com a fonte antes do merge
                 const taggedFetches: Promise<any[]>[] = [];
