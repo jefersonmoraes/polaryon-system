@@ -110,7 +110,7 @@ export default function BiddingDashboardPage() {
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
-    const [appVersion, setAppVersion] = useState('3.6.2');
+    const [appVersion, setAppVersion] = useState('3.6.4');
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -231,7 +231,7 @@ export default function BiddingDashboardPage() {
         }, 600); 
 
         return () => clearInterval(autoBidInterval);
-    }, [isActive]);
+    }, [isListening]);
 
     // MODO MULTI-UASG (v2.0 War Flow)
     const [sessions, setSessions] = useState<Record<string, {
@@ -671,7 +671,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.3</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.4</span>
                         </h1>
                         <div className="flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -922,7 +922,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.3</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.4</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
