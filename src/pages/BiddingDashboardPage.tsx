@@ -110,7 +110,7 @@ export default function BiddingDashboardPage() {
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
-    const [appVersion, setAppVersion] = useState('3.6.1');
+    const [appVersion, setAppVersion] = useState('3.6.2');
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -922,7 +922,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.1</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.2</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
@@ -1035,10 +1035,16 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     };
 
     const handleManualBid = () => {
+        const currentBest = Number(item.valorAtual || 0);
         let marginVal = Number(margin);
-        if (marginType === 'percentage') marginVal = item.valorAtual * (marginVal / 100);
-        let val = item.valorAtual - marginVal;
+        if (marginType === 'percentage') marginVal = currentBest * (marginVal / 100);
+        
+        // 🔥 LÓGICA VENCEDORA: Sempre subtrai do MELHOR lance atual
+        let val = currentBest - marginVal;
+        
         if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+        
+        console.log(`🚀 [GATILHO MANUAL] Disparando R$ ${val} (Leader: ${currentBest}, Margin: ${marginVal})`);
         onManualBid(item.purchaseId, item.itemId, item.bidId, val);
     };
 
@@ -1056,28 +1062,33 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
                 : 'bg-white border-slate-100 shadow-sm'
         }`}>
             <div className="grid grid-cols-12 gap-8 items-center">
-                <div className="col-span-3">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">
-                            ITEM {item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
-                        </span>
+                <div className="col-span-3 flex items-center gap-4">
+                    <div className="flex flex-col items-center gap-1 mr-2">
+                        <span className="text-[8px] font-black text-slate-400 uppercase">Auto</span>
+                        <Switch checked={active} onCheckedChange={handleToggle} className="data-[state=checked]:bg-emerald-500 scale-75" />
                     </div>
-                    <div className="flex gap-2">
-                        <Badge variant="secondary" className={`text-[10px] font-bold uppercase px-2 py-1 ${
-                            isWinning ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                            {isWinning ? 'LIDERANDO' : 'PERDENDO'}
-                        </Badge>
-                        
-                        {/* 🏅 CAMPO DE CLASSIFICAÇÃO EM TEMPO REAL (v3.5.95) */}
-                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-all ${
-                            timeLeft < 30 && timeLeft > 0 && !isWinning 
-                                ? 'bg-red-500 text-white border-red-600 animate-bounce shadow-lg shadow-red-500/50' 
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                            <span className="text-[9px] font-black uppercase opacity-60">POSIÇÃO</span>
-                            <span className="text-xs font-black">{item.posicao || '?'}º</span>
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                                ITEM {item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Badge variant="secondary" className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                                isWinning ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                                {isWinning ? 'LIDERANDO' : 'PERDENDO'}
+                            </Badge>
+                            
+                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-all ${
+                                timeLeft < 30 && timeLeft > 0 && !isWinning 
+                                    ? 'bg-red-500 text-white border-red-600 animate-bounce shadow-lg shadow-red-500/50' 
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                                <span className="text-[9px] font-black uppercase opacity-60">POSIÇÃO</span>
+                                <span className="text-xs font-black">{item.posicao || '?'}º</span>
+                            </div>
                         </div>
                     </div>
                 </div>

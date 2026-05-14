@@ -161,7 +161,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
             console.error(`❌ REJEITADO (Mesmo com payload réplica):`, responseData);
             
             // 🔄 FALLBACK: Se falhar com o payload de dispensa, tenta o payload completo (Shotgun)
-            if (responseData?.message?.includes("incluirLanceCommand")) {
+            if (responseData?.message?.includes("incluirLanceCommand") || res.status === 400) {
                 console.warn("⚠️ Detectado erro de comando completo. Tentando Payload Shotgun...");
                 const fullPayload = {
                     valor: valFormatted,
@@ -178,6 +178,19 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
                     headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
                     body: JSON.stringify(fullPayload)
                 });
+            }
+
+            // 🛡️ NOVO: AUTO-CORREÇÃO PARA ERRO 422 (Intervalo Mínimo)
+            if (res.status === 422 && responseData?.message?.includes("intervalo mínimo")) {
+                console.warn("🚨 [AUTO-FIX] Erro de Intervalo Mínimo. Ajustando lance...");
+                const margin = item?.officialMargin || 0.01;
+                const best = item?.valorAtual || 0;
+                if (best > 0) {
+                    const correctedValue = Number((best - margin).toFixed(decimals));
+                    console.log(`♻️ Tentando novamente com valor corrigido: R$ ${correctedValue}`);
+                    // Chama recursivamente sendBid com o valor corrigido
+                    await sendBid(purchaseId, itemNum, bidId, correctedValue);
+                }
             }
         }
     } catch (e) {
