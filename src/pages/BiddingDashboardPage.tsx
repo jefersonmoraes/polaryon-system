@@ -110,7 +110,7 @@ export default function BiddingDashboardPage() {
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
-    const [appVersion, setAppVersion] = useState('3.5.97');
+    const [appVersion, setAppVersion] = useState('3.6.0');
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -255,7 +255,10 @@ export default function BiddingDashboardPage() {
 
     const quickBid = async (itemId: string, value: number, sid?: string) => {
         const targetSid = sid || sessionId;
-        if (!targetSid) return;
+        if (!targetSid || targetSid === 'undefined' || !itemId || itemId === 'undefined') {
+            console.warn("[QUICK BID] Aborting due to invalid identifiers:", { targetSid, itemId });
+            return;
+        }
         try {
             toast.info(`Enviando lance R$ ${value.toFixed(2)}...`);
             await api.post(`/bidding/sessions/${targetSid}/items/${itemId}/bid`, { value });
@@ -600,7 +603,7 @@ export default function BiddingDashboardPage() {
 
     const saveStrategy = async (itemId: string, strategy: ItemStrategy, targetSid?: string) => {
         const sid = targetSid || sessionId;
-        if (!sid) return;
+        if (!sid || sid === 'undefined' || !itemId || itemId === 'undefined') return;
         try {
             await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
@@ -868,7 +871,7 @@ function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRa
     return (
         <div className="space-y-8 pb-12">
             {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} />
+                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion={appVersion} />
             ))}
         </div>
     );
@@ -904,7 +907,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.5.97</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V{appVersion}</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
