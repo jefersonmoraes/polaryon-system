@@ -937,16 +937,25 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const isAll = fonteFilter.includes('unificado');
             
             if (isAll) {
-                const [pncpRes1, pncpRes2, pcpRes] = await Promise.all([
+                const kw = keyword.trim();
+                const [pncpRes1, pncpRes2, pcpRes, bllRes, sigaRes, rsRes, licRes] = await Promise.all([
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
-                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } }))
+                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Bolsa de Licitações"` : '"Bolsa de Licitações"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "SIGA"` : '"SIGA"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Compras RS"` : '"Compras RS"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Licitações-e"` : '"Licitações-e"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } }))
                 ]);
 
                 const pncpItems = [...(pncpRes1.data?.items || []), ...(pncpRes2.data?.items || [])];
                 const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }));
+                const bllItems = bllRes.data?.items || [];
+                const sigaItems = sigaRes.data?.items || [];
+                const rsItems = rsRes.data?.items || [];
+                const licItems = licRes.data?.items || [];
 
-                const allItems = [...pncpItems, ...pcpItems];
+                const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...sigaItems, ...rsItems, ...licItems];
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
                     const cnpj = item.orgao_cnpj || '';
@@ -973,20 +982,22 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                             .catch(() => [])
                     );
                 }
+                const kw = keyword.trim();
                 if (fonteFilter.includes('bll')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 12, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Bolsa de Licitações"` : '"Bolsa de Licitações"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('comprasnet')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 1, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    // Compras.gov costuma ser a maioria, busca normal com ID se possível (embora ignorado, deixamos o q limpo)
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('licitacoese')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 2, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Licitações-e"` : '"Licitações-e"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('siga')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 3, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "SIGA"` : '"SIGA"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('compras-rs')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, id_sistema_origem: 10, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Compras RS"` : '"Compras RS"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('pncp')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: searchParams }).then(r => r.data?.items || []).catch(() => []));
