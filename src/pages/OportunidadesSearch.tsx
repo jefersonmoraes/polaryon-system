@@ -938,23 +938,19 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             
             if (isAll) {
                 const kw = keyword.trim();
-                const [p1, p2, p3, p4, p5, p6, pcpRes] = await Promise.all([
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 1, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 2, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 3, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 4, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 5, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 6, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } }))
+                // Turbo Discovery: Busca massiva em 10 páginas simultâneas (500 itens)
+                const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                const pncpFetches = pages.map(p => 
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } }))
+                );
+                
+                const [pcpRes, ...pncpResults] = await Promise.all([
+                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
+                    ...pncpFetches
                 ]);
 
                 const allItems = [
-                    ...(p1.data?.items || []), 
-                    ...(p2.data?.items || []), 
-                    ...(p3.data?.items || []), 
-                    ...(p4.data?.items || []),
-                    ...(p5.data?.items || []),
-                    ...(p6.data?.items || []),
+                    ...pncpResults.flatMap(r => r.data?.items || []),
                     ...(pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))
                 ];
                 const uniqueMap = new Map();
@@ -984,8 +980,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     );
                 }
                 const kw = keyword.trim();
-                // Discovery Matrix: Busca profunda de 5 páginas + nicho por palavras-chave
-                [1, 2, 3, 4, 5].forEach(p => {
+                // Turbo Discovery: Busca profunda de 10 páginas para garantir volume nos portais secundários
+                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(p => {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 });
 
@@ -995,7 +991,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (fonteFilter.includes('licitacoese')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Licitações-e` : 'Licitações-e', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Banco do Brasil` : 'Banco do Brasil', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('siga')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} SIGA` : 'SIGA', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
@@ -1005,6 +1000,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (fonteFilter.includes('pncp')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Prefeitura` : 'Prefeitura', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
+                }
+                if (fonteFilter.includes('pcp')) {
+                    taggedFetches.push(api.get('/transparency/pcp-proxy', { params: searchParams }).then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))).catch(() => []));
                 }
 
                 const taggedResults = await Promise.all(taggedFetches);
