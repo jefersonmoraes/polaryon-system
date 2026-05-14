@@ -110,7 +110,7 @@ export default function BiddingDashboardPage() {
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
-    const [appVersion, setAppVersion] = useState('3.6.0');
+    const [appVersion, setAppVersion] = useState('3.6.1');
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -171,7 +171,14 @@ export default function BiddingDashboardPage() {
 
                 // 30 Segundos Finais
                 if (tSeconds <= 30 && tSeconds > 0) {
-                    const isLosing = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
+                    const myBid = Number(item.meuValor || 99999999);
+                    const bestBid = Number(item.valorAtual || 0);
+                    
+                    const isWinningByValue = (myBid > 0 && bestBid > 0 && myBid <= bestBid);
+                    const isLosingPos = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
+                    
+                    // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição é desconhecida mas o valor indica perda, atira!)
+                    const isLosing = isLosingPos || (!isWinningByValue && item.posicao === '?');
                     
                     if (isLosing) {
                         const now = Date.now();
@@ -511,7 +518,15 @@ export default function BiddingDashboardPage() {
 
                                  const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                                  const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
-                                 const pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
+                                 let pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
+                                 if (!pos || pos === '0' || pos === '?') {
+                                     const rows = Array.from(document.querySelectorAll('tr, .cp-item-row, .ng-star-inserted'));
+                                     const itemRow = rows.find(r => r.textContent.includes(`Item ${item.identificador}`) || r.textContent.includes(`Item: ${item.identificador}`));
+                                     if (itemRow) {
+                                         const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2), .posicao-label, .cp-posicao');
+                                         if (posCell) pos = posCell.textContent.trim().replace('º', '').replace('°', '');
+                                     }
+                                 }
                                  const isWinner = pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°';
                                  
                                  newSessions[sid].items.push({
@@ -521,7 +536,7 @@ export default function BiddingDashboardPage() {
                                      uasgName: uasgCode, 
                                      ganhador: isWinner ? 'Você' : 'Outro',
                                      status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado'),
-                                     position: parseInt(pos) || 0, 
+                                     position: pos, 
                                      timerSeconds: item.segundosParaEncerramento || -1, 
                                      desc: item.descricao || `Item ${item.numero}`
                                  });
@@ -577,7 +592,7 @@ export default function BiddingDashboardPage() {
         }
     }, [isDesktop, sessionId]);
 
-    // --- NOVO: AGRUPAMENTO DE ITENS POR SESSÃO v3.5.12 ---
+    // --- NOVO: AGRUPAMENTO DE ITENS POR SESSÃO v3.6.1 ---
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
         Object.entries(sessions).forEach(([sid, s]) => {
@@ -656,7 +671,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v{appVersion}</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.1</span>
                         </h1>
                         <div className="flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -716,7 +731,7 @@ export default function BiddingDashboardPage() {
                 ) : (
                     <div className="grid grid-cols-12 gap-8 animate-in fade-in duration-700">
                         <div className={`${isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-6`}>
-                            {/* --- MONITOR DE TRÁFEGO v3.5.10 (DIAGNÓSTICO) --- */}
+                            {/* --- MONITOR DE TRÁFEGO v3.6.1 (DIAGNÓSTICO) --- */}
             <div className="mt-8">
                 <Sheet>
                     <SheetTrigger asChild>
@@ -871,7 +886,7 @@ function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRa
     return (
         <div className="space-y-8 pb-12">
             {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion={appVersion} />
+                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" />
             ))}
         </div>
     );
@@ -907,7 +922,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V{appVersion}</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.1</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}

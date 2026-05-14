@@ -21,6 +21,16 @@ const scrapeTimerFromDOM = () => {
                 const diff = Math.floor((endDate.getTime() - Date.now()) / 1000);
                 if (diff > 0) return diff;
             }
+
+            // ⏱️ NOVO: Captura de Countdown Direto (MM:SS ou HH:MM:SS)
+            const matchCountdown = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (matchCountdown && !text.includes('/') && (el.classList.contains('relogio') || el.classList.contains('timer') || el.id.includes('relogio') || el.id.includes('timer') || el.className.includes('cp-valor-item'))) {
+                const h = matchCountdown[3] ? parseInt(matchCountdown[1]) : 0;
+                const m = matchCountdown[3] ? parseInt(matchCountdown[2]) : parseInt(matchCountdown[1]);
+                const s = matchCountdown[3] ? parseInt(matchCountdown[3]) : parseInt(matchCountdown[2]);
+                const total = (h * 3600) + (m * 60) + s;
+                if (total > 0 && total < 3600) return total; 
+            }
         }
     } catch (e) { }
     return 0;
@@ -230,16 +240,14 @@ const startHybridEngine = () => {
                              let pos = String(item.posicaoParticipanteDisputa || item.posicao || item.classificacao || '').trim().toUpperCase();
                              
                              // Fallback: Se a posição estiver vazia, tenta buscar no DOM
-                             if (!pos || pos === '0') {
-                                 // Procura a linha que contém o número do item em uma célula
-                                 const rows = Array.from(document.querySelectorAll('tr, .cp-item-row'));
+                              if (!pos || pos === '0' || pos === '?') {
+                                 const rows = Array.from(document.querySelectorAll('tr, .cp-item-row, .ng-star-inserted'));
                                  const itemRow = rows.find(r => r.textContent.includes(`Item ${rawId}`) || r.textContent.includes(`Item: ${rawId}`));
-                                 
                                  if (itemRow) {
-                                     const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2), .posicao-label');
+                                     const posCell = itemRow.querySelector('.col-posicao, [title="Posição"], td:nth-child(2), .posicao-label, .cp-posicao, .classificacao');
                                      if (posCell) pos = posCell.textContent.trim().replace('º', '').replace('°', '');
                                  }
-                             }
+                              }
 
                              const currentTitle = document.querySelector('.br-header-title')?.textContent?.trim() || 
                                      document.querySelector('.titulo-servico')?.textContent?.trim() || 
