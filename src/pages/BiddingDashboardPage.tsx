@@ -228,7 +228,7 @@ export default function BiddingDashboardPage() {
                     }
                 }
             });
-        }, 600); 
+        }, 500); 
 
         return () => clearInterval(autoBidInterval);
     }, [isListening]);
@@ -254,9 +254,13 @@ export default function BiddingDashboardPage() {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
     const handleManualBid = (purchaseId: string, itemId: string, bidId: string, value: number) => {
+        handleSendBid(purchaseId, itemId, bidId, value);
+        toast.info(`🚀 Gatilho Disparado: R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    };
+
+    const handleSendBid = (purchaseId: string, itemId: string, bidId: string, value: number, isKamikaze: boolean = false, allow4: boolean = false) => {
         if (isDesktop && (window as any).electronAPI) {
-            (window as any).electronAPI.manualBid(purchaseId, itemId, bidId, value);
-            toast.info(`🚀 Gatilho Disparado: R$ ${value.toFixed(2)}`);
+            (window as any).electronAPI.manualBid(purchaseId, itemId, bidId, value, { isKamikaze, allow4 });
         }
     };
 
@@ -671,7 +675,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.4</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.5</span>
                         </h1>
                         <div className="flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -922,7 +926,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                         </h3>
                         <div className="flex gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] font-bold bg-white text-slate-400 border-slate-200">Modo Aberto</Badge>
-                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.4</Badge>
+                            <Badge className="bg-emerald-50 text-[10px] text-emerald-600 border-emerald-100 font-black">ELITE V3.6.5</Badge>
                         </div>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}

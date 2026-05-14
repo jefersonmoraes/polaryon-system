@@ -80,10 +80,8 @@ ipcRenderer.on('force-room-learning', (event, { purchaseId }) => {
 });
 
 // ⚡ LANCE MANUAL / AUTOMÁTICO
-ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value }) => {
-    // itemId = número sequencial (ex: 1)
-    // bidId = identificador longo (ex: UUID)
-    await sendBid(purchaseId, itemId, bidId, value);
+ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, bidId, value, options }) => {
+    await sendBid(purchaseId, itemId, bidId, value, options);
 });
 
 // 🕵️ MOTOR DE DIAGNÓSTICO E SINCRONIA (v3.5.72)
@@ -114,7 +112,7 @@ if (!window.polaryonSnifferInjected) {
     };
 }
 
-const sendBid = async (purchaseId, itemNum, bidId, value) => {
+const sendBid = async (purchaseId, itemNum, bidId, value, options = {}) => {
     const auth = window.polaryonAuthBearer;
     if (!auth) return console.error("❌ Token ausente.");
 
@@ -125,7 +123,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value) => {
 
     try {
         const strat = window.polaryonStrategies[itemNum];
-        const decimals = strat?.useFourDecimals ? 4 : 2;
+        const decimals = options.allow4 || strat?.useFourDecimals ? 4 : 2;
         const valFormatted = Number(Number(value).toFixed(decimals));
         const item = getFreshItem(bidId || itemNum);
         
