@@ -938,24 +938,21 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             
             if (isAll) {
                 const kw = keyword.trim();
-                const [pncpRes1, pncpRes2, pcpRes, bllRes, sigaRes, rsRes, licRes] = await Promise.all([
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage1, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: pncpPage2, tam_pagina: 50 } }).catch(() => ({ data: { items: [], total: 0 } })),
-                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Bolsa de Licitações"` : '"Bolsa de Licitações"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "SIGA"` : '"SIGA"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Compras RS"` : '"Compras RS"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Licitações-e"` : '"Licitações-e"', tam_pagina: 50 } }).catch(() => ({ data: { items: [] } }))
+                const [p1, p2, p3, p4, pcpRes] = await Promise.all([
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 1, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 2, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 3, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: 4, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } })),
+                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } }))
                 ]);
 
-                const pncpItems = [...(pncpRes1.data?.items || []), ...(pncpRes2.data?.items || [])];
-                const pcpItems = (pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }));
-                const bllItems = bllRes.data?.items || [];
-                const sigaItems = sigaRes.data?.items || [];
-                const rsItems = rsRes.data?.items || [];
-                const licItems = licRes.data?.items || [];
-
-                const allItems = [...pncpItems, ...pcpItems, ...bllItems, ...sigaItems, ...rsItems, ...licItems];
+                const allItems = [
+                    ...(p1.data?.items || []), 
+                    ...(p2.data?.items || []), 
+                    ...(p3.data?.items || []), 
+                    ...(p4.data?.items || []),
+                    ...(pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))
+                ];
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
                     const cnpj = item.orgao_cnpj || '';
@@ -983,21 +980,26 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     );
                 }
                 const kw = keyword.trim();
+                // Busca profunda de 3 páginas para qualquer filtro específico para garantir descoberta
+                [1, 2, 3].forEach(p => {
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
+                });
+
+                // Se houver palavras-chave específicas, injetamos buscas de nicho (sem aspas literais para evitar erro de encoding)
                 if (fonteFilter.includes('bll')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Bolsa de Licitações"` : '"Bolsa de Licitações"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('comprasnet')) {
-                    // Compras.gov costuma ser a maioria, busca normal com ID se possível (embora ignorado, deixamos o q limpo)
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Bolsa Licitações` : 'Bolsa Licitações', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('licitacoese')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Licitações-e"` : '"Licitações-e"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Licitações-e` : 'Licitações-e', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('siga')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "SIGA"` : '"SIGA"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} SIGA` : 'SIGA', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 }
                 if (fonteFilter.includes('compras-rs')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} "Compras RS"` : '"Compras RS"', tam_pagina: 100 } }).then(r => r.data?.items || []).catch(() => []));
+                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Compras RS` : 'Compras RS', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
+                }
+                if (fonteFilter.includes('pcp')) {
+                    taggedFetches.push(api.get('/transparency/pcp-proxy', { params: searchParams }).then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))).catch(() => []));
                 }
                 if (fonteFilter.includes('pncp')) {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: searchParams }).then(r => r.data?.items || []).catch(() => []));
