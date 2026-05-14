@@ -130,7 +130,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value, options = {}) => {
         // 🛠️ CORREÇÃO DE ENDEREÇAMENTO (v3.5.87)
         // Usamos o bidId (ID interno do Serpro) como prioridade absoluta para a URL
         const targetId = bidId || item?.bidId || item?.itemId || itemNum;
-        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${targetId}/lances`;
+        const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${targetId}/lances?configs=false&captcha1=${options.captcha || ''}&captcha2=&captcha3=`;
 
         // 🛡️ PAYLOAD RÉPLICA HUMANA (v3.5.72) - Especial para Dispensa Eletrônica
         // Baseado no log capturado: { valorInformado: 990, faseItem: "LA" }
@@ -147,7 +147,7 @@ const sendBid = async (purchaseId, itemNum, bidId, value, options = {}) => {
                 'Authorization': auth, 
                 'Content-Type': 'application/json', 
                 'Accept': 'application/json',
-                'User-Agent': navigator.userAgent
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2 Chrome/112.0.5615.165 Electron/24.1.3 Safari/537.36'
             },
             body: JSON.stringify(payload)
         });
@@ -211,7 +211,8 @@ const startHybridEngine = () => {
                     
                     for (const baseUrl of targetUrls) {
                         try {
-                            const res = await fetch(baseUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json' } });
+                            const finalUrl = baseUrl.includes('?') ? `${baseUrl}&configs=false&captcha1=&captcha2=&captcha3=` : `${baseUrl}?configs=false&captcha1=&captcha2=&captcha3=`;
+                            const res = await fetch(finalUrl, { headers: { 'Authorization': authHeader, 'Accept': 'application/json', 'User-Agent': 'SIGAClient/0.7.2' } });
                             if (res.ok) {
                                 const data = await res.json();
                                 const items = Array.isArray(data) ? data : (data.itens || data.items || []);
