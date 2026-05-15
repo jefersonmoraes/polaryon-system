@@ -330,29 +330,34 @@ export default function BiddingDashboardPage() {
         }
     };
 
-    // v2.0 War Flow - Unified Item List
+    // v2.0 War Flow - Unified Item List (v3.6.14)
     const allItems = useMemo(() => {
-        const list: (BiddingItem & { sid: string, uasgName: string })[] = [];
-        if (!sessions) return list;
-
+        // Agrupamento por ID de Compra para evitar duplicidade visual
+        const uniqueItems = new Map<string, (BiddingItem & { sid: string, uasgName: string })>();
+        
         Object.entries(sessions).forEach(([sid, session]) => {
             if (!session) return;
             const sessionItems = Array.isArray(session.items) ? session.items : [];
             sessionItems.forEach(item => {
                 if (!item) return;
-                list.push({ ...item, sid, uasgName: session.uasg || '---' });
+                // Chave única: uasg + item
+                const key = `${session.uasg}_${item.itemId}`;
+                if (!uniqueItems.has(key) || (item.timerSeconds && item.timerSeconds > 0)) {
+                    uniqueItems.set(key, { ...item, sid, uasgName: session.sessionTitle || session.uasg || '---' });
+                }
             });
         });
 
+        const list = Array.from(uniqueItems.values());
+
         // Ordenação inteligente: Perdedores e Urgentes primeiro
-        return [...list].sort((a, b) => {
-            const aIsWinning = a.ganhador === 'Você' || a.position === 1;
-            const bIsWinning = b.ganhador === 'Você' || b.position === 1;
+        return list.sort((a, b) => {
+            const aIsWinning = a.ganhador === 'Você' || String(a.posicao) === '1';
+            const bIsWinning = b.ganhador === 'Você' || String(b.posicao) === '1';
             
             if (!aIsWinning && bIsWinning) return -1;
             if (aIsWinning && !bIsWinning) return 1;
             
-            // Se ambos estão no mesmo status, os com menos tempo vem primeiro
             return (a.timerSeconds || 9999) - (b.timerSeconds || 9999);
         });
     }, [sessions]);
@@ -451,6 +456,15 @@ export default function BiddingDashboardPage() {
                         ano: data.ano !== '---' ? data.ano : (sessionData.ano || '---'),
                         sessionTitle: data.sessionTitle || sessionData.sessionTitle || ''
                     };
+
+                    // 🔥 LÓGICA DE LIMPEZA DE FANTASMAS (v3.6.14)
+                    // Se recebemos uma sala real (idCompra), removemos a sala de LOGIN genérica se existir
+                    if (data.uasg && data.uasg !== 'LOGIN') {
+                        Object.keys(updated).forEach(k => {
+                            if (updated[k].uasg === 'LOGIN') delete updated[k];
+                        });
+                    }
+
                     return updated;
                 });
             };
@@ -721,7 +735,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.13</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.14</span>
                         </h1>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
@@ -759,22 +773,22 @@ export default function BiddingDashboardPage() {
             </header>
 
 
-            {Object.keys(sessions).length > 0 && (
                 <div className="w-full bg-slate-900 border-b border-white/5 py-2 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-2">Salas Ativas:</span>
-                    {Object.entries(sessions).map(([sid, s]) => (
+                    {Object.entries(sessions)
+                        .filter(([sid, s]) => sid !== 'undefined' && s.uasg !== 'LOGIN') // Oculta login quando há salas reais
+                        .map(([sid, s]) => (
                         <button 
                             key={sid}
                             onClick={() => { setSessionId(sid); setItems(s.items || []); setIsListening(true); }}
                             className={`flex items-center gap-2 px-4 py-1.5 rounded-lg border transition-all whitespace-nowrap ${sessionId === sid ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
                         >
                             <Activity className={`w-3 h-3 ${sessionId === sid ? 'text-white' : 'text-emerald-500'}`} />
-                            <span className="text-[10px] font-black tracking-tight">UASG {s.uasg} | {(s.items || []).length} Itens</span>
+                            <span className="text-[10px] font-black tracking-tight">{s.sessionTitle || `UASG ${s.uasg}`} | {(s.items || []).length} Itens</span>
                             {(s.items || []).some(it => (it.status || '').toLowerCase().includes('disputa')) && <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
                         </button>
                     ))}
                 </div>
-            )}
 
             <main className="container mx-auto px-4 py-8 max-w-[1800px]">
                 {!isListening ? (
@@ -1108,10 +1122,15 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     };
 
     const formatTime = (seconds: number) => {
-        if (seconds <= 0) return '00:00';
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        if (seconds <= 0) return '00:00:00';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        
+        if (h > 0) {
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
     return (
