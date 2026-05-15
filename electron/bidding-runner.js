@@ -22,11 +22,11 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.25 - Ultra-Sniper (Smart Search & Debug)
+ * ItemRunner v3.6.26 - Final Strike (Type Consistency & Value Mapping)
  */
 class ItemRunner {
     constructor(itemId, idCompra, originalSessionId, agent, webContents, config, clockSync) {
-        this.itemId = itemId;
+        this.itemId = String(itemId); // Força ID como String para bater com o Frontend
         this.idCompra = idCompra;
         this.originalSessionId = originalSessionId;
         this.agent = agent;
@@ -55,20 +55,11 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
             
-            if (itemsList.length === 0) {
-                this.webContents.send('bidding-update', {
-                    sessionId: this.originalSessionId,
-                    log: `[MOTOR] Lista vazia recebida do governo.`
-                });
-                this.timeoutId = setTimeout(() => this.run(), 5000);
-                return;
-            }
-
-            // 🏆 BUSCA INTELIGENTE (Smart Search)
+            // Busca o item garantindo comparação de string
             const item = itemsList.find(it => 
-                String(it.numero) === String(this.itemId) || 
-                String(it.identificador) === String(this.itemId) ||
-                (it.descricao && it.descricao.toLowerCase().includes('lâmpada')) // Fallback por texto se os IDs falharem
+                String(it.numero) === this.itemId || 
+                String(it.identificador) === this.itemId ||
+                (it.descricao && it.descricao.toLowerCase().includes('lâmpada'))
             );
             
             if (item) {
@@ -86,13 +77,14 @@ class ItemRunner {
                     }
                 }
 
+                // 🏁 Envio de dados com consistência de tipos
                 this.webContents.send('bidding-update', {
                     sessionId: this.originalSessionId,
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: title,
-                    log: `[MOTOR] Item ${this.itemId} localizado! Status: ${posicaoTxt}`,
+                    log: `[MOTOR] Item ${this.itemId}: ${posicaoTxt} | ${Math.floor(secondsLeft)}s`,
                     items: [{
-                        itemId: this.itemId,
+                        itemId: this.itemId, // Mantém como String
                         valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
                         meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : (item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0),
                         status: item.faseTraduzido || item.fase || 'Em Disputa',
@@ -105,10 +97,6 @@ class ItemRunner {
                 const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 1500;
                 this.timeoutId = setTimeout(() => this.run(), nextInterval);
             } else {
-                this.webContents.send('bidding-update', {
-                    sessionId: this.originalSessionId,
-                    log: `[DEBUG] Item ${this.itemId} não achado entre os ${itemsList.length} itens da lista.`
-                });
                 this.timeoutId = setTimeout(() => this.run(), 4000);
             }
 
