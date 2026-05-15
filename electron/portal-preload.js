@@ -1,41 +1,62 @@
 (function() {
-    console.log("%c[POLARYON] Interceptor de Elite v3.6.27 Iniciado!", "color: #00ff00; font-weight: bold;");
+    console.log("%c[POLARYON] Escuta-Geral v3.6.29 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
 
+    // 🕵️‍♂️ INTERCEPTOR DE FETCH (Moderno)
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         const response = await originalFetch(...args);
         const url = args[0];
-
         if (typeof url === 'string' && (url.includes('em-disputa') || url.includes('itens'))) {
-            // Extrai o código da compra da URL (ex: 29000206002052026)
-            const match = url.match(/\/compras\/(\d+)\//);
-            const roomCode = match ? match[1] : null;
-
             const clone = response.clone();
-            clone.json().then(data => {
-                const items = Array.isArray(data) ? data : (data.itens || []);
-                if (items.length > 0 && roomCode) {
-                    if (window.electronAPI && window.electronAPI.sendPortalData) {
-                        window.electronAPI.sendPortalData({
-                            type: 'portal-sync',
-                            roomCode: roomCode, // Carimbo da Sala
-                            timestamp: Date.now(),
-                            items: items.map(it => ({
-                                itemId: String(it.numero || it.identificador),
-                                valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
-                                meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
-                                status: it.faseTraduzido || it.fase,
-                                posicao: it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
-                                timerSeconds: it.segundosParaEncerramento || -1,
-                                dataHoraFimContagem: it.dataHoraFimContagem,
-                                desc: it.descricao
-                            }))
-                        });
-                    }
-                    console.log(`%c[POLARYON] Dados da sala ${roomCode} enviados para o Dashboard!`, "color: #00d4ff;");
-                }
-            }).catch(() => {});
+            clone.json().then(data => processSerproData(data, url)).catch(() => {});
         }
         return response;
     };
+
+    // 🕵️‍♂️ INTERCEPTOR DE XHR (Tradicional - Usado pelo Comprasnet antigo)
+    const open = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this._url = url;
+        return open.apply(this, arguments);
+    };
+
+    const send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function() {
+        this.addEventListener('load', function() {
+            if (this._url && (this._url.includes('em-disputa') || this._url.includes('itens'))) {
+                try {
+                    const data = JSON.parse(this.responseText);
+                    processSerproData(data, this._url);
+                } catch (e) {}
+            }
+        });
+        return send.apply(this, arguments);
+    };
+
+    function processSerproData(data, url) {
+        const items = Array.isArray(data) ? data : (data.itens || []);
+        const match = url.match(/\/compras\/(\d+)\//);
+        const roomCode = match ? match[1] : null;
+
+        if (items.length > 0 && roomCode) {
+            if (window.electronAPI && window.electronAPI.sendPortalData) {
+                window.electronAPI.sendPortalData({
+                    type: 'portal-sync',
+                    roomCode: roomCode,
+                    timestamp: Date.now(),
+                    items: items.map(it => ({
+                        itemId: String(it.numero || it.identificador),
+                        valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
+                        meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
+                        status: it.faseTraduzido || it.fase,
+                        posicao: it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
+                        timerSeconds: it.segundosParaEncerramento || -1,
+                        dataHoraFimContagem: it.dataHoraFimContagem,
+                        desc: it.descricao
+                    }))
+                });
+            }
+            console.log(`%c[POLARYON] Sincronia detectada na sala ${roomCode}! 📡`, "color: #00d4ff; font-weight: bold;");
+        }
+    }
 })();

@@ -495,12 +495,25 @@ export default function BiddingDashboardPage() {
                 setSessions(prev => {
                     const updated = { ...prev };
                     // Procura uma sessão que tenha o UASG/Número batendo com o roomCode
-                    const sid = Object.keys(updated).find(k => {
+                    let sid = Object.keys(updated).find(k => {
                         const s = updated[k];
                         const code = `${s.uasg}05${String(s.numero).padStart(5, '0')}${s.ano}`;
                         const codeAlt = `${s.uasg}06${String(s.numero).padStart(5, '0')}${s.ano}`;
                         return roomCode === code || roomCode === codeAlt;
                     });
+
+                    // 🛠️ CRIAÇÃO VIRTUAL: Se a sala não existe, cria ela na hora!
+                    if (!sid) {
+                        sid = `virtual_${roomCode}`;
+                        updated[sid] = {
+                            uasg: roomCode.substring(0, 6),
+                            numero: parseInt(roomCode.substring(8, 13)),
+                            ano: roomCode.substring(13, 17),
+                            items: [],
+                            sessionTitle: `SALA DETECTADA: ${roomCode.substring(0, 6)}`,
+                            lastUpdate: timestamp
+                        };
+                    }
 
                     if (sid) {
                         const sessionData = updated[sid];
@@ -519,7 +532,7 @@ export default function BiddingDashboardPage() {
                             syncStatus: 'PORTAL_DIRECT'
                         };
 
-                        // 🔥 AUTO-IGNIÇÃO: Se não estiver ouvindo, força o início da sessão
+                        // 🔥 AUTO-IGNIÇÃO: Força o foco na sala detectada
                         if (!isListening || sessionId !== sid) {
                             setSessionId(sid);
                             setIsListening(true);
