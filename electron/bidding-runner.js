@@ -20,7 +20,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.20 - Victory (SIGA DNA)
+ * ItemRunner v3.6.21 - Absolute Fix (Array-Direct)
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
@@ -53,26 +53,30 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const data = res.data;
 
-            // Extração de Título do Objeto (v3.6.20)
-            if (!this.purchaseTitle || this.purchaseTitle.includes('UNDEFINED')) {
-                this.purchaseTitle = data.termoObjeto || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)} | UASG ${this.idCompra.substring(0, 6)}`;
+            // 🏁 TRATAMENTO DE ARRAY DIRETO (v3.6.21)
+            const itemsList = Array.isArray(data) ? data : (data.itens || []);
+            
+            if (itemsList.length === 0) {
+                // Se não achou itens, tenta de novo em 5s
+                this.timeoutId = setTimeout(() => this.run(), 5000);
+                return;
             }
 
-            const itemsList = data.itens || [];
             const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
             
             if (item) {
-                // 🏁 DNA SIGA: Posição e Status
+                // Mapeamento de Ranking (DNA SIGA)
                 const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
                 
-                // 🏁 DNA SIGA: Cronômetro (Fix Fuso Horário)
+                // Mapeamento de Título
+                this.purchaseTitle = data.termoObjeto || item.descricao || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
+
+                // Cálculo de Cronômetro (Fix Local Time)
                 let secondsLeft = item.segundosParaEncerramento;
                 if (secondsLeft === undefined || secondsLeft === null) {
                     if (item.dataHoraFimContagem) {
-                        // O governo envia a hora sem fuso (ex: 2026-05-15T14:00:00). 
-                        // Assumimos que é a mesma referência do relógio do sistema.
                         const endTime = new Date(item.dataHoraFimContagem).getTime();
-                        const nowTime = new Date().getTime(); // Usamos o tempo local para bater com a string local
+                        const nowTime = new Date().getTime();
                         secondsLeft = Math.max(0, (endTime - nowTime) / 1000);
                     } else {
                         secondsLeft = -1;
@@ -96,10 +100,9 @@ class ItemRunner {
 
                 const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
                 this.timeoutId = setTimeout(() => this.run(), nextInterval);
-                return;
+            } else {
+                this.timeoutId = setTimeout(() => this.run(), 5000);
             }
-
-            this.timeoutId = setTimeout(() => this.run(), 5000);
 
         } catch (e) {
             this.timeoutId = setTimeout(() => this.run(), 5000);
