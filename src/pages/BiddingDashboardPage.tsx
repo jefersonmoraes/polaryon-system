@@ -518,6 +518,13 @@ export default function BiddingDashboardPage() {
                             lastUpdate: timestamp,
                             syncStatus: 'PORTAL_DIRECT'
                         };
+
+                        // 🔥 AUTO-IGNIÇÃO: Se não estiver ouvindo, força o início da sessão
+                        if (!isListening || sessionId !== sid) {
+                            setSessionId(sid);
+                            setIsListening(true);
+                            setItems(Array.from(itemMap.values()));
+                        }
                     }
                     return updated;
                 });
@@ -779,7 +786,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v{appVersion}</span>
+                            POLARYON
                         </h1>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
