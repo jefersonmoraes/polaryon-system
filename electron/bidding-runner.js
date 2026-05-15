@@ -20,7 +20,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.19 - Eagle Eye Discovery
+ * ItemRunner v3.6.20 - Victory (SIGA DNA)
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
@@ -32,7 +32,6 @@ class ItemRunner {
         this.clockSync = clockSync;
         this.active = true;
         this.timeoutId = null;
-        this.currentRank = '?';
         this.purchaseTitle = '';
     }
 
@@ -54,33 +53,30 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const data = res.data;
 
-            // 🦅 DISCOVERY LOG (v3.6.19)
-            // Isso vai aparecer no seu Fluxo de Dados/Terminal
-            const keys = Object.keys(data).join(', ');
-            console.log(`[POLARYON DISCOVERY] Resposta recebida. Campos: ${keys}`);
-
-            const itemsList = data.itens || data.items || data.listaItens || (Array.isArray(data) ? data : []);
-            
-            if (itemsList.length > 0) {
-                const firstItemKeys = Object.keys(itemsList[0]).join(', ');
-                console.log(`[POLARYON DISCOVERY] Campos do Item: ${firstItemKeys}`);
+            // Extração de Título do Objeto (v3.6.20)
+            if (!this.purchaseTitle || this.purchaseTitle.includes('UNDEFINED')) {
+                this.purchaseTitle = data.termoObjeto || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)} | UASG ${this.idCompra.substring(0, 6)}`;
             }
 
-            const item = itemsList.find(it => 
-                String(it.numero) === String(this.itemId) || 
-                String(it.identificador) === String(this.itemId) ||
-                String(it.sequencial) === String(this.itemId)
-            );
+            const itemsList = data.itens || [];
+            const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
             
             if (item) {
-                this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || item.classificacao || '?');
-                this.purchaseTitle = data.termoObjeto || data.descricaoCompra || this.purchaseTitle || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
-
-                let secondsLeft = item.segundosParaEncerramento || item.tempoRestante || item.secondsLeft;
+                // 🏁 DNA SIGA: Posição e Status
+                const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
+                
+                // 🏁 DNA SIGA: Cronômetro (Fix Fuso Horário)
+                let secondsLeft = item.segundosParaEncerramento;
                 if (secondsLeft === undefined || secondsLeft === null) {
-                    const endTimeStr = item.dataHoraFimContagem || item.dataFim || item.prazoEncerramento;
-                    const endTime = endTimeStr ? new Date(endTimeStr).getTime() : 0;
-                    secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
+                    if (item.dataHoraFimContagem) {
+                        // O governo envia a hora sem fuso (ex: 2026-05-15T14:00:00). 
+                        // Assumimos que é a mesma referência do relógio do sistema.
+                        const endTime = new Date(item.dataHoraFimContagem).getTime();
+                        const nowTime = new Date().getTime(); // Usamos o tempo local para bater com a string local
+                        secondsLeft = Math.max(0, (endTime - nowTime) / 1000);
+                    } else {
+                        secondsLeft = -1;
+                    }
                 }
 
                 this.webContents.send('bidding-update', {
@@ -89,12 +85,12 @@ class ItemRunner {
                     sessionTitle: this.purchaseTitle,
                     items: [{
                         itemId: this.itemId,
-                        valorAtual: item.melhorLance || item.valorEstimado || item.valorAtual,
-                        meuValor: item.valorLanceProposta || item.meuUltimoLance,
-                        status: item.faseTraduzido || item.situacao || item.fase,
-                        posicao: this.currentRank,
+                        valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : item.melhorLance,
+                        meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : item.valorLanceProposta,
+                        status: item.faseTraduzido || item.fase,
+                        posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
-                        desc: item.descricao || item.objeto
+                        desc: item.descricao
                     }]
                 });
 
