@@ -20,12 +20,12 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.15 - Visão de Águia (Estabilidade Total)
+ * ItemRunner v3.6.16 - Visão de Águia (Format Fix)
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
         this.itemId = itemId;
-        this.idCompra = idCompra;
+        this.idCompra = idCompra; // UASG + MOD + NUM + ANO
         this.agent = agent;
         this.webContents = webContents;
         this.config = config;
@@ -40,72 +40,63 @@ class ItemRunner {
         if (!this.active) return;
 
         try {
-            // 1. Dados Públicos (Garantidos)
-            const itemUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}/itens/${this.itemId}`;
-            const res = await axios.get(itemUrl, { 
-                timeout: 3000,
-                headers: { 'User-Agent': 'SIGAClient/0.7.2' }
+            // 1. Captura de Dados (Busca em Massa para evitar 204)
+            const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}/itens`;
+            const res = await axios.get(itemsUrl, { 
+                timeout: 5000,
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
             });
-            this.clockSync.update(res.headers.date);
-            const item = res.data;
-
-            // Extração de Ranking e Título da API de Itens (Fallback Seguro)
-            this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || '?');
             
-            // Tenta pegar o título oficial da compra
-            if (!this.purchaseTitle) {
-                try {
-                    const compraUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}`;
-                    const compraRes = await axios.get(compraUrl, { headers: { 'User-Agent': 'SIGAClient/0.7.2' } });
-                    if (compraRes.data) {
-                        const c = compraRes.data;
-                        this.purchaseTitle = `${c.modalidadeTraduzido} ${c.numero}/${c.ano} | ${c.uasgNome}`;
-                    }
-                } catch (e) {
-                    this.purchaseTitle = `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)} | UASG ${this.idCompra.substring(0, 6)}`;
-                }
-            }
+            this.clockSync.update(res.headers.date);
+            const itemsList = res.data;
+            const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
 
-            // 2. Cronômetro Real
-            let secondsLeft = item.segundosParaEncerramento;
-            if (secondsLeft === undefined || secondsLeft === null) {
-                const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
-                secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
-            }
-
-            // 3. Tenta Ranking Privado (Apenas se tiver Token)
-            try {
-                const token = await ipcMain.invoke('get-login-token');
-                if (token) {
-                    const salaUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${this.idCompra}/item/${this.itemId}`;
-                    const salaRes = await axios.get(salaUrl, {
-                        httpsAgent: this.agent,
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (salaRes.data && salaRes.data.posicaoParticipante) {
-                        this.currentRank = String(salaRes.data.posicaoParticipante);
+            if (item) {
+                this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || '?');
+                
+                // 2. Busca de Título (Se ainda não tiver)
+                if (!this.purchaseTitle || this.purchaseTitle.includes('UNDEFINED')) {
+                    try {
+                        const compraUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}`;
+                        const compraRes = await axios.get(compraUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+                        if (compraRes.data) {
+                            const c = compraRes.data;
+                            this.purchaseTitle = `${c.modalidadeTraduzido} ${c.numero}/${c.ano} | ${c.uasgNome}`;
+                        }
+                    } catch (e) {
+                        this.purchaseTitle = `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)} | UASG ${this.idCompra.substring(0, 6)}`;
                     }
                 }
-            } catch (e) { /* Fallback já definido no passo 1 */ }
 
-            // 4. Notifica UI
-            this.webContents.send('bidding-update', {
-                sessionId: this.idCompra,
-                uasg: this.idCompra.substring(0, 6),
-                sessionTitle: this.purchaseTitle,
-                items: [{
-                    itemId: this.itemId,
-                    valorAtual: item.melhorLance || item.valorEstimado,
-                    meuValor: item.valorLanceProposta,
-                    status: item.faseTraduzido || item.fase,
-                    posicao: this.currentRank,
-                    timerSeconds: secondsLeft,
-                    desc: item.descricao
-                }]
-            });
+                // 3. Cronômetro Real
+                let secondsLeft = item.segundosParaEncerramento;
+                if (secondsLeft === undefined || secondsLeft === null) {
+                    const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
+                    secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
+                }
 
-            const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
-            this.timeoutId = setTimeout(() => this.run(), nextInterval);
+                // 4. Notifica UI
+                this.webContents.send('bidding-update', {
+                    sessionId: this.idCompra,
+                    uasg: this.idCompra.substring(0, 6),
+                    sessionTitle: this.purchaseTitle,
+                    items: [{
+                        itemId: this.itemId,
+                        valorAtual: item.melhorLance || item.valorEstimado,
+                        meuValor: item.valorLanceProposta,
+                        status: item.faseTraduzido || item.fase,
+                        posicao: this.currentRank,
+                        timerSeconds: secondsLeft,
+                        desc: item.descricao
+                    }]
+                });
+
+                const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
+                this.timeoutId = setTimeout(() => this.run(), nextInterval);
+            } else {
+                // Item não encontrado na lista, tenta de novo em 5s
+                this.timeoutId = setTimeout(() => this.run(), 5000);
+            }
 
         } catch (e) {
             this.timeoutId = setTimeout(() => this.run(), 5000);
@@ -127,6 +118,7 @@ class BiddingRunner {
     }
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
+        // Formato ID Compra: UASG + MOD + NUM + ANO (17 chars)
         const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
         if (this.activeSessions.has(idCompra)) return;
 
