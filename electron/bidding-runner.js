@@ -20,12 +20,12 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.16 - Visão de Águia (Format Fix)
+ * ItemRunner v3.6.17 - Eagle Eye Final (Disputa Fix)
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
         this.itemId = itemId;
-        this.idCompra = idCompra; // UASG + MOD + NUM + ANO
+        this.idCompra = idCompra;
         this.agent = agent;
         this.webContents = webContents;
         this.config = config;
@@ -40,63 +40,59 @@ class ItemRunner {
         if (!this.active) return;
 
         try {
-            // 1. Captura de Dados (Busca em Massa para evitar 204)
-            const itemsUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}/itens`;
-            const res = await axios.get(itemsUrl, { 
-                timeout: 5000,
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-            });
+            const token = await ipcMain.invoke('get-login-token');
+            // 1. Endpoint que deu 200 no Diagnóstico
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=&captcha2=&captcha3=`;
             
+            const res = await axios.get(url, {
+                httpsAgent: this.agent,
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+
             this.clockSync.update(res.headers.date);
-            const itemsList = res.data;
-            const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
+            const data = res.data;
 
-            if (item) {
-                this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || '?');
+            if (data && data.itens) {
+                const item = data.itens.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
                 
-                // 2. Busca de Título (Se ainda não tiver)
-                if (!this.purchaseTitle || this.purchaseTitle.includes('UNDEFINED')) {
-                    try {
-                        const compraUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}`;
-                        const compraRes = await axios.get(compraUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-                        if (compraRes.data) {
-                            const c = compraRes.data;
-                            this.purchaseTitle = `${c.modalidadeTraduzido} ${c.numero}/${c.ano} | ${c.uasgNome}`;
-                        }
-                    } catch (e) {
-                        this.purchaseTitle = `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)} | UASG ${this.idCompra.substring(0, 6)}`;
+                if (item) {
+                    this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || '?');
+                    this.purchaseTitle = data.termoObjeto || this.purchaseTitle || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
+
+                    // 2. Cronômetro Real
+                    let secondsLeft = item.segundosParaEncerramento;
+                    if (secondsLeft === undefined || secondsLeft === null) {
+                        const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
+                        secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
                     }
+
+                    // 3. Notifica UI
+                    this.webContents.send('bidding-update', {
+                        sessionId: this.idCompra,
+                        uasg: this.idCompra.substring(0, 6),
+                        sessionTitle: this.purchaseTitle,
+                        items: [{
+                            itemId: this.itemId,
+                            valorAtual: item.melhorLance || item.valorEstimado,
+                            meuValor: item.valorLanceProposta,
+                            status: item.faseTraduzido || item.fase,
+                            posicao: this.currentRank,
+                            timerSeconds: secondsLeft,
+                            desc: item.descricao
+                        }]
+                    });
+
+                    const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
+                    this.timeoutId = setTimeout(() => this.run(), nextInterval);
+                    return;
                 }
-
-                // 3. Cronômetro Real
-                let secondsLeft = item.segundosParaEncerramento;
-                if (secondsLeft === undefined || secondsLeft === null) {
-                    const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
-                    secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
-                }
-
-                // 4. Notifica UI
-                this.webContents.send('bidding-update', {
-                    sessionId: this.idCompra,
-                    uasg: this.idCompra.substring(0, 6),
-                    sessionTitle: this.purchaseTitle,
-                    items: [{
-                        itemId: this.itemId,
-                        valorAtual: item.melhorLance || item.valorEstimado,
-                        meuValor: item.valorLanceProposta,
-                        status: item.faseTraduzido || item.fase,
-                        posicao: this.currentRank,
-                        timerSeconds: secondsLeft,
-                        desc: item.descricao
-                    }]
-                });
-
-                const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
-                this.timeoutId = setTimeout(() => this.run(), nextInterval);
-            } else {
-                // Item não encontrado na lista, tenta de novo em 5s
-                this.timeoutId = setTimeout(() => this.run(), 5000);
             }
+            
+            // Se não achou o item ou erro, tenta de novo em 5s
+            this.timeoutId = setTimeout(() => this.run(), 5000);
 
         } catch (e) {
             this.timeoutId = setTimeout(() => this.run(), 5000);
@@ -118,7 +114,6 @@ class BiddingRunner {
     }
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
-        // Formato ID Compra: UASG + MOD + NUM + ANO (17 chars)
         const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
         if (this.activeSessions.has(idCompra)) return;
 
