@@ -111,6 +111,7 @@ export default function BiddingDashboardPage() {
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
     const [appVersion, setAppVersion] = useState('...');
+    const [serverTime, setServerTime] = useState<number>(Date.now());
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -135,6 +136,14 @@ export default function BiddingDashboardPage() {
     }, [itemStrategies]);
 
     useEffect(() => { lastBidTimesRef.current = lastAutoBidTimes; }, [lastAutoBidTimes]);
+
+    // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.6.13
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setServerTime(Date.now() + serverOffset);
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [serverOffset]);
 
     // 🎯 MOTOR DE DISPARO INDEPENDENTE (v3.5.89)
     useEffect(() => {
@@ -418,26 +427,32 @@ export default function BiddingDashboardPage() {
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
             const handleUpdate = (data: any) => {
-                const { sessionId: sid, items: newItems, timestamp, turbo: isTurbo } = data;
-                
-                if (sid === sessionId) {
-                    setItems(newItems || []);
-                    setLastUpdate(timestamp);
-                    if (isTurbo !== undefined) setTurbo(isTurbo);
-                }
+                const { sessionId: sid, items: newItems, timestamp } = data;
+                if (data.serverOffset !== undefined) setServerOffset(data.serverOffset);
 
-                setSessions(prev => ({
-                    ...prev,
-                    [sid]: {
-                        ...(prev[sid] || {}),
-                        items: Array.isArray(newItems) ? newItems : [],
+                setSessions(prev => {
+                    const updated = { ...prev };
+                    const sessionData = updated[sid] || {};
+                    
+                    // Lógica de Fusão de Itens: Mantém apenas itens únicos por itemId
+                    const existingItems = sessionData.items || [];
+                    const itemMap = new Map(existingItems.map((it: any) => [it.itemId, it]));
+                    
+                    (newItems || []).forEach((it: any) => {
+                        itemMap.set(it.itemId, { ...(itemMap.get(it.itemId) || {}), ...it });
+                    });
+
+                    updated[sid] = {
+                        ...sessionData,
+                        items: Array.from(itemMap.values()),
                         lastUpdate: timestamp,
-                        uasg: data.uasg || (prev[sid]?.uasg) || '---',
-                        numero: data.numero !== '---' ? data.numero : (prev[sid]?.numero || '---'),
-                        ano: data.ano !== '---' ? data.ano : (prev[sid]?.ano || '---'),
-                        sessionTitle: data.sessionTitle || (prev[sid]?.sessionTitle) || ''
-                    }
-                }));
+                        uasg: data.uasg || sessionData.uasg || '---',
+                        numero: data.numero !== '---' ? data.numero : (sessionData.numero || '---'),
+                        ano: data.ano !== '---' ? data.ano : (sessionData.ano || '---'),
+                        sessionTitle: data.sessionTitle || sessionData.sessionTitle || ''
+                    };
+                    return updated;
+                });
             };
             
             const handleChat = (data: any) => {
@@ -706,11 +721,20 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.10</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.13</span>
                         </h1>
-                        <div className="flex items-center gap-2">
-                            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SISTEMA OPERACIONAL</span>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SISTEMA OPERACIONAL</span>
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 rounded-lg shadow-inner">
+                                <Clock className="w-3 h-3 text-emerald-400" />
+                                <span className="text-[11px] font-mono font-bold text-white tracking-tighter">
+                                    {new Date(serverTime).toLocaleTimeString('pt-BR')}
+                                </span>
+                                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">SINCRONIZADO</span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -40,6 +40,7 @@ class ItemRunner {
         this.lastBid = 0;
         this.prevStatus = null;
         this.isPaused = false;
+        this.currentRank = '?';
     }
 
     async run() {
@@ -56,40 +57,54 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const item = res.data;
 
+            // Busca de Posição (Ranking) - Endpoint Estilo Siga
+            try {
+                const rankUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances/compra/${this.idCompra}/item/${this.itemId}`;
+                const token = await ipcMain.invoke('get-login-token');
+                const rankRes = await axios.get(rankUrl, {
+                    httpsAgent: this.agent,
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (rankRes.data && rankRes.data.posicaoParticipante) {
+                    this.currentRank = String(rankRes.data.posicaoParticipante);
+                }
+            } catch (rankErr) {
+                // Silencioso: Se falhar o ranking, mantém o anterior
+            }
+
             // Sincronia de Tempo para Sniper
             const serverTime = this.clockSync.getServerTime();
             const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
             const secondsLeft = endTime ? Math.max(0, (endTime - serverTime) / 1000) : -1;
 
-            if (this.prevStatus !== item.fase) {
-                this.webContents.send('bidding-log', { 
-                    itemId: this.itemId, 
-                    message: `Fase: ${item.fase} | Sniper: ${secondsLeft > 0 ? secondsLeft.toFixed(1)+'s' : 'N/A'}` 
-                });
-                this.prevStatus = item.fase;
-            }
+            // Notifica UI
+            this.webContents.send('bidding-update', {
+                sessionId: this.idCompra, // Unificamos pelo ID da Compra
+                uasg: this.idCompra.substring(0, 6),
+                items: [{
+                    itemId: this.itemId,
+                    valorAtual: item.melhorLance || item.valorEstimado,
+                    meuValor: item.valorLanceProposta,
+                    status: item.fase,
+                    posicao: this.currentRank,
+                    timerSeconds: secondsLeft,
+                    serverTime: serverTime,
+                    serverOffset: this.clockSync.offset
+                }]
+            });
 
             await this.evaluateAndBid(item, secondsLeft);
 
-            // INTERVALO DINÂMICO (Algoritmo Sniper v3.6.11)
+            // INTERVALO DINÂMICO
             let nextInterval = 2000;
             if (item.fase === 'DISPUTA' || item.fase === 'IMINENTE') {
-                if (secondsLeft > 0 && secondsLeft < 45) {
-                    nextInterval = 100; // TURBO MODE (10 FPS de monitoramento)
-                } else {
-                    nextInterval = 350; // Monitoramento agressivo padrão
-                }
+                nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 350;
             }
 
             this.timeoutId = setTimeout(() => this.run(), nextInterval);
 
         } catch (e) {
-            // TRATAMENTO DE ERROS DO SERPRO (Estilo Siga)
             if (e.response && e.response.status === 422) {
-                this.webContents.send('bidding-log', { 
-                    itemId: this.itemId, 
-                    message: '⚠️ Erro 422: Resfriando conexão por 10 segundos...' 
-                });
                 this.isPaused = true;
                 setTimeout(() => { this.isPaused = false; this.run(); }, 10000);
             } else {
@@ -99,7 +114,7 @@ class ItemRunner {
     }
 
     async evaluateAndBid(item, secondsLeft) {
-        const myPosition = item.melhorLance === item.valorLanceProposta ? 1 : 0;
+        const myPosition = this.currentRank === '1' || item.melhorLance === item.valorLanceProposta ? 1 : 0;
         if (myPosition === 1) return;
 
         const currentVal = item.melhorLance || item.valorEstimado;
@@ -112,7 +127,6 @@ class ItemRunner {
         targetValue = Math.max(targetValue, minPrice);
         targetValue = Math.round(targetValue * 100) / 100;
 
-        // Disparo nos últimos 2.8s (Safe-zone do Serpro para garantir entrada no 59s/29s)
         const isSniperWindow = secondsLeft > 0 && secondsLeft <= 2.8;
         const isNormalFollower = this.config.mode === 'follower' && (item.fase === 'DISPUTA' || item.fase === 'IMINENTE');
 
@@ -122,19 +136,8 @@ class ItemRunner {
             try {
                 await this.executeBid(targetValue);
                 this.lastBid = targetValue;
-                this.webContents.send('bidding-action', {
-                    itemId: this.itemId,
-                    value: targetValue,
-                    status: 'success',
-                    reason: isSniperWindow ? `Sniper T-${secondsLeft.toFixed(1)}s` : 'Seguindo'
-                });
             } catch (err) {
-                this.webContents.send('bidding-action', {
-                    itemId: this.itemId,
-                    value: targetValue,
-                    status: 'error',
-                    error: err.message
-                });
+                // Log de erro de lance
             }
         }
     }
@@ -165,14 +168,14 @@ class ItemRunner {
 }
 
 /**
- * BiddingRunner v3.6.11 - Elite Sniper
+ * BiddingRunner v3.6.13 - Visão de Águia
  */
 class BiddingRunner {
     constructor(webContents) {
         this.webContents = webContents;
         this.clockSync = new ClockSync();
-        this.activeRunners = new Map(); // key: idCompra_itemId
-        this.activeSessions = new Set(); // key: idCompra (Bloqueio de duplicidade)
+        this.activeRunners = new Map(); 
+        this.activeSessions = new Set(); 
     }
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
@@ -180,11 +183,7 @@ class BiddingRunner {
         const internalModality = modality === '14' ? '91' : modality;
         const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
 
-        // BLOQUEIO DE DUPLICIDADE POR ID COMPRA
-        if (this.activeSessions.has(idCompra)) {
-            console.log(`[v3.6.11] Sessão para ${idCompra} já ativa. Ignorando duplicata.`);
-            return;
-        }
+        if (this.activeSessions.has(idCompra)) return;
 
         const agent = new https.Agent({
             pfx: Buffer.from(vault.pfxBase64, 'base64'),
@@ -203,8 +202,7 @@ class BiddingRunner {
                 runner.run();
             }
         }
-
-        console.log(`[v3.6.11] Motor Sniper ATÔMICO iniciado para ${idCompra}`);
+        console.log(`[v3.6.13] Motor Sniper UNIFICADO para ${idCompra}`);
     }
 
     stop(sessionId, uasg, numero, ano, modality = '06') {
