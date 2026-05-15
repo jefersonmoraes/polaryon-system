@@ -457,11 +457,13 @@ export default function BiddingDashboardPage() {
                         sessionTitle: data.sessionTitle || sessionData.sessionTitle || ''
                     };
 
-                    // 🔥 LÓGICA DE LIMPEZA DE FANTASMAS (v3.6.14)
-                    // Se recebemos uma sala real (idCompra), removemos a sala de LOGIN genérica se existir
+                    // 🔥 FUSÃO AGRESSIVA (v3.6.15)
+                    // Se temos uma sala com UASG real, matamos qualquer outra que seja genérica ou duplicada
                     if (data.uasg && data.uasg !== 'LOGIN') {
                         Object.keys(updated).forEach(k => {
-                            if (updated[k].uasg === 'LOGIN') delete updated[k];
+                            if (k !== sid && (updated[k].uasg === 'LOGIN' || updated[k].uasg === data.uasg)) {
+                                delete updated[k];
+                            }
                         });
                     }
 
@@ -735,7 +737,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.14</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.15</span>
                         </h1>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
@@ -1141,10 +1143,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
         }`}>
             <div className="grid grid-cols-12 gap-8 items-center">
                 <div className="col-span-3 flex items-center gap-4">
-                    <div className="flex flex-col items-center gap-1 mr-2">
-                        <span className="text-[8px] font-black text-slate-400 uppercase">Auto</span>
-                        <Switch checked={active} onCheckedChange={handleToggle} className="data-[state=checked]:bg-emerald-500 scale-75" />
-                    </div>
                     <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
                             <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
