@@ -20,12 +20,13 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.22 - Dynamic Sync & Logs
+ * ItemRunner v3.6.23 - Bridge Fix (Sync by Original Session ID)
  */
 class ItemRunner {
-    constructor(itemId, idCompra, agent, webContents, config, clockSync) {
+    constructor(itemId, idCompra, originalSessionId, agent, webContents, config, clockSync) {
         this.itemId = itemId;
-        this.idCompra = idCompra;
+        this.idCompra = idCompra; // ID do Governo (UASG + Mod + Num + Ano)
+        this.originalSessionId = originalSessionId; // ID da Tela (UUID do Banco)
         this.agent = agent;
         this.webContents = webContents;
         this.config = config;
@@ -71,8 +72,9 @@ class ItemRunner {
                     }
                 }
 
+                // 🏁 BRIDGE FIX: Envia usando o originalSessionId para a tela reconhecer
                 this.webContents.send('bidding-update', {
-                    sessionId: this.idCompra,
+                    sessionId: this.originalSessionId, 
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: this.purchaseTitle,
                     log: `[MOTOR] Item ${this.itemId}: ${posicaoTxt} | T: ${Math.floor(secondsLeft)}s`,
@@ -114,7 +116,7 @@ class BiddingRunner {
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
         const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
-        if (this.activeSessions.has(idCompra)) return;
+        if (this.activeSessions.has(sessionId)) return;
 
         const agent = new https.Agent({
             pfx: Buffer.from(vault.pfxBase64, 'base64'),
@@ -122,31 +124,29 @@ class BiddingRunner {
             rejectUnauthorized: false
         });
 
-        this.activeSessions.add(idCompra);
+        this.activeSessions.add(sessionId);
         const itemsConfig = vault.itemsConfig || {};
         for (const itemId in itemsConfig) {
-            const runner = new ItemRunner(itemId, idCompra, agent, this.webContents, itemsConfig[itemId], this.clockSync);
-            this.activeRunners.set(`${idCompra}_${itemId}`, runner);
+            const runner = new ItemRunner(itemId, idCompra, sessionId, agent, this.webContents, itemsConfig[itemId], this.clockSync);
+            this.activeRunners.set(`${sessionId}_${itemId}`, runner);
             runner.run();
         }
     }
 
-    stop(sessionId, uasg, numero, ano, modality = '06') {
-        const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
+    stop(sessionId) {
         for (const [key, runner] of this.activeRunners.entries()) {
-            if (key.startsWith(idCompra)) {
+            if (key.startsWith(sessionId)) {
                 runner.stop();
                 this.activeRunners.delete(key);
             }
         }
-        this.activeSessions.delete(idCompra);
+        this.activeSessions.delete(sessionId);
     }
 
-    updateConfig(sessionId, config, uasg, numero, ano, modality = '06') {
-        const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
+    updateConfig(sessionId, config) {
         const itemsConfig = config.itemsConfig || {};
         for (const itemId in itemsConfig) {
-            const runner = this.activeRunners.get(`${idCompra}_${itemId}`);
+            const runner = this.activeRunners.get(`${sessionId}_${itemId}`);
             if (runner) runner.config = itemsConfig[itemId];
         }
     }
