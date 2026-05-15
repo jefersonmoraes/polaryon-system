@@ -20,7 +20,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.18 - Eagle Eye Universal Map
+ * ItemRunner v3.6.19 - Eagle Eye Discovery
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
@@ -54,10 +54,18 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const data = res.data;
 
-            // 🔥 MAPEAMENTO UNIVERSAL (v3.6.18)
-            // Tenta encontrar a lista de itens em qualquer campo comum
+            // 🦅 DISCOVERY LOG (v3.6.19)
+            // Isso vai aparecer no seu Fluxo de Dados/Terminal
+            const keys = Object.keys(data).join(', ');
+            console.log(`[POLARYON DISCOVERY] Resposta recebida. Campos: ${keys}`);
+
             const itemsList = data.itens || data.items || data.listaItens || (Array.isArray(data) ? data : []);
             
+            if (itemsList.length > 0) {
+                const firstItemKeys = Object.keys(itemsList[0]).join(', ');
+                console.log(`[POLARYON DISCOVERY] Campos do Item: ${firstItemKeys}`);
+            }
+
             const item = itemsList.find(it => 
                 String(it.numero) === String(this.itemId) || 
                 String(it.identificador) === String(this.itemId) ||
@@ -65,13 +73,9 @@ class ItemRunner {
             );
             
             if (item) {
-                // Captura agressiva de Ranking
                 this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || item.classificacao || '?');
-                
-                // Captura agressiva de Título
                 this.purchaseTitle = data.termoObjeto || data.descricaoCompra || this.purchaseTitle || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
 
-                // Captura agressiva de Tempo
                 let secondsLeft = item.segundosParaEncerramento || item.tempoRestante || item.secondsLeft;
                 if (secondsLeft === undefined || secondsLeft === null) {
                     const endTimeStr = item.dataHoraFimContagem || item.dataFim || item.prazoEncerramento;
