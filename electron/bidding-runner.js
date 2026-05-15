@@ -20,7 +20,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.17 - Eagle Eye Final (Disputa Fix)
+ * ItemRunner v3.6.18 - Eagle Eye Universal Map
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
@@ -41,7 +41,6 @@ class ItemRunner {
 
         try {
             const token = await ipcMain.invoke('get-login-token');
-            // 1. Endpoint que deu 200 no Diagnóstico
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=&captcha2=&captcha3=`;
             
             const res = await axios.get(url, {
@@ -55,43 +54,51 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const data = res.data;
 
-            if (data && data.itens) {
-                const item = data.itens.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
-                
-                if (item) {
-                    this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || '?');
-                    this.purchaseTitle = data.termoObjeto || this.purchaseTitle || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
-
-                    // 2. Cronômetro Real
-                    let secondsLeft = item.segundosParaEncerramento;
-                    if (secondsLeft === undefined || secondsLeft === null) {
-                        const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
-                        secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
-                    }
-
-                    // 3. Notifica UI
-                    this.webContents.send('bidding-update', {
-                        sessionId: this.idCompra,
-                        uasg: this.idCompra.substring(0, 6),
-                        sessionTitle: this.purchaseTitle,
-                        items: [{
-                            itemId: this.itemId,
-                            valorAtual: item.melhorLance || item.valorEstimado,
-                            meuValor: item.valorLanceProposta,
-                            status: item.faseTraduzido || item.fase,
-                            posicao: this.currentRank,
-                            timerSeconds: secondsLeft,
-                            desc: item.descricao
-                        }]
-                    });
-
-                    const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
-                    this.timeoutId = setTimeout(() => this.run(), nextInterval);
-                    return;
-                }
-            }
+            // 🔥 MAPEAMENTO UNIVERSAL (v3.6.18)
+            // Tenta encontrar a lista de itens em qualquer campo comum
+            const itemsList = data.itens || data.items || data.listaItens || (Array.isArray(data) ? data : []);
             
-            // Se não achou o item ou erro, tenta de novo em 5s
+            const item = itemsList.find(it => 
+                String(it.numero) === String(this.itemId) || 
+                String(it.identificador) === String(this.itemId) ||
+                String(it.sequencial) === String(this.itemId)
+            );
+            
+            if (item) {
+                // Captura agressiva de Ranking
+                this.currentRank = String(item.posicaoParticipanteDisputa || item.posicao || item.classificacao || '?');
+                
+                // Captura agressiva de Título
+                this.purchaseTitle = data.termoObjeto || data.descricaoCompra || this.purchaseTitle || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
+
+                // Captura agressiva de Tempo
+                let secondsLeft = item.segundosParaEncerramento || item.tempoRestante || item.secondsLeft;
+                if (secondsLeft === undefined || secondsLeft === null) {
+                    const endTimeStr = item.dataHoraFimContagem || item.dataFim || item.prazoEncerramento;
+                    const endTime = endTimeStr ? new Date(endTimeStr).getTime() : 0;
+                    secondsLeft = endTime ? Math.max(0, (endTime - this.clockSync.getServerTime()) / 1000) : -1;
+                }
+
+                this.webContents.send('bidding-update', {
+                    sessionId: this.idCompra,
+                    uasg: this.idCompra.substring(0, 6),
+                    sessionTitle: this.purchaseTitle,
+                    items: [{
+                        itemId: this.itemId,
+                        valorAtual: item.melhorLance || item.valorEstimado || item.valorAtual,
+                        meuValor: item.valorLanceProposta || item.meuUltimoLance,
+                        status: item.faseTraduzido || item.situacao || item.fase,
+                        posicao: this.currentRank,
+                        timerSeconds: secondsLeft,
+                        desc: item.descricao || item.objeto
+                    }]
+                });
+
+                const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
+                this.timeoutId = setTimeout(() => this.run(), nextInterval);
+                return;
+            }
+
             this.timeoutId = setTimeout(() => this.run(), 5000);
 
         } catch (e) {
