@@ -39,57 +39,68 @@ class ItemRunner {
         this.timeoutId = null;
         this.lastBid = 0;
         this.prevStatus = null;
+        this.isPaused = false;
     }
 
     async run() {
-        if (!this.active) return;
+        if (!this.active || this.isPaused) return;
 
         try {
             // Polling de status do item
             const itemUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/public/v1/compras/${this.idCompra}/itens/${this.itemId}`;
-            const res = await axios.get(itemUrl, { timeout: 3000 });
+            const res = await axios.get(itemUrl, { 
+                timeout: 3000,
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SIGAClient/0.7.2 Electron/24.1.3 Safari/537.36' }
+            });
             
             this.clockSync.update(res.headers.date);
             const item = res.data;
 
-            // Lógica de Sniper e Disparo
+            // Sincronia de Tempo para Sniper
             const serverTime = this.clockSync.getServerTime();
             const endTime = item.dataHoraFimContagem ? new Date(item.dataHoraFimContagem).getTime() : 0;
             const secondsLeft = endTime ? Math.max(0, (endTime - serverTime) / 1000) : -1;
 
-            // Notificações de mudança de fase
             if (this.prevStatus !== item.fase) {
                 this.webContents.send('bidding-log', { 
                     itemId: this.itemId, 
-                    message: `Fase alterada: ${this.prevStatus || 'Início'} -> ${item.fase}` 
+                    message: `Fase: ${item.fase} | Sniper: ${secondsLeft > 0 ? secondsLeft.toFixed(1)+'s' : 'N/A'}` 
                 });
                 this.prevStatus = item.fase;
             }
 
-            // AVALIAÇÃO DE LANCE
             await this.evaluateAndBid(item, secondsLeft);
 
-            // INTERVALO DINÂMICO (Janela Sniper)
-            // Se estiver em disputa e faltando menos de 45 segundos, entra em modo TURBO (100ms)
+            // INTERVALO DINÂMICO (Algoritmo Sniper v3.6.11)
             let nextInterval = 2000;
             if (item.fase === 'DISPUTA' || item.fase === 'IMINENTE') {
                 if (secondsLeft > 0 && secondsLeft < 45) {
-                    nextInterval = 100; // MODO SNIPER ATIVADO
+                    nextInterval = 100; // TURBO MODE (10 FPS de monitoramento)
                 } else {
-                    nextInterval = 400; // MODO DISPUTA PADRÃO
+                    nextInterval = 350; // Monitoramento agressivo padrão
                 }
             }
 
             this.timeoutId = setTimeout(() => this.run(), nextInterval);
 
         } catch (e) {
-            this.timeoutId = setTimeout(() => this.run(), 5000); // Retry em erro
+            // TRATAMENTO DE ERROS DO SERPRO (Estilo Siga)
+            if (e.response && e.response.status === 422) {
+                this.webContents.send('bidding-log', { 
+                    itemId: this.itemId, 
+                    message: '⚠️ Erro 422: Resfriando conexão por 10 segundos...' 
+                });
+                this.isPaused = true;
+                setTimeout(() => { this.isPaused = false; this.run(); }, 10000);
+            } else {
+                this.timeoutId = setTimeout(() => this.run(), 5000);
+            }
         }
     }
 
     async evaluateAndBid(item, secondsLeft) {
         const myPosition = item.melhorLance === item.valorLanceProposta ? 1 : 0;
-        if (myPosition === 1) return; // Já ganhando
+        if (myPosition === 1) return;
 
         const currentVal = item.melhorLance || item.valorEstimado;
         const minPrice = this.config.minPrice || 0.1;
@@ -101,12 +112,12 @@ class ItemRunner {
         targetValue = Math.max(targetValue, minPrice);
         targetValue = Math.round(targetValue * 100) / 100;
 
-        // ESTRATÉGIA SNIPER: Disparar nos últimos 3 segundos sincronizados
-        const isSniperWindow = secondsLeft > 0 && secondsLeft <= 3.5;
+        // Disparo nos últimos 2.8s (Safe-zone do Serpro para garantir entrada no 59s/29s)
+        const isSniperWindow = secondsLeft > 0 && secondsLeft <= 2.8;
         const isNormalFollower = this.config.mode === 'follower' && (item.fase === 'DISPUTA' || item.fase === 'IMINENTE');
 
         if (isSniperWindow || isNormalFollower) {
-            if (targetValue === this.lastBid) return; // Evita lances duplicados
+            if (targetValue === this.lastBid) return; 
             
             try {
                 await this.executeBid(targetValue);
@@ -115,7 +126,7 @@ class ItemRunner {
                     itemId: this.itemId,
                     value: targetValue,
                     status: 'success',
-                    reason: isSniperWindow ? 'Sniper Sincronizado' : 'Seguidor Automático'
+                    reason: isSniperWindow ? `Sniper T-${secondsLeft.toFixed(1)}s` : 'Seguindo'
                 });
             } catch (err) {
                 this.webContents.send('bidding-action', {
@@ -129,8 +140,6 @@ class ItemRunner {
     }
 
     async executeBid(value) {
-        // Implementação real do POST para o Serpro (Sala de Disputa)
-        // Aqui usamos o token mTLS e os headers que extraímos da engenharia reversa
         const bidUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-sala-disputa-fornecedor/api/v1/lances';
         const payload = {
             sequencialItem: parseInt(this.itemId),
@@ -156,18 +165,26 @@ class ItemRunner {
 }
 
 /**
- * BiddingRunner v3.6.11 - O Orquestrador Sniper
+ * BiddingRunner v3.6.11 - Elite Sniper
  */
 class BiddingRunner {
     constructor(webContents) {
         this.webContents = webContents;
         this.clockSync = new ClockSync();
-        this.activeRunners = new Map(); // sessionId_itemId -> ItemRunner
-        this.sessions = new Map(); // sessionId -> sessionData
+        this.activeRunners = new Map(); // key: idCompra_itemId
+        this.activeSessions = new Set(); // key: idCompra (Bloqueio de duplicidade)
     }
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
-        if (this.sessions.has(sessionId)) return;
+        const paddedNum = String(numero).padStart(5, '0');
+        const internalModality = modality === '14' ? '91' : modality;
+        const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
+
+        // BLOQUEIO DE DUPLICIDADE POR ID COMPRA
+        if (this.activeSessions.has(idCompra)) {
+            console.log(`[v3.6.11] Sessão para ${idCompra} já ativa. Ignorando duplicata.`);
+            return;
+        }
 
         const agent = new https.Agent({
             pfx: Buffer.from(vault.pfxBase64, 'base64'),
@@ -175,16 +192,11 @@ class BiddingRunner {
             rejectUnauthorized: false
         });
 
-        const paddedNum = String(numero).padStart(5, '0');
-        const internalModality = modality === '14' ? '91' : modality;
-        const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
+        this.activeSessions.add(idCompra);
 
-        this.sessions.set(sessionId, { idCompra, agent, vault });
-
-        // Inicia runners para cada item configurado
         const itemsConfig = vault.itemsConfig || {};
         for (const itemId in itemsConfig) {
-            const key = `${sessionId}_${itemId}`;
+            const key = `${idCompra}_${itemId}`;
             if (!this.activeRunners.has(key)) {
                 const runner = new ItemRunner(itemId, idCompra, agent, this.webContents, itemsConfig[itemId], this.clockSync);
                 this.activeRunners.set(key, runner);
@@ -192,28 +204,32 @@ class BiddingRunner {
             }
         }
 
-        console.log(`[v3.6.11] Motor Sniper iniciado para ${idCompra}`);
+        console.log(`[v3.6.11] Motor Sniper ATÔMICO iniciado para ${idCompra}`);
     }
 
-    stop(sessionId) {
+    stop(sessionId, uasg, numero, ano, modality = '06') {
+        const paddedNum = String(numero).padStart(5, '0');
+        const internalModality = modality === '14' ? '91' : modality;
+        const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
+
         for (const [key, runner] of this.activeRunners.entries()) {
-            if (key.startsWith(sessionId)) {
+            if (key.startsWith(idCompra)) {
                 runner.stop();
                 this.activeRunners.delete(key);
             }
         }
-        this.sessions.delete(sessionId);
+        this.activeSessions.delete(idCompra);
     }
 
-    updateConfig(sessionId, config) {
-        const session = this.sessions.get(sessionId);
-        if (session) {
-            session.vault.itemsConfig = config.itemsConfig || session.vault.itemsConfig;
-            // Atualiza runners existentes
-            for (const itemId in session.vault.itemsConfig) {
-                const runner = this.activeRunners.get(`${sessionId}_${itemId}`);
-                if (runner) runner.config = session.vault.itemsConfig[itemId];
-            }
+    updateConfig(sessionId, config, uasg, numero, ano, modality = '06') {
+        const paddedNum = String(numero).padStart(5, '0');
+        const internalModality = modality === '14' ? '91' : modality;
+        const idCompra = `${uasg}${internalModality}${paddedNum}${ano}`;
+
+        const itemsConfig = config.itemsConfig || {};
+        for (const itemId in itemsConfig) {
+            const runner = this.activeRunners.get(`${idCompra}_${itemId}`);
+            if (runner) runner.config = itemsConfig[itemId];
         }
     }
 }
