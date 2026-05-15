@@ -3,37 +3,38 @@ const https = require('https');
 const { ipcMain } = require('electron');
 
 /**
- * ClockSync - Sincronizador de Relógio Atômico
+ * ClockSync - Sincronizador de Relógio Atômico v2
  */
 class ClockSync {
     constructor() {
-        this.offset = 0;
+        this.serverTimeAtLastUpdate = Date.now();
+        this.localTimeAtLastUpdate = Date.now();
     }
     update(serverDateHeader) {
         if (!serverDateHeader) return;
-        const serverTime = new Date(serverDateHeader).getTime();
-        this.offset = serverTime - Date.now();
+        this.serverTimeAtLastUpdate = new Date(serverDateHeader).getTime();
+        this.localTimeAtLastUpdate = Date.now();
     }
     getServerTime() {
-        return Date.now() + this.offset;
+        const elapsed = Date.now() - this.localTimeAtLastUpdate;
+        return this.serverTimeAtLastUpdate + elapsed;
     }
 }
 
 /**
- * ItemRunner v3.6.23 - Bridge Fix (Sync by Original Session ID)
+ * ItemRunner v3.6.24 - Absolute Precision (Serpro DNA)
  */
 class ItemRunner {
     constructor(itemId, idCompra, originalSessionId, agent, webContents, config, clockSync) {
         this.itemId = itemId;
-        this.idCompra = idCompra; // ID do Governo (UASG + Mod + Num + Ano)
-        this.originalSessionId = originalSessionId; // ID da Tela (UUID do Banco)
+        this.idCompra = idCompra;
+        this.originalSessionId = originalSessionId;
         this.agent = agent;
         this.webContents = webContents;
         this.config = config;
         this.clockSync = clockSync;
         this.active = true;
         this.timeoutId = null;
-        this.purchaseTitle = '';
     }
 
     async run() {
@@ -52,47 +53,48 @@ class ItemRunner {
             });
 
             this.clockSync.update(res.headers.date);
-            const data = res.data;
-
-            const itemsList = Array.isArray(data) ? data : (data.itens || []);
+            const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
+            
             const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
             
             if (item) {
+                // 🏆 Mapeamento SIGA-DNA (v3.6.24)
                 const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
-                this.purchaseTitle = data.termoObjeto || item.descricao || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
+                const title = item.descricao || `Item ${this.itemId}`;
 
+                // ⏱️ Cálculo de Tempo com Sincronia de Servidor
                 let secondsLeft = item.segundosParaEncerramento;
                 if (secondsLeft === undefined || secondsLeft === null) {
                     if (item.dataHoraFimContagem) {
                         const endTime = new Date(item.dataHoraFimContagem).getTime();
-                        const nowTime = new Date().getTime();
-                        secondsLeft = Math.max(0, (endTime - nowTime) / 1000);
+                        const serverNow = this.clockSync.getServerTime();
+                        secondsLeft = Math.max(0, (endTime - serverNow) / 1000);
                     } else {
                         secondsLeft = -1;
                     }
                 }
 
-                // 🏁 BRIDGE FIX: Envia usando o originalSessionId para a tela reconhecer
+                // 🏁 Envio de Dados com ID Original (Bridge Fix)
                 this.webContents.send('bidding-update', {
-                    sessionId: this.originalSessionId, 
+                    sessionId: this.originalSessionId,
                     uasg: this.idCompra.substring(0, 6),
-                    sessionTitle: this.purchaseTitle,
-                    log: `[MOTOR] Item ${this.itemId}: ${posicaoTxt} | T: ${Math.floor(secondsLeft)}s`,
+                    sessionTitle: title,
+                    log: `[MOTOR] Sincronizado: ${posicaoTxt} | Relógio: ${Math.floor(secondsLeft)}s`,
                     items: [{
                         itemId: this.itemId,
-                        valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : item.melhorLance,
-                        meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : item.valorLanceProposta,
-                        status: item.faseTraduzido || item.fase,
+                        valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
+                        meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : (item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0),
+                        status: item.faseTraduzido || item.fase || 'Em Disputa',
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
                         desc: item.descricao
                     }]
                 });
 
-                const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 2000;
+                const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 1500;
                 this.timeoutId = setTimeout(() => this.run(), nextInterval);
             } else {
-                this.timeoutId = setTimeout(() => this.run(), 5000);
+                this.timeoutId = setTimeout(() => this.run(), 4000);
             }
 
         } catch (e) {
