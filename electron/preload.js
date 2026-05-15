@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onBiddingLoginFinished: (callback) => ipcRenderer.on('bidding-login-finished', (event, data) => callback(data)),
   onBiddingNetworkTraffic: (callback) => ipcRenderer.on('bidding-network-traffic', (event, data) => callback(data)),
   manualBid: (purchaseId, itemId, bidId, value, options) => ipcRenderer.send('manual-bid', { purchaseId, itemId, bidId, value, options }),
+  sendPortalData: (data) => ipcRenderer.send('send-portal-data', data),
+  onPortalDataUpdate: (callback) => ipcRenderer.on('portal-data-update', (event, data) => callback(data)),
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),

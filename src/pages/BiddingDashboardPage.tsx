@@ -489,8 +489,46 @@ export default function BiddingDashboardPage() {
                 }));
             };
             
+            const handlePortalSync = (data: any) => {
+                const { roomCode, items: newItems, timestamp } = data;
+                
+                setSessions(prev => {
+                    const updated = { ...prev };
+                    // Procura uma sessão que tenha o UASG/Número batendo com o roomCode
+                    const sid = Object.keys(updated).find(k => {
+                        const s = updated[k];
+                        const code = `${s.uasg}05${String(s.numero).padStart(5, '0')}${s.ano}`;
+                        const codeAlt = `${s.uasg}06${String(s.numero).padStart(5, '0')}${s.ano}`;
+                        return roomCode === code || roomCode === codeAlt;
+                    });
+
+                    if (sid) {
+                        const sessionData = updated[sid];
+                        const existingItems = sessionData.items || [];
+                        const itemMap = new Map(existingItems.map((it: any) => [String(it.id || it.itemId), it]));
+                        
+                        (newItems || []).forEach((it: any) => {
+                            const key = String(it.itemId);
+                            itemMap.set(key, { ...(itemMap.get(key) || {}), ...it, id: key });
+                        });
+
+                        updated[sid] = {
+                            ...sessionData,
+                            items: Array.from(itemMap.values()),
+                            lastUpdate: timestamp,
+                            syncStatus: 'PORTAL_DIRECT'
+                        };
+                    }
+                    return updated;
+                });
+            };
+
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
             (window as any).electronAPI.onBiddingChat(handleChat);
+            
+            if ((window as any).electronAPI.onPortalDataUpdate) {
+                (window as any).electronAPI.onPortalDataUpdate(handlePortalSync);
+            }
 
             if ((window as any).electronAPI.onBiddingNetworkTraffic) {
                 (window as any).electronAPI.onBiddingNetworkTraffic((data: any) => {
@@ -741,7 +779,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.22</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v{appVersion}</span>
                         </h1>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
@@ -763,7 +801,7 @@ export default function BiddingDashboardPage() {
                     <div className="flex items-center gap-3 pr-6 border-r border-slate-100">
                         <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-slate-400 uppercase">STATUS API</span>
-                            <span className="text-xs font-bold text-emerald-400">ELITE V3.6.25</span>
+                            <span className="text-xs font-bold text-emerald-400">OPERACIONAL</span>
                         </div>
                     </div>
                     

@@ -263,6 +263,13 @@ ipcMain.on('portal-detected-room', (event, data) => {
     }
 });
 
+// [BRIDGE DIRETA] RELAY DE DADOS DO NAVEGADOR PARA O DASHBOARD (v3.6.27)
+ipcMain.on('send-portal-data', (event, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('portal-data-update', data);
+    }
+});
+
 // [GATILHO MANUAL] RELAY PARA O VISUAL RUNNER
 ipcMain.on('manual-bid', (event, data) => {
     if (visualRunner) {
