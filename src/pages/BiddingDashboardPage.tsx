@@ -763,7 +763,7 @@ export default function BiddingDashboardPage() {
                     <div className="flex items-center gap-3 pr-6 border-r border-slate-100">
                         <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-slate-400 uppercase">STATUS API</span>
-                            <span className="text-xs font-bold text-emerald-600">CONECTADO</span>
+                            <span className="text-xs font-bold text-emerald-400">ELITE V3.6.25</span>
                         </div>
                     </div>
                     

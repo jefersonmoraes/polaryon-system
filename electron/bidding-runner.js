@@ -22,7 +22,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.24 - Absolute Precision (Serpro DNA)
+ * ItemRunner v3.6.25 - Ultra-Sniper (Smart Search & Debug)
  */
 class ItemRunner {
     constructor(itemId, idCompra, originalSessionId, agent, webContents, config, clockSync) {
@@ -55,14 +55,26 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
             
-            const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
+            if (itemsList.length === 0) {
+                this.webContents.send('bidding-update', {
+                    sessionId: this.originalSessionId,
+                    log: `[MOTOR] Lista vazia recebida do governo.`
+                });
+                this.timeoutId = setTimeout(() => this.run(), 5000);
+                return;
+            }
+
+            // 🏆 BUSCA INTELIGENTE (Smart Search)
+            const item = itemsList.find(it => 
+                String(it.numero) === String(this.itemId) || 
+                String(it.identificador) === String(this.itemId) ||
+                (it.descricao && it.descricao.toLowerCase().includes('lâmpada')) // Fallback por texto se os IDs falharem
+            );
             
             if (item) {
-                // 🏆 Mapeamento SIGA-DNA (v3.6.24)
                 const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
                 const title = item.descricao || `Item ${this.itemId}`;
 
-                // ⏱️ Cálculo de Tempo com Sincronia de Servidor
                 let secondsLeft = item.segundosParaEncerramento;
                 if (secondsLeft === undefined || secondsLeft === null) {
                     if (item.dataHoraFimContagem) {
@@ -74,12 +86,11 @@ class ItemRunner {
                     }
                 }
 
-                // 🏁 Envio de Dados com ID Original (Bridge Fix)
                 this.webContents.send('bidding-update', {
                     sessionId: this.originalSessionId,
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: title,
-                    log: `[MOTOR] Sincronizado: ${posicaoTxt} | Relógio: ${Math.floor(secondsLeft)}s`,
+                    log: `[MOTOR] Item ${this.itemId} localizado! Status: ${posicaoTxt}`,
                     items: [{
                         itemId: this.itemId,
                         valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
@@ -94,6 +105,10 @@ class ItemRunner {
                 const nextInterval = (secondsLeft > 0 && secondsLeft < 45) ? 100 : 1500;
                 this.timeoutId = setTimeout(() => this.run(), nextInterval);
             } else {
+                this.webContents.send('bidding-update', {
+                    sessionId: this.originalSessionId,
+                    log: `[DEBUG] Item ${this.itemId} não achado entre os ${itemsList.length} itens da lista.`
+                });
                 this.timeoutId = setTimeout(() => this.run(), 4000);
             }
 
