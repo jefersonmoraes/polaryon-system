@@ -20,7 +20,7 @@ class ClockSync {
 }
 
 /**
- * ItemRunner v3.6.21 - Absolute Fix (Array-Direct)
+ * ItemRunner v3.6.22 - Dynamic Sync & Logs
  */
 class ItemRunner {
     constructor(itemId, idCompra, agent, webContents, config, clockSync) {
@@ -53,25 +53,13 @@ class ItemRunner {
             this.clockSync.update(res.headers.date);
             const data = res.data;
 
-            // 🏁 TRATAMENTO DE ARRAY DIRETO (v3.6.21)
             const itemsList = Array.isArray(data) ? data : (data.itens || []);
-            
-            if (itemsList.length === 0) {
-                // Se não achou itens, tenta de novo em 5s
-                this.timeoutId = setTimeout(() => this.run(), 5000);
-                return;
-            }
-
             const item = itemsList.find(it => String(it.numero) === String(this.itemId) || String(it.identificador) === String(this.itemId));
             
             if (item) {
-                // Mapeamento de Ranking (DNA SIGA)
                 const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
-                
-                // Mapeamento de Título
                 this.purchaseTitle = data.termoObjeto || item.descricao || `Dispensa ${this.idCompra.substring(8, 13)}/${this.idCompra.substring(13, 17)}`;
 
-                // Cálculo de Cronômetro (Fix Local Time)
                 let secondsLeft = item.segundosParaEncerramento;
                 if (secondsLeft === undefined || secondsLeft === null) {
                     if (item.dataHoraFimContagem) {
@@ -87,6 +75,7 @@ class ItemRunner {
                     sessionId: this.idCompra,
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: this.purchaseTitle,
+                    log: `[MOTOR] Item ${this.itemId}: ${posicaoTxt} | T: ${Math.floor(secondsLeft)}s`,
                     items: [{
                         itemId: this.itemId,
                         valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : item.melhorLance,

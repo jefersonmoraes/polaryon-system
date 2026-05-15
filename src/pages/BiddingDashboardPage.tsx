@@ -434,6 +434,10 @@ export default function BiddingDashboardPage() {
             const handleUpdate = (data: any) => {
                 const { sessionId: sid, items: newItems, timestamp } = data;
                 if (data.serverOffset !== undefined) setServerOffset(data.serverOffset);
+                if (data.log) {
+                    setTrafficLogs(prev => [`[${new Date().toLocaleTimeString()}] ${data.log}`, ...prev].slice(0, 50));
+                }
+
 
                 setSessions(prev => {
                     const updated = { ...prev };
@@ -737,7 +741,7 @@ export default function BiddingDashboardPage() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.15</span>
+                            POLARYON <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">ELITE v3.6.22</span>
                         </h1>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
