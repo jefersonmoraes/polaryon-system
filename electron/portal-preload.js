@@ -1,7 +1,7 @@
 const { ipcRenderer } = require('electron');
 
 (function() {
-    console.log("%c[POLARYON] Escuta-Geral v3.6.45 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
+    console.log("%c[POLARYON] Escuta-Geral v3.6.46 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
 
     let sessionToken = '';
     const synchronizedPurchases = new Set();
@@ -149,7 +149,8 @@ const { ipcRenderer } = require('electron');
 
         const response = await originalFetch(...args);
         const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-        if (url.includes('serpro.gov.br')) {
+        const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br');
+        if (isSerpro) {
             const clone = response.clone();
             clone.json().then(data => processSerproData(data, url)).catch(() => {});
         }
@@ -175,7 +176,8 @@ const { ipcRenderer } = require('electron');
     const send = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function() {
         this.addEventListener('load', function() {
-            if (this._url && this._url.includes('serpro.gov.br')) {
+            const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br'));
+            if (isSerpro) {
                 try {
                     const data = JSON.parse(this.responseText);
                     processSerproData(data, this._url);
