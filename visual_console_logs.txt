@@ -1,5 +1,4 @@
-=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 17:34:42 ===
-[17:34:42] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.58 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[17:34:42] [PRINCIPAL] [LOG] Uncaught (in promise) Server Error (Script: https://www.gov.br/govbrportal/js/inicializacao-autenticacao-openid.js:55)
-[17:34:57] [PRINCIPAL] [LOG] Uncaught TypeError: Failed to construct 'URL': Invalid URL (Script: https://www.gov.br/govbrportal/js/inicializacao-autenticacao-openid.js:9)
-[17:34:57] [PRINCIPAL] [LOG] Uncaught TypeError: Failed to construct 'URL': Invalid URL (Script: https://www.gov.br/govbrportal/js/inicializacao-autenticacao-openid.js:9)
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 17:47:05 ===
+[17:47:05] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.59 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:47:05] [PRINCIPAL] [LOG] Uncaught ReferenceError: $ is not defined (Script: https://www.gov.br/compras/portal_javascripts/Sunburst%20Theme/resourcegovbr.policybrowser-update-cachekey-08f0f01f404c6b4ba6c04acde242252c.js:23)
+[17:47:06] [PRINCIPAL] [WARNING] %c[POLARYON] Radar: https://www.gov.br/compras/pt-br/@@configuracoes_view color: #888; font-size: 10px; (Script: :80)

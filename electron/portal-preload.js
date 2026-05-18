@@ -247,16 +247,21 @@
         console.error("🔴 [POLARYON] Falha ao injetar script de escuta:", e);
     }
 
-    // 🛡️ AUTO-CLICKER DO LOGIN DO GOV.BR (v3.6.59)
-    // Se estiver na landing page, executa o clique programático no botão azul para iniciar a autenticação de forma natural e com referrers corretos.
+    // 🛡️ AUTO-CLICKER DO LOGIN DO GOV.BR (v3.6.60)
+    // Se estiver na landing page, executa o clique ou redirecionamento programático para iniciar a autenticação de forma natural e com referrers corretos.
     if (window.location.href.includes('/compras/pt-br') && !window.location.href.includes('@@') && !window.location.href.includes('search')) {
         const autoClickLogin = () => {
-            const btn = document.querySelector('button.br-sign-in') || 
-                        Array.from(document.querySelectorAll('button')).find(el => el.textContent && el.textContent.includes('Entrar com gov.br'));
+            const btn = document.querySelector('.br-sign-in') || 
+                        document.querySelector('.sign-in') || 
+                        Array.from(document.querySelectorAll('a, button')).find(el => el.textContent && el.textContent.includes('Entrar com gov.br'));
             
             if (btn) {
-                console.log('%c[POLARYON] ⚡ Botão de login detectado! Executando clique automático...', 'color: #3b82f6; font-weight: bold;');
-                btn.click();
+                console.log('%c[POLARYON] ⚡ Botão/Link de login detectado! Executando clique automático...', 'color: #3b82f6; font-weight: bold;');
+                if (btn.tagName === 'A' && btn.href && btn.href.includes('@@')) {
+                    window.location.href = btn.href;
+                } else {
+                    btn.click();
+                }
                 return true;
             }
             return false;
