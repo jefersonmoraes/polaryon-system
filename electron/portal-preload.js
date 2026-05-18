@@ -247,6 +247,32 @@
         console.error("🔴 [POLARYON] Falha ao injetar script de escuta:", e);
     }
 
+    // 🛡️ AUTO-CLICKER DO LOGIN DO GOV.BR (v3.6.59)
+    // Se estiver na landing page, executa o clique programático no botão azul para iniciar a autenticação de forma natural e com referrers corretos.
+    if (window.location.href.includes('/compras/pt-br') && !window.location.href.includes('@@') && !window.location.href.includes('search')) {
+        const autoClickLogin = () => {
+            const btn = document.querySelector('button.br-sign-in') || 
+                        Array.from(document.querySelectorAll('button')).find(el => el.textContent && el.textContent.includes('Entrar com gov.br'));
+            
+            if (btn) {
+                console.log('%c[POLARYON] ⚡ Botão de login detectado! Executando clique automático...', 'color: #3b82f6; font-weight: bold;');
+                btn.click();
+                return true;
+            }
+            return false;
+        };
+
+        if (!autoClickLogin()) {
+            let attempts = 0;
+            const interval = setInterval(() => {
+                attempts++;
+                if (autoClickLogin() || attempts > 50) {
+                    clearInterval(interval);
+                }
+            }, 100);
+        }
+    }
+
     // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL (8 SEGUNDOS)
     setInterval(async () => {
         if (!sessionToken || synchronizedPurchases.size === 0) return;

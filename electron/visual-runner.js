@@ -287,7 +287,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://www.gov.br/govbrportal/inicializacao-autenticacao-openid.html';
+        const startUrl = 'https://www.gov.br/compras/pt-br';
         win.loadURL(startUrl);
     }
 
