@@ -1,10 +1,8 @@
-=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 19:29:44 ===
-[19:29:44] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[19:29:45] [PRINCIPAL] [ERROR] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) (Script: https://sso.acesso.gov.br/TSPD/0877702dbcab200018d01228d68295ddf7939926aff18da720baaa21e04457f0c704ac10045fe663?type=8:457)
-[19:29:46] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[19:29:46] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
-[19:29:46] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3d35a102:566)
-[19:29:57] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[19:29:57] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[19:30:11] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[19:30:11] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.69 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 20:23:02 ===
+[20:23:02] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:23:03] [PRINCIPAL] [ERROR] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) (Script: https://sso.acesso.gov.br/TSPD/082670627aab2000312f9baf8a60a50122a3dc7a8655ab9348312a477e570b30cba7c3c4cc6ad121?type=8:456)
+[20:23:04] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:23:04] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
+[20:23:04] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3d666b5d:566)
+[20:23:16] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:23:16] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)

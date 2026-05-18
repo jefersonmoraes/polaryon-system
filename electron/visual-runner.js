@@ -238,23 +238,15 @@ class VisualRunner {
                     if (event && typeof event.preventDefault === 'function') {
                         event.preventDefault();
                     }
-                    console.log(`[POLARYON WINDOW] [${label}] 🚫 Bloqueando redirecionamento indesejado: ${url}`);
+                    console.log(`[POLARYON WINDOW] [${label}] 🚫 Interceptado legado/erro: ${url}`);
                     
                     const session = this.sessions.get(sessionId);
                     const activeWin = targetWin && !targetWin.isDestroyed() ? targetWin : (session ? session.window : null);
                     
                     if (activeWin && !activeWin.isDestroyed()) {
-                        if (session && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
-                            const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
-                            const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
-                            const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                            const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                            console.log(`[VISUAL-RUNNER] [${label}] Redirecionando para: ${targetUrl}`);
-                            activeWin.loadURL(targetUrl);
-                        } else {
-                            activeWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
-                        }
+                        const handshakeUrl = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                        console.log(`[VISUAL-RUNNER] [${label}] Redirecionando para handshake seguro: ${handshakeUrl}`);
+                        activeWin.loadURL(handshakeUrl);
                     }
                 }
             };
@@ -281,31 +273,36 @@ class VisualRunner {
                 handleLegacyRedirect(null, url);
 
                 if (!isChild) {
-                    const isLoginFinished = url.includes('intro.htm') || url.includes('index.html') || url.includes('/seguro/fornecedor/');
-                    if (isLoginFinished) {
+                    const isLegacyLanding = url.includes('intro.htm') || url.includes('index.html');
+                    if (isLegacyLanding) {
                         const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                             session.loginFinished = true; // Evita loop
                             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO COM SUCESSO! Redirecionando para a disputa...`);
+                                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO! Iniciando handshake seguro (servico=226)...`);
                             }
                             if (!session.window.webContents.isDevToolsOpened()) {
                                 session.window.webContents.openDevTools({ mode: 'detach' });
                             }
-                            
-                            if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                            const handshakeUrl = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                            console.log(`[VISUAL-RUNNER] [${label}] 🚀 Direcionando para handshake seguro: ${handshakeUrl}`);
+                            session.window.loadURL(handshakeUrl);
+                        }
+                    } else if (url.includes('/seguro/fornecedor/disputa')) {
+                        const session = this.sessions.get(sessionId);
+                        if (session && session.window && !session.window.isDestroyed()) {
+                            if (!url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
                                 const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
                                 const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
                                 const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
                                 const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
                                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                                console.log(`[VISUAL-RUNNER] [${label}] 🚀 Login Concluído: Direcionando para: ${targetUrl}`);
+                                console.log(`[VISUAL-RUNNER] [${label}] 🎯 Redirecionando para a disputa específica: ${targetUrl}`);
                                 session.window.loadURL(targetUrl);
                             } else {
-                                session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
-                            }
-                            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                                this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                                    this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                                }
                             }
                         }
                     }
