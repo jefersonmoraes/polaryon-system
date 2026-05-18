@@ -78,8 +78,8 @@ const { ipcRenderer } = require('electron');
 
         if (items.length > 0 && roomCode) {
             // Se as configs originais do robô existirem, manda para a tela
-            if (window.electronAPI && window.electronAPI.sendPortalData) {
-                window.electronAPI.sendPortalData({
+            if (typeof ipcRenderer !== 'undefined') {
+                ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
                     timestamp: Date.now(),

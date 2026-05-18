@@ -60,7 +60,7 @@ class VisualRunner {
             webPreferences: {
                 preload: path.join(__dirname, 'portal-preload.js'),
                 nodeIntegration: false,
-                contextIsolation: true,
+                contextIsolation: false,
                 webSecurity: false,
                 allowRunningInsecureContent: true,
                 backgroundThrottling: false, 
