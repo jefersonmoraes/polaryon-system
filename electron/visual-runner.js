@@ -281,7 +281,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
+        const startUrl = 'https://www.gov.br/compras/pt-br/@@configuracoes_view';
         win.loadURL(startUrl);
     }
 
