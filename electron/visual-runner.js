@@ -89,6 +89,12 @@ class VisualRunner {
             }
 
             if (auth && auth.startsWith('Bearer')) {
+                global.serproToken = auth; // 🔥 SALVA GLOBALMENTE PARA O MOTOR BACKGROUND
+                if (!global.ipcTokenRegistered) {
+                    global.ipcTokenRegistered = true;
+                    ipcMain.handle('get-login-token', () => global.serproToken);
+                }
+                
                 if (!win.isDestroyed()) {
                     // Injeta Token
                     win.webContents.send('force-token-injection', { token: auth });
@@ -117,6 +123,8 @@ class VisualRunner {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
                 session.window.hide(); 
+                // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
+                session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/');
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
                 }

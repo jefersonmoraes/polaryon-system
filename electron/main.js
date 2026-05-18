@@ -254,6 +254,13 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
   }
   
   visualRunner.startVisualSession(sessionId, { uasg, numero, ano, modality, vault });
+
+  // 🚀 MODO SIGA-PREGÃO: Dispara o Motor Rest de Background
+  const BiddingRunner = require('./bidding-runner');
+  if (!global.biddingRunner) {
+      global.biddingRunner = new BiddingRunner(mainWindow.webContents);
+  }
+  global.biddingRunner.start(sessionId, uasg, numero, ano, vault, modality);
 });
 
 // [SIGA AUTO-DETECTION] RELAY PARA O DASHBOARD
@@ -270,10 +277,12 @@ ipcMain.on('send-portal-data', (event, data) => {
     }
 });
 
-// [GATILHO MANUAL] RELAY PARA O VISUAL RUNNER
+// [GATILHO MANUAL] RELAY PARA O MOTOR INVISÍVEL HTTP (bidding-runner)
 ipcMain.on('manual-bid', (event, data) => {
-    if (visualRunner) {
-        visualRunner.sendManualBid(data);
+    if (global.biddingRunner) {
+        global.biddingRunner.sendBid(data);
+    } else {
+        console.error('[POLARYON] Motor HTTP de Lances não está rodando!');
     }
 });
 
