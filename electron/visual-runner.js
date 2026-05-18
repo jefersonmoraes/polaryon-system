@@ -260,7 +260,7 @@ class VisualRunner {
                         console.log(`[VISUAL-RUNNER] 🚀 Login Concluído: Direcionando para a disputa direta: ${targetUrl}`);
                         session.window.loadURL(targetUrl);
                     } else {
-                        session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
+                        session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
                     }
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                         this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
