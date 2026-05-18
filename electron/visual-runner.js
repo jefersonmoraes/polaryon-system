@@ -119,7 +119,10 @@ class VisualRunner {
         });
 
         win.webContents.on('did-navigate', (event, url) => {
-            if (url.includes('intro.htm') || url.includes('servico=226') || url.includes('main.asp')) {
+            const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
+            const isComprasnet = url.includes('comprasnet.gov.br') || url.includes('gov.br/compras');
+            
+            if (isComprasnet && !isLoginOrSSO) {
                 const session = this.sessions.get(sessionId);
                 if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                     session.loginFinished = true; // Evita loop
