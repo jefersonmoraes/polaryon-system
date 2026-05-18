@@ -102,7 +102,7 @@ class VisualRunner {
                 preload: path.join(__dirname, 'portal-preload.js'),
                 nodeIntegration: false,
                 contextIsolation: false,
-                nodeIntegrationInSubFrames: true, // 🛰️ [SUBFRAMES/IFRAMES] Permite injetar o espião dentro de framesets e iframes onde o SPA roda (v3.6.45)
+                nodeIntegrationInSubFrames: false, // 🛰️ [SUBFRAMES/IFRAMES] Previne injeção de globals do Node no contexto global de subframes, evitando conflitos de jQuery/CommonJS (v3.6.54)
                 webSecurity: false,
                 allowRunningInsecureContent: true,
                 backgroundThrottling: false, 
@@ -125,7 +125,7 @@ class VisualRunner {
                         preload: path.join(__dirname, 'portal-preload.js'),
                         nodeIntegration: false,
                         contextIsolation: false,
-                        nodeIntegrationInSubFrames: true, // 🛰️ Multi-Janelas e Popups herdam suporte a Subframes
+                        nodeIntegrationInSubFrames: false, // 🛰️ Multi-Janelas e Popups herdam prevenção de conflitos CommonJS
                         webSecurity: false,
                         allowRunningInsecureContent: true,
                         backgroundThrottling: false,
