@@ -1,7 +1,11 @@
 const { ipcRenderer } = require('electron');
 
 (function() {
-    console.log("%c[POLARYON] Escuta-Geral v3.6.46 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
+    ipcRenderer.invoke('get-app-version').then(v => {
+        console.log(`%c[POLARYON] Escuta-Geral v${v} Ativado! 🛰️`, "color: #00ff00; font-weight: bold;");
+    }).catch(() => {
+        console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
+    });
 
     let sessionToken = '';
     const synchronizedPurchases = new Set();
