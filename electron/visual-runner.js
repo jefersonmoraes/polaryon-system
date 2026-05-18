@@ -281,7 +281,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://sso.acesso.gov.br/authorize?response_type=code&client_id=comprasnet.gov.br&scope=openid+profile+email+phone+govbr_confiabilidades&state=F&redirect_uri=https://www.comprasnet.gov.br/seguro/landing_sso.asp';
+        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
         win.loadURL(startUrl);
     }
 
