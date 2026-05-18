@@ -3,6 +3,59 @@ const https = require('https');
 const { ipcMain } = require('electron');
 
 /**
+ * CaptchaManager - Bypass Automático via Nuvem Siga
+ */
+class CaptchaManager {
+    constructor() {
+        this.token1 = '';
+        this.token2 = '';
+        this.lastFetch = 0;
+        this.fetchPromise = null;
+    }
+
+    async getTokens() {
+        const now = Date.now();
+        if (now - this.lastFetch > 180000) { // Renova a cada 3 minutos
+            if (!this.fetchPromise) {
+                this.fetchPromise = this._fetchTokens().finally(() => {
+                    this.fetchPromise = null;
+                });
+            }
+            if (!this.token1) {
+                await this.fetchPromise;
+            }
+        }
+        return { captcha1: this.token1, captcha2: this.token2, captcha3: this.token1 };
+    }
+
+    async _fetchTokens() {
+        try {
+            const headers = {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'pt-BR',
+                'origin': 'https://disputas.sigapregao.com.br',
+                'referer': 'https://disputas.sigapregao.com.br/',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2 Chrome/112.0.5615.165 Electron/24.1.3 Safari/537.36'
+            };
+            
+            const [res1, res2] = await Promise.all([
+                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers }).catch(() => ({data: ''})),
+                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers }).catch(() => ({data: ''}))
+            ]);
+
+            if (res1.data) this.token1 = res1.data;
+            if (res2.data) this.token2 = res2.data;
+            this.lastFetch = Date.now();
+            console.log('[POLARYON] 🔓 Tokens Captcha Bypass adquiridos com sucesso!');
+        } catch (e) {
+            console.error('[POLARYON] ❌ Erro ao renovar captchas:', e.message);
+        }
+    }
+}
+
+const captchaManager = new CaptchaManager();
+
+/**
  * ClockSync - Sincronizador de Relógio Atômico v2
  */
 class ClockSync {
@@ -41,8 +94,9 @@ class ItemRunner {
         if (!this.active) return;
 
         try {
+            const captchas = await captchaManager.getTokens();
             const token = await ipcMain.invoke('get-login-token');
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=&captcha2=&captcha3=`;
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
             
             const res = await axios.get(url, {
                 httpsAgent: this.agent,
