@@ -1,0 +1,4 @@
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 17:01:48 ===
+[17:01:48] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.56 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:01:48] [PRINCIPAL] [LOG] Uncaught ReferenceError: $ is not defined (Script: https://www.gov.br/compras/portal_javascripts/Sunburst%20Theme/resourcegovbr.policybrowser-update-cachekey-08f0f01f404c6b4ba6c04acde242252c.js:23)
+[17:01:49] [PRINCIPAL] [WARNING] %c[POLARYON] Radar: https://www.gov.br/compras/pt-br/@@configuracoes_view color: #888; font-size: 10px; (Script: :80)
