@@ -72,6 +72,32 @@ class VisualRunner {
         const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
         win.webContents.setUserAgent(modernUserAgent);
 
+        // 🛰️ [SIFÃO MULTI-JANELAS] Garante que janelas filhas (popups do Comprasnet/Dispensa) herdem o preload, cookies e DevTools (v3.6.45)
+        win.webContents.setWindowOpenHandler((details) => {
+            console.log(`[POLARYON WINDOW] Nova janela filha solicitada: ${details.url}`);
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    autoHideMenuBar: true,
+                    webPreferences: {
+                        preload: path.join(__dirname, 'portal-preload.js'),
+                        nodeIntegration: false,
+                        contextIsolation: false,
+                        webSecurity: false,
+                        allowRunningInsecureContent: true,
+                        backgroundThrottling: false,
+                        partition: 'persist:polaryon-global'
+                    }
+                }
+            };
+        });
+
+        win.webContents.on('did-create-window', (childWindow) => {
+            console.log("[POLARYON WINDOW] Janela filha criada com sucesso!");
+            childWindow.webContents.setUserAgent(win.webContents.getUserAgent());
+            childWindow.webContents.openDevTools({ mode: 'detach' });
+        });
+
         this.sessions.set(sessionId, { window: win, config });
 
         const ses = win.webContents.session;

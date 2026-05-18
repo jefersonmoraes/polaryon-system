@@ -492,6 +492,9 @@ export default function BiddingDashboardPage() {
             const handlePortalSync = (data: any) => {
                 const { roomCode, items: newItems, timestamp } = data;
                 
+                // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
+                setIsAuthenticated(true);
+                
                 setSessions(prev => {
                     const updated = { ...prev };
                     // Procura uma sessão que tenha o UASG/Número batendo com o roomCode
