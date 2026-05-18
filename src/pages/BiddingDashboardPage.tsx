@@ -961,8 +961,37 @@ export default function BiddingDashboardPage() {
                         <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
                             <Zap className="w-12 h-12 text-emerald-500 animate-pulse" />
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Aguardando Conexão</h3>
-                        <p className="text-slate-400 mt-2 max-w-sm mx-auto font-medium">Nenhuma sala detectada. Navegue até uma disputa no portal para iniciar o monitoramento automático.</p>
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Modo Lobo Solitário</h3>
+                        <p className="text-slate-400 mt-2 max-w-sm mx-auto font-medium mb-6">Insira a UASG e o Número do Edital (Sem barras ou traços) para que o motor de fundo se conecte de forma invisível.</p>
+                        
+                        {isAuthenticated ? (
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
+                                <div className="flex gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                    <Input 
+                                        placeholder="UASG (Ex: 150002)" 
+                                        className="w-40 h-12 text-sm font-bold bg-white text-center" 
+                                        value={uasg}
+                                        onChange={(e) => setUasg(e.target.value)}
+                                    />
+                                    <Input 
+                                        placeholder="Nº Edital (Ex: 822026)" 
+                                        className="w-40 h-12 text-sm font-bold bg-white text-center" 
+                                        value={numeroPregao}
+                                        onChange={(e) => setNumeroPregao(e.target.value)}
+                                    />
+                                </div>
+                                <Button 
+                                    className="bg-emerald-500 hover:bg-emerald-600 font-bold px-8 shadow-lg shadow-emerald-500/20 rounded-xl h-16 text-sm"
+                                    onClick={() => startRadar(uasg, numeroPregao, anoPregao || new Date().getFullYear().toString())}
+                                >
+                                    ENGATAR KAMIKAZE <Target className="w-5 h-5 ml-2" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="mt-8">
+                                <p className="text-sm font-bold text-amber-500 bg-amber-50 py-3 px-6 rounded-xl inline-block">Faça Login no Compras.gov.br primeiro para liberar a conexão.</p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
