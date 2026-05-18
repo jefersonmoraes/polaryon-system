@@ -224,117 +224,10 @@ class VisualRunner {
             }
         });
 
-        const handleLegacyRedirect = (event, url) => {
-            const isLegacyPortal = url.includes('main.asp') || 
-                                   url.includes('main2.asp') || 
-                                   url.includes('indexgov.asp') || 
-                                   url.includes('analise_amigavel.asp') || 
-                                   url.includes('AcessoNaoAutorizado.asp') || 
-                                   url.includes('popup.asp');
-            if (isLegacyPortal) {
-                event.preventDefault();
-                console.log(`[POLARYON WINDOW] 🚫 Bloqueando redirecionamento indesejado: ${url}`);
-                const session = this.sessions.get(sessionId);
-                if (session && session.window && !session.window.isDestroyed()) {
-                    if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
-                        const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
-                        const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
-                        const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                        const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                        console.log(`[VISUAL-RUNNER] Redirecionando para: ${targetUrl}`);
-                        session.window.loadURL(targetUrl);
-                    } else {
-                        session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
-                    }
-                }
-            }
-        };
+        const attachNavigationListeners = (targetWin, isChild = false) => {
+            const label = isChild ? 'FILHA' : 'PRINCIPAL';
 
-        win.webContents.on('will-navigate', (event, url) => {
-            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] will-navigate: ${url}`);
-            }
-            handleLegacyRedirect(event, url);
-        });
-
-        win.webContents.on('will-redirect', (event, url) => {
-            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] will-redirect: ${url}`);
-            }
-            handleLegacyRedirect(event, url);
-        });
-
-        win.webContents.on('did-navigate', (event, url) => {
-            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] did-navigate: ${url}`);
-            }
-
-            const isLegacyPortal = url.includes('main.asp') || 
-                                   url.includes('main2.asp') || 
-                                   url.includes('indexgov.asp') || 
-                                   url.includes('analise_amigavel.asp') || 
-                                   url.includes('AcessoNaoAutorizado.asp') || 
-                                   url.includes('popup.asp');
-            if (isLegacyPortal) {
-                console.log(`[POLARYON WINDOW] ⚡ did-navigate interceptou legado/erro: ${url}`);
-                const session = this.sessions.get(sessionId);
-                if (session && session.window && !session.window.isDestroyed()) {
-                    if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
-                        const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
-                        const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
-                        const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                        const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                        console.log(`[VISUAL-RUNNER] Forçando redirecionamento did-navigate para: ${targetUrl}`);
-                        session.window.loadURL(targetUrl);
-                    } else {
-                        session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
-                    }
-                    return;
-                }
-            }
-
-            const isLoginFinished = url.includes('intro.htm') || url.includes('index.html') || url.includes('/seguro/fornecedor/');
-            
-            if (isLoginFinished) {
-                const session = this.sessions.get(sessionId);
-                if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
-                    session.loginFinished = true; // Evita loop
-                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO COM SUCESSO! Redirecionando para a disputa...`);
-                    }
-                    if (!session.window.webContents.isDevToolsOpened()) {
-                        session.window.webContents.openDevTools({ mode: 'detach' });
-                    }
-                    
-                    if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
-                        const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
-                        const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
-                        const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                        const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                        
-                        console.log(`[VISUAL-RUNNER] 🚀 Login Concluído: Direcionando para a disputa direta: ${targetUrl}`);
-                        session.window.loadURL(targetUrl);
-                    } else {
-                        session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
-                    }
-                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                        this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
-                    }
-                }
-            }
-        });
-
-        win.webContents.on('did-start-navigation', (event, url) => {
-            win.webContents.executeJavaScript(`
-                window.alert = () => { console.log("Alert silenciado") };
-                window.confirm = () => { return true };
-                window.prompt = () => { return null };
-            `);
-
-            if (url) {
+            const handleLegacyRedirect = (event, url) => {
                 const isLegacyPortal = url.includes('main.asp') || 
                                        url.includes('main2.asp') || 
                                        url.includes('indexgov.asp') || 
@@ -342,23 +235,106 @@ class VisualRunner {
                                        url.includes('AcessoNaoAutorizado.asp') || 
                                        url.includes('popup.asp');
                 if (isLegacyPortal) {
-                    console.log(`[POLARYON WINDOW] ⚡ did-start-navigation interceptou legado/erro: ${url}`);
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                    }
+                    console.log(`[POLARYON WINDOW] [${label}] 🚫 Bloqueando redirecionamento indesejado: ${url}`);
+                    
                     const session = this.sessions.get(sessionId);
-                    if (session && session.window && !session.window.isDestroyed()) {
-                        if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                    const activeWin = targetWin && !targetWin.isDestroyed() ? targetWin : (session ? session.window : null);
+                    
+                    if (activeWin && !activeWin.isDestroyed()) {
+                        if (session && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
                             const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
                             const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
                             const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
                             const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
                             const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                            console.log(`[VISUAL-RUNNER] Forçando redirecionamento did-start-navigation para: ${targetUrl}`);
-                            session.window.loadURL(targetUrl);
+                            console.log(`[VISUAL-RUNNER] [${label}] Redirecionando para: ${targetUrl}`);
+                            activeWin.loadURL(targetUrl);
                         } else {
-                            session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
+                            activeWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
                         }
                     }
                 }
-            }
+            };
+
+            targetWin.webContents.on('will-navigate', (event, url) => {
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                    this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] will-navigate: ${url}`);
+                }
+                handleLegacyRedirect(event, url);
+            });
+
+            targetWin.webContents.on('will-redirect', (event, url) => {
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                    this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] will-redirect: ${url}`);
+                }
+                handleLegacyRedirect(event, url);
+            });
+
+            targetWin.webContents.on('did-navigate', (event, url) => {
+                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                    this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] did-navigate: ${url}`);
+                }
+
+                handleLegacyRedirect(null, url);
+
+                if (!isChild) {
+                    const isLoginFinished = url.includes('intro.htm') || url.includes('index.html') || url.includes('/seguro/fornecedor/');
+                    if (isLoginFinished) {
+                        const session = this.sessions.get(sessionId);
+                        if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
+                            session.loginFinished = true; // Evita loop
+                            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO COM SUCESSO! Redirecionando para a disputa...`);
+                            }
+                            if (!session.window.webContents.isDevToolsOpened()) {
+                                session.window.webContents.openDevTools({ mode: 'detach' });
+                            }
+                            
+                            if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                                const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
+                                const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
+                                const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                                const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                                console.log(`[VISUAL-RUNNER] [${label}] 🚀 Login Concluído: Direcionando para: ${targetUrl}`);
+                                session.window.loadURL(targetUrl);
+                            } else {
+                                session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
+                            }
+                            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                                this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                            }
+                        }
+                    }
+                }
+            });
+
+            targetWin.webContents.on('did-start-navigation', (event, url) => {
+                targetWin.webContents.executeJavaScript(`
+                    window.alert = () => { console.log("Alert silenciado") };
+                    window.confirm = () => { return true };
+                    window.prompt = () => { return null };
+                `);
+
+                if (url) {
+                    handleLegacyRedirect(null, url);
+                }
+            });
+        };
+
+        // Ativa os listeners na janela principal
+        attachNavigationListeners(win, false);
+
+        // Atualiza did-create-window para ativar os listeners nas janelas filhas
+        win.webContents.on('did-create-window', (childWindow) => {
+            console.log("[POLARYON WINDOW] Janela filha criada com sucesso!");
+            childWindow.webContents.setUserAgent(win.webContents.getUserAgent());
+            childWindow.webContents.openDevTools({ mode: 'detach' });
+            logConsole(childWindow, 'FILHA');
+            attachNavigationListeners(childWindow, true); // 🔥 PROTEGE A JANELA FILHA CONTRA LOOPS E ERROS DE LOGIN!
         });
 
         win.webContents.openDevTools({ mode: 'detach' });
