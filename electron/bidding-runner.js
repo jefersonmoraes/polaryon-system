@@ -94,9 +94,6 @@ class RoomRunner {
         try {
             const captchas = await captchaManager.getTokens();
             let token = global.serproToken;
-            if (!token && ipcMain.handlers['get-login-token']) {
-                token = await ipcMain.invoke('get-login-token');
-            }
             
             if (!token) {
                 console.log(`[POLARYON MOTOR] Aguardando o login furtivo capturar o Token Oficial...`);
@@ -212,9 +209,6 @@ class BiddingRunner {
             const captchas = await captchaManager.getTokens();
             
             let token = global.serproToken;
-            if (!token && ipcMain.handlers['get-login-token']) {
-                token = await ipcMain.invoke('get-login-token');
-            }
 
             if (!token) {
                 throw new Error("Token de Sessão não capturado. Disparo Abortado.");
