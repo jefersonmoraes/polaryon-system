@@ -50,6 +50,47 @@ class VisualRunner {
             return;
         }
 
+        // 🛰️ [REUTILIZAÇÃO DE JANELA] Se já houver alguma janela ativa aberta (ex: fluxo de login), reutiliza-a
+        // para evitar login duplo ou múltiplas janelas no mesmo processo (v3.6.47)
+        let activeSessionId = null;
+        let activeWin = null;
+        
+        for (const [id, sess] of this.sessions.entries()) {
+            if (sess.window && !sess.window.isDestroyed()) {
+                activeSessionId = id;
+                activeWin = sess.window;
+                break;
+            }
+        }
+
+        if (activeWin) {
+            console.log(`[VISUAL-RUNNER] 🔄 Reutilizando janela ativa (${activeSessionId}) para a nova sessão: ${sessionId}`);
+            
+            // Remove a sessão antiga do map e registra a nova com a mesma janela
+            this.sessions.delete(activeSessionId);
+            this.sessions.set(sessionId, { window: activeWin, config, loginFinished: true });
+
+            // Atualiza o título e envia o sinal de inicialização
+            const isLoginFlow = config.modality === 'LOGIN_FLOW';
+            const title = isLoginFlow ? 'Polaryon - Autenticação' : `Polaryon - Modo Visual (${config.numero}/${config.ano})`;
+            activeWin.setTitle(title);
+
+            activeWin.webContents.send('init-session', { sessionId, config });
+
+            // Navega diretamente para a sala se UASG e Número forem informados
+            if (config.uasg && config.numero && config.uasg !== 'LOGIN') {
+                const modCode = config.modality === '05' || config.modality === 'PREGAO' ? '05' : '06';
+                const paddedNumero = String(config.numero).replace(/\D/g, '').padStart(5, '0');
+                const cleanAno = String(config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                const purchaseId = `${config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                
+                console.log(`[VISUAL-RUNNER] 🚀 Reutilização: Navegando para a disputa direta: ${targetUrl}`);
+                activeWin.loadURL(targetUrl);
+            }
+            return;
+        }
+
         const isLoginFlow = config.modality === 'LOGIN_FLOW';
 
         const win = new BrowserWindow({
@@ -117,7 +158,7 @@ class VisualRunner {
             }
 
             if (auth && auth.toLowerCase().startsWith('bearer')) {
-                global.serproToken = auth; // 🔥 SALVA GLOBALMENTE PARA O MOTOR BACKGROUND
+                global.serproToken = auth.replace(/^bearer/i, 'Bearer'); // 🔥 SALVA GLOBALMENTE E NORMALIZADO PARA O MOTOR BACKGROUND (v3.6.47)
                 if (!global.ipcTokenRegistered) {
                     global.ipcTokenRegistered = true;
                     ipcMain.handle('get-login-token', () => global.serproToken);
@@ -125,7 +166,7 @@ class VisualRunner {
                 
                 if (!win.isDestroyed()) {
                     // Injeta Token
-                    win.webContents.send('force-token-injection', { token: auth });
+                    win.webContents.send('force-token-injection', { token: global.serproToken });
                     
                     // Aprende Sala (Extrai ID da URL se houver)
                     const idMatch = details.url.match(/\/v1\/compras\/(\d+)/);
@@ -175,7 +216,18 @@ class VisualRunner {
                     // session.window.hide(); 
                     
                     // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
-                    session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
+                    if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                        const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
+                        const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
+                        const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                        const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                        
+                        console.log(`[VISUAL-RUNNER] 🚀 Login Concluído: Direcionando para a disputa direta: ${targetUrl}`);
+                        session.window.loadURL(targetUrl);
+                    } else {
+                        session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
+                    }
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                         this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
                     }

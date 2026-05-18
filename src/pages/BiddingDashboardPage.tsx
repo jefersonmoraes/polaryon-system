@@ -721,7 +721,10 @@ export default function BiddingDashboardPage() {
         const sid = targetSid || sessionId;
         if (!sid || sid === 'undefined' || !itemId || itemId === 'undefined') return;
         try {
-            await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
+            const isSimulated = sid.startsWith('virtual_') || sid.startsWith('HYBRID_');
+            if (!isSimulated) {
+                await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
+            }
             setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
             if (isLocalRunning && (window as any).electronAPI) {
                 (window as any).electronAPI.updateLocalBiddingConfig(sid, { itemsConfig: { ...itemStrategies, [itemId]: strategy } });

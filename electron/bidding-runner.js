@@ -106,7 +106,7 @@ class RoomRunner {
             const res = await axios.get(url, {
                 httpsAgent: this.agent,
                 headers: { 
-                    'Authorization': token.startsWith('Bearer') ? token : `Bearer ${token}`,
+                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
             });
@@ -224,7 +224,7 @@ class BiddingRunner {
             const response = await axios.post(targetUrl, payload, {
                 httpsAgent: this.agent,
                 headers: {
-                    'Authorization': token.startsWith('Bearer') ? token : `Bearer ${token}`,
+                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
