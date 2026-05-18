@@ -1,8 +1,2 @@
-=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 18:31:39 ===
-[18:31:40] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.64 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[18:31:51] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.64 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[18:31:51] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
-[18:31:51] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3d009a8b:566)
-[18:32:09] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.64 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[18:32:10] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.64 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[18:32:10] [FILHA] [WARNING] %c[POLARYON] Escuta-Geral v3.6.64 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 18:40:20 ===
+[18:40:21] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.65 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)

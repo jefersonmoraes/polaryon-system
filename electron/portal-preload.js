@@ -257,11 +257,7 @@
             
             if (btn) {
                 console.log('%c[POLARYON] ⚡ Botão/Link de login detectado! Executando clique automático...', 'color: #3b82f6; font-weight: bold;');
-                if (btn.tagName === 'A' && btn.href && btn.href.includes('@@')) {
-                    window.location.href = btn.href;
-                } else {
-                    btn.click();
-                }
+                btn.click();
                 return true;
             }
             return false;

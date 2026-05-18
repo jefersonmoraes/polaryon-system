@@ -139,6 +139,10 @@ class VisualRunner {
         // 🛰️ [SIFÃO MULTI-JANELAS] Garante que janelas filhas (popups do Comprasnet/Dispensa) herdem o preload, cookies e DevTools (v3.6.45)
         win.webContents.setWindowOpenHandler((details) => {
             console.log(`[POLARYON WINDOW] Nova janela filha solicitada: ${details.url}`);
+            if (details.url.includes('popup.asp') || details.url.includes('popup/')) {
+                console.log(`[POLARYON WINDOW] 🚫 Bloqueando popup desnecessário de aviso: ${details.url}`);
+                return { action: 'deny' };
+            }
             return {
                 action: 'allow',
                 overrideBrowserWindowOptions: {
@@ -281,7 +285,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://www.gov.br/compras/pt-br/@@configuracoes_view';
+        const startUrl = 'https://www.gov.br/compras/pt-br';
         win.loadURL(startUrl);
     }
 
