@@ -139,8 +139,13 @@ class VisualRunner {
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                         this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN DETECTADO! Escondendo janela e navegando para servico=226...`);
                     }
-                    session.window.webContents.closeDevTools();
-                    session.window.hide(); 
+                    // Manter janela visível e devtools abertos a pedido do usuário para acompanhamento (v3.6.43)
+                    if (!session.window.webContents.isDevToolsOpened()) {
+                        session.window.webContents.openDevTools({ mode: 'detach' });
+                    }
+                    // session.window.webContents.closeDevTools();
+                    // session.window.hide(); 
+                    
                     // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
                     session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
