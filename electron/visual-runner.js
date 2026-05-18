@@ -125,7 +125,7 @@ class VisualRunner {
                     session.loginFinished = true; // Evita loop
                     session.window.hide(); 
                     // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
-                    session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/');
+                    session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                         this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
                     }
