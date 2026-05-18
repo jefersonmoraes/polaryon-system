@@ -1,9 +1,10 @@
 const { ipcRenderer } = require('electron');
 
 (function() {
-    console.log("%c[POLARYON] Escuta-Geral v3.6.33 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
+    console.log("%c[POLARYON] Escuta-Geral v3.6.42 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
 
     let sessionToken = '';
+    const synchronizedPurchases = new Set();
 
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
     ipcRenderer.on('force-token-injection', (event, data) => {
@@ -65,12 +66,24 @@ const { ipcRenderer } = require('electron');
         }
     });
 
-
     // -------------------------------------------------------------------------
     // SISTEMA DE INTERCEPTAÇÃO DE REDE (O "ESCUTA-GERAL")
     // -------------------------------------------------------------------------
     function processSerproData(data, url) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
+
+        // Se detectarmos uma lista contendo IDs de compra, começamos a sincronização delas
+        const jsonStr = JSON.stringify(data || {});
+        const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
+        if (discoveredIds && discoveredIds.length > 0) {
+            discoveredIds.forEach(purchaseId => {
+                if (!synchronizedPurchases.has(purchaseId)) {
+                    synchronizedPurchases.add(purchaseId);
+                    console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                    autoFetchPurchaseItems(purchaseId);
+                }
+            });
+        }
 
         const items = Array.isArray(data) ? data : (data.itens || []);
         const match = url.match(/\/compras\/(\d+)\//);
@@ -98,9 +111,42 @@ const { ipcRenderer } = require('electron');
         }
     }
 
+    async function autoFetchPurchaseItems(purchaseId) {
+        if (!sessionToken) return;
+        try {
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+            const res = await originalFetch(url, {
+                headers: {
+                    'Authorization': sessionToken,
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                processSerproData(data, url);
+            }
+        } catch (e) {
+            console.error(`[POLARYON] Erro ao sincronizar itens da sala ${purchaseId}:`, e);
+        }
+    }
+
     // 🕵️‍♂️ INTERCEPTOR DE FETCH
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
+        // Captura o token do cabeçalho se existir
+        if (args[1] && args[1].headers) {
+            const headers = args[1].headers;
+            let auth = '';
+            if (headers instanceof Headers) {
+                auth = headers.get('Authorization') || headers.get('authorization');
+            } else if (typeof headers === 'object') {
+                auth = headers['Authorization'] || headers['authorization'] || headers['Authorization '] || headers['authorization '];
+            }
+            if (auth && auth.startsWith('Bearer')) {
+                sessionToken = auth;
+            }
+        }
+
         const response = await originalFetch(...args);
         const url = typeof args[0] === 'string' ? args[0] : args[0].url;
         if (url.includes('serpro.gov.br')) {
@@ -117,6 +163,15 @@ const { ipcRenderer } = require('electron');
         return open.apply(this, arguments);
     };
 
+    const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+        if (header.toLowerCase() === 'authorization' && value.startsWith('Bearer')) {
+            sessionToken = value;
+            console.log("%c[POLARYON XHR] Token Armado via XHR: " + value.substring(0, 30) + "...", "color: #00ffff; font-weight: bold;");
+        }
+        return setRequestHeader.apply(this, arguments);
+    };
+
     const send = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function() {
         this.addEventListener('load', function() {
@@ -129,4 +184,26 @@ const { ipcRenderer } = require('electron');
         });
         return send.apply(this, arguments);
     };
+
+    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL (8 SEGUNDOS)
+    setInterval(async () => {
+        if (!sessionToken || synchronizedPurchases.size === 0) return;
+        for (const purchaseId of synchronizedPurchases) {
+            try {
+                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                const res = await originalFetch(url, {
+                    headers: {
+                        'Authorization': sessionToken,
+                        'Accept': 'application/json'
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    processSerproData(data, url);
+                }
+            } catch (e) {
+                console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
+            }
+        }
+    }, 8000);
 })();

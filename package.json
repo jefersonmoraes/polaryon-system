@@ -1,7 +1,7 @@
 {
   "name": "polaryon-system",
   "private": true,
-  "version": "3.6.41",
+  "version": "3.6.42",
   "description": "Polaryon - Plataforma Inteligente de Licitações e Gestão Governamental",
   "author": "Polaryon Tecnologia",
   "type": "module",
@@ -17,6 +17,7 @@
     "build:desktop": "vite build --config vite.desktop.config.ts",
     "build:web": "vite build --mode production",
     "build:dev": "vite build --mode development",
+    "clean:electron": "node -e \"import('fs').then(fs => { fs.rmSync('dist_desktop', { recursive: true, force: true }); fs.rmSync('dist_electron', { recursive: true, force: true }); })\"",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

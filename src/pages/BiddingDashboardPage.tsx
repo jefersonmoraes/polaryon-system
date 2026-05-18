@@ -574,6 +574,7 @@ export default function BiddingDashboardPage() {
                 (window as any).electronAPI.onBiddingLoginFinished(() => {
                     toast.success("Login confirmado! Ocultando janela e iniciando radar silencioso... 🛡️");
                     setIsListening(true);
+                    setIsAuthenticated(true);
                 });
             }
 
