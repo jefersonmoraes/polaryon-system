@@ -1,5 +1,12 @@
 const { ipcRenderer } = require('electron');
 
+// 🛡️ PREVINE CONFLITO DE JQUERY COM NODE/COMMONJS (CLASSIC ELECTRON BUG - v3.6.53)
+if (typeof window !== 'undefined') {
+    delete window.module;
+    delete window.exports;
+    delete window.require;
+}
+
 (function() {
     ipcRenderer.invoke('get-app-version').then(v => {
         console.log(`%c[POLARYON] Escuta-Geral v${v} Ativado! 🛰️`, "color: #00ff00; font-weight: bold;");
