@@ -224,10 +224,45 @@ class VisualRunner {
             }
         });
 
+        const handleLegacyRedirect = (event, url) => {
+            const isLegacyPortal = url.includes('main.asp') || 
+                                   url.includes('main2.asp') || 
+                                   url.includes('indexgov.asp') || 
+                                   url.includes('analise_amigavel.asp') || 
+                                   url.includes('AcessoNaoAutorizado.asp') || 
+                                   url.includes('popup.asp');
+            if (isLegacyPortal) {
+                event.preventDefault();
+                console.log(`[POLARYON WINDOW] 🚫 Bloqueando redirecionamento indesejado: ${url}`);
+                const session = this.sessions.get(sessionId);
+                if (session && session.window && !session.window.isDestroyed()) {
+                    if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                        const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
+                        const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
+                        const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                        const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                        console.log(`[VISUAL-RUNNER] Redirecionando para: ${targetUrl}`);
+                        session.window.loadURL(targetUrl);
+                    } else {
+                        session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa');
+                    }
+                }
+            }
+        };
+
         win.webContents.on('will-navigate', (event, url) => {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-update-log', `[VISUAL] will-navigate: ${url}`);
             }
+            handleLegacyRedirect(event, url);
+        });
+
+        win.webContents.on('will-redirect', (event, url) => {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] will-redirect: ${url}`);
+            }
+            handleLegacyRedirect(event, url);
         });
 
         win.webContents.on('did-navigate', (event, url) => {
