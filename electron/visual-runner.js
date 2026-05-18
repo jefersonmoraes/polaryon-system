@@ -174,6 +174,16 @@ class VisualRunner {
                         const pId = idMatch[1];
                         win.webContents.send('force-room-learning', { purchaseId: pId });
                     }
+
+                    // 🔥 DESBLOQUEIO GARANTIDO POR TOKEN (v3.6.50): Se capturamos o token legítimo, o usuário já está autenticado!
+                    const session = this.sessions.get(sessionId);
+                    if (session && !session.loginFinished) {
+                        session.loginFinished = true;
+                        if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                            this.dashboardWebContents.send('bidding-update-log', `[VISUAL] Token de combate interceptado! Desbloqueando dashboard...`);
+                            this.dashboardWebContents.send('bidding-login-finished', { sessionId, url: details.url });
+                        }
+                    }
                 }
             }
             callback({ requestHeaders: details.requestHeaders });
@@ -199,7 +209,8 @@ class VisualRunner {
             }
 
             const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
-            const isComprasnet = (url.includes('comprasnet.gov.br') || url.includes('compras.gov.br')) && url.includes('/seguro/');
+            // 🛡️ SUPORTE AMPLIADO A INTRO E COMPRASNET-WEB (v3.6.50): O login redireciona para intro.htm ou comprasnet-web/seguro
+            const isComprasnet = (url.includes('comprasnet.gov.br') || url.includes('compras.gov.br')) && (url.includes('/seguro/') || url.includes('intro.htm') || url.includes('comprasnet-web'));
             
             if (isComprasnet && !isLoginOrSSO) {
                 const session = this.sessions.get(sessionId);
