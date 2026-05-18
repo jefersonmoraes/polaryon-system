@@ -1,13 +1,6 @@
 (function() {
     const { ipcRenderer } = require('electron');
 
-    // 🛡️ PREVINE CONFLITO DE JQUERY COM NODE/COMMONJS (CLASSIC ELECTRON BUG - v3.6.54)
-    if (typeof window !== 'undefined') {
-        delete window.module;
-        delete window.exports;
-        delete window.require;
-    }
-
     ipcRenderer.invoke('get-app-version').then(v => {
         console.log(`%c[POLARYON] Escuta-Geral v${v} Ativado! 🛰️`, "color: #00ff00; font-weight: bold;");
     }).catch(() => {
@@ -85,7 +78,6 @@
     function processSerproData(data, url) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
-        // Se detectarmos uma lista contendo IDs de compra, começamos a sincronização delas
         const jsonStr = JSON.stringify(data || {});
         const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
         if (discoveredIds && discoveredIds.length > 0) {
@@ -103,7 +95,6 @@
         const roomCode = match ? match[1] : null;
 
         if (items.length > 0 && roomCode) {
-            // Se as configs originais do robô existirem, manda para a tela
             if (typeof ipcRenderer !== 'undefined') {
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
@@ -128,7 +119,7 @@
         if (!sessionToken) return;
         try {
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-            const res = await originalFetch(url, {
+            const res = await fetch(url, {
                 headers: {
                     'Authorization': sessionToken,
                     'Accept': 'application/json'
@@ -143,62 +134,104 @@
         }
     }
 
-    // 🕵️‍♂️ INTERCEPTOR DE FETCH
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-        // Captura o token do cabeçalho se existir
-        if (args[1] && args[1].headers) {
-            const headers = args[1].headers;
-            let auth = '';
-            if (headers instanceof Headers) {
-                auth = headers.get('Authorization') || headers.get('authorization');
-            } else if (typeof headers === 'object') {
-                auth = headers['Authorization'] || headers['authorization'] || headers['Authorization '] || headers['authorization '];
-            }
-            if (auth && auth.toLowerCase().startsWith('bearer')) {
-                sessionToken = auth;
+    // Escuta as mensagens da página injetada
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.source === 'polaryon-injector') {
+            const { type, token, data, url } = event.data;
+            if (type === 'token') {
+                sessionToken = token;
+            } else if (type === 'serpro-data') {
+                processSerproData(data, url);
             }
         }
+    });
 
-        const response = await originalFetch(...args);
-        const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-        const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br');
-        if (isSerpro) {
-            const clone = response.clone();
-            clone.json().then(data => processSerproData(data, url)).catch(() => {});
-        }
-        return response;
-    };
-
-    // 🕵️‍♂️ INTERCEPTOR DE XHR
-    const open = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-        this._url = url;
-        return open.apply(this, arguments);
-    };
-
-    const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
-    XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
-        if (header.toLowerCase() === 'authorization' && value && value.toLowerCase().startsWith('bearer')) {
-            sessionToken = value;
-            console.log("%c[POLARYON XHR] Token Armado via XHR: " + value.substring(0, 30) + "...", "color: #00ffff; font-weight: bold;");
-        }
-        return setRequestHeader.apply(this, arguments);
-    };
-
-    const send = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function() {
-        this.addEventListener('load', function() {
-            const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br'));
-            if (isSerpro) {
-                try {
-                    const data = JSON.parse(this.responseText);
-                    processSerproData(data, this._url);
-                } catch (e) {}
+    // Injeta o interceptor de rede na página
+    try {
+        const scriptContent = `
+        (function() {
+            let sessionToken = '';
+            
+            function processSerproData(data, url) {
+                window.postMessage({
+                    source: 'polaryon-injector',
+                    type: 'serpro-data',
+                    data,
+                    url
+                }, '*');
             }
-        });
-        return send.apply(this, arguments);
-    };
+
+            const originalFetch = window.fetch;
+            window.fetch = async (...args) => {
+                if (args[1] && args[1].headers) {
+                    const headers = args[1].headers;
+                    let auth = '';
+                    if (headers instanceof Headers) {
+                        auth = headers.get('Authorization') || headers.get('authorization');
+                    } else if (typeof headers === 'object') {
+                        auth = headers['Authorization'] || headers['authorization'] || headers['Authorization '] || headers['authorization '];
+                    }
+                    if (auth && auth.toLowerCase().startsWith('bearer')) {
+                        sessionToken = auth;
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: 'token',
+                            token: sessionToken
+                        }, '*');
+                    }
+                }
+                const response = await originalFetch(...args);
+                const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+                const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br');
+                if (isSerpro) {
+                    const clone = response.clone();
+                    clone.json().then(data => processSerproData(data, url)).catch(() => {});
+                }
+                return response;
+            };
+
+            const open = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url) {
+                this._url = url;
+                return open.apply(this, arguments);
+            };
+
+            const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+            XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+                if (header.toLowerCase() === 'authorization' && value && value.toLowerCase().startsWith('bearer')) {
+                    sessionToken = value;
+                    window.postMessage({
+                        source: 'polaryon-injector',
+                        type: 'token',
+                        token: sessionToken
+                    }, '*');
+                }
+                return setRequestHeader.apply(this, arguments);
+            };
+
+            const send = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function() {
+                this.addEventListener('load', function() {
+                    const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br'));
+                    if (isSerpro) {
+                        try {
+                            const data = JSON.parse(this.responseText);
+                            processSerproData(data, this._url);
+                        } catch (e) {}
+                    }
+                });
+                return send.apply(this, arguments);
+            };
+        })();
+        `;
+
+        const script = document.createElement('script');
+        script.textContent = scriptContent;
+        (document.head || document.documentElement).appendChild(script);
+        script.remove();
+    } catch (e) {
+        console.error("[POLARYON] Falha ao injetar script de escuta:", e);
+    }
 
     // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL (8 SEGUNDOS)
     setInterval(async () => {
@@ -206,7 +239,7 @@
         for (const purchaseId of synchronizedPurchases) {
             try {
                 const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-                const res = await originalFetch(url, {
+                const res = await fetch(url, {
                     headers: {
                         'Authorization': sessionToken,
                         'Accept': 'application/json'

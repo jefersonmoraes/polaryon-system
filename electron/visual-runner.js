@@ -101,7 +101,7 @@ class VisualRunner {
             webPreferences: {
                 preload: path.join(__dirname, 'portal-preload.js'),
                 nodeIntegration: false,
-                contextIsolation: false,
+                contextIsolation: true,
                 nodeIntegrationInSubFrames: false, // 🛰️ [SUBFRAMES/IFRAMES] Previne injeção de globals do Node no contexto global de subframes, evitando conflitos de jQuery/CommonJS (v3.6.54)
                 webSecurity: false,
                 allowRunningInsecureContent: true,
@@ -124,7 +124,7 @@ class VisualRunner {
                     webPreferences: {
                         preload: path.join(__dirname, 'portal-preload.js'),
                         nodeIntegration: false,
-                        contextIsolation: false,
+                        contextIsolation: true,
                         nodeIntegrationInSubFrames: false, // 🛰️ Multi-Janelas e Popups herdam prevenção de conflitos CommonJS
                         webSecurity: false,
                         allowRunningInsecureContent: true,
