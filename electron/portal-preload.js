@@ -1,7 +1,7 @@
 const { ipcRenderer } = require('electron');
 
 (function() {
-    console.log("%c[POLARYON] Escuta-Geral v3.6.42 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
+    console.log("%c[POLARYON] Escuta-Geral v3.6.45 Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
 
     let sessionToken = '';
     const synchronizedPurchases = new Set();
@@ -142,7 +142,7 @@ const { ipcRenderer } = require('electron');
             } else if (typeof headers === 'object') {
                 auth = headers['Authorization'] || headers['authorization'] || headers['Authorization '] || headers['authorization '];
             }
-            if (auth && auth.startsWith('Bearer')) {
+            if (auth && auth.toLowerCase().startsWith('bearer')) {
                 sessionToken = auth;
             }
         }
@@ -165,7 +165,7 @@ const { ipcRenderer } = require('electron');
 
     const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
     XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
-        if (header.toLowerCase() === 'authorization' && value.startsWith('Bearer')) {
+        if (header.toLowerCase() === 'authorization' && value && value.toLowerCase().startsWith('bearer')) {
             sessionToken = value;
             console.log("%c[POLARYON XHR] Token Armado via XHR: " + value.substring(0, 30) + "...", "color: #00ffff; font-weight: bold;");
         }

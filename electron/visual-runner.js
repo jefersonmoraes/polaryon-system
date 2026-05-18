@@ -61,6 +61,7 @@ class VisualRunner {
                 preload: path.join(__dirname, 'portal-preload.js'),
                 nodeIntegration: false,
                 contextIsolation: false,
+                nodeIntegrationInSubFrames: true, // 🛰️ [SUBFRAMES/IFRAMES] Permite injetar o espião dentro de framesets e iframes onde o SPA roda (v3.6.45)
                 webSecurity: false,
                 allowRunningInsecureContent: true,
                 backgroundThrottling: false, 
@@ -83,6 +84,7 @@ class VisualRunner {
                         preload: path.join(__dirname, 'portal-preload.js'),
                         nodeIntegration: false,
                         contextIsolation: false,
+                        nodeIntegrationInSubFrames: true, // 🛰️ Multi-Janelas e Popups herdam suporte a Subframes
                         webSecurity: false,
                         allowRunningInsecureContent: true,
                         backgroundThrottling: false,
@@ -114,7 +116,7 @@ class VisualRunner {
                 }
             }
 
-            if (auth && auth.startsWith('Bearer')) {
+            if (auth && auth.toLowerCase().startsWith('bearer')) {
                 global.serproToken = auth; // 🔥 SALVA GLOBALMENTE PARA O MOTOR BACKGROUND
                 if (!global.ipcTokenRegistered) {
                     global.ipcTokenRegistered = true;
