@@ -130,7 +130,7 @@ class VisualRunner {
             }
 
             const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
-            const isComprasnet = url.includes('comprasnet.gov.br') || url.includes('gov.br/compras');
+            const isComprasnet = (url.includes('comprasnet.gov.br') || url.includes('compras.gov.br')) && url.includes('/seguro/');
             
             if (isComprasnet && !isLoginOrSSO) {
                 const session = this.sessions.get(sessionId);
