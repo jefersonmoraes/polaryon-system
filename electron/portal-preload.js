@@ -224,13 +224,27 @@
             };
         })();
         `;
+ 
+        const injectScript = () => {
+            const script = document.createElement('script');
+            script.textContent = scriptContent;
+            (document.head || document.documentElement).appendChild(script);
+            script.remove();
+        };
 
-        const script = document.createElement('script');
-        script.textContent = scriptContent;
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
+        if (document.head || document.documentElement) {
+            injectScript();
+        } else {
+            const observer = new MutationObserver(() => {
+                if (document.head || document.documentElement) {
+                    injectScript();
+                    observer.disconnect();
+                }
+            });
+            observer.observe(document, { childList: true, subtree: true });
+        }
     } catch (e) {
-        console.error("[POLARYON] Falha ao injetar script de escuta:", e);
+        console.error("🔴 [POLARYON] Falha ao injetar script de escuta:", e);
     }
 
     // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL (8 SEGUNDOS)

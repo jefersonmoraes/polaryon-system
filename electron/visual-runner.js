@@ -92,7 +92,27 @@ class VisualRunner {
         }
 
         const isLoginFlow = config.modality === 'LOGIN_FLOW';
-
+ 
+        // 🛰️ [TELEMETRIA DE CONSOLE] Inicializa arquivo de log local para diagnóstico remoto (v3.6.56)
+        const fs = require('fs');
+        const path = require('path');
+        const logFilePath = path.join('e:\\POLARYON SYSTEM\\POLARYON KUNBUN\\polaryon-system', 'visual_console_logs.txt');
+        try {
+            fs.writeFileSync(logFilePath, `=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM ${new Date().toLocaleString()} ===\n`, 'utf8');
+        } catch (e) {}
+ 
+        const logConsole = (targetWin, type) => {
+            targetWin.webContents.on('console-message', (event, level, message, line, sourceId) => {
+                const levels = ['INFO', 'WARNING', 'ERROR'];
+                const lvl = levels[level] || 'LOG';
+                const timestamp = new Date().toLocaleTimeString();
+                const logLine = `[${timestamp}] [${type}] [${lvl}] ${message} (Script: ${sourceId}:${line})`;
+                try {
+                    fs.appendFileSync(logFilePath, logLine + '\n', 'utf8');
+                } catch (err) {}
+            });
+        };
+ 
         const win = new BrowserWindow({
             width: 1280,
             height: 900,
@@ -110,10 +130,12 @@ class VisualRunner {
             },
             show: true
         });
-
+ 
+        logConsole(win, 'PRINCIPAL');
+ 
         const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
         win.webContents.setUserAgent(modernUserAgent);
-
+ 
         // 🛰️ [SIFÃO MULTI-JANELAS] Garante que janelas filhas (popups do Comprasnet/Dispensa) herdem o preload, cookies e DevTools (v3.6.45)
         win.webContents.setWindowOpenHandler((details) => {
             console.log(`[POLARYON WINDOW] Nova janela filha solicitada: ${details.url}`);
@@ -134,13 +156,14 @@ class VisualRunner {
                 }
             };
         });
-
+ 
         win.webContents.on('did-create-window', (childWindow) => {
             console.log("[POLARYON WINDOW] Janela filha criada com sucesso!");
             childWindow.webContents.setUserAgent(win.webContents.getUserAgent());
             childWindow.webContents.openDevTools({ mode: 'detach' });
+            logConsole(childWindow, 'FILHA');
         });
-
+ 
         this.sessions.set(sessionId, { window: win, config });
 
         const ses = win.webContents.session;
