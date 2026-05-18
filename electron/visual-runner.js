@@ -118,15 +118,17 @@ class VisualRunner {
             }
         });
 
-        ipcMain.removeAllListeners('login-success');
-        ipcMain.on('login-success', (event, { sessionId, url }) => {
-            const session = this.sessions.get(sessionId);
-            if (session && session.window && !session.window.isDestroyed()) {
-                session.window.hide(); 
-                // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
-                session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/');
-                if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                    this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+        win.webContents.on('did-navigate', (event, url) => {
+            if (url.includes('intro.htm') || url.includes('servico=226') || url.includes('main.asp')) {
+                const session = this.sessions.get(sessionId);
+                if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
+                    session.loginFinished = true; // Evita loop
+                    session.window.hide(); 
+                    // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
+                    session.window.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/');
+                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                        this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                    }
                 }
             }
         });
