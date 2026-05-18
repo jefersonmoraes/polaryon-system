@@ -118,7 +118,17 @@ class VisualRunner {
             }
         });
 
+        win.webContents.on('will-navigate', (event, url) => {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] will-navigate: ${url}`);
+            }
+        });
+
         win.webContents.on('did-navigate', (event, url) => {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] did-navigate: ${url}`);
+            }
+
             const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
             const isComprasnet = url.includes('comprasnet.gov.br') || url.includes('gov.br/compras');
             
@@ -126,6 +136,10 @@ class VisualRunner {
                 const session = this.sessions.get(sessionId);
                 if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                     session.loginFinished = true; // Evita loop
+                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN DETECTADO! Escondendo janela e navegando para servico=226...`);
+                    }
+                    session.window.webContents.closeDevTools();
                     session.window.hide(); 
                     // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
                     session.window.loadURL('https://www.comprasnet.gov.br/seguro/indexgov.asp?servico=226');
