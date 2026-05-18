@@ -208,7 +208,7 @@ class VisualRunner {
                 this.dashboardWebContents.send('bidding-update-log', `[VISUAL] did-navigate: ${url}`);
             }
 
-            const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
+            const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('loginPortal') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
             // 🛡️ SUPORTE AMPLIADO A INTRO E COMPRASNET-WEB (v3.6.50): O login redireciona para intro.htm ou comprasnet-web/seguro
             const isComprasnet = (url.includes('comprasnet.gov.br') || url.includes('compras.gov.br')) && (url.includes('/seguro/') || url.includes('intro.htm') || url.includes('comprasnet-web'));
             
@@ -264,7 +264,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortalFornecedor.asp';
+        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortal.asp';
         win.loadURL(startUrl);
     }
 
