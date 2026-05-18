@@ -287,7 +287,7 @@ class VisualRunner {
             if (!win.isDestroyed()) win.webContents.send('init-session', { sessionId, config });
         });
 
-        const startUrl = 'https://www.comprasnet.gov.br/seguro/loginPortal.asp';
+        const startUrl = 'https://www.gov.br/govbrportal/inicializacao-autenticacao-openid.html';
         win.loadURL(startUrl);
     }
 

@@ -1,4 +1,11 @@
-=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 17:01:48 ===
-[17:01:48] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.56 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[17:01:48] [PRINCIPAL] [LOG] Uncaught ReferenceError: $ is not defined (Script: https://www.gov.br/compras/portal_javascripts/Sunburst%20Theme/resourcegovbr.policybrowser-update-cachekey-08f0f01f404c6b4ba6c04acde242252c.js:23)
-[17:01:49] [PRINCIPAL] [WARNING] %c[POLARYON] Radar: https://www.gov.br/compras/pt-br/@@configuracoes_view color: #888; font-size: 10px; (Script: :80)
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 17:19:35 ===
+[17:19:35] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:19:39] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:19:41] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:19:41] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
+[17:19:41] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3cbe8b1d:566)
+[17:21:00] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:21:01] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:21:01] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.57 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[17:21:01] [PRINCIPAL] [LOG] Uncaught ReferenceError: $ is not defined (Script: https://www.gov.br/compras/portal_javascripts/Sunburst%20Theme/resourcegovbr.policybrowser-update-cachekey-08f0f01f404c6b4ba6c04acde242252c.js:23)
+[17:21:01] [PRINCIPAL] [WARNING] %c[POLARYON] Radar: https://www.gov.br/compras/pt-br/@@configuracoes_view color: #888; font-size: 10px; (Script: :80)
