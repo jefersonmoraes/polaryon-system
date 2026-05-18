@@ -231,25 +231,19 @@ class VisualRunner {
                 this.dashboardWebContents.send('bidding-update-log', `[VISUAL] did-navigate: ${url}`);
             }
 
-            const isLoginOrSSO = url.includes('loginPortalFornecedor') || url.includes('loginPortal') || url.includes('sso.acesso.gov.br') || url.includes('gov.br/cas');
-            // 🛡️ SUPORTE AMPLIADO A INTRO E COMPRASNET-WEB (v3.6.50): O login redireciona para intro.htm ou comprasnet-web/seguro
-            const isComprasnet = (url.includes('comprasnet.gov.br') || url.includes('compras.gov.br')) && (url.includes('/seguro/') || url.includes('intro.htm') || url.includes('comprasnet-web'));
+            const isLoginFinished = url.includes('intro.htm') || url.includes('index.html') || url.includes('/seguro/fornecedor/');
             
-            if (isComprasnet && !isLoginOrSSO) {
+            if (isLoginFinished) {
                 const session = this.sessions.get(sessionId);
                 if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                     session.loginFinished = true; // Evita loop
                     if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN DETECTADO! Escondendo janela e navegando para servico=226...`);
+                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO COM SUCESSO! Redirecionando para a disputa...`);
                     }
-                    // Manter janela visível e devtools abertos a pedido do usuário para acompanhamento (v3.6.43)
                     if (!session.window.webContents.isDevToolsOpened()) {
                         session.window.webContents.openDevTools({ mode: 'detach' });
                     }
-                    // session.window.webContents.closeDevTools();
-                    // session.window.hide(); 
                     
-                    // NAVEGA PARA A SALA PARA O SIFÃO PEGAR O TOKEN!
                     if (session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
                         const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
                         const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
