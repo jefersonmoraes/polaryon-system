@@ -50,7 +50,9 @@ const { ipcRenderer } = require('electron');
                 headers: {
                     'Authorization': sessionToken,
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 },
                 body: JSON.stringify(payload)
             });

@@ -1,85 +1,85 @@
 import fs from 'fs';
 import path from 'path';
 
-const harPath = 'e:\\POLARYON SYSTEM\\POLARYON KUNBUN\\polaryon-system\\importar\\disputas.sigapregao.com.br.har';
+const harFiles = [
+    'e:/POLARYON SYSTEM/POLARYON KUNBUN/polaryon-system/importar/cnetmobile.estaleiro.serpro.gov.br.har',
+    'e:/POLARYON SYSTEM/POLARYON KUNBUN/polaryon-system/importar/www.comprasnet.gov.br.har',
+    'e:/POLARYON SYSTEM/POLARYON KUNBUN/polaryon-system/importar/disputas.sigapregao.com.br.har'
+];
 
-function parseHar() {
-    console.log('🔍 Iniciando análise do arquivo HAR...');
-    
-    if (!fs.existsSync(harPath)) {
-        console.error('❌ Arquivo HAR não encontrado!');
+harFiles.forEach(file => {
+    if (!fs.existsSync(file)) {
+        console.log(`File not found: ${file}`);
         return;
     }
+    console.log(`\n======================================================`);
+    console.log(`ANALYZING HAR FILE: ${path.basename(file)}`);
+    console.log(`======================================================`);
 
-    const harData = JSON.parse(fs.readFileSync(harPath, 'utf8'));
-    const entries = harData.log.entries;
-    console.log(`📊 Total de requisições gravadas no HAR: ${entries.length}\n`);
+    try {
+        const content = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const entries = content.log.entries;
+        console.log(`Total entries found: ${entries.length}`);
 
-    const endpoints = {};
+        const summary = [];
+        const uniqueUrls = new Set();
 
-    entries.forEach(entry => {
-        const req = entry.request;
-        const resp = entry.response;
-        const url = req.url;
-        const method = req.method;
-        const status = resp.status;
+        entries.forEach(entry => {
+            const req = entry.request;
+            const res = entry.response;
+            const url = req.url;
+            const method = req.method;
 
-        // Foca em APIs interessantes (Serpro, Comprasnet, Siga, etc.)
-        if (url.includes('compras') || url.includes('serpro') || url.includes('disputa') || url.includes('lance')) {
-            const urlObj = new URL(url);
-            const pathKey = `${method} ${urlObj.origin}${urlObj.pathname}`;
+            // Keep track of all requests, filter to API / interesting routes
+            if (
+                url.includes('/api/') || 
+                url.includes('/comprasnet-') || 
+                url.includes('/compras/') || 
+                url.includes('/lances') || 
+                url.includes('/disputa') || 
+                url.includes('/seguro/')
+            ) {
+                const urlObj = new URL(url);
+                const pathAndQuery = urlObj.pathname + urlObj.search;
+                const key = `${method} ${urlObj.origin}${urlObj.pathname}`;
 
-            if (!endpoints[pathKey]) {
-                endpoints[pathKey] = {
-                    method,
-                    url: url.split('?')[0],
-                    count: 0,
-                    statusCodes: new Set(),
-                    sampleParams: urlObj.search,
-                    sampleRequestBody: null,
-                    sampleResponseBodySize: resp.content.size,
-                    sampleResponseText: null
-                };
-            }
+                if (!uniqueUrls.has(key)) {
+                    uniqueUrls.add(key);
+                    
+                    const authHeader = req.headers.find(h => h.name.toLowerCase() === 'authorization');
+                    const cookieHeader = req.headers.find(h => h.name.toLowerCase() === 'cookie');
+                    
+                    const hasAuth = authHeader ? `${authHeader.value.substring(0, 15)}...` : 'None';
+                    const hasCookie = cookieHeader ? 'Yes' : 'No';
 
-            endpoints[pathKey].count++;
-            endpoints[pathKey].statusCodes.add(status);
+                    let reqBody = '';
+                    if (req.postData && req.postData.text) {
+                        reqBody = req.postData.text;
+                    }
 
-            // Tenta pegar um exemplo de corpo de requisição
-            if (req.postData && req.postData.text) {
-                try {
-                    endpoints[pathKey].sampleRequestBody = JSON.parse(req.postData.text);
-                } catch {
-                    endpoints[pathKey].sampleRequestBody = req.postData.text;
+                    summary.push({
+                        method,
+                        url,
+                        status: res.status,
+                        auth: hasAuth,
+                        cookie: hasCookie,
+                        body: reqBody
+                    });
                 }
             }
+        });
 
-            // Tenta pegar um exemplo de resposta de API
-            if (resp.content && resp.content.text && !endpoints[pathKey].sampleResponseText) {
-                try {
-                    const parsed = JSON.parse(resp.content.text);
-                    // Minimiza para não poluir muito a saída
-                    endpoints[pathKey].sampleResponseText = Array.isArray(parsed) ? parsed.slice(0, 1) : parsed;
-                } catch {
-                    endpoints[pathKey].sampleResponseText = resp.content.text.substring(0, 200) + '...';
-                }
+        console.log(`Unique API/Interesting endpoints found: ${summary.length}`);
+        summary.slice(0, 50).forEach((item, index) => {
+            console.log(`\n[#${index + 1}] ${item.method} ${item.url} -> Status: ${item.status}`);
+            console.log(`   - Auth Header: ${item.auth}`);
+            console.log(`   - Cookie: ${item.cookie}`);
+            if (item.body) {
+                console.log(`   - Request Body: ${item.body}`);
             }
-        }
-    });
+        });
 
-    console.log('📝 --- ENDPOINTS DE INTERESSE ENCONTRADOS ---');
-    Object.values(endpoints).forEach((ep, i) => {
-        console.log(`\n[${i+1}] ${ep.method} ${ep.url}`);
-        console.log(`    Contagem: ${ep.count}`);
-        console.log(`    Status HTTP: ${Array.from(ep.statusCodes).join(', ')}`);
-        console.log(`    Parâmetros: ${ep.sampleParams || '(nenhum)'}`);
-        if (ep.sampleRequestBody) {
-            console.log(`    Request Body Exemplo:`, JSON.stringify(ep.sampleRequestBody, null, 2));
-        }
-        if (ep.sampleResponseText) {
-            console.log(`    Response Exemplo:`, JSON.stringify(ep.sampleResponseText, null, 2).substring(0, 800) + '...');
-        }
-    });
-}
-
-parseHar();
+    } catch (e) {
+        console.error(`Error parsing ${file}:`, e.message);
+    }
+});

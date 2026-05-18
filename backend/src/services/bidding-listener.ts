@@ -11,7 +11,9 @@ const apiClient = axios.create({
     timeout: 5000,
     headers: {
         'Accept': 'application/json, text/plain, */*',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'x-device-platform': 'web',
+        'x-version-number': '6.0.2'
     }
 });
 
@@ -65,7 +67,11 @@ export class BiddingListener {
                 try {
                     const response = await axios.get(publicApiUrl, { 
                         timeout: 5000,
-                        headers: { 'User-Agent': 'Mozilla/5.0 Polaryon/1.0' }
+                        headers: { 
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        }
                     });
 
                     // CLOCK SYNC: Extract server time from header
@@ -230,7 +236,9 @@ export class BiddingListener {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Polaryon/1.0'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
 
@@ -257,7 +265,9 @@ export class BiddingListener {
                 httpsAgent: agent,
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'User-Agent': 'Mozilla/5.0 Polaryon/1.0'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
 
@@ -289,7 +299,9 @@ export class BiddingListener {
                     httpsAgent: agent,
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'User-Agent': 'Mozilla/5.0 Polaryon/1.0'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
                     }
                 });
                 return response.data;

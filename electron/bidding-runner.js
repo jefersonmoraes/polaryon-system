@@ -107,7 +107,9 @@ class RoomRunner {
                 httpsAgent: this.agent,
                 headers: { 
                     'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
 
@@ -221,13 +223,15 @@ class BiddingRunner {
                 faseItem: "LA"
             };
 
-            const response = await axios.post(targetUrl, payload, {
+             const response = await axios.post(targetUrl, payload, {
                 httpsAgent: this.agent,
                 headers: {
                     'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
 
