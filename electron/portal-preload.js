@@ -27,7 +27,7 @@
             });
 
             // 2. Procura por botões de dropdown customizados (Bootstrap/Angular / JSF / Material)
-            const dropdownToggles = document.querySelectorAll('.dropdown-toggle, .ui-select-toggle, [data-toggle="dropdown"], .mat-select-trigger, button, div');
+            const dropdownToggles = document.querySelectorAll('.dropdown-toggle, .ui-select-toggle, [data-toggle="dropdown"], .mat-select-trigger, .br-select, .ui-select-match');
             dropdownToggles.forEach(toggle => {
                 const text = toggle.innerText || '';
                 // Se for o botão principal do filtro de status e não estiver na Disputa
