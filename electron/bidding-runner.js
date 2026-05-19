@@ -240,8 +240,7 @@ class GlobalScanner {
 
             const captchas = await captchaManager.getTokens();
 
-            // filtro=4 (Em Disputa)
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}&tamanhoPagina=50&pagina=0&filtro=4`;
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?captcha=${captchas.captcha1}&tamanhoPagina=50&pagina=0&filtro=4`;
             
             const res = await axios.get(url, {
                 headers: { 

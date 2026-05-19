@@ -196,9 +196,26 @@
     function processSerproData(data, url) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
-        // A varredura de IDs de 17 dígitos na rede só ocorre para chamadas que não sejam o listão do /participacoes
-        // Isso evita puxar salas inativas (o "lixo") que entopem a fila do robô
-        if (!url.includes('/participacoes')) {
+        if (url.includes('/participacoes')) {
+            const listObj = Array.isArray(data) ? data : (data.itens || []);
+            listObj.forEach(p => {
+                if (p.compra && p.compra.numeroUasg && p.compra.numero) {
+                    const uasg = p.compra.numeroUasg;
+                    const numero = p.compra.numero;
+                    const ano = p.compra.ano;
+                    const modalityCode = String(p.compra.modalidade || '6').padStart(2, '0');
+                    const purchaseId = `${uasg}${modalityCode}${String(numero).padStart(5, '0')}${ano}`;
+                    
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DETECTOR] Sala de Participação Ativa Detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        
+                        // Notifica o processo Electron principal sobre a nova sala
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
+                    }
+                }
+            });
+        } else {
             const jsonStr = JSON.stringify(data || {});
             const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
             if (discoveredIds && discoveredIds.length > 0) {
