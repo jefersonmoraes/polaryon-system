@@ -142,7 +142,9 @@
             const res = await fetch(url, {
                 headers: {
                     'Authorization': sessionToken,
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
             if (res.ok) {
@@ -294,7 +296,7 @@
         }
     }
 
-    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.81)
+    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.82)
     // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
     let currentIndex = 0;
     setInterval(async () => {
@@ -309,13 +311,17 @@
             const res = await fetch(url, {
                 headers: {
                     'Authorization': sessionToken,
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 }
             });
 
             if (res.ok) {
                 const data = await res.json();
                 processSerproData(data, url);
+            } else if (res.status === 401 || res.status === 403) {
+                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Mantendo na fila para re-tentativa quando novo token chegar.`);
             } else if (res.status === 422 || res.status === 404) {
                 // Auto-limpeza defensiva: se o Serpro retornar que a sala é inválida/inexistente ou já encerrou, removemos do radar
                 synchronizedPurchases.delete(purchaseId);
