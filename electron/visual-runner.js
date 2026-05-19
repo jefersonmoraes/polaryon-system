@@ -14,6 +14,13 @@ class VisualRunner {
             }
         });
 
+        ipcMain.removeAllListeners('portal-error');
+        ipcMain.on('portal-error', (event, data) => {
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-error', data);
+            }
+        });
+
         ipcMain.removeAllListeners('portal-hybrid-capture');
         ipcMain.on('portal-hybrid-capture', (event, data) => {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
@@ -83,7 +90,21 @@ class VisualRunner {
                 const paddedNumero = String(config.numero).replace(/\D/g, '').padStart(5, '0');
                 const cleanAno = String(config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
                 const purchaseId = `${config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                
+                let targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                
+                // Extrai compras-id da URL atual se disponível
+                try {
+                    const currentUrlStr = activeWin.getURL();
+                    const currentUrl = new URL(currentUrlStr);
+                    const comprasId = currentUrl.searchParams.get('compras-id');
+                    if (comprasId) {
+                        targetUrl += `&compras-id=${comprasId}`;
+                        console.log(`[VISUAL-RUNNER] 🔑 Reaproveitando compras-id do URL ativo: ${comprasId}`);
+                    }
+                } catch (e) {
+                    console.error("[VISUAL-RUNNER] Erro ao extrair compras-id da URL ativa:", e.message);
+                }
                 
                 console.log(`[VISUAL-RUNNER] 🚀 Reutilização: Navegando para a disputa direta: ${targetUrl}`);
                 activeWin.loadURL(targetUrl);

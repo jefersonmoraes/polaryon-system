@@ -483,7 +483,14 @@
                 const data = await res.json();
                 processSerproData(data, url);
             } else if (res.status === 401 || res.status === 403) {
-                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Mantendo na fila para re-tentativa quando novo token chegar.`);
+                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Resetando token e solicitando re-autenticação.`);
+                shared.sessionToken = '';
+                ipcRenderer.send('portal-error', {
+                    sessionId: 'GLOBAL',
+                    error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
+                    code: res.status,
+                    action: 'REQUIRE_REAUTH'
+                });
             } else if (res.status === 422 || res.status === 404) {
                 // Auto-limpeza defensiva: se o Serpro retornar que a sala é inválida/inexistente ou já encerrou, removemos do radar
                 shared.synchronizedPurchases.delete(purchaseId);

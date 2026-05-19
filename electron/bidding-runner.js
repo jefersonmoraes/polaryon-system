@@ -39,8 +39,8 @@ class CaptchaManager {
             };
             
             const [res1, res2] = await Promise.all([
-                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers }).catch(() => ({data: ''})),
-                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers }).catch(() => ({data: ''}))
+                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers, timeout: 6000 }).catch(() => ({data: ''})),
+                axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers, timeout: 6000 }).catch(() => ({data: ''}))
             ]);
 
             if (res1.data) this.token1 = res1.data;
@@ -259,7 +259,8 @@ class GlobalScanner {
                     const uasg = p.compra.numeroUasg;
                     const numero = p.compra.numero;
                     const ano = p.compra.ano;
-                    const idCompra = `${uasg}06${String(numero).padStart(5, '0')}${ano}`;
+                    const modalityCode = String(p.compra.modalidade || '6').padStart(2, '0');
+                    const idCompra = `${uasg}${modalityCode}${String(numero).padStart(5, '0')}${ano}`;
                     const sessionId = `GLOBAL_${idCompra}`;
                     
                     if (!this.knownRooms.has(sessionId)) {
@@ -270,11 +271,11 @@ class GlobalScanner {
                         
                         // Envia ao frontend para focar e abrir
                         this.webContents.send('bidding-detected-room', {
-                            url: `compra=${uasg}06${String(numero).padStart(5, '0')}${ano}`
+                            url: `compra=${idCompra}`
                         });
                         
                         // Auto-inicia o motor invisível no backend Electron para monitorar a sala inteira sem clique!
-                        this.biddingRunner.start(sessionId, uasg, numero, ano, null, '06');
+                        this.biddingRunner.start(sessionId, uasg, numero, ano, null, modalityCode);
                     }
                 }
             });
@@ -283,6 +284,16 @@ class GlobalScanner {
             this.timeoutId = setTimeout(() => this.run(), 15000);
         } catch (e) {
             console.error('[GLOBAL SCANNER] Erro na varredura global:', e.message);
+            const statusError = e.response ? e.response.status : 500;
+            if ((statusError === 401 || statusError === 403) && !this.webContents.isDestroyed()) {
+                console.warn(`[GLOBAL SCANNER] 🚨 Sessão Expirada durante varredura. Solicitando re-autenticação.`);
+                this.webContents.send('bidding-error', {
+                    sessionId: 'GLOBAL',
+                    error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
+                    code: statusError,
+                    action: 'REQUIRE_REAUTH'
+                });
+            }
             this.timeoutId = setTimeout(() => this.run(), 15000);
         }
     }
