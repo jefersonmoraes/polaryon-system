@@ -7,14 +7,32 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
-    // Compartilhamento de Estado entre Frames (v3.6.89)
-    if (!window.top._polaryonSharedState) {
-        window.top._polaryonSharedState = {
-            sessionToken: '',
-            synchronizedPurchases: new Set()
-        };
+    // Compartilhamento de Estado CORS-Safe entre Frames (v3.6.90)
+    let shared = {
+        sessionToken: '',
+        synchronizedPurchases: new Set()
+    };
+    try {
+        if (window.top) {
+            if (!window.top._polaryonSharedState) {
+                window.top._polaryonSharedState = {
+                    sessionToken: '',
+                    synchronizedPurchases: new Set()
+                };
+            }
+            shared = window.top._polaryonSharedState;
+        }
+    } catch (e) {
+        // Ignora erro de cross-origin e usa o estado local isolado
     }
-    const shared = window.top._polaryonSharedState;
+
+    // Ativamente busca o token da sessão do processo principal Electron (Evita Race Condition)
+    ipcRenderer.invoke('get-login-token').then(token => {
+        if (token) {
+            shared.sessionToken = token;
+            console.log("%c[POLARYON] Token recuperado ativamente no startup!", "color: #ff00ff; font-size: 11px;");
+        }
+    }).catch(() => {});
 
     // AUTOMATIZADOR DE FILTRO: Seleciona "Disputa" automaticamente se estiver em outra opção (v3.6.86)
     // Garante que o usuário sempre seja guiado para a lista de disputas sem precisar de cliques manuais
@@ -140,6 +158,9 @@
                     if (!shared.synchronizedPurchases.has(purchaseId)) {
                         shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura de rede: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        
+                        // Notifica o processo Electron principal sobre a nova sala
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
                     }
                 });
             }
@@ -343,6 +364,9 @@
                     if (!shared.synchronizedPurchases.has(purchaseId)) {
                         shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DOM] Sala Detectada via Código HTML: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        
+                        // Notifica o processo Electron principal sobre a nova sala
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
                     }
                 });
             }
@@ -375,6 +399,9 @@
                     if (!shared.synchronizedPurchases.has(purchaseId)) {
                         shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DOM] Sala Detectada via Segmentação: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
+                        
+                        // Notifica o processo Electron principal sobre a nova sala
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
                     }
                 }
             }

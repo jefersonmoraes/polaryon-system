@@ -255,7 +255,7 @@ class GlobalScanner {
             const participacoes = res.data || [];
             
             participacoes.forEach(p => {
-                if (p.compra && p.compra.chaveCompraPncp) {
+                if (p.compra && p.compra.numeroUasg && p.compra.numero) {
                     const uasg = p.compra.numeroUasg;
                     const numero = p.compra.numero;
                     const ano = p.compra.ano;
