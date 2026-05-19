@@ -1335,7 +1335,14 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                         />
                     </div>
                     <div className="flex flex-col gap-1.5 flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Margem</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center justify-between">
+                            <span>Margem</span>
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md transition-all ${
+                                marginType === 'percentage' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                                {marginType === 'percentage' ? '%' : 'R$'}
+                            </span>
+                        </label>
                         <Input 
                             type="number" 
                             className="h-10 text-xs font-bold bg-slate-50 border-slate-200" 
