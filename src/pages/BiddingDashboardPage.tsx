@@ -228,7 +228,11 @@ export default function BiddingDashboardPage() {
 
                             if (nextBid > maxAllowedBidBySerpro) {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} viola margem Serpro (Máximo permitido: R$ ${maxAllowedBidBySerpro})`);
-                            } else if (nextBid < myCurrentBid && nextBid >= myMin) {
+                            } else if (nextBid >= currentBest && currentBest > 0) {
+                                console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} é pior ou igual ao líder (R$ ${currentBest}). Evitando erro 422.`);
+                            } else if (nextBid >= myCurrentBid) {
+                                console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} não é melhor que seu último lance (R$ ${myCurrentBid}). Evitando erro 422.`);
+                            } else if (nextBid >= myMin) {
                                 console.log(`%c🎯 [SNIPER] DISPARANDO LANCE: R$ ${nextBid} para Item ${sId}`, "color: #10b981; font-weight: bold;");
                                 
                                 toast.success(`Sniper Disparando R$ ${nextBid} no Item ${sId}`, {
@@ -1185,51 +1189,21 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
-        if (item.decrementValue === undefined || item.decrementValue === null) {
-            if (item.officialMargin !== undefined && item.officialMargin !== null) {
+        if (item.officialMargin !== undefined && item.officialMargin !== null) {
+            // Se a margem atual for menor que a oficial (ou for o valor default 1), forçamos a margem oficial!
+            if (margin <= 1 || margin < item.officialMargin) {
                 setMargin(item.officialMargin);
             }
         }
-    }, [item.officialMargin, item.decrementValue]);
+    }, [item.officialMargin]);
 
     useEffect(() => {
-        if (item.decrementType === undefined || item.decrementType === null) {
-            if (item.officialMarginType !== undefined && item.officialMarginType !== null) {
-                setMarginType(item.officialMarginType === 'P' ? 'percentage' : 'fixed');
-            }
+        if (item.officialMarginType !== undefined && item.officialMarginType !== null) {
+            setMarginType(item.officialMarginType === 'P' ? 'percentage' : 'fixed');
         }
-    }, [item.officialMarginType, item.decrementType]);
+    }, [item.officialMarginType]);
 
-    // ✨ AJUSTE MANUAL DE TEMPO (v3.5.80)
-    const handleManualTimeSync = (val: string) => {
-        setManualTime(val);
-        if (val.length >= 4) {
-            try {
-                const parts = val.replace(/\D/g, '').match(/.{1,2}/g);
-                if (parts && parts.length >= 2) {
-                    const h = parseInt(parts[0]);
-                    const m = parseInt(parts[1]);
-                    const s = parts[2] ? parseInt(parts[2]) : 0;
-                    
-                    const now = new Date();
-                    const target = new Date();
-                    target.setHours(h, m, s, 0);
-                    
-                    // Se o horário já passou hoje, assume que é para o dia seguinte (ex: amanhã cedo)
-                    if (target.getTime() <= now.getTime()) {
-                        target.setDate(target.getDate() + 1);
-                    }
-                    
-                    const diff = Math.floor((target.getTime() - now.getTime()) / 1000);
-                    if (diff > 0) {
-                        setTimeLeft(diff);
-                        toast.success(`CRONÔMETRO SINCRONIZADO PARA ${h}:${m}:${s}`);
-                    }
-                }
-            } catch (e) { console.error('Erro ao sincronizar tempo manual', e); }
-        }
-    };
-
+    // O cronômetro agora é imortalizado pela extração automática de `dataHoraFimContagem` do Serpro.
     // Decrementador local apenas como fallback
     useEffect(() => {
         let interval: any;
@@ -1272,6 +1246,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
         let val = currentBest - marginVal;
         
         if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+        
+        // Anti-Burrice / Anti-Rejeição: Se o lance calculado for maior ou igual ao atual, ABORTA!
+        if (currentBest > 0 && val >= currentBest) {
+            toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não é melhor que o atual (R$ ${currentBest.toFixed(2)}). Erro 422 evitado.`);
+            return;
+        }
         
         console.log(`🚀 [GATILHO MANUAL] Disparando R$ ${val} (Leader: ${currentBest}, Margin: ${marginVal})`);
         onManualBid(item.purchaseId, item.itemId, item.bidId, val);
@@ -1337,7 +1317,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                     </div>
                     <div className="flex flex-col gap-1.5 flex-1">
                         <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center justify-between">
-                            <span>Margem</span>
+                            <span className="flex items-center gap-1">
+                                Margem 
+                                {item.officialMargin && (
+                                    <span className="text-[8px] text-slate-300 ml-1 font-mono">(Oficial: {item.officialMarginType === 'P' ? '%' : 'R$'} {item.officialMargin})</span>
+                                )}
+                            </span>
                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md transition-all ${
                                 marginType === 'percentage' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
                             }`}>

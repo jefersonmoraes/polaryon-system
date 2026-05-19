@@ -200,7 +200,7 @@
             // 🔥 FILTRO INTELIGENTE ULTRA-RIGOROSO: Ignora abas "Em Andamento" ou "Agendadas"
             // e foca unicamente nas salas ativas em disputa (situacao=3 ou contendo "DISPUTA")
             const isDisputaQuery = url.includes('situacao=3') || url.includes('situacao=EM_DISPUTA') || url.includes('fase=disputa') || url.includes('situacao=disputa');
-            const hasOtherFilters = url.includes('situacao=1') || url.includes('situacao=2') || url.includes('situacao=4') || url.includes('situacao=AGENDADA') || url.includes('situacao=EM_ANDAMENTO');
+            const hasOtherFilters = url.includes('situacao=1') || url.includes('situacao=2') || url.includes('situacao=4') || url.includes('AGENDADA') || url.includes('EM_ANDAMENTO') || url.includes('ENCERRADA');
             
             if (hasOtherFilters && !isDisputaQuery) {
                 console.log(`%c[POLARYON] Ignorando participações fora da aba de Disputa Ativa: ${url}`, "color: #94a3b8; font-size: 10px; font-weight: bold;");
