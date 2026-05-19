@@ -116,6 +116,8 @@ class RoomRunner {
             this.clockSync.update(res.headers.date);
             const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
             
+            let minTimer = Infinity;
+
             if (itemsList.length > 0) {
                 const serverNow = this.clockSync.getServerTime();
                 const mappedItems = itemsList.map(item => {
@@ -128,6 +130,12 @@ class RoomRunner {
                         } else {
                             secondsLeft = -1;
                         }
+                    }
+
+                    // Apenas considera itens ativos na fase de disputa (LA) para aceleração
+                    const faseItem = item.fase || 'LA';
+                    if (faseItem === 'LA' && secondsLeft >= 0 && secondsLeft < minTimer) {
+                        minTimer = secondsLeft;
                     }
 
                     return {
@@ -151,8 +159,17 @@ class RoomRunner {
                 });
             }
 
-            // Acelera o radar se houver itens perto do fim
-            this.timeoutId = setTimeout(() => this.run(), 1000);
+            // Polling dinâmico inteligente
+            let nextInterval = 1000;
+            if (minTimer <= 30) {
+                nextInterval = 350; // Ritmo frenético de 350ms nos segundos finais! 🔥🚀
+                console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA: Item iminente a ${minTimer.toFixed(1)}s do fim! Polling ajustado para ${nextInterval}ms`);
+            } else if (minTimer <= 60) {
+                nextInterval = 600; // Ritmo intermediário de 600ms
+                console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado: Item a ${minTimer.toFixed(1)}s do fim. Polling ajustado para ${nextInterval}ms`);
+            }
+
+            this.timeoutId = setTimeout(() => this.run(), nextInterval);
 
         } catch (e) {
             console.error('[POLARYON MOTOR] Erro na varredura da sala:', e.message);
