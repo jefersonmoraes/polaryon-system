@@ -9,12 +9,47 @@
 
     let sessionToken = '';
     const synchronizedPurchases = new Set();
+    let discoveryInterval = null;
+
+    async function runDiscovery() {
+        if (!sessionToken) return;
+        try {
+            const url = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=100&pagina=0&filtro=4';
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': sessionToken,
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`%c[POLARYON DISCOVERY] Auto-Descoberta de Salas em Disputa (Encontrado: ${Array.isArray(data) ? data.length : 0})`, "color: #a78bfa; font-weight: bold;");
+                processSerproData(data, url);
+            }
+        } catch (e) {
+            console.error("[POLARYON DISCOVERY] Erro ao buscar participações em disputa:", e);
+        }
+    }
+
+    function triggerAutoDiscovery() {
+        if (!sessionToken) return;
+        runDiscovery();
+        if (discoveryInterval) clearInterval(discoveryInterval);
+        discoveryInterval = setInterval(runDiscovery, 30000);
+    }
 
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
+            const oldToken = sessionToken;
             sessionToken = data.token;
             console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
+            if (sessionToken !== oldToken) {
+                triggerAutoDiscovery();
+            }
         }
     });
 
@@ -161,7 +196,11 @@
         if (event.data && event.data.source === 'polaryon-injector') {
             const { type, token, data, url } = event.data;
             if (type === 'token') {
+                const oldToken = sessionToken;
                 sessionToken = token;
+                if (sessionToken !== oldToken) {
+                    triggerAutoDiscovery();
+                }
             } else if (type === 'serpro-data') {
                 processSerproData(data, url);
             }
