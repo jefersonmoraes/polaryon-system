@@ -1346,20 +1346,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                 </div>
 
                 <div className="col-span-3 flex items-center justify-end gap-5">
-                    <div className="flex flex-col gap-1">
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                            timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
-                        }`}>
-                            <Clock className="w-4 h-4" />
-                            <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
-                        </div>
-                        <input 
-                            type="text" 
-                            placeholder="Ajuste HH:mm"
-                            className="text-[9px] font-bold text-center bg-transparent border-b border-slate-200 outline-none focus:border-emerald-400 text-slate-400"
-                            value={manualTime}
-                            onChange={(e) => handleManualTimeSync(e.target.value)}
-                        />
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                        timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
+                    }`}>
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
                     </div>
                     
                     <Button 
