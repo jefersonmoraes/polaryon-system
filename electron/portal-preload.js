@@ -116,36 +116,19 @@
     function processSerproData(data, url) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
-        // 🔥 EXTRAÇÃO INTELIGENTE DE PARTICIPAÇÕES (v3.6.80)
-        if (url.includes('/participacoes')) {
-            const list = Array.isArray(data) ? data : [];
-            list.forEach(p => {
-                if (p.compra) {
-                    const { numeroUasg, modalidade, numero, ano } = p.compra;
-                    // Mapeia modalidade (geralmente 6 é Dispensa Eletrônica, mas formatamos sempre com 2 dígitos)
-                    const modStr = String(modalidade).padStart(2, '0');
-                    const numStr = String(numero).padStart(5, '0');
-                    const purchaseId = `${numeroUasg}${modStr}${numStr}${ano}`;
-                    
+        // A varredura de IDs de 17 dígitos na rede só ocorre para chamadas que não sejam o listão do /participacoes
+        // Isso evita puxar salas inativas (o "lixo") que entopem a fila do robô
+        if (!url.includes('/participacoes')) {
+            const jsonStr = JSON.stringify(data || {});
+            const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
+            if (discoveredIds && discoveredIds.length > 0) {
+                discoveredIds.forEach(purchaseId => {
                     if (!synchronizedPurchases.has(purchaseId)) {
                         synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DETECTOR] Sala Auto-Detectada via Participações: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                        // O loop em Round-Robin carregará esta sala suavemente a cada 3 segundos, prevenindo 429
+                        console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura de rede: ${purchaseId}`, "color: #10b981; font-weight: bold;");
                     }
-                }
-            });
-        }
-
-        const jsonStr = JSON.stringify(data || {});
-        const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
-        if (discoveredIds && discoveredIds.length > 0) {
-            discoveredIds.forEach(purchaseId => {
-                if (!synchronizedPurchases.has(purchaseId)) {
-                    synchronizedPurchases.add(purchaseId);
-                    console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                    // O loop em Round-Robin carregará esta sala suavemente a cada 3 segundos, prevenindo 429
-                }
-            });
+                });
+            }
         }
 
         const items = Array.isArray(data) ? data : (data.itens || []);
@@ -350,51 +333,36 @@
                 });
             }
 
-            // 2. Captura lógica baseada nos cards de compra renderizados na tela (Híbrido Perfeito)
-            const allElements = Array.from(document.querySelectorAll('*'));
-            allElements.forEach(el => {
-                if (el.children.length > 3) return; // Foca apenas nos elementos de título/célula folha para evitar loops desnecessários
+            // 2. Captura lógica baseada nos cards de compra renderizados na tela (Segmentação por Modalidade - v3.6.87)
+            const bodyText = document.body ? document.body.innerText : '';
+            const segments = bodyText.split(/(DISPENSA ELETRÔNICA|DISPENSA|PREGÃO|CONCORRÊNCIA|INEXIGIBILIDADE)/i);
+            
+            for (let i = 1; i < segments.length; i += 2) {
+                const modalidadeText = segments[i];
+                const blockText = segments[i + 1] || '';
                 
-                const text = el.innerText || '';
-                const editalMatch = text.match(/Nº\s*(\d+)\/(\d{4})/i);
+                const editalMatch = blockText.match(/Nº\s*(\d+)\/(\d{4})/i);
+                const uasgMatch = blockText.match(/\b(\d{5,6})\s*-\s*/);
                 
-                if (editalMatch) {
+                if (editalMatch && uasgMatch) {
                     const editalNum = editalMatch[1];
                     const ano = editalMatch[2];
+                    const uasg = uasgMatch[1];
                     
-                    // Procura pela UASG subindo até o nível do card (pai/avô) para associar ao edital correspondente
-                    let uasg = '';
-                    let parentText = '';
-                    let current = el;
-                    
-                    for (let i = 0; i < 3; i++) {
-                        if (!current) break;
-                        const cText = current.innerText || '';
-                        const uMatch = cText.match(/\b(\d{5,6})\s*-\s*/);
-                        if (uMatch) {
-                            uasg = uMatch[1];
-                            parentText = cText;
-                            break;
-                        }
-                        current = current.parentElement;
+                    let modalidade = '06'; // Padrão Dispensa Eletrônica
+                    if (modalidadeText.toUpperCase().includes('PREGÃO')) {
+                        modalidade = '05';
                     }
                     
-                    if (uasg) {
-                        let modalidade = '06'; // Padrão Dispensa Eletrônica
-                        if (parentText.toUpperCase().includes('PREGÃO') || text.toUpperCase().includes('PREGÃO')) {
-                            modalidade = '05';
-                        }
-                        
-                        const numStr = String(editalNum).padStart(5, '0');
-                        const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
-                        
-                        if (!synchronizedPurchases.has(purchaseId)) {
-                            synchronizedPurchases.add(purchaseId);
-                            console.log(`%c[POLARYON DOM] Sala Detectada via Layout Híbrido: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
-                        }
+                    const numStr = String(editalNum).padStart(5, '0');
+                    const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
+                    
+                    if (!synchronizedPurchases.has(purchaseId)) {
+                        synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DOM] Sala Detectada via Segmentação: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
                     }
                 }
-            });
+            }
         } catch (e) {
             console.error("[POLARYON DOM SCANNER] Falha na varredura:", e);
         }
