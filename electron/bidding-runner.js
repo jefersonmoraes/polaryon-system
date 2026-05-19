@@ -163,6 +163,7 @@ class RoomRunner {
                         status: item.faseTraduzido || item.fase || 'Em Disputa',
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
+                        dataHoraFimContagem: item.dataHoraFimContagem,
                         desc: item.descricao
                     };
                 });

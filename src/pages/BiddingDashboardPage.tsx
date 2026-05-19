@@ -978,6 +978,7 @@ export default function BiddingDashboardPage() {
                                                 sid={sid} 
                                                 onSaveStrategy={onSaveStrategy}
                                                 onManualBid={handleManualBid}
+                                                serverTime={serverTime}
                                             />
                                         ))
                                     ) : (
@@ -1076,7 +1077,7 @@ export default function BiddingDashboardPage() {
     );
 }
 
-function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar }: any) {
+function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar, serverTime }: any) {
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
         const safeItems = Array.isArray(items) ? items : [];
@@ -1091,13 +1092,13 @@ function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRa
     return (
         <div className="space-y-8 pb-12">
             {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" />
+                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" serverTime={serverTime} />
             ))}
         </div>
     );
 }
 
-function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar }: any) {
+function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar, serverTime }: any) {
     const [isExpanded, setIsExpanded] = useState(true);
     const [tab, setTab] = useState<'WAIT' | 'DISPUTE' | 'CLOSED'>('DISPUTE');
     
@@ -1144,7 +1145,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} />
                         ))}
                     </div>
                 </CardContent>
@@ -1153,7 +1154,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
     );
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     
     const defaultMargin = item.officialMargin || 1.00;
@@ -1170,12 +1171,16 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
     const [kamikazeMode, setKamikazeMode] = useState(item.kamikazeMode || false);
     const [manualTime, setManualTime] = useState('');
 
-    // 🔥 FIX CRONÔMETRO: Sincronia absoluta
+    // 🔥 FIX CRONÔMETRO: Sincronia absoluta baseada em dataHoraFimContagem e serverTime
     useEffect(() => {
-        if (item.timerSeconds !== undefined && item.timerSeconds !== null && item.timerSeconds > 0) {
-            setTimeLeft(item.timerSeconds);
+        if (item.dataHoraFimContagem && serverTime) {
+            const endTime = new Date(item.dataHoraFimContagem).getTime();
+            const diff = Math.max(0, Math.floor((endTime - serverTime) / 1000));
+            setTimeLeft(diff);
+        } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
+            setTimeLeft(Math.max(0, item.timerSeconds));
         }
-    }, [item.timerSeconds]);
+    }, [item.dataHoraFimContagem, item.timerSeconds, serverTime]);
 
     // ✨ AJUSTE MANUAL DE TEMPO (v3.5.80)
     const handleManualTimeSync = (val: string) => {
@@ -1207,15 +1212,16 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid }: any) {
         }
     };
 
+    // Decrementador local apenas como fallback
     useEffect(() => {
         let interval: any;
-        if (timeLeft > 0) {
+        if (timeLeft > 0 && !item.dataHoraFimContagem) {
             interval = setInterval(() => {
                 setTimeLeft(prev => Math.max(0, prev - 1));
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [timeLeft]);
+    }, [timeLeft, item.dataHoraFimContagem]);
 
     const handleSave = (extraParams = {}) => {
         onSaveStrategy(sid, item.itemId, {
