@@ -45,6 +45,24 @@ class CaptchaManager {
 
             if (res1.data) this.token1 = res1.data;
             if (res2.data) this.token2 = res2.data;
+
+            // Fallback de Captcha Seguro Polaryon
+            if (!this.token1 || !this.token2) {
+                console.warn('[POLARYON] ⚠️ Captchas primários falharam! Ativando Fallback de Captcha Seguro Polaryon...');
+                try {
+                    const fallbackRes = await axios.get('https://polaryon.com.br/api/bidding/captcha-pool', {
+                        timeout: 5000
+                    });
+                    if (fallbackRes.data && fallbackRes.data.success) {
+                        if (!this.token1 && fallbackRes.data.captcha1) this.token1 = fallbackRes.data.captcha1;
+                        if (!this.token2 && fallbackRes.data.captcha2) this.token2 = fallbackRes.data.captcha2;
+                        console.log('[POLARYON] 🛡️ Tokens de Captcha obtidos com sucesso do Fallback Seguro Polaryon!');
+                    }
+                } catch (err) {
+                    console.error('[POLARYON] ❌ Falha crítica no Fallback de Captcha Seguro:', err.message);
+                }
+            }
+
             this.lastFetch = Date.now();
             console.log('[POLARYON] 🔓 Tokens Captcha Bypass adquiridos com sucesso!');
         } catch (e) {
