@@ -4,7 +4,13 @@ import { prisma } from '../lib/prisma';
 export interface BiddingItem {
     itemId: string;
     valorAtual: number;
+    meuValor?: number;
     ganhador: string;
+    officialMargin?: number;
+    officialMarginType?: string;
+    position?: number | string;
+    tempoRestante?: number;
+    status?: string;
 }
 
 export interface ItemStrategyConfig {
@@ -37,15 +43,36 @@ export class BiddingStrategyEngine {
         // Em um sistema real, o disparador (Listener) usaria este delay.
         // Aqui apenas indicamos se a ação é imediata ou deve esperar.
 
-        let nextBid = 0;
-        if (decrementType === 'fixed') {
-            nextBid = currentItem.valorAtual - decrementValue;
-        } else {
-            nextBid = currentItem.valorAtual * (1 - decrementValue / 100);
+        // --- LÓGICA DE MARGEM OFICIAL (SERPRO) ---
+        const myCurrentBid = Number(currentItem.meuValor || 999999999);
+        const officialMarginVal = Number(currentItem.officialMargin || 0);
+        const officialMarginType = currentItem.officialMarginType || 'V';
+        
+        let mandatorySerproMargin = 0;
+        if (officialMarginVal > 0) {
+            mandatorySerproMargin = officialMarginType === 'P' ? myCurrentBid * (officialMarginVal / 100) : officialMarginVal;
+        }
+        
+        const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;
+        const targetMargin = decrementType === 'fixed' ? decrementValue : currentItem.valorAtual * (decrementValue / 100);
+        const requiredDecrement = Math.max(targetMargin, mandatorySerproMargin);
+
+        let nextBid = currentItem.valorAtual > 0 && (currentItem.valorAtual - requiredDecrement >= minPrice) 
+                      ? currentItem.valorAtual - targetMargin 
+                      : myCurrentBid - requiredDecrement;
+
+        nextBid = Math.floor(nextBid * 100) / 100;
+
+        if (nextBid > maxAllowedBidBySerpro) {
+            nextBid = maxAllowedBidBySerpro;
+            nextBid = Math.floor(nextBid * 100) / 100;
         }
 
-        nextBid = Math.round(nextBid * 100) / 100;
         if (nextBid < minPrice) nextBid = minPrice;
+
+        if (nextBid > maxAllowedBidBySerpro) {
+            return { action: 'hold', reason: `Bloqueado: Lance de R$ ${nextBid} viola a margem mínima do Serpro (Max: R$ ${maxAllowedBidBySerpro}).` };
+        }
 
         const isImminente = currentItem.status?.toUpperCase().includes('IMINENTE') || 
                            (currentItem.tempoRestante > 0 && currentItem.tempoRestante < 60);

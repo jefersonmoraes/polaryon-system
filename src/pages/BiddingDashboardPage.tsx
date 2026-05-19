@@ -205,13 +205,30 @@ export default function BiddingDashboardPage() {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
                             
+                            // CALCULAR MARGEM OBRIGATÓRIA DO SERPRO
+                            const officialMarginVal = Number(item.officialMargin || 0);
+                            const officialMarginType = item.officialMarginType || 'V';
+                            const mandatorySerproMargin = officialMarginType === 'P' ? myCurrentBid * (officialMarginVal / 100) : officialMarginVal;
+                            
+                            // O limite máximo que o Serpro aceita
+                            const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;
+                            
+                            let nextBid = 0;
                             const isLeaderBeatable = (currentBest > 0 && currentBest - margin >= myMin);
-                            let nextBid = isLeaderBeatable ? (currentBest - margin) : (myCurrentBid - margin);
+                            
+                            if (isLeaderBeatable) {
+                                nextBid = Math.min(currentBest - margin, maxAllowedBidBySerpro);
+                            } else {
+                                // Se não pode bater o líder, no mínimo ajusta para o maxAllowed ou myMin para continuar reduzindo
+                                nextBid = Math.min(myMin, maxAllowedBidBySerpro);
+                            }
                             
                             if (nextBid < myMin) nextBid = myMin;
-                            nextBid = allow4 ? Math.round(nextBid * 10000) / 10000 : Math.round(nextBid * 100) / 100;
+                            nextBid = allow4 ? Math.floor(nextBid * 10000) / 10000 : Math.floor(nextBid * 100) / 100; // Floor para garantir q fica abaixo
 
-                            if (nextBid < myCurrentBid && nextBid >= myMin) {
+                            if (nextBid > maxAllowedBidBySerpro) {
+                                console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} viola margem Serpro (Máximo permitido: R$ ${maxAllowedBidBySerpro})`);
+                            } else if (nextBid < myCurrentBid && nextBid >= myMin) {
                                 console.log(`%c🎯 [SNIPER] DISPARANDO LANCE: R$ ${nextBid} para Item ${sId}`, "color: #10b981; font-weight: bold;");
                                 
                                 toast.success(`Sniper Disparando R$ ${nextBid} no Item ${sId}`, {
@@ -639,7 +656,9 @@ export default function BiddingDashboardPage() {
                                      status: item.situacao === '1' ? 'Disputa' : (item.situacao === '2' ? 'Iminência' : 'Encerrado'),
                                      position: pos, 
                                      timerSeconds: item.segundosParaEncerramento || -1, 
-                                     desc: item.descricao || `Item ${item.numero}`
+                                     desc: item.descricao || `Item ${item.numero}`,
+                                     officialMargin: item.variacaoMinimaEntreLances || 1,
+                                     officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V'
                                  });
                              });
                              setSessions(prev => {
