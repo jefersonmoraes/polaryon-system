@@ -92,7 +92,7 @@
                     if (!synchronizedPurchases.has(purchaseId)) {
                         synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DETECTOR] Sala Auto-Detectada via Participações: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                        autoFetchPurchaseItems(purchaseId);
+                        // O loop em Round-Robin carregará esta sala suavemente a cada 3 segundos, prevenindo 429
                     }
                 }
             });
@@ -105,7 +105,7 @@
                 if (!synchronizedPurchases.has(purchaseId)) {
                     synchronizedPurchases.add(purchaseId);
                     console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                    autoFetchPurchaseItems(purchaseId);
+                    // O loop em Round-Robin carregará esta sala suavemente a cada 3 segundos, prevenindo 429
                 }
             });
         }
@@ -294,25 +294,35 @@
         }
     }
 
-    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL (8 SEGUNDOS)
+    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.81)
+    // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
+    let currentIndex = 0;
     setInterval(async () => {
         if (!sessionToken || synchronizedPurchases.size === 0) return;
-        for (const purchaseId of synchronizedPurchases) {
-            try {
-                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-                const res = await fetch(url, {
-                    headers: {
-                        'Authorization': sessionToken,
-                        'Accept': 'application/json'
-                    }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    processSerproData(data, url);
+        
+        const purchaseIds = Array.from(synchronizedPurchases);
+        const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
+        currentIndex++;
+
+        try {
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': sessionToken,
+                    'Accept': 'application/json'
                 }
-            } catch (e) {
-                console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                processSerproData(data, url);
+            } else if (res.status === 422 || res.status === 404) {
+                // Auto-limpeza defensiva: se o Serpro retornar que a sala é inválida/inexistente ou já encerrou, removemos do radar
+                synchronizedPurchases.delete(purchaseId);
+                console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por inatividade (${res.status}): ${purchaseId}`);
             }
+        } catch (e) {
+            console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
         }
-    }, 8000);
+    }, 3000);
 })();
