@@ -80,6 +80,54 @@
         }
     }, 4000);
 
+    // AUTOMATIZADOR DE SALA: Abre automaticamente as disputas clicando no botão [+] (v3.6.91)
+    // Garante que o robô acesse e carregue os itens das salas ativas em disputa sem intervenção humana
+    setInterval(() => {
+        try {
+            // Busca por todos os botões, links, spans ou divs que representam o [+] de abertura
+            const allElements = Array.from(document.querySelectorAll('button, a, div, span, mat-icon'));
+            allElements.forEach(el => {
+                const text = (el.innerText || el.textContent || '').trim();
+                const className = (el.className || '').toLowerCase();
+                const title = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                
+                // Critérios para identificar o botão [+] azul do card:
+                // 1. O texto do botão/ícone é exatamente "+"
+                // 2. Ou possui título como "abrir", "acessar", "detalhar", "visualizar"
+                // 3. Ou possui classes CSS de ícone de mais (plus)
+                const isPlusButton = (text === '+' || 
+                                      className.includes('fa-plus') || 
+                                      className.includes('glyphicon-plus') || 
+                                      className.includes('plus-button') ||
+                                      title.includes('abrir') || 
+                                      title.includes('acessar') || 
+                                      title.includes('detalhar') || 
+                                      title.includes('visualizar'));
+
+                if (isPlusButton) {
+                    // Evita clique duplo/múltiplo se o botão já foi clicado ou se o card já está aberto
+                    // (geralmente quando expandido o texto muda para "-" ou a classe ganha "active"/"open")
+                    if (text === '-' || className.includes('minus') || className.includes('active') || className.includes('open')) {
+                        return; 
+                    }
+
+                    // Verifica se o elemento ou seu botão pai possui alguma marcação de já clicado temporária
+                    if (el._polaryonClicked || (el.parentElement && el.parentElement._polaryonClicked)) {
+                        return;
+                    }
+
+                    console.log('%c[POLARYON AUTOMATION] 🔓 Abrindo itens da disputa automaticamente clicando no botão [+]', 'color: #10b981; font-weight: bold;');
+                    el._polaryonClicked = true;
+                    if (el.parentElement) el.parentElement._polaryonClicked = true;
+                    
+                    el.click();
+                }
+            });
+        } catch (e) {
+            // Silencioso
+        }
+    }, 3000);
+
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
