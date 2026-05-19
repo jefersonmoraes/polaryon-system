@@ -1182,6 +1182,23 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
         }
     }, [item.dataHoraFimContagem, item.timerSeconds, serverTime]);
 
+    // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
+    useEffect(() => {
+        if (item.decrementValue === undefined || item.decrementValue === null) {
+            if (item.officialMargin !== undefined && item.officialMargin !== null) {
+                setMargin(item.officialMargin);
+            }
+        }
+    }, [item.officialMargin, item.decrementValue]);
+
+    useEffect(() => {
+        if (item.decrementType === undefined || item.decrementType === null) {
+            if (item.officialMarginType !== undefined && item.officialMarginType !== null) {
+                setMarginType(item.officialMarginType === 'P' ? 'percentage' : 'fixed');
+            }
+        }
+    }, [item.officialMarginType, item.decrementType]);
+
     // ✨ AJUSTE MANUAL DE TEMPO (v3.5.80)
     const handleManualTimeSync = (val: string) => {
         setManualTime(val);

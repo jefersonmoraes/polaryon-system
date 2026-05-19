@@ -249,6 +249,8 @@
                         posicao: it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
                         timerSeconds: it.segundosParaEncerramento || -1,
                         dataHoraFimContagem: it.dataHoraFimContagem,
+                        officialMargin: it.variacaoMinimaEntreLances || 1,
+                        officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao
                     }))
                 });

@@ -164,6 +164,8 @@ class RoomRunner {
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
                         dataHoraFimContagem: item.dataHoraFimContagem,
+                        officialMargin: item.variacaoMinimaEntreLances || 1,
+                        officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V',
                         desc: item.descricao
                     };
                 });
