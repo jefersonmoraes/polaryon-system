@@ -1,37 +1,34 @@
 import fs from 'fs';
 import path from 'path';
 
-const harPath = 'e:\\POLARYON SYSTEM\\POLARYON KUNBUN\\polaryon-system\\importar\\www.comprasnet.gov.br.har';
-
-if (!fs.existsSync(harPath)) {
-    console.error("Arquivo HAR não encontrado:", harPath);
-    process.exit(1);
+function analyzeHar(filePath) {
+    console.log(`\n=== Analyzing ${path.basename(filePath)} ===`);
+    if (!fs.existsSync(filePath)) {
+        console.log("File does not exist!");
+        return;
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const entries = data.log.entries;
+    const urls = entries.map(e => e.request.url);
+    const uniqueHosts = new Set();
+    const uniquePaths = new Set();
+    
+    for (const url of urls) {
+        try {
+            const parsed = new URL(url);
+            uniqueHosts.add(parsed.hostname);
+            uniquePaths.add(parsed.pathname);
+        } catch (e) {
+            // Ignore invalid URLs
+        }
+    }
+    
+    console.log("Unique Hostnames:");
+    console.log(Array.from(uniqueHosts));
+    
+    console.log("\nSome sample URLs (first 30):");
+    console.log(urls.slice(0, 30));
 }
 
-const data = JSON.parse(fs.readFileSync(harPath, 'utf-8'));
-const entries = data.log.entries;
-
-console.log(`Total de entradas no HAR: ${entries.length}`);
-
-// Filtra requisições relevantes
-const relevant = entries.filter(e => {
-    const url = e.request.url;
-    return url.includes('login') || url.includes('openid') || url.includes('sso') || url.includes('auth') || url.includes('@@');
-});
-
-console.log(`\nRelevantes encontradas: ${relevant.length}`);
-relevant.forEach((e, idx) => {
-    console.log(`\n[${idx + 1}] ${e.request.method} - ${e.request.url}`);
-    console.log(`Status: ${e.response.status} ${e.response.statusText}`);
-    
-    // Mostra referer
-    const referer = e.request.headers.find(h => h.name.toLowerCase() === 'referer');
-    if (referer) {
-        console.log(`Referer: ${referer.value}`);
-    }
-    
-    // Mostra redirectURL
-    if (e.response.redirectURL) {
-        console.log(`Redirect URL: ${e.response.redirectURL}`);
-    }
-});
+analyzeHar('e:\\POLARYON SYSTEM\\POLARYON KUNBUN\\polaryon-system\\importar\\www.comprasnet.gov.br.har');
+analyzeHar('e:\\POLARYON SYSTEM\\POLARYON KUNBUN\\polaryon-system\\importar\\cnetmobile.estaleiro.serpro.gov.br.har');

@@ -1,8 +1,8 @@
-=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 20:23:02 ===
-[20:23:02] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[20:23:03] [PRINCIPAL] [ERROR] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) (Script: https://sso.acesso.gov.br/TSPD/082670627aab2000312f9baf8a60a50122a3dc7a8655ab9348312a477e570b30cba7c3c4cc6ad121?type=8:456)
-[20:23:04] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[20:23:04] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
-[20:23:04] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3d666b5d:566)
-[20:23:16] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
-[20:23:16] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.70 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+=== POLARYON VISUAL CONSOLE LOGS - INICIADO EM 18/05/2026, 20:59:41 ===
+[20:59:41] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.71 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:59:41] [PRINCIPAL] [ERROR] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet) (Script: https://sso.acesso.gov.br/TSPD/082670627aab2000312f9baf8a60a50122a3dc7a8655ab9348312a477e570b30cba7c3c4cc6ad121?type=8:456)
+[20:59:42] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.71 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:59:42] [PRINCIPAL] [WARNING] recaptchacompat disabled (Script: https://js.hcaptcha.com/1/api.js?onload=onLoadHcaptcha&recaptchacompat=off&render=explicit&hl=pt:4)
+[20:59:42] [PRINCIPAL] [WARNING] hCaptcha is ready. (Script: https://sso.acesso.gov.br/login?client_id=comprasnet.gov.br&authorization_id=19e3d87f7a7:566)
+[20:59:54] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.71 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)
+[20:59:54] [PRINCIPAL] [WARNING] %c[POLARYON] Escuta-Geral v3.6.71 Ativado! 🛰️ color: #00ff00; font-weight: bold; (Script: :6)

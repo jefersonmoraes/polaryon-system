@@ -244,7 +244,7 @@ class VisualRunner {
                     const activeWin = targetWin && !targetWin.isDestroyed() ? targetWin : (session ? session.window : null);
                     
                     if (activeWin && !activeWin.isDestroyed()) {
-                        const handshakeUrl = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                        const handshakeUrl = 'https://www.comprasnet.gov.br/assinadas/dispensa_eletronica.asp';
                         console.log(`[VISUAL-RUNNER] [${label}] Redirecionando para handshake seguro: ${handshakeUrl}`);
                         activeWin.loadURL(handshakeUrl);
                     }
@@ -272,23 +272,55 @@ class VisualRunner {
 
                 handleLegacyRedirect(null, url);
 
-                if (!isChild) {
+                if (isChild) {
+                    // Se for janela filha (popup de handshake)
+                    if (url.includes('/seguro/fornecedor/')) {
+                        const session = this.sessions.get(sessionId);
+                        if (session && session.window && !session.window.isDestroyed()) {
+                            console.log(`[VISUAL-RUNNER] [${label}] Popup de handshake detectado. Transferindo para janela principal: ${url}`);
+                            
+                            // Calcula URL da disputa específica
+                            let targetUrl = url;
+                            if (!url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                                const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
+                                const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
+                                const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                                const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                                targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                            }
+
+                            // Carrega na janela principal e fecha o popup de forma extremamente suave
+                            session.window.loadURL(targetUrl);
+                            
+                            setTimeout(() => {
+                                try {
+                                    if (!targetWin.isDestroyed()) {
+                                        targetWin.destroy();
+                                    }
+                                } catch (err) {
+                                    console.error("Erro ao fechar popup:", err);
+                                }
+                            }, 300);
+                        }
+                    }
+                } else {
+                    // Se for janela principal
                     const isLegacyLanding = url.includes('intro.htm') || url.includes('index.html');
                     if (isLegacyLanding) {
                         const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                             session.loginFinished = true; // Evita loop
                             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO! Iniciando handshake seguro (servico=226)...`);
+                                this.dashboardWebContents.send('bidding-update-log', `[VISUAL] LOGIN CONCLUÍDO! Iniciando handshake seguro (dispensa_eletronica.asp)...`);
                             }
                             if (!session.window.webContents.isDevToolsOpened()) {
                                 session.window.webContents.openDevTools({ mode: 'detach' });
                             }
-                            const handshakeUrl = 'https://www.comprasnet.gov.br/seguro/login_f.asp?servico=226';
+                            const handshakeUrl = 'https://www.comprasnet.gov.br/assinadas/dispensa_eletronica.asp';
                             console.log(`[VISUAL-RUNNER] [${label}] 🚀 Direcionando para handshake seguro: ${handshakeUrl}`);
                             session.window.loadURL(handshakeUrl);
                         }
-                    } else if (url.includes('/seguro/fornecedor/disputa')) {
+                    } else if (url.includes('/seguro/fornecedor/')) {
                         const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed()) {
                             if (!url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
