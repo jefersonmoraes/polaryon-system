@@ -55,3 +55,24 @@ O motor de captura deve realizar extração multi-camada para evitar travamentos
 
 > [!IMPORTANT]
 > Qualquer alteração que simplifique a UI para padrões "bootstrap" ou "vanilla" é considerada uma falha de protocolo. A Polaryon deve sempre parecer um terminal tático de alta performance.
+
+---
+
+## 🔒 PROTOCOLO DE AUTENTICAÇÃO CRUZADA (HANDSHAKE)
+
+### 1. O Gateway de Transição Seguro
+A transição entre o portal legado de compras governamentais e a nova sala de disputas (`cnetmobile...`) **DEVE** ocorrer exclusivamente pela URL oficial de handshake:
+`https://www.comprasnet.gov.br/assinadas/dispensa_eletronica.asp`
+
+*   **Evite 404**: Roteamentos legados como `/seguro/login_f.asp?servico=226` não são acessíveis via requisição GET comum sem um contexto do IIS ativo e retornam erro.
+*   **O Mecanismo**: Esta página de transição gera internamente o token `compras-id` de forma legítima baseada no Certificado Digital instalado.
+
+### 2. Propagação Obrigatória do `compras-id`
+Para evitar o erro de segurança `Cnet-id inválido.` ou `Acesso não autorizado` na sala de disputa moderna:
+*   O token `compras-id` obtido no redirecionamento **DEVE** ser extraído e acoplado a qualquer rota de disputa final no Electron:
+    `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=UASGMODNUMANO&compras-id=UUID_DO_TOKEN`
+*   **Persistent Headers**: Os cabeçalhos `Referer` (`https://www.comprasnet.gov.br/seguro/intro.htm`) e `Origin` (`https://www.comprasnet.gov.br`) devem ser interceptados e forçados via `onBeforeSendHeaders` para as rotas `/assinadas/dispensa_eletronica.asp` e `/comprasnet-web/seguro`.
+
+### 3. Escudo Autolimpante de Sessão (Legacy Shield)
+O robô deve interceptar qualquer rota que aponte para páginas legadas de erro/expiração (como `main2.asp`, `analise_amigavel.asp`, `AcessoNaoAutorizado.asp`) e redirecionar imediatamente o usuário de volta ao gateway `dispensa_eletronica.asp` para restabelecer a autorização com zero cliques.
+
