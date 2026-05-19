@@ -7,8 +7,14 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
-    let sessionToken = '';
-    const synchronizedPurchases = new Set();
+    // Compartilhamento de Estado entre Frames (v3.6.89)
+    if (!window.top._polaryonSharedState) {
+        window.top._polaryonSharedState = {
+            sessionToken: '',
+            synchronizedPurchases: new Set()
+        };
+    }
+    const shared = window.top._polaryonSharedState;
 
     // AUTOMATIZADOR DE FILTRO: Seleciona "Disputa" automaticamente se estiver em outra opção (v3.6.86)
     // Garante que o usuário sempre seja guiado para a lista de disputas sem precisar de cliques manuais
@@ -27,14 +33,22 @@
             });
 
             // 2. Procura por botões de dropdown customizados (Bootstrap/Angular / JSF / Material)
-            const dropdownToggles = document.querySelectorAll('.dropdown-toggle, .ui-select-toggle, [data-toggle="dropdown"], .mat-select-trigger, .br-select, .ui-select-match');
+            const allToggles = Array.from(document.querySelectorAll('.dropdown-toggle, .ui-select-toggle, [data-toggle="dropdown"], .mat-select-trigger, .br-select, .ui-select-match, button, div'));
+            const dropdownToggles = allToggles.filter(toggle => {
+                const className = (toggle.className || '').toLowerCase();
+                const tagName = toggle.tagName.toLowerCase();
+                if (tagName === 'button' || tagName === 'div') {
+                    return className.includes('select') || className.includes('dropdown') || className.includes('filtro') || className.includes('toggle') || className.includes('ui-select');
+                }
+                return true;
+            });
             dropdownToggles.forEach(toggle => {
                 const text = toggle.innerText || '';
                 // Se for o botão principal do filtro de status e não estiver na Disputa
-                if ((text.includes('Todas') || text.includes('Em andamento') || text.includes('Filtro')) && !text.includes('Disputa')) {
+                if ((text.includes('Todas') || text.includes('Em andamento') || text.includes('Filtro') || text.includes('Situação') || text.includes('Situacao')) && !text.includes('Disputa')) {
                     toggle.click();
                     setTimeout(() => {
-                        const options = Array.from(document.querySelectorAll('.dropdown-menu a, .ui-select-choices-row, mat-option, .dropdown-item, li, span, button'));
+                        const options = Array.from(document.querySelectorAll('.dropdown-menu a, .ui-select-choices-row, mat-option, .dropdown-item, li, span, button, .ui-select-choices-row-inner'));
                         const disputaOpt = options.find(opt => opt.innerText.trim() === 'Disputa');
                         if (disputaOpt) {
                             disputaOpt.click();
@@ -51,7 +65,7 @@
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
-            sessionToken = data.token;
+            shared.sessionToken = data.token;
             console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
         }
     });
@@ -60,7 +74,7 @@
     ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
         console.log(`%c[POLARYON TÁTICO] Iniciando Sequência de Disparo - Item: ${itemId} | Valor: R$ ${value}`, "color: #ffaa00; font-weight: bold;");
         
-        if (!sessionToken) {
+        if (!shared.sessionToken) {
             console.error('[POLARYON] ERRO: Token de Sessão ausente. O robô não interceptou o login ainda.');
             return;
         }
@@ -90,7 +104,7 @@
             const response = await fetch(targetUrl, {
                 method: 'POST',
                 headers: {
-                    'Authorization': sessionToken,
+                    'Authorization': shared.sessionToken,
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'x-device-platform': 'web',
@@ -123,8 +137,8 @@
             const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
             if (discoveredIds && discoveredIds.length > 0) {
                 discoveredIds.forEach(purchaseId => {
-                    if (!synchronizedPurchases.has(purchaseId)) {
-                        synchronizedPurchases.add(purchaseId);
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura de rede: ${purchaseId}`, "color: #10b981; font-weight: bold;");
                     }
                 });
@@ -182,7 +196,7 @@
         if (event.data && event.data.source === 'polaryon-injector') {
             const { type, token, data, url } = event.data;
             if (type === 'token') {
-                sessionToken = token;
+                shared.sessionToken = token;
             } else if (type === 'serpro-data') {
                 processSerproData(data, url);
             }
@@ -317,7 +331,7 @@
         }
     }
 
-    // SCANNER DE DOM EM TEMPO REAL PARA CAPTURAR COMPRAS RENDERIZADAS PELO SERVIDOR (v3.6.83)
+    // SCANNER DE DOM EM TEMPO REAL PARA CAPTURAR COMPRAS RENDERIZADAS PELO SERVIDOR (v3.6.89)
     // Varre a página a cada 2 segundos procurando por cards de compras e UASGs renderizadas diretamente via HTML (JSF/Server-side)
     setInterval(() => {
         try {
@@ -326,23 +340,24 @@
             const discoveredIds = html.match(/\b\d{17}\b/g);
             if (discoveredIds && discoveredIds.length > 0) {
                 discoveredIds.forEach(purchaseId => {
-                    if (!synchronizedPurchases.has(purchaseId)) {
-                        synchronizedPurchases.add(purchaseId);
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DOM] Sala Detectada via Código HTML: ${purchaseId}`, "color: #10b981; font-weight: bold;");
                     }
                 });
             }
 
-            // 2. Captura lógica baseada nos cards de compra renderizados na tela (Segmentação por Modalidade - v3.6.87)
+            // 2. Captura lógica baseada nos cards de compra renderizados na tela (Segmentação por Modalidade - v3.6.89)
             const bodyText = document.body ? document.body.innerText : '';
-            const segments = bodyText.split(/(DISPENSA ELETRÔNICA|DISPENSA|PREGÃO|CONCORRÊNCIA|INEXIGIBILIDADE)/i);
+            const segments = bodyText.split(/(DISPENSA\s+ELETRÔNICA|DISPENSA\s+ELETRONICA|DISPENSA|PREGÃO|PREGAO|CONCORRÊNCIA|CONCORRENCIA|INEXIGIBILIDADE|COTAÇÃO|COTACAO)/i);
             
             for (let i = 1; i < segments.length; i += 2) {
                 const modalidadeText = segments[i];
                 const blockText = segments[i + 1] || '';
                 
                 const editalMatch = blockText.match(/Nº\s*(\d+)\/(\d{4})/i);
-                const uasgMatch = blockText.match(/\b(\d{5,6})\s*-\s*/);
+                // Busca qualquer número de 5 ou 6 dígitos (que representa a UASG na estrutura do card) independente de traços/hifens
+                const uasgMatch = blockText.match(/\b(\d{5,6})\b/);
                 
                 if (editalMatch && uasgMatch) {
                     const editalNum = editalMatch[1];
@@ -350,15 +365,15 @@
                     const uasg = uasgMatch[1];
                     
                     let modalidade = '06'; // Padrão Dispensa Eletrônica
-                    if (modalidadeText.toUpperCase().includes('PREGÃO')) {
+                    if (modalidadeText.toUpperCase().includes('PREGÃO') || modalidadeText.toUpperCase().includes('PREGAO')) {
                         modalidade = '05';
                     }
                     
                     const numStr = String(editalNum).padStart(5, '0');
                     const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
                     
-                    if (!synchronizedPurchases.has(purchaseId)) {
-                        synchronizedPurchases.add(purchaseId);
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
                         console.log(`%c[POLARYON DOM] Sala Detectada via Segmentação: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
                     }
                 }
@@ -368,13 +383,13 @@
         }
     }, 2000);
 
-    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.83)
+    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.89)
     // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
     let currentIndex = 0;
     setInterval(async () => {
-        if (!sessionToken || synchronizedPurchases.size === 0) return;
+        if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) return;
         
-        const purchaseIds = Array.from(synchronizedPurchases);
+        const purchaseIds = Array.from(shared.synchronizedPurchases);
         const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
         currentIndex++;
 
@@ -382,7 +397,7 @@
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
             const res = await fetch(url, {
                 headers: {
-                    'Authorization': sessionToken,
+                    'Authorization': shared.sessionToken,
                     'Accept': 'application/json',
                     'x-device-platform': 'web',
                     'x-version-number': '6.0.2'
@@ -396,7 +411,7 @@
                 console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Mantendo na fila para re-tentativa quando novo token chegar.`);
             } else if (res.status === 422 || res.status === 404) {
                 // Auto-limpeza defensiva: se o Serpro retornar que a sala é inválida/inexistente ou já encerrou, removemos do radar
-                synchronizedPurchases.delete(purchaseId);
+                shared.synchronizedPurchases.delete(purchaseId);
                 console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por inatividade (${res.status}): ${purchaseId}`);
             }
         } catch (e) {
