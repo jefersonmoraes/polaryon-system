@@ -296,7 +296,56 @@
         }
     }
 
-    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.82)
+    // SCANNER DE DOM EM TEMPO REAL PARA CAPTURAR COMPRAS RENDERIZADAS PELO SERVIDOR (v3.6.83)
+    // Varre a página a cada 2 segundos procurando por cards de compras e UASGs renderizadas diretamente via HTML (JSF/Server-side)
+    setInterval(() => {
+        try {
+            // 1. Captura direta de IDs de 17 dígitos em atributos HTML (data-id, click, scripts, etc.)
+            const html = document.documentElement.innerHTML || '';
+            const discoveredIds = html.match(/\b\d{17}\b/g);
+            if (discoveredIds && discoveredIds.length > 0) {
+                discoveredIds.forEach(purchaseId => {
+                    if (!synchronizedPurchases.has(purchaseId)) {
+                        synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DOM] Sala Detectada via Código HTML: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                    }
+                });
+            }
+
+            // 2. Captura lógica baseada nos cards de compra renderizados na tela (JSF / HTML Puro)
+            const allElements = Array.from(document.querySelectorAll('div, tr, td, li, card, p'));
+            allElements.forEach(el => {
+                if (el.children.length > 8) return; // Evita containers de nível muito alto para otimizar CPU
+                
+                const text = el.innerText || '';
+                const uasgMatch = text.match(/\b(\d{5,6})\s*-\s*/);
+                const editalMatch = text.match(/Nº\s*(\d+)\/(\d{4})/i);
+                
+                if (uasgMatch && editalMatch) {
+                    const uasg = uasgMatch[1];
+                    const editalNum = editalMatch[1];
+                    const ano = editalMatch[2];
+                    
+                    let modalidade = '06'; // Padrão Dispensa Eletrônica
+                    if (text.toUpperCase().includes('PREGÃO')) {
+                        modalidade = '05';
+                    }
+                    
+                    const numStr = String(editalNum).padStart(5, '0');
+                    const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
+                    
+                    if (!synchronizedPurchases.has(purchaseId)) {
+                        synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DOM] Sala Detectada via Layout: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
+                    }
+                }
+            });
+        } catch (e) {
+            console.error("[POLARYON DOM SCANNER] Falha na varredura:", e);
+        }
+    }, 2000);
+
+    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.83)
     // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
     let currentIndex = 0;
     setInterval(async () => {
