@@ -279,14 +279,20 @@ class VisualRunner {
                         if (session && session.window && !session.window.isDestroyed()) {
                             console.log(`[VISUAL-RUNNER] [${label}] Popup de handshake detectado. Transferindo para janela principal: ${url}`);
                             
-                            // Calcula URL da disputa específica
+                            // Calcula URL da disputa específica mantendo o compras-id crucial
                             let targetUrl = url;
-                            if (!url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
-                                const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
-                                const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
-                                const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                                const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                                targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                            try {
+                                const parsedUrl = new URL(url);
+                                const comprasId = parsedUrl.searchParams.get('compras-id');
+                                if (comprasId && !url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
+                                    const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
+                                    const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
+                                    const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
+                                    const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                                    targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}&compras-id=${comprasId}`;
+                                }
+                            } catch (e) {
+                                console.error("Erro ao analisar URL do popup de handshake:", e);
                             }
 
                             // Carrega na janela principal e fecha o popup de forma extremamente suave
@@ -328,8 +334,18 @@ class VisualRunner {
                                 const paddedNumero = String(session.config.numero).replace(/\D/g, '').padStart(5, '0');
                                 const cleanAno = String(session.config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
                                 const purchaseId = `${session.config.uasg}${modCode}${paddedNumero}${cleanAno}`;
-                                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
-                                console.log(`[VISUAL-RUNNER] [${label}] 🎯 Redirecionando para a disputa específica: ${targetUrl}`);
+                                
+                                // Extrai o compras-id da URL atual (se existir) para persistir o token seguro de lances
+                                let targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
+                                try {
+                                    const parsedUrl = new URL(url);
+                                    const comprasId = parsedUrl.searchParams.get('compras-id');
+                                    if (comprasId) {
+                                        targetUrl += `&compras-id=${comprasId}`;
+                                    }
+                                } catch (e) {}
+
+                                console.log(`[VISUAL-RUNNER] [${label}] 🎯 Redirecionando para a disputa específica com token: ${targetUrl}`);
                                 session.window.loadURL(targetUrl);
                             } else {
                                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
