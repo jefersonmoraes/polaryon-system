@@ -216,12 +216,93 @@ class RoomRunner {
     }
 }
 
+/**
+ * GlobalScanner - Varrer Minhas Participações Automático (Filtro: Disputa)
+ */
+class GlobalScanner {
+    constructor(webContents, clockSync, biddingRunner) {
+        this.webContents = webContents;
+        this.clockSync = clockSync;
+        this.biddingRunner = biddingRunner;
+        this.active = true;
+        this.timeoutId = null;
+        this.knownRooms = new Set();
+    }
+
+    async run() {
+        if (!this.active) return;
+        try {
+            let token = global.serproToken;
+            if (!token) {
+                this.timeoutId = setTimeout(() => this.run(), 5000);
+                return;
+            }
+
+            const captchas = await captchaManager.getTokens();
+
+            // filtro=4 (Em Disputa)
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}&tamanhoPagina=50&pagina=0&filtro=4`;
+            
+            const res = await axios.get(url, {
+                headers: { 
+                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                }
+            });
+
+            const participacoes = res.data || [];
+            
+            participacoes.forEach(p => {
+                if (p.compra && p.compra.chaveCompraPncp) {
+                    const uasg = p.compra.numeroUasg;
+                    const numero = p.compra.numero;
+                    const ano = p.compra.ano;
+                    const idCompra = `${uasg}06${String(numero).padStart(5, '0')}${ano}`;
+                    const sessionId = `GLOBAL_${idCompra}`;
+                    
+                    if (!this.knownRooms.has(sessionId)) {
+                        this.knownRooms.add(sessionId);
+                        console.log(`[GLOBAL SCANNER] Nova Sala em Disputa Detectada Automaticamente: ${idCompra}`);
+                        
+                        this.webContents.send('bidding-update-log', `[GLOBAL SCANNER] Automático: Iniciando Radar na Sala ${uasg} - Pregão ${numero}/${ano}...`);
+                        
+                        // Envia ao frontend para focar e abrir
+                        this.webContents.send('bidding-detected-room', {
+                            url: `compra=${uasg}06${String(numero).padStart(5, '0')}${ano}`
+                        });
+                        
+                        // Auto-inicia o motor invisível no backend Electron para monitorar a sala inteira sem clique!
+                        this.biddingRunner.start(sessionId, uasg, numero, ano, null, '06');
+                    }
+                }
+            });
+
+            // Varre a cada 15 segundos para encontrar novas salas
+            this.timeoutId = setTimeout(() => this.run(), 15000);
+        } catch (e) {
+            console.error('[GLOBAL SCANNER] Erro na varredura global:', e.message);
+            this.timeoutId = setTimeout(() => this.run(), 15000);
+        }
+    }
+
+    stop() {
+        this.active = false;
+        if (this.timeoutId) clearTimeout(this.timeoutId);
+    }
+}
+
 class BiddingRunner {
     constructor(webContents) {
         this.webContents = webContents;
         this.clockSync = new ClockSync();
         this.activeRunners = new Map(); // Mapa de sessões ativas
         this.agent = null;
+        
+        // Inicializa Varredura Global Automática no boot
+        this.globalScanner = new GlobalScanner(this.webContents, this.clockSync, this);
+        this.globalScanner.run();
     }
 
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
