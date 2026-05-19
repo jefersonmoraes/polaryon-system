@@ -662,6 +662,7 @@ export default function BiddingDashboardPage() {
                                  
                                  newSessions[sid].items.push({
                                      itemId: item.identificador || (item.numero ? item.numero.toString() : '0'),
+                                     purchaseId: fullId,
                                      valorAtual: melhorGeral, 
                                      meuValor: melhorMeu, 
                                      uasgName: uasgCode, 

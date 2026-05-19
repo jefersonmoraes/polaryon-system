@@ -158,6 +158,7 @@ class RoomRunner {
 
                     return {
                         itemId: String(item.numero || item.identificador),
+                        purchaseId: this.idCompra,
                         valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
                         meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : (item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0),
                         status: item.faseTraduzido || item.fase || 'Em Disputa',

@@ -267,6 +267,7 @@
                     timestamp: Date.now(),
                     items: items.map(it => ({
                         itemId: String(it.numero || it.identificador),
+                        purchaseId: roomCode,
                         valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
                         meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
                         status: it.faseTraduzido || it.fase,
