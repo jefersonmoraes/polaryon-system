@@ -197,8 +197,8 @@
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
         if (url.includes('/participacoes')) {
-            // 🔥 FILTRO INTELIGENTE: Ignora abas "Em Andamento" (situacao=2) ou "Agendadas" (situacao=1) 
-            // e foca unicamente nas salas ativas em disputa (situacao=3 ou situacao=EM_DISPUTA)
+            // 🔥 FILTRO INTELIGENTE ULTRA-RIGOROSO: Ignora abas "Em Andamento" ou "Agendadas"
+            // e foca unicamente nas salas ativas em disputa (situacao=3 ou contendo "DISPUTA")
             const isDisputaQuery = url.includes('situacao=3') || url.includes('situacao=EM_DISPUTA') || url.includes('fase=disputa') || url.includes('situacao=disputa');
             const hasOtherFilters = url.includes('situacao=1') || url.includes('situacao=2') || url.includes('situacao=4') || url.includes('situacao=AGENDADA') || url.includes('situacao=EM_ANDAMENTO');
             
@@ -209,9 +209,19 @@
 
             const listObj = Array.isArray(data) ? data : (data.itens || []);
             listObj.forEach(p => {
-                // Filtro individual por item (situacaoCompra = 3 significa em disputa)
-                const isItemDisputa = p.situacaoCompra === undefined || p.situacaoCompra === null || String(p.situacaoCompra) === '3';
-                if (!isItemDisputa) return;
+                // Filtro individual rigoroso por qualquer campo de situação presente no objeto
+                const situacaoRaw = p.situacao || (p.compra && p.compra.situacao) || p.situacaoCompra || (p.compra && p.compra.situacaoCompra) || p.situacaoParticipacao || '';
+                const situacaoStr = String(situacaoRaw).toUpperCase();
+                
+                if (situacaoRaw) {
+                    const isDisputa = situacaoStr.includes('DISPUTA') || situacaoStr === '3';
+                    if (!isDisputa) {
+                        return; // Descarte imediato
+                    }
+                } else {
+                    // Sem campos de situação, descarta preventivamente se a consulta for de outra aba
+                    if (hasOtherFilters && !isDisputaQuery) return;
+                }
 
                 if (p.compra && p.compra.numeroUasg && p.compra.numero) {
                     const uasg = p.compra.numeroUasg;
