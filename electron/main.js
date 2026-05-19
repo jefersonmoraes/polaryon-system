@@ -277,12 +277,13 @@ ipcMain.on('send-portal-data', (event, data) => {
     }
 });
 
-// [GATILHO MANUAL] RELAY PARA O MOTOR INVISÍVEL HTTP (bidding-runner)
+// [GATILHO MANUAL] RELAY PARA O MOTOR INVISÍVEL HTTP (bidding-runner) E NAVEGADOR VISUAL (visual-runner)
 ipcMain.on('manual-bid', (event, data) => {
     if (global.biddingRunner) {
         global.biddingRunner.sendBid(data);
-    } else {
-        console.error('[POLARYON] Motor HTTP de Lances não está rodando!');
+    }
+    if (visualRunner) {
+        visualRunner.sendManualBid(data);
     }
 });
 
