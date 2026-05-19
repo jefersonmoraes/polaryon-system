@@ -566,6 +566,19 @@ export default function BiddingDashboardPage() {
             (window as any).electronAPI.onBiddingUpdate(handleUpdate);
             (window as any).electronAPI.onBiddingChat(handleChat);
             
+            if ((window as any).electronAPI.onBiddingError) {
+                (window as any).electronAPI.onBiddingError((data: any) => {
+                    const { sessionId: errSid, error, code, action } = data;
+                    if (action === 'REQUIRE_REAUTH') {
+                        setIsAuthenticated(false);
+                        setIsListening(false);
+                        toast.error(`⚠️ Queda de Sessão (Cod: ${code}): O token expirou ou falhou. Clique em "Continuar com Gov.br" para reconectar.`, { duration: 10000 });
+                    } else {
+                        toast.error(`[POLARYON MOTOR] ${error}`);
+                    }
+                });
+            }
+
             if ((window as any).electronAPI.onPortalDataUpdate) {
                 (window as any).electronAPI.onPortalDataUpdate(handlePortalSync);
             }

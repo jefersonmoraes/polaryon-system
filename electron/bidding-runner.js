@@ -191,6 +191,21 @@ class RoomRunner {
 
         } catch (e) {
             console.error('[POLARYON MOTOR] Erro na varredura da sala:', e.message);
+            
+            // Anti-Ghost: Se houver erro de rede, 401 ou 403, avisa o painel imediatamente para pausar a sessão e solicitar re-auth
+            const statusError = e.response ? e.response.status : 500;
+            if (statusError === 401 || statusError === 403 || statusError >= 500 || e.message.includes('network')) {
+                console.warn(`[POLARYON MOTOR] 🚨 Queda de Sessão detectada (Anti-Ghost ativado). Código: ${statusError}`);
+                if (!this.webContents.isDestroyed()) {
+                    this.webContents.send('bidding-error', {
+                        sessionId: this.sessionId,
+                        error: 'Conexão perdida ou Token expirado. A sessão foi desativada por segurança.',
+                        code: statusError,
+                        action: 'REQUIRE_REAUTH'
+                    });
+                }
+            }
+
             this.timeoutId = setTimeout(() => this.run(), 3000);
         }
     }
