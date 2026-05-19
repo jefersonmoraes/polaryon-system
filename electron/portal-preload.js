@@ -312,31 +312,48 @@
                 });
             }
 
-            // 2. Captura lógica baseada nos cards de compra renderizados na tela (JSF / HTML Puro)
-            const allElements = Array.from(document.querySelectorAll('div, tr, td, li, card, p'));
+            // 2. Captura lógica baseada nos cards de compra renderizados na tela (Híbrido Perfeito)
+            const allElements = Array.from(document.querySelectorAll('*'));
             allElements.forEach(el => {
-                if (el.children.length > 8) return; // Evita containers de nível muito alto para otimizar CPU
+                if (el.children.length > 3) return; // Foca apenas nos elementos de título/célula folha para evitar loops desnecessários
                 
                 const text = el.innerText || '';
-                const uasgMatch = text.match(/\b(\d{5,6})\s*-\s*/);
                 const editalMatch = text.match(/Nº\s*(\d+)\/(\d{4})/i);
                 
-                if (uasgMatch && editalMatch) {
-                    const uasg = uasgMatch[1];
+                if (editalMatch) {
                     const editalNum = editalMatch[1];
                     const ano = editalMatch[2];
                     
-                    let modalidade = '06'; // Padrão Dispensa Eletrônica
-                    if (text.toUpperCase().includes('PREGÃO')) {
-                        modalidade = '05';
+                    // Procura pela UASG subindo até o nível do card (pai/avô) para associar ao edital correspondente
+                    let uasg = '';
+                    let parentText = '';
+                    let current = el;
+                    
+                    for (let i = 0; i < 3; i++) {
+                        if (!current) break;
+                        const cText = current.innerText || '';
+                        const uMatch = cText.match(/\b(\d{5,6})\s*-\s*/);
+                        if (uMatch) {
+                            uasg = uMatch[1];
+                            parentText = cText;
+                            break;
+                        }
+                        current = current.parentElement;
                     }
                     
-                    const numStr = String(editalNum).padStart(5, '0');
-                    const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
-                    
-                    if (!synchronizedPurchases.has(purchaseId)) {
-                        synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DOM] Sala Detectada via Layout: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
+                    if (uasg) {
+                        let modalidade = '06'; // Padrão Dispensa Eletrônica
+                        if (parentText.toUpperCase().includes('PREGÃO') || text.toUpperCase().includes('PREGÃO')) {
+                            modalidade = '05';
+                        }
+                        
+                        const numStr = String(editalNum).padStart(5, '0');
+                        const purchaseId = `${uasg}${modalidade}${numStr}${ano}`;
+                        
+                        if (!synchronizedPurchases.has(purchaseId)) {
+                            synchronizedPurchases.add(purchaseId);
+                            console.log(`%c[POLARYON DOM] Sala Detectada via Layout Híbrido: ${purchaseId} (UASG: ${uasg} | Edital: ${editalNum}/${ano})`, "color: #10b981; font-weight: bold;");
+                        }
                     }
                 }
             });
