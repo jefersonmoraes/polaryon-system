@@ -9,47 +9,50 @@
 
     let sessionToken = '';
     const synchronizedPurchases = new Set();
-    let discoveryInterval = null;
 
-    async function runDiscovery() {
-        if (!sessionToken) return;
+    // AUTOMATIZADOR DE FILTRO: Seleciona "Disputa" automaticamente se estiver em outra opção (v3.6.86)
+    // Garante que o usuário sempre seja guiado para a lista de disputas sem precisar de cliques manuais
+    setInterval(() => {
         try {
-            const url = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=100&pagina=0&filtro=4';
-            const res = await fetch(url, {
-                headers: {
-                    'Authorization': sessionToken,
-                    'Accept': 'application/json',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
+            // 1. Procura por elemento <select> padrão do portal
+            const selects = document.querySelectorAll('select');
+            selects.forEach(select => {
+                const options = Array.from(select.options);
+                const hasDisputa = options.some(opt => opt.text.includes('Disputa') || opt.value === '4');
+                if (hasDisputa && select.value !== '4') {
+                    select.value = '4';
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log('%c[POLARYON AUTOMATION] Filtro "Disputa" selecionado via <select>!', 'color: #10b981; font-weight: bold;');
                 }
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                console.log(`%c[POLARYON DISCOVERY] Auto-Descoberta de Salas em Disputa (Encontrado: ${Array.isArray(data) ? data.length : 0})`, "color: #a78bfa; font-weight: bold;");
-                processSerproData(data, url);
-            }
+            // 2. Procura por botões de dropdown customizados (Bootstrap/Angular / JSF / Material)
+            const dropdownToggles = document.querySelectorAll('.dropdown-toggle, .ui-select-toggle, [data-toggle="dropdown"], .mat-select-trigger, button, div');
+            dropdownToggles.forEach(toggle => {
+                const text = toggle.innerText || '';
+                // Se for o botão principal do filtro de status e não estiver na Disputa
+                if ((text.includes('Todas') || text.includes('Em andamento') || text.includes('Filtro')) && !text.includes('Disputa')) {
+                    toggle.click();
+                    setTimeout(() => {
+                        const options = Array.from(document.querySelectorAll('.dropdown-menu a, .ui-select-choices-row, mat-option, .dropdown-item, li, span, button'));
+                        const disputaOpt = options.find(opt => opt.innerText.trim() === 'Disputa');
+                        if (disputaOpt) {
+                            disputaOpt.click();
+                            console.log('%c[POLARYON AUTOMATION] Filtro "Disputa" selecionado via Custom Dropdown!', 'color: #10b981; font-weight: bold;');
+                        }
+                    }, 300);
+                }
+            });
         } catch (e) {
-            console.error("[POLARYON DISCOVERY] Erro ao buscar participações em disputa:", e);
+            // Silencioso para não poluir
         }
-    }
-
-    function triggerAutoDiscovery() {
-        if (!sessionToken) return;
-        runDiscovery();
-        if (discoveryInterval) clearInterval(discoveryInterval);
-        discoveryInterval = setInterval(runDiscovery, 30000);
-    }
+    }, 4000);
 
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
-            const oldToken = sessionToken;
             sessionToken = data.token;
             console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
-            if (sessionToken !== oldToken) {
-                triggerAutoDiscovery();
-            }
         }
     });
 
@@ -196,11 +199,7 @@
         if (event.data && event.data.source === 'polaryon-injector') {
             const { type, token, data, url } = event.data;
             if (type === 'token') {
-                const oldToken = sessionToken;
                 sessionToken = token;
-                if (sessionToken !== oldToken) {
-                    triggerAutoDiscovery();
-                }
             } else if (type === 'serpro-data') {
                 processSerproData(data, url);
             }
