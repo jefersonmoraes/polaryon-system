@@ -78,6 +78,26 @@
     function processSerproData(data, url) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
+        // 🔥 EXTRAÇÃO INTELIGENTE DE PARTICIPAÇÕES (v3.6.80)
+        if (url.includes('/participacoes')) {
+            const list = Array.isArray(data) ? data : [];
+            list.forEach(p => {
+                if (p.compra) {
+                    const { numeroUasg, modalidade, numero, ano } = p.compra;
+                    // Mapeia modalidade (geralmente 6 é Dispensa Eletrônica, mas formatamos sempre com 2 dígitos)
+                    const modStr = String(modalidade).padStart(2, '0');
+                    const numStr = String(numero).padStart(5, '0');
+                    const purchaseId = `${numeroUasg}${modStr}${numStr}${ano}`;
+                    
+                    if (!synchronizedPurchases.has(purchaseId)) {
+                        synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DETECTOR] Sala Auto-Detectada via Participações: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        autoFetchPurchaseItems(purchaseId);
+                    }
+                }
+            });
+        }
+
         const jsonStr = JSON.stringify(data || {});
         const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
         if (discoveredIds && discoveredIds.length > 0) {
