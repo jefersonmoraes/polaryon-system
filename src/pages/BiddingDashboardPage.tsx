@@ -1174,7 +1174,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
 
     const [useFourDecimals, setUseFourDecimals] = useState(item.useFourDecimals || false);
     const [kamikazeMode, setKamikazeMode] = useState(item.kamikazeMode || false);
-    const [manualTime, setManualTime] = useState('');
+    const [directBidValue, setDirectBidValue] = useState<string>('');
 
     // 🔥 FIX CRONÔMETRO: Sincronia absoluta baseada em dataHoraFimContagem e serverTime
     useEffect(() => {
@@ -1238,14 +1238,20 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     };
 
     const handleManualBid = () => {
+        let val;
         const currentBest = Number(item.valorAtual || 0);
-        let marginVal = Number(margin);
-        if (marginType === 'percentage') marginVal = currentBest * (marginVal / 100);
-        
-        // 🔥 LÓGICA VENCEDORA: Sempre subtrai do MELHOR lance atual
-        let val = currentBest - marginVal;
-        
-        if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+
+        if (directBidValue && Number(directBidValue) > 0) {
+            val = Number(directBidValue);
+        } else {
+            let marginVal = Number(margin);
+            if (marginType === 'percentage') marginVal = currentBest * (marginVal / 100);
+            
+            // 🔥 LÓGICA VENCEDORA: Sempre subtrai do MELHOR lance atual
+            val = currentBest - marginVal;
+            
+            if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+        }
         
         // Anti-Burrice / Anti-Rejeição: Se o lance calculado for maior ou igual ao atual, ABORTA!
         if (currentBest > 0 && val >= currentBest) {
@@ -1253,8 +1259,9 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
             return;
         }
         
-        console.log(`🚀 [GATILHO MANUAL] Disparando R$ ${val} (Leader: ${currentBest}, Margin: ${marginVal})`);
+        console.log(`🚀 [GATILHO MANUAL] Disparando R$ ${val} (Leader: ${currentBest}, DirectBid: ${directBidValue})`);
         onManualBid(item.purchaseId, item.itemId, item.bidId, val);
+        setDirectBidValue(''); // Reseta após disparo
     };
 
     const formatTime = (seconds: number) => {
@@ -1363,6 +1370,16 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                         <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
                     </div>
                     
+                    <Input 
+                        placeholder="R$ Direto"
+                        type="number"
+                        className="w-24 h-10 text-xs font-bold bg-slate-50 border-slate-200"
+                        value={directBidValue}
+                        onChange={(e) => setDirectBidValue(e.target.value)}
+                        step={useFourDecimals ? "0.0001" : "0.01"}
+                        title="Digite um valor exato para enviar diretamente com o Gatilho"
+                    />
+
                     <Button 
                         size="sm" 
                         onClick={handleManualBid}
