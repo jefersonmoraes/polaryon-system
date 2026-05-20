@@ -214,7 +214,8 @@
                 const situacaoStr = String(situacaoRaw).toUpperCase();
                 
                 if (situacaoRaw) {
-                    const isDisputa = situacaoStr.includes('DISPUTA') || situacaoStr === '3';
+                    // ✅ Aceita apenas EM_DISPUTA / DISPUTA (código 3) — exclui DISPUTA_ENCERRADA explicitamente
+                    const isDisputa = (situacaoStr === 'EM_DISPUTA' || situacaoStr === 'DISPUTA' || situacaoStr === '3') && !situacaoStr.includes('ENCERRADA') && !situacaoStr.includes('ENCERRADO');
                     if (!isDisputa) {
                         return; // Descarte imediato
                     }
@@ -232,10 +233,24 @@
                     
                     if (!shared.synchronizedPurchases.has(purchaseId)) {
                         shared.synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DETECTOR] Sala de Participação Ativa Detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        console.log(`%c[POLARYON DETECTOR] 🎯 Nova sala em disputa detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
                         
                         // Notifica o processo Electron principal sobre a nova sala
                         ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
+
+                        // ⚡ BUSCA IMEDIATA — não espera o round-robin
+                        if (shared.sessionToken) {
+                            const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                            fetch(roomUrl, {
+                                headers: {
+                                    'Authorization': shared.sessionToken,
+                                    'Accept': 'application/json',
+                                    'x-device-platform': 'web',
+                                    'x-version-number': '6.0.2'
+                                }
+                            }).then(r => r.ok ? r.json().then(d => processSerproData(d, roomUrl)) : null)
+                              .catch(() => {});
+                        }
                     }
                 }
             });
@@ -510,6 +525,9 @@
         if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) return;
         
         const purchaseIds = Array.from(shared.synchronizedPurchases);
+        // Processa até 3 salas por tick para salas grandes (ex: 10 salas = ~10s para ciclo completo)
+        const batchSize = Math.min(3, purchaseIds.length);
+        for (let b = 0; b < batchSize; b++) {
         const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
         currentIndex++;
 
@@ -552,7 +570,42 @@
         } catch (e) {
             console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
         }
+        } // fim do batch
     }, 3000);
+
+    // =========================================================================
+    // 🔍 SCANNER PROATIVO DE PARTICIPAÇÕES (v3.7.4)
+    // Busca TODAS as salas em disputa a cada 30s, independente do interceptor.
+    // Garante que salas abertas ANTES do login sejam capturadas automaticamente.
+    // =========================================================================
+    async function proactiveScanRooms() {
+        if (!shared.sessionToken) return;
+        try {
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=50&pagina=0&filtro=4`;
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': shared.sessionToken,
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                signal: AbortSignal.timeout(15000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`%c[POLARYON SCAN] 🔍 Varredura proativa de participações concluída.`, 'color: #6366f1; font-size: 10px;');
+                processSerproData(data, url);
+            }
+        } catch (e) {
+            // Silencioso
+        }
+    }
+
+    // Primeiro scan com delay de 5s (aguarda token) e depois a cada 30s
+    setTimeout(() => {
+        proactiveScanRooms();
+        setInterval(proactiveScanRooms, 30000);
+    }, 5000);
 
     // =========================================================================
     // 💓 SISTEMA DE HEARTBEAT - MANTÉM A SESSÃO VIVA INDEFINIDAMENTE (v3.7.2)
