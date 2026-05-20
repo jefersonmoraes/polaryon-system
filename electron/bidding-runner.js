@@ -180,6 +180,102 @@ class RoomRunner {
                     log: `[MOTOR KAMIKAZE] Escaneamento Limpo: ${mappedItems.length} itens detectados.`,
                     items: mappedItems
                 });
+
+                // 🎯 MOTOR DE AUTO-LANCE BACKEND (v3.8.4) - Independente da UI React!
+                if (this.biddingRunner && this.biddingRunner.configs.has(this.sessionId)) {
+                    const sessionConfig = this.biddingRunner.configs.get(this.sessionId);
+                    if (sessionConfig && sessionConfig.itemsConfig) {
+                        if (!this.lastBidTimes) this.lastBidTimes = new Map();
+
+                        for (const mappedItem of mappedItems) {
+                            const sId = String(mappedItem.itemId);
+                            const strat = sessionConfig.itemsConfig[sId] || {};
+
+                            if (!strat.active) continue;
+
+                            const myMin = Number(strat.minPrice || 0);
+                            if (myMin <= 0) {
+                                console.debug(`[BACKEND SNIPER] Item ${sId}: BLOQUEADO - Mínimo não configurado.`);
+                                continue;
+                            }
+
+                            const tSeconds = Number(mappedItem.timerSeconds);
+                            const isKamikaze = strat.kamikazeMode || false;
+
+                            // Só dispara nos 30 segundos finais OU em modo kamikaze
+                            if (!((tSeconds <= 30 && tSeconds > 0) || isKamikaze)) continue;
+
+                            // Verifica se está perdendo
+                            const posicao = String(mappedItem.posicao || '');
+                            const isWinning = (posicao === '1' || posicao === '1º' || posicao === '1°' || posicao === 'V' || posicao === 'VENCEDOR');
+                            if (isWinning) continue;
+
+                            const currentBest = Number(mappedItem.valorAtual || 0);
+                            const myCurrentBid = Number(mappedItem.meuValor || 999999999);
+                            const margin = Number(strat.decrementValue || 1);
+                            const allow4 = strat.useFourDecimals || false;
+
+                            // Cooldown para não spammar (Kamikaze: 500ms, Normal: 2000ms)
+                            const now = Date.now();
+                            const cooldown = isKamikaze ? 500 : 2000;
+                            const lastBidAt = this.lastBidTimes.get(sId) || 0;
+                            if (now - lastBidAt < cooldown) continue;
+
+                            // Calcular margem obrigatória do Serpro
+                            const officialMarginVal = Number(mappedItem.officialMargin || 0);
+                            const officialMarginType = mappedItem.officialMarginType || 'V';
+                            const mandatorySerproMargin = officialMarginType === 'P'
+                                ? myCurrentBid * (officialMarginVal / 100)
+                                : officialMarginVal;
+                            const maxAllowedBySerpro = myCurrentBid - mandatorySerproMargin;
+
+                            // Calcular próximo lance
+                            let nextBid = 0;
+                            const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin);
+
+                            if (isLeaderBeatable) {
+                                nextBid = Math.min(currentBest - margin, maxAllowedBySerpro);
+                            } else {
+                                // Líder imbatível: envia o mínimo para manter posição
+                                nextBid = Math.min(myMin, maxAllowedBySerpro);
+                            }
+
+                            if (nextBid < myMin) nextBid = myMin;
+                            nextBid = allow4
+                                ? Math.floor(nextBid * 10000) / 10000
+                                : Math.floor(nextBid * 100) / 100;
+
+                            // Validações de segurança
+                            if (nextBid < myMin) {
+                                console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} abaixo do mínimo R$ ${myMin}. Bloqueado.`);
+                                continue;
+                            }
+                            if (nextBid >= myCurrentBid) {
+                                console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} não melhora meu atual R$ ${myCurrentBid}. Bloqueado.`);
+                                continue;
+                            }
+                            if (nextBid > maxAllowedBySerpro) {
+                                console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} viola margem Serpro (máx: R$ ${maxAllowedBySerpro}). Bloqueado.`);
+                                continue;
+                            }
+
+                            // 🔥 DISPARO BACKEND DIRETO!
+                            this.lastBidTimes.set(sId, now);
+                            console.log(`%c🎯 [BACKEND SNIPER] DISPARANDO: R$ ${nextBid} → Item ${sId} | Timer: ${tSeconds}s | Lider: R$ ${currentBest}`, 'color: #10b981; font-weight: bold;');
+
+                            if (!this.webContents.isDestroyed()) {
+                                this.webContents.send('bidding-update-log', `🎯 [SNIPER BACKEND] Disparando R$ ${nextBid} → Item ${sId} (${tSeconds}s restantes)`);
+                            }
+
+                            // Disparo assíncrono - não bloqueia o polling
+                            this.biddingRunner.sendBid({
+                                purchaseId: mappedItem.purchaseId,
+                                itemId: sId,
+                                value: nextBid
+                            }).catch(err => console.error(`[BACKEND SNIPER] Falha no disparo do Item ${sId}:`, err.message));
+                        }
+                    }
+                }
             }
 
             // Polling dinâmico inteligente e adaptativo contra erro 422/429
