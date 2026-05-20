@@ -79,7 +79,6 @@ class VisualRunner {
             this.sessions.set(sessionId, { window: activeWin, config, loginFinished: !isLoginFlow });
 
             // Atualiza o título e envia o sinal de inicialização
-            const isLoginFlow = config.modality === 'LOGIN_FLOW';
             const title = isLoginFlow ? 'Polaryon - Autenticação' : `Polaryon - Modo Visual (${config.numero}/${config.ano})`;
             activeWin.setTitle(title);
 

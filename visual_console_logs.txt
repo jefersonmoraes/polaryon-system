@@ -33,3 +33,5 @@
 [11:37:20] [PRINCIPAL] [WARNING] %c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente. color: #6366f1; font-size: 10px; (Script: :689)
 [11:38:50] [PRINCIPAL] [WARNING] %c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente. color: #6366f1; font-size: 10px; (Script: :689)
 [11:40:20] [PRINCIPAL] [WARNING] %c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente. color: #6366f1; font-size: 10px; (Script: :689)
+[11:41:50] [PRINCIPAL] [WARNING] %c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente. color: #6366f1; font-size: 10px; (Script: :689)
+[11:43:20] [PRINCIPAL] [WARNING] %c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente. color: #6366f1; font-size: 10px; (Script: :689)
