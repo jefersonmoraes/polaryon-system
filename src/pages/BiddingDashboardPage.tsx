@@ -190,10 +190,15 @@ export default function BiddingDashboardPage() {
                     const isLosing = isLosingPos || (!isWinningByValue && item.posicao === '?');
                     
                     if (isLosing) {
+                        const myMin = Number(strat.minPrice || 0);
+                        if (myMin <= 0) {
+                            console.debug(`[SNIPER] Item ${sId}: BLOQUEADO - Valor mínimo não configurado.`);
+                            return;
+                        }
+
                         const now = Date.now();
                         const lastBid = lastAutoBidTimesLocal[sId] || lastAutoBidTimesLocal[item.itemId] || 0;
                         
-                        const myMin = Number(strat.minPrice || 0);
                         const margin = Number(strat.decrementValue || 1);
                         const isKamikaze = strat.kamikazeMode || false;
                         const allow4 = strat.useFourDecimals || false;
@@ -1238,6 +1243,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     };
 
     const handleManualBid = () => {
+        if (!minPrice || Number(minPrice) <= 0) {
+            toast.error('BLOQUEIO PRIMORDIAL: Defina um Valor Mínimo antes de disparar o Gatilho!');
+            return;
+        }
+
         let val;
         const currentBest = Number(item.valorAtual || 0);
 
@@ -1249,8 +1259,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
             
             // 🔥 LÓGICA VENCEDORA: Sempre subtrai do MELHOR lance atual
             val = currentBest - marginVal;
-            
-            if (minPrice > 0 && val < Number(minPrice)) val = Number(minPrice);
+        }
+
+        // A Trava Primordial (aplica-se a directBidValue e ao cálculo)
+        if (val < Number(minPrice)) {
+            val = Number(minPrice);
         }
         
         // Anti-Burrice / Anti-Rejeição: Se o lance calculado for maior ou igual ao atual, ABORTA!
