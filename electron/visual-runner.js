@@ -249,6 +249,15 @@ class VisualRunner {
         const attachNavigationListeners = (targetWin, isChild = false) => {
             const label = isChild ? 'FILHA' : 'PRINCIPAL';
 
+            const getActiveSession = () => {
+                for (const [sid, s] of this.sessions.entries()) {
+                    if (s.window === win || s.window === targetWin) {
+                        return { sessionId: sid, session: s };
+                    }
+                }
+                return { sessionId: null, session: null };
+            };
+
             const handleLegacyRedirect = (event, url) => {
                 const isLegacyPortal = url.includes('main.asp') || 
                                        url.includes('main2.asp') || 
@@ -262,7 +271,7 @@ class VisualRunner {
                     }
                     console.log(`[POLARYON WINDOW] [${label}] 🚫 Interceptado legado/erro: ${url}`);
                     
-                    const session = this.sessions.get(sessionId);
+                    const { session } = getActiveSession();
                     const activeWin = targetWin && !targetWin.isDestroyed() ? targetWin : (session ? session.window : null);
                     
                     if (activeWin && !activeWin.isDestroyed()) {
@@ -288,6 +297,9 @@ class VisualRunner {
             });
 
             targetWin.webContents.on('did-navigate', (event, url) => {
+                const { sessionId: currentSessionId, session } = getActiveSession();
+                if (!currentSessionId) return;
+
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] did-navigate: ${url}`);
                 }
@@ -297,7 +309,6 @@ class VisualRunner {
                 if (isChild) {
                     // Se for janela filha (popup de handshake)
                     if (url.includes('/seguro/fornecedor/')) {
-                        const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed()) {
                             console.log(`[VISUAL-RUNNER] [${label}] Popup de handshake detectado. Transferindo para janela principal: ${url}`);
                             
@@ -335,7 +346,6 @@ class VisualRunner {
                     // Se for janela principal
                     const isLegacyLanding = url.includes('intro.htm') || url.includes('index.html');
                     if (isLegacyLanding) {
-                        const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                             session.loginFinished = true; // Evita loop
                             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
@@ -349,7 +359,6 @@ class VisualRunner {
                             session.window.loadURL(handshakeUrl);
                         }
                     } else if (url.includes('/seguro/fornecedor/')) {
-                        const session = this.sessions.get(sessionId);
                         if (session && session.window && !session.window.isDestroyed()) {
                             if (!url.includes('compra=') && session.config && session.config.uasg && session.config.numero && session.config.uasg !== 'LOGIN') {
                                 const modCode = session.config.modality === '05' || session.config.modality === 'PREGAO' ? '05' : '06';
@@ -371,7 +380,7 @@ class VisualRunner {
                                 session.window.loadURL(targetUrl);
                             } else {
                                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
-                                    this.dashboardWebContents.send('bidding-login-finished', { sessionId, url });
+                                    this.dashboardWebContents.send('bidding-login-finished', { sessionId: currentSessionId, url });
                                 }
                             }
                         }
