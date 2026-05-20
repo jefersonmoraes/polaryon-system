@@ -542,10 +542,12 @@
                         action: 'REQUIRE_REAUTH'
                     });
                 }
-            } else if (res.status === 422 || res.status === 404) {
-                // Auto-limpeza defensiva
+            } else if (res.status === 422) {
+                console.log(`[POLARYON LOOP] ⏳ Sala aguardando início ou pausada (422): ${purchaseId}. Mantendo no radar...`);
+            } else if (res.status === 404) {
+                // Auto-limpeza apenas se a sala realmente não existir
                 shared.synchronizedPurchases.delete(purchaseId);
-                console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por inatividade (${res.status}): ${purchaseId}`);
+                console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por não existir (${res.status}): ${purchaseId}`);
             }
         } catch (e) {
             console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);

@@ -178,8 +178,9 @@ export default function BiddingDashboardPage() {
                     console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${tSeconds}s | Perdedor: ${item.posicao !== '1'}`);
                 }
 
-                // 30 Segundos Finais
-                if (tSeconds <= 30 && tSeconds > 0) {
+                // Kamikaze ou 30 Segundos Finais
+                const isKamikaze = strat.kamikazeMode || false;
+                if ((tSeconds <= 30 && tSeconds > 0) || isKamikaze) {
                     const myBid = Number(item.meuValor || 99999999);
                     const bestBid = Number(item.valorAtual || 0);
                     
@@ -200,7 +201,6 @@ export default function BiddingDashboardPage() {
                         const lastBid = lastAutoBidTimesLocal[sId] || lastAutoBidTimesLocal[item.itemId] || 0;
                         
                         const margin = Number(strat.decrementValue || 1);
-                        const isKamikaze = strat.kamikazeMode || false;
                         const allow4 = strat.useFourDecimals || false;
 
                         let cooldown = isKamikaze ? 350 : 1500;
@@ -1391,6 +1391,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                                 handleSave();
                             }}
                             step={useFourDecimals ? "0.0001" : "0.01"}
+                            disabled={active}
                         />
                     </div>
                     <div className="flex flex-col gap-1.5 flex-1">
@@ -1414,6 +1415,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                             onChange={(e) => setMargin(Number(e.target.value))}
                             onBlur={() => handleSave()}
                             step={useFourDecimals ? "0.0001" : "0.01"}
+                            disabled={active}
                         />
                     </div>
                 </div>
@@ -1477,6 +1479,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                             id={`4dec-${item.itemId}`} 
                             checked={useFourDecimals}
                             onCheckedChange={(val) => { setUseFourDecimals(!!val); handleSave({ useFourDecimals: !!val }); }}
+                            disabled={active}
                         />
                         <label htmlFor={`4dec-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Permitir 4 casas decimais</label>
                     </div>
@@ -1485,6 +1488,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                             id={`kamikaze-${item.itemId}`} 
                             checked={kamikazeMode}
                             onCheckedChange={(val) => { setKamikazeMode(!!val); handleSave({ kamikazeMode: !!val }); }}
+                            disabled={active}
                         />
                         <label htmlFor={`kamikaze-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Modo Kamikaze (Sem Espera)</label>
                     </div>
