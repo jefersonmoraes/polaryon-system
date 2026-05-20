@@ -505,6 +505,7 @@
     // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.89)
     // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
     let currentIndex = 0;
+    let consecutiveLoopFailures = 0;
     setInterval(async () => {
         if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) return;
         
@@ -524,19 +525,25 @@
             });
 
             if (res.ok) {
+                consecutiveLoopFailures = 0; // Reset na tolerância
                 const data = await res.json();
                 processSerproData(data, url);
             } else if (res.status === 401 || res.status === 403) {
-                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Resetando token e solicitando re-autenticação.`);
-                shared.sessionToken = '';
-                ipcRenderer.send('portal-error', {
-                    sessionId: 'GLOBAL',
-                    error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
-                    code: res.status,
-                    action: 'REQUIRE_REAUTH'
-                });
+                consecutiveLoopFailures++;
+                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
+                
+                if (consecutiveLoopFailures >= 3) {
+                    consecutiveLoopFailures = 0;
+                    shared.sessionToken = '';
+                    ipcRenderer.send('portal-error', {
+                        sessionId: 'GLOBAL',
+                        error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
+                        code: res.status,
+                        action: 'REQUIRE_REAUTH'
+                    });
+                }
             } else if (res.status === 422 || res.status === 404) {
-                // Auto-limpeza defensiva: se o Serpro retornar que a sala é inválida/inexistente ou já encerrou, removemos do radar
+                // Auto-limpeza defensiva
                 shared.synchronizedPurchases.delete(purchaseId);
                 console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por inatividade (${res.status}): ${purchaseId}`);
             }
