@@ -75,7 +75,8 @@ class VisualRunner {
             
             // Remove a sessão antiga do map e registra a nova com a mesma janela
             this.sessions.delete(activeSessionId);
-            this.sessions.set(sessionId, { window: activeWin, config, loginFinished: true });
+            const isLoginFlow = config.modality === 'LOGIN_FLOW';
+            this.sessions.set(sessionId, { window: activeWin, config, loginFinished: !isLoginFlow });
 
             // Atualiza o título e envia o sinal de inicialização
             const isLoginFlow = config.modality === 'LOGIN_FLOW';
@@ -253,7 +254,7 @@ class VisualRunner {
                                        url.includes('main2.asp') || 
                                        url.includes('indexgov.asp') || 
                                        url.includes('analise_amigavel.asp') || 
-                                       url.includes('AcessoNaoAutorizado.asp') || 
+                                       url.toLowerCase().includes('acessonaoautorizado') || 
                                        url.includes('popup.asp');
                 if (isLegacyPortal) {
                     if (event && typeof event.preventDefault === 'function') {
