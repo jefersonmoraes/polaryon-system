@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startVisualBidding: (sessionData) => ipcRenderer.send('start-visual-bidding', sessionData),
   stopVisualBidding: (sessionId) => ipcRenderer.send('stop-visual-bidding', sessionId),
   updateLocalBiddingConfig: (sessionId, config) => ipcRenderer.send('update-local-config', { sessionId, config }),
+  setFocusedSession: (sessionId) => ipcRenderer.send('set-focused-session', sessionId),
   onBiddingUpdate: (callback) => ipcRenderer.on('bidding-update', (event, data) => callback(data)),
   onBiddingError: (callback) => ipcRenderer.on('bidding-error', (event, data) => callback(data)),
   onBiddingChat: (callback) => ipcRenderer.on('bidding-chat', (event, data) => callback(data)),

@@ -460,6 +460,10 @@ class VisualRunner {
                 session.window.show();
                 session.window.focus();
             }
+            if (global.biddingRunner) {
+                global.biddingRunner.focusedSessionId = sessionId;
+                console.log(`[POLARYON] 👁️ Foco da sessão alterado para ${sessionId}. Acelerando radar correspondente!`);
+            }
         });
         ipcMain.on('visual-navigate', (event, { sessionId, url }) => {
             const session = this.sessions.get(sessionId);

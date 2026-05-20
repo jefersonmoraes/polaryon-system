@@ -93,15 +93,16 @@ class ClockSync {
 }
 
 /**
- * RoomRunner v4.0.0 - Radar Global Kamikaze (Varre Sala Inteira em Plano de Fundo)
+ * RoomRunner v4.1.0 - Radar Global Kamikaze Adaptativo (v3.8.2)
  */
 class RoomRunner {
-    constructor(idCompra, sessionId, agent, webContents, clockSync) {
+    constructor(idCompra, sessionId, agent, webContents, clockSync, biddingRunner) {
         this.idCompra = idCompra;
         this.sessionId = sessionId;
         this.agent = agent;
         this.webContents = webContents;
         this.clockSync = clockSync;
+        this.biddingRunner = biddingRunner;
         this.active = true;
         this.timeoutId = null;
     }
@@ -181,24 +182,52 @@ class RoomRunner {
                 });
             }
 
-            // Polling dinâmico inteligente
-            let nextInterval = 1000;
-            if (minTimer <= 30) {
-                nextInterval = 350; // Ritmo frenético de 350ms nos segundos finais! 🔥🚀
-                console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA: Item iminente a ${minTimer.toFixed(1)}s do fim! Polling ajustado para ${nextInterval}ms`);
-            } else if (minTimer <= 60) {
-                nextInterval = 600; // Ritmo intermediário de 600ms
-                console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado: Item a ${minTimer.toFixed(1)}s do fim. Polling ajustado para ${nextInterval}ms`);
+            // Polling dinâmico inteligente e adaptativo contra erro 422/429
+            let nextInterval = 10000; // Por padrão, ritmo passivo de 10s para evitar 429
+            const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
+
+            if (isBiddingActive) {
+                nextInterval = 1000;
+                if (minTimer <= 30) {
+                    nextInterval = 350; // Ritmo frenético de 350ms nos segundos finais! 🔥🚀
+                    console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA (${this.sessionId}): Item iminente a ${minTimer.toFixed(1)}s do fim! Polling ajustado para ${nextInterval}ms`);
+                } else if (minTimer <= 60) {
+                    nextInterval = 600; // Ritmo intermediário de 600ms
+                    console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado (${this.sessionId}): Item a ${minTimer.toFixed(1)}s do fim. Polling ajustado para ${nextInterval}ms`);
+                }
+            } else {
+                // Se a sessão está inativa e em plano de fundo, polling de 10 segundos é suficiente e extremamente seguro
+                if (Math.random() < 0.1) { // Reduz poluição do log
+                    console.log(`[POLARYON MOTOR] 💤 Radar Passivo (${this.sessionId}) rodando a 10s para preservação de banda e proteção de IP (Anti-429).`);
+                }
             }
 
             this.timeoutId = setTimeout(() => this.run(), nextInterval);
 
         } catch (e) {
+            const statusError = e.response ? e.response.status : 0;
+
+            if (statusError === 429) {
+                // 🛑 RATE-LIMIT DETECTADO: Backoff Exponencial Anti-429 (v3.8.2)
+                this.backoffCount = (this.backoffCount || 0) + 1;
+                const backoffMs = Math.min(15000 * this.backoffCount, 60000); // 15s, 30s, 45s, 60s max
+                console.warn(`[POLARYON MOTOR] 🚦 429 Rate-Limit na sala ${this.sessionId}! Backoff exponencial: ${backoffMs/1000}s (tentativa ${this.backoffCount})`);
+                // Força renovação de captcha na próxima rodada
+                captchaManager.lastFetch = 0;
+                captchaManager.token1 = '';
+                captchaManager.token2 = '';
+                if (!this.webContents.isDestroyed()) {
+                    this.webContents.send('bidding-update-log', `⏳ [ANTI-429] Servidor pediu pausa. Aguardando ${backoffMs/1000}s antes de retomar radar...`);
+                }
+                this.timeoutId = setTimeout(() => this.run(), backoffMs);
+                return;
+            }
+
+            this.backoffCount = 0; // Reset backoff em erro diferente de 429
             console.error('[POLARYON MOTOR] Erro na varredura da sala:', e.message);
             
             // Anti-Ghost: Se houver erro de rede, 401 ou 403, avisa o painel imediatamente para pausar a sessão e solicitar re-auth
-            const statusError = e.response ? e.response.status : 500;
-            if (statusError === 401 || statusError === 403 || statusError >= 500 || e.message.includes('network')) {
+            if (statusError === 401 || statusError === 403 || statusError >= 500 || (e.message && e.message.includes('network'))) {
                 console.warn(`[POLARYON MOTOR] 🚨 Queda de Sessão detectada (Anti-Ghost ativado). Código: ${statusError}`);
                 if (!this.webContents.isDestroyed()) {
                     this.webContents.send('bidding-error', {
@@ -283,8 +312,8 @@ class GlobalScanner {
                 }
             });
 
-            // Varre a cada 15 segundos para encontrar novas salas
-            this.timeoutId = setTimeout(() => this.run(), 15000);
+            // Varre a cada 60 segundos para encontrar novas salas (v3.8.2)
+            this.timeoutId = setTimeout(() => this.run(), 60000);
         } catch (e) {
             console.error('[GLOBAL SCANNER] Erro na varredura global:', e.message);
             const statusError = e.response ? e.response.status : 500;
@@ -297,7 +326,7 @@ class GlobalScanner {
                     action: 'REQUIRE_REAUTH'
                 });
             }
-            this.timeoutId = setTimeout(() => this.run(), 15000);
+            this.timeoutId = setTimeout(() => this.run(), 60000);
         }
     }
 
@@ -312,6 +341,8 @@ class BiddingRunner {
         this.webContents = webContents;
         this.clockSync = new ClockSync();
         this.activeRunners = new Map(); // Mapa de sessões ativas
+        this.configs = new Map(); // Configurações de estratégias por sessão (v3.8.2)
+        this.focusedSessionId = null; // ID da sessão focada na tela do usuário
         this.agent = null;
         
         // Inicializa Varredura Global Automática no boot
@@ -331,7 +362,8 @@ class BiddingRunner {
             rejectUnauthorized: false
         });
 
-        const runner = new RoomRunner(idCompra, sessionId, this.agent, this.webContents, this.clockSync);
+        // Repassa this (BiddingRunner) para o RoomRunner conseguir ler as configs de lances ativos
+        const runner = new RoomRunner(idCompra, sessionId, this.agent, this.webContents, this.clockSync, this);
         this.activeRunners.set(sessionId, runner);
         runner.run();
     }
@@ -344,7 +376,30 @@ class BiddingRunner {
     }
 
     updateConfig(sessionId, config) {
-        // Configs agora são aplicadas apenas para o auto-bid no frontend! O Motor Global só espelha a tela.
+        if (config) {
+            this.configs.set(sessionId, config);
+            console.log(`[POLARYON MOTOR] ⚙️ Estratégia de lances atualizada no Motor para a sessão: ${sessionId}`);
+        }
+    }
+
+    isSessionActive(sessionId) {
+        // Se for a sessão atualmente visualizada pelo usuário no painel, força a atividade em tempo real!
+        if (sessionId === this.focusedSessionId) {
+            return true;
+        }
+
+        // Se houver algum sniper ativado (botão verde) nessa sessão, considera ativa!
+        const config = this.configs.get(sessionId);
+        if (config && config.itemsConfig) {
+            for (const itemId in config.itemsConfig) {
+                const strat = config.itemsConfig[itemId];
+                if (strat && strat.active === true) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

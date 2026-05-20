@@ -222,6 +222,7 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 // LOCAL BIDDING IPC HANDLERS (Headless API - Deprecated for 14.133, kept for legacy)
 ipcMain.on('start-local-bidding', async (event, { sessionId, uasg, numero, ano, vault, modality }) => {
   if (biddingRunner) {
+    biddingRunner.focusedSessionId = sessionId;
     await biddingRunner.start(sessionId, uasg, numero, ano, vault, modality);
     sessionStore.save(biddingRunner.activeSessions);
   }
@@ -239,9 +240,20 @@ ipcMain.on('update-local-config', (event, { sessionId, config }) => {
     biddingRunner.updateConfig(sessionId, config);
     sessionStore.save(biddingRunner.activeSessions);
   }
+  // Também repassa para o motor global (Visual Mode) - v3.8.2
+  if (global.biddingRunner && global.biddingRunner !== biddingRunner) {
+    global.biddingRunner.updateConfig(sessionId, config);
+  }
   if (visualRunner) {
     visualRunner.updateConfig(sessionId, config);
   }
+});
+
+// [FOCO DE SESSÃO] Notifica o motor qual sala está sendo monitorada ativamente (Anti-429 v3.8.2)
+ipcMain.on('set-focused-session', (event, sessionId) => {
+  if (biddingRunner) biddingRunner.focusedSessionId = sessionId;
+  if (global.biddingRunner) global.biddingRunner.focusedSessionId = sessionId;
+  console.log(`[POLARYON] 🎯 Sessão focada definida: ${sessionId}`);
 });
 
 // VISUAL AUTOMATION IPC HANDLERS (Siga Pregão Mode)
@@ -260,6 +272,7 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
   if (!global.biddingRunner) {
       global.biddingRunner = new BiddingRunner(mainWindow.webContents);
   }
+  global.biddingRunner.focusedSessionId = sessionId; // Registra foco inicial (v3.8.2)
   global.biddingRunner.start(sessionId, uasg, numero, ano, vault, modality);
 });
 

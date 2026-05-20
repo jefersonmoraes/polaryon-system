@@ -155,6 +155,13 @@ export default function BiddingDashboardPage() {
 
     useEffect(() => { lastBidTimesRef.current = lastAutoBidTimes; }, [lastAutoBidTimes]);
 
+    // 🎯 NOTIFICA O MOTOR DO FOCO DA SESSÃO (Anti-429 Adaptive Polling v3.8.2)
+    useEffect(() => {
+        if (isDesktop && sessionId && (window as any).electronAPI?.setFocusedSession) {
+            (window as any).electronAPI.setFocusedSession(sessionId);
+        }
+    }, [sessionId, isDesktop]);
+
     // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.6.13
     useEffect(() => {
         const timer = setInterval(() => {
