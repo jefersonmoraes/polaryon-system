@@ -294,6 +294,16 @@ export default function BiddingDashboardPage() {
     };
 
     const handleSendBid = (purchaseId: string, itemId: string, bidId: string, value: number, isKamikaze: boolean = false, allow4: boolean = false) => {
+        const sId = String(itemId);
+        const strat = itemStrategies[sId] || itemStrategies[itemId] || {};
+        const myMin = Number(strat.minPrice || 0);
+
+        if (myMin > 0 && value < myMin) {
+            console.warn(`[POLARYON SHIELD] Lance de R$ ${value} bloqueado para o Item ${itemId}. É inferior ao mínimo configurado (R$ ${myMin})!`);
+            toast.error(`TRAVA PRIMORDIAL: Lance de R$ ${value} no Item ${itemId} violou o limite mínimo de R$ ${myMin}!`);
+            return;
+        }
+
         if (isDesktop && (window as any).electronAPI) {
             (window as any).electronAPI.manualBid(purchaseId, itemId, bidId, value, { isKamikaze, allow4 });
         }
@@ -1170,7 +1180,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     const defaultMargin = item.officialMargin || 1.00;
     const defaultType = item.officialMarginType || 'fixed';
 
-    const [minPrice, setMinPrice] = useState(item.minPrice || 0);
+    const [minPrice, setMinPrice] = useState<number | string>(item.minPrice && item.minPrice > 0 ? item.minPrice : '');
     const [margin, setMargin] = useState(item.decrementValue || defaultMargin);
     const [marginType, setMarginType] = useState(item.decrementType || defaultType);
     const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
@@ -1221,12 +1231,23 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     }, [timeLeft, item.dataHoraFimContagem]);
 
     const handleSave = (extraParams = {}) => {
+        const numMinPrice = Number(minPrice);
+        const hasMin = minPrice !== '' && !isNaN(numMinPrice) && numMinPrice > 0;
+        let nextActive = active;
+
+        // Se o usuário desativou ou se não preencheu o mínimo, forçamos desativado
+        if (!hasMin && active) {
+            nextActive = false;
+            setActive(false);
+            toast.warning(`ITEM ${item.itemId} DESATIVADO: Valor mínimo inválido ou não preenchido.`);
+        }
+
         onSaveStrategy(sid, item.itemId, {
             mode: strategy,
-            minPrice: Number(minPrice),
+            minPrice: hasMin ? numMinPrice : 0,
             decrementValue: Number(margin),
             decrementType: marginType,
-            active: active,
+            active: nextActive,
             useFourDecimals,
             kamikazeMode,
             ...extraParams
@@ -1234,6 +1255,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     };
 
     const handleToggle = () => {
+        const numMinPrice = Number(minPrice);
+        if (!minPrice || isNaN(numMinPrice) || numMinPrice <= 0) {
+            toast.error('BLOQUEIO PRIMORDIAL: Defina um Valor Mínimo antes de ativar o robô!');
+            return;
+        }
         const newState = !active;
         setActive(newState);
         handleSave({ active: newState });
@@ -1243,7 +1269,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     };
 
     const handleManualBid = () => {
-        if (!minPrice || Number(minPrice) <= 0) {
+        const numMinPrice = Number(minPrice);
+        if (!minPrice || isNaN(numMinPrice) || numMinPrice <= 0) {
             toast.error('BLOQUEIO PRIMORDIAL: Defina um Valor Mínimo antes de disparar o Gatilho!');
             return;
         }
@@ -1262,8 +1289,13 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
         }
 
         // A Trava Primordial (aplica-se a directBidValue e ao cálculo)
-        if (val < Number(minPrice)) {
-            val = Number(minPrice);
+        if (val < numMinPrice) {
+            val = numMinPrice;
+        }
+
+        if (val < numMinPrice) {
+            toast.error(`BLOQUEIO PRIMORDIAL: Lance de R$ ${val} é inferior ao Valor Mínimo de R$ ${numMinPrice}!`);
+            return;
         }
         
         // Anti-Burrice / Anti-Rejeição: Se o lance calculado for maior ou igual ao atual, ABORTA!
@@ -1325,13 +1357,38 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
 
                 <div className="col-span-3 flex gap-4">
                     <div className="flex flex-col gap-1.5 flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Mínimo (R$)</label>
+                        <label className="text-[10px] font-bold text-red-600 uppercase flex items-center gap-1">
+                            <span>⚠ Mínimo (R$)</span>
+                            {(!minPrice || Number(minPrice) <= 0) && (
+                                <span className="text-[8px] text-red-400 font-normal normal-case">obrigatório</span>
+                            )}
+                        </label>
                         <Input 
-                            type="number" 
-                            className="h-10 text-xs font-bold bg-slate-50 border-slate-200" 
-                            value={minPrice} 
-                            onChange={(e) => setMinPrice(Number(e.target.value))}
-                            onBlur={() => handleSave()}
+                            type="text"
+                            inputMode="decimal"
+                            className={`h-10 text-xs font-bold border-2 transition-colors ${
+                                (!minPrice || Number(minPrice) <= 0)
+                                    ? 'bg-red-50 border-red-300 focus:border-red-500 placeholder:text-red-300'
+                                    : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                            }`}
+                            value={minPrice === '' ? '' : minPrice}
+                            placeholder="Ex: 99500.00"
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '' || raw === '.') {
+                                    setMinPrice('');
+                                } else {
+                                    const parsed = parseFloat(raw);
+                                    setMinPrice(isNaN(parsed) ? '' : raw);
+                                }
+                            }}
+                            onBlur={() => {
+                                if (minPrice !== '') {
+                                    const n = parseFloat(String(minPrice));
+                                    setMinPrice(isNaN(n) || n <= 0 ? '' : n);
+                                }
+                                handleSave();
+                            }}
                             step={useFourDecimals ? "0.0001" : "0.01"}
                         />
                     </div>

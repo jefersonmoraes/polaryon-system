@@ -544,4 +544,105 @@
             console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
         }
     }, 3000);
+
+    // =========================================================================
+    // 💓 SISTEMA DE HEARTBEAT - MANTÉM A SESSÃO VIVA INDEFINIDAMENTE (v3.7.2)
+    // =========================================================================
+    // O SIGA Pregão nunca desconecta porque faz polling contínuo. Nós fazemos o mesmo:
+    // A cada 90 segundos enviamos um ping silencioso à API do Serpro usando o token ativo.
+    // Isso renova o TTL do JWT/sessão no servidor e impede o timeout por inatividade.
+    // =========================================================================
+    let keepAliveConsecutiveFailures = 0;
+    const KEEPALIVE_INTERVAL_MS = 90000; // 90 segundos
+    const KEEPALIVE_MAX_FAILURES = 3;    // 3 falhas consecutivas = pede re-auth
+
+    async function sendKeepAlive() {
+        if (!shared.sessionToken) return; // Sem token, não há o que manter
+
+        try {
+            // 1. Ping leve na API do Serpro (endpoint de participações com paginação mínima)
+            const pingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=1&pagina=0&filtro=4`;
+            const res = await fetch(pingUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': shared.sessionToken,
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                signal: AbortSignal.timeout(15000) // Timeout de 15s
+            });
+
+            if (res.ok || res.status === 404 || res.status === 422) {
+                // Qualquer resposta válida (mesmo 404/422 = token aceito, apenas sem dados)
+                keepAliveConsecutiveFailures = 0;
+                console.log(`%c[POLARYON HEARTBEAT] ❤️ Sessão Viva! Ping às ${new Date().toLocaleTimeString()}`, 'color: #10b981; font-size: 10px;');
+            } else if (res.status === 401 || res.status === 403) {
+                keepAliveConsecutiveFailures++;
+                console.warn(`[POLARYON HEARTBEAT] ⚠️ Token expirado ou rejeitado (${res.status}). Falha ${keepAliveConsecutiveFailures}/${KEEPALIVE_MAX_FAILURES}`);
+                
+                if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
+                    keepAliveConsecutiveFailures = 0;
+                    shared.sessionToken = '';
+                    ipcRenderer.send('portal-error', {
+                        sessionId: 'HEARTBEAT',
+                        error: 'Sessão expirada por inatividade. Por favor, reautentique com o Gov.br.',
+                        code: res.status,
+                        action: 'REQUIRE_REAUTH'
+                    });
+                    console.error('[POLARYON HEARTBEAT] 🔴 Sessão encerrada definitivamente. Re-autenticação necessária.');
+                }
+            } else {
+                console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
+            }
+        } catch (err) {
+            if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+                console.warn('[POLARYON HEARTBEAT] ⏰ Timeout no ping. Rede lenta? Continuando...');
+            } else {
+                keepAliveConsecutiveFailures++;
+                console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede no heartbeat:`, err.message);
+                if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
+                    keepAliveConsecutiveFailures = 0;
+                    ipcRenderer.send('portal-error', {
+                        sessionId: 'HEARTBEAT',
+                        error: 'Conexão com o Serpro perdida. Verifique sua internet.',
+                        code: 0,
+                        action: 'REQUIRE_REAUTH'
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
+    async function renewGovBrSession() {
+        try {
+            await fetch('https://www.comprasnet.gov.br/seguro/fornecedor/compras.asp', {
+                method: 'HEAD',
+                credentials: 'include',
+                mode: 'no-cors',
+                signal: AbortSignal.timeout(10000)
+            });
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente.', 'color: #6366f1; font-size: 10px;');
+        } catch (e) {
+            // Silencioso — falha no Gov.br não é crítica
+        }
+    }
+
+    // Inicia o heartbeat com 30s de delay inicial (aguarda o token ser capturado primeiro)
+    setTimeout(() => {
+        // Primeiro ping
+        sendKeepAlive();
+        renewGovBrSession();
+
+        // Loop de manutenção contínua
+        setInterval(() => {
+            sendKeepAlive();
+            renewGovBrSession();
+        }, KEEPALIVE_INTERVAL_MS);
+
+    }, 30000);
+
+    console.log('%c[POLARYON HEARTBEAT] 💓 Sistema de Keep-Alive ativado (ping a cada 90s)', 'color: #6366f1; font-weight: bold;');
+    // =========================================================================
 })();
