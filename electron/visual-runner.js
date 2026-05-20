@@ -89,7 +89,8 @@ class VisualRunner {
                 const modCode = config.modality === '05' || config.modality === 'PREGAO' ? '05' : '06';
                 const paddedNumero = String(config.numero).replace(/\D/g, '').padStart(5, '0');
                 const cleanAno = String(config.ano || new Date().getFullYear()).replace(/\D/g, '').slice(-4);
-                const purchaseId = `${config.uasg}${modCode}${paddedNumero}${cleanAno}`;
+                const paddedUasg = String(config.uasg).replace(/\D/g, '').padStart(6, '0');
+                const purchaseId = `${paddedUasg}${modCode}${paddedNumero}${cleanAno}`;
                 
                 let targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/disputa?compra=${purchaseId}`;
                 

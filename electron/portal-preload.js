@@ -225,7 +225,7 @@
                 }
 
                 if (p.compra && p.compra.numeroUasg && p.compra.numero) {
-                    const uasg = p.compra.numeroUasg;
+                    const uasg = String(p.compra.numeroUasg).padStart(6, '0');
                     const numero = p.compra.numero;
                     const ano = p.compra.ano;
                     const modalityCode = String(p.compra.modalidade || '6').padStart(2, '0');
@@ -493,7 +493,7 @@
                 if (editalMatch && uasgMatch) {
                     const editalNum = editalMatch[1];
                     const ano = editalMatch[2];
-                    const uasg = uasgMatch[1];
+                    const uasg = String(uasgMatch[1]).padStart(6, '0');
                     
                     let modalidade = '06'; // Padrão Dispensa Eletrônica
                     if (modalidadeText.toUpperCase().includes('PREGÃO') || modalidadeText.toUpperCase().includes('PREGAO')) {
