@@ -1617,14 +1617,16 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             return;
         }
         
-        // Anti-Burrice / Anti-Rejeição: Se o lance for maior ou igual ao melhor lance do item
-        if (!simulationMode && currentBest > 0 && val >= currentBest) {
-            toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não é melhor que o melhor lance atual (R$ ${currentBest.toFixed(2)}). Erro 422 evitado.`);
+        const myCurrentBid = safeParseNumber(item.meuValor);
+
+        // Anti-Burrice: Se o usuário já tem um lance, não permitir mandar um lance PIOR ou IGUAL ao próprio lance
+        if (!simulationMode && myCurrentBid > 0 && val >= myCurrentBid) {
+            toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não melhora o seu lance atual (R$ ${myCurrentBid.toFixed(2)}).`);
             return;
         }
 
-        // Se a margem mínima oficial da sala estiver disponível, precisamos garantir que o decremento é respeitado
-        if (!simulationMode && currentBest > 0) {
+        // Se estamos TENTANDO bater o líder (val < currentBest), verificamos a margem oficial do Serpro
+        if (!simulationMode && currentBest > 0 && val < currentBest) {
             const officialMarginVal = safeParseNumber(item.officialMargin);
             const officialMarginType = item.officialMarginType || 'V';
             

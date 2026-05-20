@@ -221,23 +221,25 @@ class RoomRunner {
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 
-                            // Calcular margem obrigatória do Serpro
+                            // Calcular margem obrigatória do Serpro (baseada no líder para assumir a ponta)
                             const officialMarginVal = Number(mappedItem.officialMargin || 0);
                             const officialMarginType = mappedItem.officialMarginType || 'V';
                             const mandatorySerproMargin = officialMarginType === 'P'
-                                ? myCurrentBid * (officialMarginVal / 100)
+                                ? currentBest * (officialMarginVal / 100)
                                 : officialMarginVal;
-                            const maxAllowedBySerpro = myCurrentBid - mandatorySerproMargin;
+                            const maxAllowedToTakeLead = currentBest - mandatorySerproMargin;
 
                             // Calcular próximo lance
                             let nextBid = 0;
-                            const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin);
+                            const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin && maxAllowedToTakeLead >= myMin);
 
                             if (isLeaderBeatable) {
-                                nextBid = Math.min(currentBest - margin, maxAllowedBySerpro);
+                                // Tenta assumir a ponta usando nossa margem ou a margem obrigatória
+                                nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
                             } else {
-                                // Líder imbatível: envia o mínimo para manter posição
-                                nextBid = Math.min(myMin, maxAllowedBySerpro);
+                                // Líder imbatível ou não podemos cobrir a margem oficial:
+                                // Envia o MÍNIMO para garantir a melhor posição possível no ranking (ex: 2º lugar)
+                                nextBid = myMin;
                             }
 
                             if (nextBid < myMin) nextBid = myMin;
@@ -250,12 +252,10 @@ class RoomRunner {
                                 console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} abaixo do mínimo R$ ${myMin}. Bloqueado.`);
                                 continue;
                             }
-                            if (nextBid >= myCurrentBid) {
+                            
+                            // Bloqueia apenas se o lance não melhorar o PRÓPRIO lance atual do usuário
+                            if (myCurrentBid !== 999999999 && nextBid >= myCurrentBid) {
                                 console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} não melhora meu atual R$ ${myCurrentBid}. Bloqueado.`);
-                                continue;
-                            }
-                            if (nextBid > maxAllowedBySerpro) {
-                                console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} viola margem Serpro (máx: R$ ${maxAllowedBySerpro}). Bloqueado.`);
                                 continue;
                             }
 
