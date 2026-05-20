@@ -278,6 +278,12 @@ router.post('/sessions/:id/items/:itemId/bid', requireAuth, async (req: AuthRequ
             }
         });
 
+        res.json({ success: true, bid });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Safe Captcha Pool Fallback
 router.get('/captcha-pool', async (req: Request, res: Response) => {
     try {
