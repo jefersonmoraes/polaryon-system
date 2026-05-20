@@ -139,7 +139,7 @@ class RoomRunner {
             if (itemsList.length > 0) {
                 const serverNow = this.clockSync.getServerTime();
                 const mappedItems = itemsList.map(item => {
-                    const posicaoTxt = item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
+                    const posicaoTxt = item.classificacao || item.posicao || (item.melhorValorFornecedor && (item.melhorValorFornecedor.classificacao || item.melhorValorFornecedor.posicao)) || item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
                     let secondsLeft = item.segundosParaEncerramento;
                     if (secondsLeft === undefined || secondsLeft === null) {
                         if (item.dataHoraFimContagem) {

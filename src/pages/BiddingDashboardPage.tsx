@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle, Briefcase } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle, Briefcase, MessageSquare } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
     AlertDialog,
@@ -79,6 +79,22 @@ interface ItemStrategy {
     decrementType: 'fixed' | 'percent';
 }
 
+export function safeParseNumber(val: any): number {
+    if (val === undefined || val === null) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    
+    let str = String(val).trim().replace(/R\$\s*/gi, '');
+    
+    if (str.includes(',') && str.includes('.')) {
+        str = str.replace(/\./g, '').replace(/,/g, '.');
+    } else if (str.includes(',')) {
+        str = str.replace(/,/g, '.');
+    }
+    
+    const parsed = parseFloat(str);
+    return isNaN(parsed) ? 0 : parsed;
+}
+
 export default function BiddingDashboardPage() {
     const { currentUser: authUser } = useAuthStore();
     const [searchParams] = useSearchParams();
@@ -94,6 +110,8 @@ export default function BiddingDashboardPage() {
     const [itemStrategies, setItemStrategies] = useState<Record<string, ItemStrategy>>({});
     const [simulationMode, setSimulationMode] = useState(true);
     const { credentials, fetchCredentials: fetchVaultCredentials } = useVaultStore();
+
+    // Helper para obter a configuração de itens de uma sessão específica
     const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
     const [modality, setModality] = useState<string>('05'); // Default: 05 - Pregão
     const [actionLogs, setActionLogs] = useState<any[]>([]);
@@ -280,9 +298,43 @@ export default function BiddingDashboardPage() {
         simulationMode: boolean;
     }>>({});
 
+    // Helper para obter a configuração de itens de uma sessão específica
+    const getSessionItemsConfig = (sid: string) => {
+        const config: Record<string, any> = {};
+        Object.entries(itemStrategies).forEach(([key, val]) => {
+            if (key.startsWith(`${sid}_`)) {
+                const itemId = key.replace(`${sid}_`, '');
+                config[itemId] = val;
+            }
+        });
+        return config;
+    };
+
+    // Helper para buscar a estratégia de um item específico de uma sessão específica
+    const getStrategy = (sid: string | null, itemId: string) => {
+        if (!sid) return {};
+        return itemStrategies[`${sid}_${itemId}`] || {};
+    };
+
+    // Helper para mapear um purchaseId para um sessionId
+    const findSessionIdByPurchaseId = (purchaseId: string) => {
+        for (const sid of Object.keys(sessions)) {
+            if (sid.includes(purchaseId)) return sid;
+            const s = sessions[sid];
+            if (s) {
+                const mod = s.modality === '05' || s.modality === 'PREGAO' ? '05' : '06';
+                const num = String(s.numero || '').replace(/\D/g, '').padStart(5, '0');
+                const yr = String(s.ano || '').replace(/\D/g, '').slice(-4);
+                const targetPid = `${s.uasg}${mod}${num}${yr}`;
+                if (targetPid === purchaseId) return sid;
+            }
+        }
+        return sessionId;
+    };
+
     // [MODO SIGA v3.2] VIEW STATE
     const [viewMode, setViewMode] = useState<'card' | 'grid'>('grid');
-    const [isChatOpen, setIsChatOpen] = useState(true);
+    const [isChatOpen, setIsChatOpen] = useState(false);
     const [modalityTab, setModalityTab] = useState<'PREGAO' | 'DISPENSA'>('DISPENSA');
 
     // --- MONITOR DE ATUALIZAÇÃO v3.5.37 ---
@@ -295,14 +347,53 @@ export default function BiddingDashboardPage() {
     };
 
     const handleSendBid = (purchaseId: string, itemId: string, bidId: string, value: number, isKamikaze: boolean = false, allow4: boolean = false) => {
-        const sId = String(itemId);
-        const strat = itemStrategies[sId] || itemStrategies[itemId] || {};
+        const sid = findSessionIdByPurchaseId(purchaseId);
+        const strat = getStrategy(sid, itemId);
         const myMin = Number(strat.minPrice || 0);
 
         if (myMin > 0 && value < myMin) {
             console.warn(`[POLARYON SHIELD] Lance de R$ ${value} bloqueado para o Item ${itemId}. É inferior ao mínimo configurado (R$ ${myMin})!`);
             toast.error(`TRAVA PRIMORDIAL: Lance de R$ ${value} no Item ${itemId} violou o limite mínimo de R$ ${myMin}!`);
             return;
+        }
+
+        if (simulationMode) {
+            const activeSid = sid || sessionId;
+            if (activeSid) {
+                setSessions(prev => {
+                    const updated = { ...prev };
+                    if (updated[activeSid]) {
+                        updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                            if (String(it.itemId) === String(itemId)) {
+                                return {
+                                    ...it,
+                                    meuValor: value,
+                                    valorAtual: value,
+                                    posicao: "1"
+                                };
+                            }
+                            return it;
+                        });
+                    }
+                    return updated;
+                });
+
+                setItems(prev => {
+                    return prev.map(it => {
+                        if (String(it.itemId) === String(itemId)) {
+                            return {
+                                ...it,
+                                meuValor: value,
+                                valorAtual: value,
+                                posicao: "1"
+                            };
+                        }
+                        return it;
+                    });
+                });
+
+                toast.success(`🎯 Sniper Atirou! R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: allow4 ? 4 : 2 })} enviado na simulação.`);
+            }
         }
 
         if (isDesktop && (window as any).electronAPI) {
@@ -349,7 +440,7 @@ export default function BiddingDashboardPage() {
                         ano: new Date().getFullYear().toString(),
                         vault: {
                             simulationMode,
-                            itemsConfig: itemStrategies
+                            itemsConfig: getSessionItemsConfig(session.id)
                         },
                         modality: 'LOGIN_FLOW'
                     });
@@ -746,6 +837,139 @@ export default function BiddingDashboardPage() {
         }
     }, [isDesktop, sessionId]);
 
+    const startSniperTest = (itemId: string, targetSid?: string) => {
+        const activeSid = targetSid || sessionId;
+        if (!activeSid) return;
+        const currentStrat = getStrategy(activeSid, itemId);
+        if (!currentStrat.active) {
+            toast.error("Por favor, configure o Valor Mínimo e ATIVE o robô (botão verde) antes de iniciar o teste de batalha!");
+            return;
+        }
+
+        toast.success("Batalha de 30 segundos iniciada! Assista ao Sniper lutar em tempo real!");
+
+        // Inicializa valores da simulação no estado
+        setSessions(prev => {
+            const updated = { ...prev };
+            if (updated[activeSid]) {
+                updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                    if (String(it.itemId) === String(itemId)) {
+                        const best = safeParseNumber(it.valorAtual) || 1000;
+                        return {
+                            ...it,
+                            timerSeconds: 30,
+                            dataHoraFimContagem: undefined, // remove para forçar contagem regressiva local
+                            valorAtual: best,
+                            meuValor: best + 10,
+                            posicao: "2",
+                            status: "Disputa"
+                        };
+                    }
+                    return it;
+                });
+            }
+            return updated;
+        });
+
+        // Atualiza a lista de itens ativos também
+        setItems(prev => {
+            return prev.map(it => {
+                if (String(it.itemId) === String(itemId)) {
+                    const best = safeParseNumber(it.valorAtual) || 1000;
+                    return {
+                        ...it,
+                        timerSeconds: 30,
+                        dataHoraFimContagem: undefined,
+                        valorAtual: best,
+                        meuValor: best + 10,
+                        posicao: "2",
+                        status: "Disputa"
+                    };
+                }
+                return it;
+            });
+        });
+
+        let seconds = 30;
+        const simInterval = setInterval(() => {
+            seconds -= 1;
+
+            setSessions(prev => {
+                const updated = { ...prev };
+                if (updated[activeSid]) {
+                    updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                        if (String(it.itemId) === String(itemId)) {
+                            if (seconds <= 0) {
+                                clearInterval(simInterval);
+                                toast.success("Fim do teste de disputa! Simulação concluída com sucesso.");
+                                return {
+                                    ...it,
+                                    timerSeconds: 0,
+                                    posicao: "1"
+                                };
+                            }
+
+                            let currentBest = safeParseNumber(it.valorAtual);
+                            let myVal = safeParseNumber(it.meuValor);
+                            let pos = it.posicao;
+
+                            // Concorrente ataca a cada 4 segundos
+                            if (seconds % 4 === 0 && pos === "1") {
+                                const decrement = safeParseNumber(currentStrat.decrementValue) || 1;
+                                currentBest = Math.max(safeParseNumber(currentStrat.minPrice), currentBest - decrement);
+                                pos = "2"; // Concorrente tomou
+                                toast.info(`⚠️ Concorrente deu lance de R$ ${currentBest.toFixed(2)} e tomou a liderança!`, { autoClose: 1500 });
+                            }
+
+                            return {
+                                ...it,
+                                timerSeconds: seconds,
+                                valorAtual: currentBest,
+                                meuValor: myVal,
+                                posicao: pos
+                            };
+                        }
+                        return it;
+                    });
+                }
+                return updated;
+            });
+
+            setItems(prev => {
+                return prev.map(it => {
+                    if (String(it.itemId) === String(itemId)) {
+                        if (seconds <= 0) {
+                            return {
+                                ...it,
+                                timerSeconds: 0,
+                                posicao: "1"
+                            };
+                        }
+
+                        let currentBest = safeParseNumber(it.valorAtual);
+                        let myVal = safeParseNumber(it.meuValor);
+                        let pos = it.posicao;
+
+                        if (seconds % 4 === 0 && pos === "1") {
+                            const decrement = safeParseNumber(currentStrat.decrementValue) || 1;
+                            currentBest = Math.max(safeParseNumber(currentStrat.minPrice), currentBest - decrement);
+                            pos = "2";
+                        }
+
+                        return {
+                            ...it,
+                            timerSeconds: seconds,
+                            valorAtual: currentBest,
+                            meuValor: myVal,
+                            posicao: pos
+                        };
+                    }
+                    return it;
+                });
+            });
+        }, 1000);
+    };
+
     // --- NOVO: AGRUPAMENTO DE ITENS POR SESSÃO v3.6.1 ---
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
@@ -778,9 +1002,10 @@ export default function BiddingDashboardPage() {
             if (!isSimulated) {
                 await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
             }
-            setItemStrategies(prev => ({ ...prev, [itemId]: strategy }));
+            setItemStrategies(prev => ({ ...prev, [`${sid}_${itemId}`]: strategy }));
             if (isLocalRunning && (window as any).electronAPI) {
-                (window as any).electronAPI.updateLocalBiddingConfig(sid, { itemsConfig: { ...itemStrategies, [itemId]: strategy } });
+                const updatedConfig = { ...getSessionItemsConfig(sid), [itemId]: strategy };
+                (window as any).electronAPI.updateLocalBiddingConfig(sid, { itemsConfig: updatedConfig });
             }
         } catch (error) { console.error(error); }
     };
@@ -788,7 +1013,7 @@ export default function BiddingDashboardPage() {
     useEffect(() => {
         if (sessionId && isLocalRunning && (window as any).electronAPI) {
             (window as any).electronAPI.updateLocalBiddingConfig(sessionId, { 
-                itemsConfig: itemStrategies
+                itemsConfig: getSessionItemsConfig(sessionId)
             });
         }
     }, [itemStrategies, sessionId, isLocalRunning]);
@@ -801,7 +1026,7 @@ export default function BiddingDashboardPage() {
                 setSessionId(sid);
                 setIsListening(true);
                 if (isDesktop && (window as any).electronAPI) {
-                    (window as any).electronAPI.startVisualBidding({ sessionId: sid, uasg: u, numero: n, ano: a, vault: { itemsConfig: itemStrategies } });
+                    (window as any).electronAPI.startVisualBidding({ sessionId: sid, uasg: u, numero: n, ano: a, vault: { itemsConfig: getSessionItemsConfig(sid) } });
                     setIsLocalRunning(true);
                 }
             }
@@ -929,7 +1154,7 @@ export default function BiddingDashboardPage() {
                     <div className="grid grid-cols-12 gap-8 animate-in fade-in duration-700">
                         <div className={`${isChatOpen ? 'col-span-9' : 'col-span-12'} space-y-6`}>
                             {/* --- MONITOR DE TRÁFEGO v3.6.1 (DIAGNÓSTICO) --- */}
-            <div className="mt-8">
+            <div className="mt-8 flex gap-3">
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="sm" className="bg-slate-900 text-white hover:bg-black border-none gap-2 font-black text-[10px] uppercase tracking-tighter">
@@ -959,6 +1184,20 @@ export default function BiddingDashboardPage() {
                         </div>
                     </SheetContent>
                 </Sheet>
+
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setIsChatOpen(!isChatOpen)}
+                    className={`gap-2 font-black text-[10px] uppercase tracking-tighter transition-all h-9 ${
+                        isChatOpen 
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-none' 
+                            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                    }`}
+                >
+                    <MessageSquare className="w-3.5 h-3.5" /> 
+                    {isChatOpen ? 'Ocultar Fluxo & Mensagens' : 'Mostrar Fluxo & Mensagens'}
+                </Button>
             </div>
 
                       <div className="space-y-6">
@@ -1000,6 +1239,8 @@ export default function BiddingDashboardPage() {
                                                 onSaveStrategy={onSaveStrategy}
                                                 onManualBid={handleManualBid}
                                                 serverTime={serverTime}
+                                                strategyConfig={getStrategy(sid, item.itemId || item.numero)}
+                                                onStartSniperTest={startSniperTest}
                                             />
                                         ))
                                     ) : (
@@ -1098,7 +1339,7 @@ export default function BiddingDashboardPage() {
     );
 }
 
-function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar, serverTime }: any) {
+function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest }: any) {
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
         const safeItems = Array.isArray(items) ? items : [];
@@ -1113,13 +1354,13 @@ function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRa
     return (
         <div className="space-y-8 pb-12">
             {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" serverTime={serverTime} />
+                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" serverTime={serverTime} getStrategy={getStrategy} onStartSniperTest={onStartSniperTest} />
             ))}
         </div>
     );
 }
 
-function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar, serverTime }: any) {
+function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest }: any) {
     const [isExpanded, setIsExpanded] = useState(true);
     const [tab, setTab] = useState<'WAIT' | 'DISPUTE' | 'CLOSED'>('DISPUTE');
     
@@ -1166,7 +1407,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} />
                         ))}
                     </div>
                 </CardContent>
@@ -1175,22 +1416,76 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
     );
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any) {
+function formatNumberPT(val: any, useFour = false): string {
+    if (val === undefined || val === null || val === '') return '';
+    const num = safeParseNumber(val);
+    if (num <= 0) return '';
+    return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: useFour ? 4 : 2,
+        maximumFractionDigits: useFour ? 4 : 2
+    });
+}
+
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     
     const defaultMargin = item.officialMargin || 1.00;
     const defaultType = item.officialMarginType || 'fixed';
 
-    const [minPrice, setMinPrice] = useState<number | string>(item.minPrice && item.minPrice > 0 ? item.minPrice : '');
-    const [margin, setMargin] = useState(item.decrementValue || defaultMargin);
-    const [marginType, setMarginType] = useState(item.decrementType || defaultType);
-    const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(item.mode || 'follower');
-    const [active, setActive] = useState(item.active || false);
+    const currentStrat = strategyConfig || {};
+
+    const [minPrice, setMinPrice] = useState<number | string>(
+        currentStrat.minPrice !== undefined ? (currentStrat.minPrice > 0 ? currentStrat.minPrice : '') : (item.minPrice && item.minPrice > 0 ? item.minPrice : '')
+    );
+    const [margin, setMargin] = useState(
+        currentStrat.decrementValue !== undefined ? currentStrat.decrementValue : (item.decrementValue || defaultMargin)
+    );
+    
+    const initialMinVal = currentStrat.minPrice !== undefined ? currentStrat.minPrice : (item.minPrice || 0);
+    const initialDecVal = currentStrat.decrementValue !== undefined ? currentStrat.decrementValue : (item.decrementValue || defaultMargin);
+    const initialFour = currentStrat.useFourDecimals !== undefined ? currentStrat.useFourDecimals : (item.useFourDecimals || false);
+
+    const [minPriceStr, setMinPriceStr] = useState<string>(formatNumberPT(initialMinVal, initialFour));
+    const [marginStr, setMarginStr] = useState<string>(formatNumberPT(initialDecVal, initialFour));
+
+    const [marginType, setMarginType] = useState(
+        currentStrat.decrementType !== undefined ? currentStrat.decrementType : (item.decrementType || defaultType)
+    );
+    const [strategy, setStrategy] = useState<'follower' | 'sniper' | 'shadow'>(
+        currentStrat.mode !== undefined ? currentStrat.mode : (item.mode || 'follower')
+    );
+    const [active, setActive] = useState(
+        currentStrat.active !== undefined ? currentStrat.active : (item.active || false)
+    );
     const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
 
-    const [useFourDecimals, setUseFourDecimals] = useState(item.useFourDecimals || false);
-    const [kamikazeMode, setKamikazeMode] = useState(item.kamikazeMode || false);
+    const [useFourDecimals, setUseFourDecimals] = useState(
+        currentStrat.useFourDecimals !== undefined ? currentStrat.useFourDecimals : (item.useFourDecimals || false)
+    );
+    const [kamikazeMode, setKamikazeMode] = useState(
+        currentStrat.kamikazeMode !== undefined ? currentStrat.kamikazeMode : (item.kamikazeMode || false)
+    );
     const [directBidValue, setDirectBidValue] = useState<string>('');
+
+    // Sincronizar com strategyConfig dinâmico
+    useEffect(() => {
+        if (strategyConfig) {
+            const isFour = strategyConfig.useFourDecimals !== undefined ? strategyConfig.useFourDecimals : useFourDecimals;
+            if (strategyConfig.minPrice !== undefined) {
+                setMinPrice(strategyConfig.minPrice > 0 ? strategyConfig.minPrice : '');
+                setMinPriceStr(formatNumberPT(strategyConfig.minPrice, isFour));
+            }
+            if (strategyConfig.decrementValue !== undefined) {
+                setMargin(strategyConfig.decrementValue);
+                setMarginStr(formatNumberPT(strategyConfig.decrementValue, isFour));
+            }
+            if (strategyConfig.decrementType !== undefined) setMarginType(strategyConfig.decrementType);
+            if (strategyConfig.mode !== undefined) setStrategy(strategyConfig.mode);
+            if (strategyConfig.active !== undefined) setActive(strategyConfig.active);
+            if (strategyConfig.useFourDecimals !== undefined) setUseFourDecimals(strategyConfig.useFourDecimals);
+            if (strategyConfig.kamikazeMode !== undefined) setKamikazeMode(strategyConfig.kamikazeMode);
+        }
+    }, [strategyConfig]);
 
     // 🔥 FIX CRONÔMETRO: Sincronia absoluta baseada em dataHoraFimContagem e serverTime
     useEffect(() => {
@@ -1270,22 +1565,25 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
     };
 
     const handleManualBid = () => {
-        const numMinPrice = Number(minPrice);
-        if (!minPrice || isNaN(numMinPrice) || numMinPrice <= 0) {
+        const numMinPrice = safeParseNumber(minPrice);
+        if (numMinPrice <= 0) {
             toast.error('BLOQUEIO PRIMORDIAL: Defina um Valor Mínimo antes de disparar o Gatilho!');
             return;
         }
 
+        const currentBest = safeParseNumber(item.valorAtual);
         let val;
-        const currentBest = Number(item.valorAtual || 0);
 
-        if (directBidValue && Number(directBidValue) > 0) {
-            val = Number(directBidValue);
+        const numDirectBid = safeParseNumber(directBidValue);
+        if (numDirectBid > 0) {
+            val = numDirectBid;
         } else {
-            let marginVal = Number(margin);
-            if (marginType === 'percentage') marginVal = currentBest * (marginVal / 100);
+            let marginVal = safeParseNumber(margin);
+            if (marginType === 'percentage') {
+                marginVal = currentBest * (marginVal / 100);
+            }
             
-            // 🔥 LÓGICA VENCEDORA: Sempre subtrai do MELHOR lance atual
+            // Subtrai do MELHOR lance atual
             val = currentBest - marginVal;
         }
 
@@ -1295,14 +1593,31 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
         }
 
         if (val < numMinPrice) {
-            toast.error(`BLOQUEIO PRIMORDIAL: Lance de R$ ${val} é inferior ao Valor Mínimo de R$ ${numMinPrice}!`);
+            toast.error(`BLOQUEIO PRIMORDIAL: Lance de R$ ${val.toFixed(2)} é inferior ao Valor Mínimo de R$ ${numMinPrice.toFixed(2)}!`);
             return;
         }
         
-        // Anti-Burrice / Anti-Rejeição: Se o lance calculado for maior ou igual ao atual, ABORTA!
+        // Anti-Burrice / Anti-Rejeição: Se o lance for maior ou igual ao melhor lance do item
         if (currentBest > 0 && val >= currentBest) {
-            toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não é melhor que o atual (R$ ${currentBest.toFixed(2)}). Erro 422 evitado.`);
+            toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não é melhor que o melhor lance atual (R$ ${currentBest.toFixed(2)}). Erro 422 evitado.`);
             return;
+        }
+
+        // Se a margem mínima oficial da sala estiver disponível, precisamos garantir que o decremento é respeitado
+        if (currentBest > 0) {
+            const officialMarginVal = safeParseNumber(item.officialMargin);
+            const officialMarginType = item.officialMarginType || 'V';
+            
+            let requiredDecrement = 0;
+            if (officialMarginVal > 0) {
+                requiredDecrement = officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal;
+            }
+            
+            const actualDecrement = currentBest - val;
+            if (actualDecrement < requiredDecrement - 0.0001) {
+                toast.error(`Lance Bloqueado: O decremento (R$ ${actualDecrement.toFixed(2)}) é menor que o intervalo mínimo da sala (R$ ${requiredDecrement.toFixed(2)}). Erro 422 evitado.`);
+                return;
+            }
         }
         
         console.log(`🚀 [GATILHO MANUAL] Disparando R$ ${val} (Leader: ${currentBest}, DirectBid: ${directBidValue})`);
@@ -1350,7 +1665,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                                     : 'bg-slate-100 text-slate-600 border-slate-200'
                             }`}>
                                 <span className="text-[9px] font-black uppercase opacity-60">POSIÇÃO</span>
-                                <span className="text-xs font-black">{item.posicao || '?'}º</span>
+                                <span className="text-xs font-black">
+                                    {item.posicao || '?'}
+                                    {/^\d+$/.test(String(item.posicao || '')) ? 'º' : ''}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1366,31 +1684,25 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                         </label>
                         <Input 
                             type="text"
-                            inputMode="decimal"
                             className={`h-10 text-xs font-bold border-2 transition-colors ${
                                 (!minPrice || Number(minPrice) <= 0)
                                     ? 'bg-red-50 border-red-300 focus:border-red-500 placeholder:text-red-300'
                                     : 'bg-emerald-50 border-emerald-300 text-emerald-800'
                             }`}
-                            value={minPrice === '' ? '' : minPrice}
-                            placeholder="Ex: 99500.00"
+                            value={minPriceStr}
+                            placeholder="Ex: 99.500,00"
                             onChange={(e) => {
                                 const raw = e.target.value;
-                                if (raw === '' || raw === '.') {
-                                    setMinPrice('');
-                                } else {
-                                    const parsed = parseFloat(raw);
-                                    setMinPrice(isNaN(parsed) ? '' : raw);
-                                }
+                                setMinPriceStr(raw);
+                                const parsed = safeParseNumber(raw);
+                                setMinPrice(parsed > 0 ? parsed : '');
                             }}
                             onBlur={() => {
-                                if (minPrice !== '') {
-                                    const n = parseFloat(String(minPrice));
-                                    setMinPrice(isNaN(n) || n <= 0 ? '' : n);
-                                }
-                                handleSave();
+                                const parsed = safeParseNumber(minPriceStr);
+                                setMinPrice(parsed > 0 ? parsed : '');
+                                setMinPriceStr(formatNumberPT(parsed, useFourDecimals));
+                                handleSave({ minPrice: parsed });
                             }}
-                            step={useFourDecimals ? "0.0001" : "0.01"}
                             disabled={active}
                         />
                     </div>
@@ -1409,12 +1721,22 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                             </span>
                         </label>
                         <Input 
-                            type="number" 
+                            type="text" 
                             className="h-10 text-xs font-bold bg-slate-50 border-slate-200" 
-                            value={margin} 
-                            onChange={(e) => setMargin(Number(e.target.value))}
-                            onBlur={() => handleSave()}
-                            step={useFourDecimals ? "0.0001" : "0.01"}
+                            value={marginStr} 
+                            placeholder="Ex: 1,00"
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setMarginStr(raw);
+                                const parsed = safeParseNumber(raw);
+                                setMargin(parsed > 0 ? parsed : 0);
+                            }}
+                            onBlur={() => {
+                                const parsed = safeParseNumber(marginStr);
+                                setMargin(parsed > 0 ? parsed : 0);
+                                setMarginStr(formatNumberPT(parsed, useFourDecimals));
+                                handleSave({ decrementValue: parsed });
+                            }}
                             disabled={active}
                         />
                     </div>
@@ -1445,11 +1767,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                     
                     <Input 
                         placeholder="R$ Direto"
-                        type="number"
+                        type="text"
                         className="w-24 h-10 text-xs font-bold bg-slate-50 border-slate-200"
                         value={directBidValue}
                         onChange={(e) => setDirectBidValue(e.target.value)}
-                        step={useFourDecimals ? "0.0001" : "0.01"}
                         title="Digite um valor exato para enviar diretamente com o Gatilho"
                     />
 
@@ -1460,6 +1781,18 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                     >
                         Gatilho
                     </Button>
+
+                    {onStartSniperTest && (
+                        <Button 
+                            size="sm" 
+                            onClick={() => onStartSniperTest(item.itemId, sid)}
+                            className="h-10 px-3 text-[10px] font-black uppercase bg-purple-600 hover:bg-purple-700 text-white gap-1.5"
+                            title="Testar motor Sniper localmente com contagem regressiva de 30 segundos"
+                            disabled={!active}
+                        >
+                            <Target className="w-3.5 h-3.5" /> Teste Sniper
+                        </Button>
+                    )}
                     
                     <button 
                         onClick={handleToggle}
@@ -1478,7 +1811,13 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime }: any
                         <Checkbox 
                             id={`4dec-${item.itemId}`} 
                             checked={useFourDecimals}
-                            onCheckedChange={(val) => { setUseFourDecimals(!!val); handleSave({ useFourDecimals: !!val }); }}
+                            onCheckedChange={(val) => { 
+                                const nextFour = !!val;
+                                setUseFourDecimals(nextFour); 
+                                setMinPriceStr(formatNumberPT(safeParseNumber(minPriceStr), nextFour));
+                                setMarginStr(formatNumberPT(safeParseNumber(marginStr), nextFour));
+                                handleSave({ useFourDecimals: nextFour }); 
+                            }}
                             disabled={active}
                         />
                         <label htmlFor={`4dec-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Permitir 4 casas decimais</label>

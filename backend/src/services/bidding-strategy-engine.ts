@@ -50,16 +50,19 @@ export class BiddingStrategyEngine {
         
         let mandatorySerproMargin = 0;
         if (officialMarginVal > 0) {
-            mandatorySerproMargin = officialMarginType === 'P' ? myCurrentBid * (officialMarginVal / 100) : officialMarginVal;
+            // Sincronizado com a regra oficial: percentual calculado sobre o lance atual/líder do item
+            mandatorySerproMargin = officialMarginType === 'P' ? (currentItem.valorAtual || myCurrentBid) * (officialMarginVal / 100) : officialMarginVal;
         }
         
         const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;
         const targetMargin = decrementType === 'fixed' ? decrementValue : currentItem.valorAtual * (decrementValue / 100);
-        const requiredDecrement = Math.max(targetMargin, mandatorySerproMargin);
-
-        let nextBid = currentItem.valorAtual > 0 && (currentItem.valorAtual - requiredDecrement >= minPrice) 
-                      ? currentItem.valorAtual - targetMargin 
-                      : myCurrentBid - requiredDecrement;
+        
+        // O decremento a ser aplicado deve ser o maior entre o configurado e o exigido pelo Serpro
+        const finalDecrement = Math.max(targetMargin, mandatorySerproMargin);
+        
+        let nextBid = currentItem.valorAtual > 0 && (currentItem.valorAtual - finalDecrement >= minPrice) 
+                      ? currentItem.valorAtual - finalDecrement 
+                      : myCurrentBid - finalDecrement;
 
         nextBid = Math.floor(nextBid * 100) / 100;
 
@@ -68,10 +71,20 @@ export class BiddingStrategyEngine {
             nextBid = Math.floor(nextBid * 100) / 100;
         }
 
-        if (nextBid < minPrice) nextBid = minPrice;
+        if (nextBid < minPrice) {
+            nextBid = minPrice;
+        }
+
+        // --- VALIDAÇÃO CRÍTICA DE MARGEM / DESOBSTRUIÇÃO DO ERRO 422 ---
+        if (currentItem.valorAtual > 0 && (currentItem.valorAtual - nextBid) < mandatorySerproMargin - 0.0001) {
+            return { 
+                action: 'hold', 
+                reason: `Bloqueado: Lance de R$ ${nextBid} (limite mínimo) não atende ao intervalo mínimo da sala de R$ ${mandatorySerproMargin.toFixed(2)} (Melhor lance: R$ ${currentItem.valorAtual}).` 
+            };
+        }
 
         if (nextBid > maxAllowedBidBySerpro) {
-            return { action: 'hold', reason: `Bloqueado: Lance de R$ ${nextBid} viola a margem mínima do Serpro (Max: R$ ${maxAllowedBidBySerpro}).` };
+            return { action: 'hold', reason: `Bloqueado: Lance de R$ ${nextBid} viola a margem mínima do Serpro em relação ao seu próprio lance (Max: R$ ${maxAllowedBidBySerpro}).` };
         }
 
         const isImminente = currentItem.status?.toUpperCase().includes('IMINENTE') || 

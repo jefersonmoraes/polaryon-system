@@ -138,6 +138,12 @@
 
     // 🎯 O GATILHO KAMIKAZE: Envia o lance utilizando o Bypass de Captcha do Siga
     ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
+        // Ignora disparos se a janela atual não corresponder à compra selecionada
+        const currentUrl = window.location.href;
+        if (!currentUrl.includes(purchaseId)) {
+            return;
+        }
+
         console.log(`%c[POLARYON TÁTICO] Iniciando Sequência de Disparo - Item: ${itemId} | Valor: R$ ${value}`, "color: #ffaa00; font-weight: bold;");
         
         if (!shared.sessionToken) {
@@ -215,7 +221,7 @@
                 
                 if (situacaoRaw) {
                     // ✅ Aceita apenas EM_DISPUTA / DISPUTA (código 3) — exclui DISPUTA_ENCERRADA explicitamente
-                    const isDisputa = (situacaoStr === 'EM_DISPUTA' || situacaoStr === 'DISPUTA' || situacaoStr === '3') && !situacaoStr.includes('ENCERRADA') && !situacaoStr.includes('ENCERRADO');
+                    const isDisputa = (situacaoStr.includes('DISPUTA') || situacaoStr === '3') && !situacaoStr.includes('ENCERRADA') && !situacaoStr.includes('ENCERRADO');
                     if (!isDisputa) {
                         return; // Descarte imediato
                     }
@@ -286,7 +292,7 @@
                         valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
                         meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
                         status: it.faseTraduzido || it.fase,
-                        posicao: it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
+                        posicao: it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
                         timerSeconds: it.segundosParaEncerramento || -1,
                         dataHoraFimContagem: it.dataHoraFimContagem,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
