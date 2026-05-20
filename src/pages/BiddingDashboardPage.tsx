@@ -807,6 +807,31 @@ export default function BiddingDashboardPage() {
                 });
             }
 
+            // 🏆 RANKING REAL: Atualiza rankingLances quando o backend busca o endpoint /lances
+            if ((window as any).electronAPI.onBiddingRankingUpdate) {
+                (window as any).electronAPI.onBiddingRankingUpdate((data: any) => {
+                    const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
+                    setSessions(prev => {
+                        const updated = { ...prev };
+                        if (updated[sid]) {
+                            updated[sid].items = updated[sid].items.map((it: any) => {
+                                if (String(it.itemId) === String(itemId)) {
+                                    return {
+                                        ...it,
+                                        ...(realPosicao ? { posicao: realPosicao } : {}),
+                                        ...(rankingLances ? { rankingLances } : {})
+                                    };
+                                }
+                                return it;
+                            });
+                        }
+                        return updated;
+                    });
+                });
+            }
+
+
+
             const restore = async () => {
                 const activeSessions = await (window as any).electronAPI.getRestoredSessions();
                 const sessionIds = Object.keys(activeSessions || {});
@@ -843,6 +868,7 @@ export default function BiddingDashboardPage() {
             restore();
         }
     }, [isDesktop, sessionId]);
+
 
     const startSniperTest = (itemId: string, targetSid?: string) => {
         const activeSid = targetSid || sessionId;
@@ -1447,7 +1473,15 @@ function formatNumberPT(val: any, useFour = false): string {
 }
 
 function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode }: any) {
-    const isWinning = item.ganhador === 'Você' || item.position === 1;
+    const isWinning = 
+        item.ganhador === 'Você' || 
+        item.position === 1 ||
+        String(item.posicao) === '1' || 
+        String(item.posicao) === '1º' ||
+        String(item.posicao) === '1°' ||
+        String(item.posicao).toUpperCase() === 'G' ||
+        String(item.posicao).toUpperCase() === 'GANHANDO' ||
+        String(item.posicao).toUpperCase() === 'VENCEDOR';
     
     const defaultMargin = item.officialMargin || 1.00;
     const defaultType = item.officialMarginType || 'fixed';
@@ -1486,6 +1520,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         currentStrat.kamikazeMode !== undefined ? currentStrat.kamikazeMode : (item.kamikazeMode || false)
     );
     const [directBidValue, setDirectBidValue] = useState<string>('');
+    const [showRankingModal, setShowRankingModal] = useState(false);
 
     // Sincronizar com strategyConfig dinâmico
     useEffect(() => {
@@ -1580,8 +1615,25 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         setActive(newState);
         handleSave({ active: newState });
         
-        if (newState) toast.success(`ITEM ${item.itemId} ATIVO`);
-        else toast.warning(`ITEM ${item.itemId} PAUSADO`);
+        if (newState) {
+            toast.success(`ITEM ${item.itemId} ATIVO`);
+            // Se kamikaze ativado e bot ligado, dispara imediatamente no mínimo
+            if (kamikazeMode && !isWinning) {
+                const currentBest = safeParseNumber(item.valorAtual);
+                const numMin = numMinPrice;
+                let fireVal = currentBest > 0 ? currentBest - safeParseNumber(margin) : numMin;
+                if (fireVal < numMin) fireVal = numMin;
+                const myBid = safeParseNumber(item.meuValor);
+                if (myBid <= 0 || fireVal < myBid) {
+                    setTimeout(() => {
+                        onManualBid(item.purchaseId, item.itemId, item.bidId, fireVal);
+                        toast.info(`💥 [KAMIKAZE IMEDIATO] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.itemId}!`);
+                    }, 500);
+                }
+            }
+        } else {
+            toast.warning(`ITEM ${item.itemId} PAUSADO`);
+        }
     };
 
     const handleManualBid = () => {
@@ -1674,7 +1726,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                 ITEM {item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
                             </span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                             <Badge variant="secondary" className={`text-[10px] font-bold uppercase px-2 py-1 ${
                                 isWinning ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                             }`}>
@@ -1692,6 +1744,15 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                     {/^\d+$/.test(String(item.posicao || '')) ? 'º' : ''}
                                 </span>
                             </div>
+
+                            {/* Botão Classificação igual ao Siga */}
+                            <button
+                                onClick={() => setShowRankingModal(true)}
+                                className="text-[10px] font-bold text-blue-500 hover:text-blue-700 underline underline-offset-2 transition-colors"
+                                title="Ver melhores lances deste item"
+                            >
+                                Classificação
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1853,6 +1914,53 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     </div>
                 </div>
             </div>
+
+            {/* ===== MODAL RANKING: MELHORES LANCES DO ITEM ===== */}
+            {showRankingModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowRankingModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b">
+                            <h2 className="text-sm font-bold text-slate-800">Melhores lances do item {item.itemId}</h2>
+                            <button onClick={() => setShowRankingModal(false)} className="text-slate-400 hover:text-slate-700 text-lg font-bold leading-none">×</button>
+                        </div>
+                        <div className="overflow-y-auto flex-1 px-6 py-4">
+                            {item.rankingLances && item.rankingLances.length > 0 ? (
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-left text-slate-500 text-xs border-b">
+                                            <th className="pb-2 font-bold w-8">#</th>
+                                            <th className="pb-2 font-bold">Origem</th>
+                                            <th className="pb-2 font-bold">Valor</th>
+                                            <th className="pb-2 font-bold">Data</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {item.rankingLances.map((lance: any, idx: number) => (
+                                            <tr key={idx} className={`border-b border-slate-50 ${ idx === 0 ? 'bg-emerald-50' : '' }`}>
+                                                <td className="py-2 font-black text-slate-700">{idx + 1}</td>
+                                                <td className="py-2 text-slate-600">{lance.origem || 'Lance'}</td>
+                                                <td className={`py-2 font-bold ${ idx === 0 ? 'text-emerald-600' : 'text-slate-800' }`}>
+                                                    R$ {Number(lance.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                                </td>
+                                                <td className="py-2 text-slate-400 text-xs">{lance.data || ''}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 gap-3 text-slate-400">
+                                    <span className="text-4xl">📊</span>
+                                    <p className="text-sm font-medium">Nenhum lance registrado ainda.</p>
+                                    <p className="text-xs text-center">Os lances aparecem aqui assim que o sistema detectar os dados via API.</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-6 py-3 border-t text-[10px] text-slate-400 text-center">
+                            Atualizado em tempo real via endpoint /lances do Comprasnet
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -198,29 +198,52 @@ class RoomRunner {
                             'x-version-number': '6.0.2'
                         }
                     }).then(lancesRes => {
-                        // A resposta é uma lista de lances em ordem crescente de valor (melhor = menor índice)
+                        // A resposta contém os dados do item incluindo melhorValorFornecedor com classificação
                         const lancesData = Array.isArray(lancesRes.data) ? lancesRes.data : (lancesRes.data.itens || []);
                         if (lancesData.length === 0) return;
 
                         // O primeiro item tem o melhorValorFornecedor com a posição real
                         const itemData = lancesData[0];
-                        if (!itemData || !itemData.melhorValorFornecedor) return;
+                        if (!itemData) return;
 
-                        const realPosicao = itemData.melhorValorFornecedor.classificacao || itemData.melhorValorFornecedor.posicao;
-                        if (realPosicao && realPosicao !== itemToCheck.posicao) {
-                            console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real confirmada = ${realPosicao} (antes: ${itemToCheck.posicao})`);
-                            // Envia atualização de ranking para o dashboard
-                            if (!this.webContents.isDestroyed()) {
-                                this.webContents.send('bidding-ranking-update', {
-                                    sessionId: this.sessionId,
-                                    itemId: itemToCheck.itemId,
-                                    realPosicao: String(realPosicao)
-                                });
-                            }
-                            // Atualiza o objeto em memória para o motor usar na próxima rodada
-                            itemToCheck.posicao = String(realPosicao);
+                        const realPosicao = itemData.melhorValorFornecedor 
+                            ? (itemData.melhorValorFornecedor.classificacao || itemData.melhorValorFornecedor.posicao)
+                            : null;
+
+                        // Monta o ranking visual igual ao modal "Melhores lances do item" do Siga/Comprasnet
+                        // Os lances são retornados em ordem de classificação (melhor = menor valor)
+                        // Cada item do array é o estado do item para um participante específico
+                        const rankingLances = lancesData.map((entry, idx) => {
+                            const val = entry.melhorValorFornecedor 
+                                ? (entry.melhorValorFornecedor.valorInformado || entry.melhorValorFornecedor.valorCalculado)
+                                : null;
+                            if (!val) return null;
+                            const dt = entry.dataHoraAtualizacao 
+                                ? new Date(entry.dataHoraAtualizacao).toLocaleString('pt-BR')
+                                : '';
+                            return {
+                                valor: val,
+                                origem: entry.tipo === 'P' ? 'Proposta' : 'Lance',
+                                data: dt,
+                                posicao: entry.melhorValorFornecedor?.classificacao || (idx + 1)
+                            };
+                        }).filter(Boolean).sort((a, b) => a.valor - b.valor);
+
+                        console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real = ${realPosicao} | ${rankingLances.length} lances no ranking`);
+                        
+                        // Envia para o dashboard: posição real + lista de lances para o modal
+                        if (!this.webContents.isDestroyed()) {
+                            this.webContents.send('bidding-ranking-update', {
+                                sessionId: this.sessionId,
+                                itemId: itemToCheck.itemId,
+                                realPosicao: realPosicao ? String(realPosicao) : null,
+                                rankingLances
+                            });
                         }
+                        // Atualiza o objeto em memória para o motor de lance usar
+                        if (realPosicao) itemToCheck.posicao = String(realPosicao);
                     }).catch(() => {}); // Silencioso — se falhar, continua com posição estimada
+
                 }
 
                 // 🎯 MOTOR DE AUTO-LANCE BACKEND (v3.8.4) - Independente da UI React!
