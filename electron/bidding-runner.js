@@ -237,25 +237,29 @@ class RoomRunner {
                                 // Tenta assumir a ponta usando nossa margem ou a margem obrigatória
                                 nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
                             } else {
-                                // Líder imbatível ou não podemos cobrir a margem oficial:
-                                // Em vez de pular direto para o MÍNIMO (o que "queimaria" nossa margem sem necessidade),
-                                // nós descemos gradativamente a partir do NOSSO PRÓPRIO lance atual, 
-                                // consumindo apenas a margem mínima necessária para garantir a 2ª ou 3ª posição aos poucos.
-                                if (myCurrentBid !== 999999999) {
-                                    let decrementToUse = margin;
-                                    
-                                    // Respeitamos a margem oficial do Serpro caso ela exista
-                                    if (officialMarginVal > 0) {
-                                        const requiredDecrement = officialMarginType === 'P' 
-                                            ? currentBest * (officialMarginVal / 100) 
-                                            : officialMarginVal;
-                                        decrementToUse = Math.max(margin, requiredDecrement);
-                                    }
-                                    
-                                    nextBid = myCurrentBid - decrementToUse;
+                                // Líder imbatível: o nosso objetivo passa a ser o 2º lugar.
+                                const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
+                                
+                                if (isSecondPlace) {
+                                    // Já estamos na 2ª posição (a melhor posição possível atrás do líder imbatível).
+                                    // Não descemos mais NADA para proteger 100% da margem de lucro restante!
+                                    nextBid = myCurrentBid; 
                                 } else {
-                                    // Se nunca deu nenhum lance antes, o único jeito de entrar é mandando o mínimo
-                                    nextBid = myMin;
+                                    // Se estamos em 3º ou pior (ou sem posição), descemos gradativamente
+                                    // consumindo apenas a margem mínima necessária para tentar pegar o 2º lugar.
+                                    if (myCurrentBid !== 999999999) {
+                                        let decrementToUse = margin;
+                                        if (officialMarginVal > 0) {
+                                            const requiredDecrement = officialMarginType === 'P' 
+                                                ? currentBest * (officialMarginVal / 100) 
+                                                : officialMarginVal;
+                                            decrementToUse = Math.max(margin, requiredDecrement);
+                                        }
+                                        nextBid = myCurrentBid - decrementToUse;
+                                    } else {
+                                        // Se nunca deu lance, não tem referência para descer gradativamente
+                                        nextBid = myMin;
+                                    }
                                 }
                             }
 
@@ -270,9 +274,9 @@ class RoomRunner {
                                 continue;
                             }
                             
-                            // Bloqueia apenas se o lance não melhorar o PRÓPRIO lance atual do usuário
+                            // Bloqueia se o lance não melhorar o PRÓPRIO lance (isso barra o nextBid = myCurrentBid do 2º lugar)
                             if (myCurrentBid !== 999999999 && nextBid >= myCurrentBid) {
-                                console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} não melhora meu atual R$ ${myCurrentBid}. Bloqueado.`);
+                                console.log(`[BACKEND SNIPER] Item ${sId}: Já estamos na posição ideal ou lance (R$ ${nextBid}) não melhora o atual. Protegendo margem.`);
                                 continue;
                             }
 
