@@ -621,8 +621,8 @@
     // Isso renova o TTL do JWT/sessão no servidor e impede o timeout por inatividade.
     // =========================================================================
     let keepAliveConsecutiveFailures = 0;
-    const KEEPALIVE_INTERVAL_MS = 90000; // 90 segundos
-    const KEEPALIVE_MAX_FAILURES = 3;    // 3 falhas consecutivas = pede re-auth
+    const KEEPALIVE_INTERVAL_MS = 30000; // 30 segundos (Super Estabilidade Anti-Queda)
+    const KEEPALIVE_MAX_FAILURES = 5;    // 5 falhas consecutivas = pede re-auth
 
     async function sendKeepAlive() {
         if (!shared.sessionToken) return; // Sem token, não há o que manter
@@ -685,13 +685,13 @@
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
     async function renewGovBrSession() {
         try {
-            await fetch('https://www.comprasnet.gov.br/seguro/fornecedor/compras.asp', {
-                method: 'HEAD',
+            await fetch('https://www.comprasnet.gov.br/seguro/intro.htm', {
+                method: 'GET',
                 credentials: 'include',
                 mode: 'no-cors',
                 signal: AbortSignal.timeout(10000)
             });
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente.', 'color: #6366f1; font-size: 10px;');
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente (intro.htm).', 'color: #6366f1; font-size: 10px;');
         } catch (e) {
             // Silencioso — falha no Gov.br não é crítica
         }

@@ -848,13 +848,15 @@ export default function BiddingDashboardPage() {
 
         toast.success("Batalha de 30 segundos iniciada! Assista ao Sniper lutar em tempo real!");
 
+        const myMin = safeParseNumber(currentStrat.minPrice);
+
         // Inicializa valores da simulação no estado
         setSessions(prev => {
             const updated = { ...prev };
             if (updated[activeSid]) {
                 updated[activeSid].items = updated[activeSid].items.map((it: any) => {
                     if (String(it.itemId) === String(itemId)) {
-                        const best = safeParseNumber(it.valorAtual) || 1000;
+                        const best = Math.max(safeParseNumber(it.valorAtual) || 1000, myMin > 0 ? myMin + 10 : 1000);
                         return {
                             ...it,
                             timerSeconds: 30,
@@ -875,7 +877,7 @@ export default function BiddingDashboardPage() {
         setItems(prev => {
             return prev.map(it => {
                 if (String(it.itemId) === String(itemId)) {
-                    const best = safeParseNumber(it.valorAtual) || 1000;
+                    const best = Math.max(safeParseNumber(it.valorAtual) || 1000, myMin > 0 ? myMin + 10 : 1000);
                     return {
                         ...it,
                         timerSeconds: 30,
@@ -913,12 +915,18 @@ export default function BiddingDashboardPage() {
                             let myVal = safeParseNumber(it.meuValor);
                             let pos = it.posicao;
 
-                            // Concorrente ataca a cada 4 segundos
+                            // Concorrente ataca a cada 4 segundos, respeitando o preço mínimo do usuário + margem
                             if (seconds % 4 === 0 && pos === "1") {
                                 const decrement = safeParseNumber(currentStrat.decrementValue) || 1;
-                                currentBest = Math.max(safeParseNumber(currentStrat.minPrice), currentBest - decrement);
-                                pos = "2"; // Concorrente tomou
-                                toast.info(`⚠️ Concorrente deu lance de R$ ${currentBest.toFixed(2)} e tomou a liderança!`, { autoClose: 1500 });
+                                const nextCompetitorBid = currentBest - decrement;
+                                
+                                if (nextCompetitorBid > myMin) {
+                                    currentBest = nextCompetitorBid;
+                                    pos = "2"; // Concorrente tomou
+                                    toast.info(`⚠️ Concorrente deu lance de R$ ${currentBest.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} e tomou a liderança!`, { autoClose: 1500 });
+                                } else {
+                                    toast.info(`🏆 Concorrente desistiu! O lance atingiria o seu limite mínimo de R$ ${myMin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, { autoClose: 2000 });
+                                }
                             }
 
                             return {
@@ -952,8 +960,12 @@ export default function BiddingDashboardPage() {
 
                         if (seconds % 4 === 0 && pos === "1") {
                             const decrement = safeParseNumber(currentStrat.decrementValue) || 1;
-                            currentBest = Math.max(safeParseNumber(currentStrat.minPrice), currentBest - decrement);
-                            pos = "2";
+                            const nextCompetitorBid = currentBest - decrement;
+                            
+                            if (nextCompetitorBid > myMin) {
+                                currentBest = nextCompetitorBid;
+                                pos = "2";
+                            }
                         }
 
                         return {
@@ -1241,6 +1253,7 @@ export default function BiddingDashboardPage() {
                                                 serverTime={serverTime}
                                                 strategyConfig={getStrategy(sid, item.itemId || item.numero)}
                                                 onStartSniperTest={startSniperTest}
+                                                simulationMode={session.simulationMode}
                                             />
                                         ))
                                     ) : (
@@ -1407,7 +1420,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} />
                         ))}
                     </div>
                 </CardContent>
@@ -1426,7 +1439,7 @@ function formatNumberPT(val: any, useFour = false): string {
     });
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode }: any) {
     const isWinning = item.ganhador === 'Você' || item.position === 1;
     
     const defaultMargin = item.officialMargin || 1.00;
@@ -1598,13 +1611,13 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
         
         // Anti-Burrice / Anti-Rejeição: Se o lance for maior ou igual ao melhor lance do item
-        if (currentBest > 0 && val >= currentBest) {
+        if (!simulationMode && currentBest > 0 && val >= currentBest) {
             toast.error(`Lance Bloqueado: R$ ${val.toFixed(2)} não é melhor que o melhor lance atual (R$ ${currentBest.toFixed(2)}). Erro 422 evitado.`);
             return;
         }
 
         // Se a margem mínima oficial da sala estiver disponível, precisamos garantir que o decremento é respeitado
-        if (currentBest > 0) {
+        if (!simulationMode && currentBest > 0) {
             const officialMarginVal = safeParseNumber(item.officialMargin);
             const officialMarginType = item.officialMarginType || 'V';
             
@@ -1643,8 +1656,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 ? 'bg-white border-emerald-400 shadow-[0_10px_30px_-15px_rgba(16,185,129,0.2)]' 
                 : 'bg-white border-slate-100 shadow-sm'
         }`}>
-            <div className="grid grid-cols-12 gap-8 items-center">
-                <div className="col-span-3 flex items-center gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-center">
+                <div className="col-span-1 md:col-span-3 flex items-center gap-4">
                     <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
                             <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -1674,7 +1687,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     </div>
                 </div>
 
-                <div className="col-span-3 flex gap-4">
+                <div className="col-span-1 md:col-span-3 flex gap-4">
                     <div className="flex flex-col gap-1.5 flex-1">
                         <label className="text-[10px] font-bold text-red-600 uppercase flex items-center gap-1">
                             <span>⚠ Mínimo (R$)</span>
@@ -1742,7 +1755,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     </div>
                 </div>
 
-                <div className="col-span-3 grid grid-cols-2 gap-4 border-l border-slate-100 pl-6">
+                <div className="col-span-1 md:col-span-3 grid grid-cols-2 gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6">
                     <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">Melhor</span>
                         <span className={`text-lg font-bold tracking-tight ${isWinning ? 'text-emerald-500' : 'text-red-500'}`}>
@@ -1757,7 +1770,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     </div>
                 </div>
 
-                <div className="col-span-3 flex items-center justify-end gap-5">
+                <div className="col-span-1 md:col-span-3 flex flex-wrap md:flex-nowrap items-center justify-between md:justify-end gap-3 md:gap-5 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
                         timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
                     }`}>
@@ -1818,7 +1831,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                 setMarginStr(formatNumberPT(safeParseNumber(marginStr), nextFour));
                                 handleSave({ useFourDecimals: nextFour }); 
                             }}
-                            disabled={active}
                         />
                         <label htmlFor={`4dec-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Permitir 4 casas decimais</label>
                     </div>
@@ -1827,7 +1839,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             id={`kamikaze-${item.itemId}`} 
                             checked={kamikazeMode}
                             onCheckedChange={(val) => { setKamikazeMode(!!val); handleSave({ kamikazeMode: !!val }); }}
-                            disabled={active}
                         />
                         <label htmlFor={`kamikaze-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Modo Kamikaze (Sem Espera)</label>
                     </div>
