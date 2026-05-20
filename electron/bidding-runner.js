@@ -238,8 +238,25 @@ class RoomRunner {
                                 nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
                             } else {
                                 // Líder imbatível ou não podemos cobrir a margem oficial:
-                                // Envia o MÍNIMO para garantir a melhor posição possível no ranking (ex: 2º lugar)
-                                nextBid = myMin;
+                                // Em vez de pular direto para o MÍNIMO (o que "queimaria" nossa margem sem necessidade),
+                                // nós descemos gradativamente a partir do NOSSO PRÓPRIO lance atual, 
+                                // consumindo apenas a margem mínima necessária para garantir a 2ª ou 3ª posição aos poucos.
+                                if (myCurrentBid !== 999999999) {
+                                    let decrementToUse = margin;
+                                    
+                                    // Respeitamos a margem oficial do Serpro caso ela exista
+                                    if (officialMarginVal > 0) {
+                                        const requiredDecrement = officialMarginType === 'P' 
+                                            ? currentBest * (officialMarginVal / 100) 
+                                            : officialMarginVal;
+                                        decrementToUse = Math.max(margin, requiredDecrement);
+                                    }
+                                    
+                                    nextBid = myCurrentBid - decrementToUse;
+                                } else {
+                                    // Se nunca deu nenhum lance antes, o único jeito de entrar é mandando o mínimo
+                                    nextBid = myMin;
+                                }
                             }
 
                             if (nextBid < myMin) nextBid = myMin;

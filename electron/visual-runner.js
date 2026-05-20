@@ -344,7 +344,7 @@ class VisualRunner {
                     }
                 } else {
                     // Se for janela principal
-                    const isLegacyLanding = url.includes('intro.htm') || url.includes('index.html');
+                    const isLegacyLanding = url.includes('indexgovbr.asp') || url.includes('index.html');
                     if (isLegacyLanding) {
                         if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                             session.loginFinished = true; // Evita loop
