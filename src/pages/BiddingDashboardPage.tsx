@@ -233,11 +233,12 @@ export default function BiddingDashboardPage() {
 
                             if (nextBid > maxAllowedBidBySerpro) {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} viola margem Serpro (Máximo permitido: R$ ${maxAllowedBidBySerpro})`);
-                            } else if (nextBid >= currentBest && currentBest > 0) {
-                                console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} é pior ou igual ao líder (R$ ${currentBest}). Evitando erro 422.`);
                             } else if (nextBid >= myCurrentBid) {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} não é melhor que seu último lance (R$ ${myCurrentBid}). Evitando erro 422.`);
                             } else if (nextBid >= myMin) {
+                                if (nextBid >= currentBest && currentBest > 0) {
+                                    console.log(`%c[SNIPER] Líder imbatível (R$ ${currentBest}). Enviando lance intermediário de R$ ${nextBid} para brigar por posição!`, "color: #eab308; font-weight: bold;");
+                                }
                                 console.log(`%c🎯 [SNIPER] DISPARANDO LANCE: R$ ${nextBid} para Item ${sId}`, "color: #10b981; font-weight: bold;");
                                 
                                 toast.success(`Sniper Disparando R$ ${nextBid} no Item ${sId}`, {
