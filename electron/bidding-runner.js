@@ -181,6 +181,48 @@ class RoomRunner {
                     items: mappedItems
                 });
 
+                // 🏆 RANKING REAL via /lances — busca assíncrona sem bloquear o polling
+                // Só busca em itens ativos para não gastar cota de rate-limit
+                const activeItems = mappedItems.filter(it => it.status !== 'Encerrado' && it.timerSeconds !== -1 || it.timerSeconds > 0);
+                if (activeItems.length > 0 && token) {
+                    // Limita a 1 item por ciclo para evitar 429
+                    const itemToCheck = activeItems[Math.floor(Date.now() / 5000) % activeItems.length];
+                    const lancesUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances`;
+                    axios.get(lancesUrl, {
+                        httpsAgent: this.agent,
+                        timeout: 5000,
+                        headers: {
+                            'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        }
+                    }).then(lancesRes => {
+                        // A resposta é uma lista de lances em ordem crescente de valor (melhor = menor índice)
+                        const lancesData = Array.isArray(lancesRes.data) ? lancesRes.data : (lancesRes.data.itens || []);
+                        if (lancesData.length === 0) return;
+
+                        // O primeiro item tem o melhorValorFornecedor com a posição real
+                        const itemData = lancesData[0];
+                        if (!itemData || !itemData.melhorValorFornecedor) return;
+
+                        const realPosicao = itemData.melhorValorFornecedor.classificacao || itemData.melhorValorFornecedor.posicao;
+                        if (realPosicao && realPosicao !== itemToCheck.posicao) {
+                            console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real confirmada = ${realPosicao} (antes: ${itemToCheck.posicao})`);
+                            // Envia atualização de ranking para o dashboard
+                            if (!this.webContents.isDestroyed()) {
+                                this.webContents.send('bidding-ranking-update', {
+                                    sessionId: this.sessionId,
+                                    itemId: itemToCheck.itemId,
+                                    realPosicao: String(realPosicao)
+                                });
+                            }
+                            // Atualiza o objeto em memória para o motor usar na próxima rodada
+                            itemToCheck.posicao = String(realPosicao);
+                        }
+                    }).catch(() => {}); // Silencioso — se falhar, continua com posição estimada
+                }
+
                 // 🎯 MOTOR DE AUTO-LANCE BACKEND (v3.8.4) - Independente da UI React!
                 if (this.biddingRunner && this.biddingRunner.configs.has(this.sessionId)) {
                     const sessionConfig = this.biddingRunner.configs.get(this.sessionId);
@@ -201,14 +243,17 @@ class RoomRunner {
 
                             const tSeconds = Number(mappedItem.timerSeconds);
                             const isKamikaze = strat.kamikazeMode || false;
+                            const isTimerActive = (tSeconds >= 0);
 
-                            // Só dispara nos 30 segundos finais OU em modo kamikaze
-                            if (!((tSeconds <= 30 && tSeconds > 0) || isKamikaze)) continue;
+                            // Só dispara nos 30 segundos finais, OU em modo kamikaze (qualquer timer)
+                            // Timer -1 = sem countagem ativa, mas no modo kamikaze continua ativo
+                            const timerFiring = isTimerActive && tSeconds <= 30 && tSeconds > 0;
+                            if (!timerFiring && !isKamikaze) continue;
 
                             // Verifica se está perdendo
                             const posicao = String(mappedItem.posicao || '');
-                            const isWinning = (posicao === '1' || posicao === '1º' || posicao === '1°' || posicao === 'V' || posicao === 'VENCEDOR');
-                            if (isWinning) continue;
+                            const isGanhando = (posicao === '1' || posicao === '1º' || posicao === '1°' || posicao === 'G' || posicao === 'V' || posicao === 'GANHANDO' || posicao === 'VENCEDOR');
+                            if (isGanhando) continue;
 
                             const currentBest = Number(mappedItem.valorAtual || 0);
                             const myCurrentBid = Number(mappedItem.meuValor || 999999999);
@@ -325,37 +370,46 @@ class RoomRunner {
             const statusError = e.response ? e.response.status : 0;
 
             if (statusError === 429) {
-                // 🛑 RATE-LIMIT DETECTADO: Backoff Exponencial Anti-429 (v3.8.2)
+                // 🛑 RATE-LIMIT DETECTADO: Backoff Exponencial Anti-429
                 this.backoffCount = (this.backoffCount || 0) + 1;
-                const backoffMs = Math.min(15000 * this.backoffCount, 60000); // 15s, 30s, 45s, 60s max
-                console.warn(`[POLARYON MOTOR] 🚦 429 Rate-Limit na sala ${this.sessionId}! Backoff exponencial: ${backoffMs/1000}s (tentativa ${this.backoffCount})`);
-                // Força renovação de captcha na próxima rodada
+                const backoffMs = Math.min(15000 * this.backoffCount, 60000);
+                console.warn(`[POLARYON MOTOR] 🚦 429 Rate-Limit na sala ${this.sessionId}! Backoff: ${backoffMs/1000}s`);
                 captchaManager.lastFetch = 0;
                 captchaManager.token1 = '';
                 captchaManager.token2 = '';
                 if (!this.webContents.isDestroyed()) {
-                    this.webContents.send('bidding-update-log', `⏳ [ANTI-429] Servidor pediu pausa. Aguardando ${backoffMs/1000}s antes de retomar radar...`);
+                    this.webContents.send('bidding-update-log', `⏳ [ANTI-429] Aguardando ${backoffMs/1000}s...`);
                 }
                 this.timeoutId = setTimeout(() => this.run(), backoffMs);
                 return;
             }
 
-            this.backoffCount = 0; // Reset backoff em erro diferente de 429
-            console.error('[POLARYON MOTOR] Erro na varredura da sala:', e.message);
-            
-            // Anti-Ghost: Se houver erro de rede, 401 ou 403, avisa o painel imediatamente para pausar a sessão e solicitar re-auth
-            if (statusError === 401 || statusError === 403 || statusError >= 500 || (e.message && e.message.includes('network'))) {
-                console.warn(`[POLARYON MOTOR] 🚨 Queda de Sessão detectada (Anti-Ghost ativado). Código: ${statusError}`);
+            if (statusError === 401 || statusError === 403) {
+                // 🔄 TOKEN EXPIRADO: Auto-renovação via Siga — não para, tenta de novo
+                this.tokenRetryCount = (this.tokenRetryCount || 0) + 1;
+                console.warn(`[POLARYON MOTOR] 🔑 401/403 na sala ${this.sessionId} (tentativa ${this.tokenRetryCount}). Forçando renovação de token via Siga...`);
+                
+                // Sinaliza para o visual-runner renovar o token capturando um novo login furtivo
                 if (!this.webContents.isDestroyed()) {
-                    this.webContents.send('bidding-error', {
-                        sessionId: this.sessionId,
-                        error: 'Conexão perdida ou Token expirado. A sessão foi desativada por segurança.',
-                        code: statusError,
-                        action: 'REQUIRE_REAUTH'
-                    });
+                    this.webContents.send('bidding-update-log', `🔑 [AUTO-RENEW] Token expirou. Renovando automaticamente... (${this.tokenRetryCount}ª tentativa)`);
+                    this.webContents.send('request-token-renewal', { sessionId: this.sessionId });
                 }
+                
+                // Limpa o token atual para forçar o visual-runner a capturar um novo
+                if (this.tokenRetryCount >= 3) {
+                    global.serproToken = null;
+                    this.tokenRetryCount = 0;
+                    console.warn('[POLARYON MOTOR] 🚨 Token limpo após 3 falhas. Aguardando re-captura pelo Visual Runner...');
+                }
+                
+                // Espera 2 segundos e tenta de novo sem parar a sessão
+                this.timeoutId = setTimeout(() => this.run(), 2000);
+                return;
             }
 
+            this.backoffCount = 0;
+            this.tokenRetryCount = 0;
+            console.error('[POLARYON MOTOR] Erro na varredura da sala:', e.message);
             this.timeoutId = setTimeout(() => this.run(), 3000);
         }
     }

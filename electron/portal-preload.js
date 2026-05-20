@@ -685,13 +685,13 @@
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
     async function renewGovBrSession() {
         try {
-            await fetch('https://www.comprasnet.gov.br/seguro/indexgovbr.asp', {
+            await fetch('https://www.comprasnet.gov.br/main.asp', {
                 method: 'GET',
                 credentials: 'include',
                 mode: 'no-cors',
                 signal: AbortSignal.timeout(10000)
             });
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente (indexgovbr.asp).', 'color: #6366f1; font-size: 10px;');
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente (main.asp).', 'color: #6366f1; font-size: 10px;');
         } catch (e) {
             // Silencioso — falha no Gov.br não é crítica
         }

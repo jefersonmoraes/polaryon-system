@@ -344,7 +344,7 @@ class VisualRunner {
                     }
                 } else {
                     // Se for janela principal
-                    const isLegacyLanding = url.includes('indexgovbr.asp') || url.includes('index.html');
+                    const isLegacyLanding = url.includes('main.asp') || url.includes('index.html');
                     if (isLegacyLanding) {
                         if (session && session.window && !session.window.isDestroyed() && !session.loginFinished) {
                             session.loginFinished = true; // Evita loop
@@ -469,6 +469,33 @@ class VisualRunner {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
                 if (url) session.window.loadURL(url);
+            }
+        });
+
+        // 🔄 AUTO-RENEW: Disparado pelo bidding-runner quando o token expira (401)
+        ipcMain.on('request-token-renewal', (event, { sessionId }) => {
+            console.log(`[VISUAL RUNNER] 🔑 Renovação de token solicitada para sessão ${sessionId}. Recarregando autenticação...`);
+            
+            // Estratégia 1: Se já temos um token válido, reinjeta nas janelas abertas
+            if (global.serproToken) {
+                for (const [sId, session] of this.sessions) {
+                    if (session.window && !session.window.isDestroyed()) {
+                        session.window.webContents.send('force-token-injection', { token: global.serproToken });
+                    }
+                }
+                console.log(`[VISUAL RUNNER] ✅ Token reaproveitado e reforçado em todas as janelas abertas.`);
+                return;
+            }
+
+            // Estratégia 2: Sem token, recarrega a janela de sessão para capturar um novo
+            const session = this.sessions.get(sessionId);
+            if (session && session.window && !session.window.isDestroyed()) {
+                const currentUrl = session.window.webContents.getURL();
+                // Só recarrega se não estiver já na tela de login
+                if (!currentUrl.includes('login') && !currentUrl.includes('acesso.gov.br')) {
+                    console.log(`[VISUAL RUNNER] 🔄 Recarregando janela da sessão ${sessionId} para capturar novo token...`);
+                    session.window.webContents.reload();
+                }
             }
         });
     }

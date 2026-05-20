@@ -150,7 +150,7 @@ app.whenReady().then(async () => {
   session.fromPartition('persist:polaryon-global').webRequest.onBeforeSendHeaders(filter, (details, callback) => {
     // Se a requisição for de handoff ou login, injetamos a autoridade necessária
     if (details.url.includes('dispensa_eletronica.asp') || details.url.includes('comprasnet-web/seguro') || details.url.includes('servico=226') || details.url.includes('login_f.asp')) {
-      details.requestHeaders['Referer'] = 'https://www.comprasnet.gov.br/seguro/indexgovbr.asp';
+      details.requestHeaders['Referer'] = 'https://www.comprasnet.gov.br/main.asp';
       details.requestHeaders['Origin'] = 'https://www.comprasnet.gov.br';
       details.requestHeaders['Sec-Fetch-Mode'] = 'navigate';
       details.requestHeaders['Sec-Fetch-Site'] = 'same-origin';
