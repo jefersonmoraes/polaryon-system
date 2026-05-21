@@ -348,6 +348,8 @@ export default function BiddingDashboardPage() {
     // --- MONITOR DE ATUALIZAÇÃO v3.5.37 ---
     const [updateInfo, setUpdateInfo] = useState<any>(null);
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
+    const [isUpdateReady, setIsUpdateReady] = useState(false); // true quando download concluído
+    const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
     const handleManualBid = (purchaseId: string, itemId: string, bidId: string, value: number) => {
         handleSendBid(purchaseId, itemId, bidId, value);
@@ -1088,45 +1090,84 @@ export default function BiddingDashboardPage() {
         } catch (e) { console.error(e); }
     };
 
-    const checkUpdate = () => {
+    const checkUpdate = (silent = false) => {
         if (isDesktop && (window as any).electronAPI) {
+            setIsCheckingUpdate(true);
             (window as any).electronAPI.getAppVersion().then((v: string) => {
-                toast.info(`Versão Atual: v${v}. Verificando servidores...`);
+                setAppVersion(v);
+                if (!silent) {
+                    toast.info(`Versão Atual: v${v}. Verificando servidores...`);
+                }
                 (window as any).electronAPI.checkForUpdates();
+                setTimeout(() => setIsCheckingUpdate(false), 8000);
             });
-        } else {
+        } else if (!silent) {
             toast.warning("Verificação manual disponível apenas no Polaryon Desktop.");
         }
     };
 
-    // --- MONITOR DE ATUALIZAÇÃO AUTOMÁTICA v3.6.10 ---
+    // --- MONITOR DE ATUALIZAÇÃO AUTOMÁTICA IMORTAL v4.0.0 ---
+    // Verifica ao iniciar, ao focar a janela, e a cada 30 minutos.
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
             const electron = (window as any).electronAPI;
-            
+
+            // Busca versão e dispara verificação ao iniciar (silent)
+            electron.getAppVersion?.().then((v: string) => {
+                setAppVersion(v);
+                electron.checkForUpdates?.();
+            });
+
+            // Verificação periódica: a cada 30 minutos
+            const periodicCheck = setInterval(() => {
+                electron.checkForUpdates?.();
+            }, 30 * 60 * 1000);
+
+            // Verificação ao recuperar o foco da janela
+            const handleFocus = () => electron.checkForUpdates?.();
+            window.addEventListener('focus', handleFocus);
+
             if (electron.onUpdateLog) {
                 electron.onUpdateLog((msg: string) => {
-                    console.log("[UPDATE-LOG]", msg);
+                    console.log('[POLARYON UPDATE]', msg);
                 });
             }
 
             if (electron.onUpdateAvailable) {
                 electron.onUpdateAvailable((info: any) => {
+                    setUpdateInfo(info);
+                    setIsUpdateReady(false);
+                    setDownloadProgress(0);
                     toast.success(`🚀 Nova versão v${info.version} disponível! Baixando automaticamente...`, {
                         position: "top-center",
-                        autoClose: 10000
+                        autoClose: 8000
                     });
+                });
+            }
+
+            if (electron.onUpdateProgress) {
+                electron.onUpdateProgress((progress: any) => {
+                    const pct = Math.round(progress?.percent || 0);
+                    setDownloadProgress(pct);
                 });
             }
 
             if (electron.onUpdateDownloaded) {
                 electron.onUpdateDownloaded((info: any) => {
-                    toast.success(`✅ Versão v${info.version} baixada! O robô será reiniciado em instantes.`, {
+                    setUpdateInfo(info);
+                    setIsUpdateReady(true);
+                    setDownloadProgress(100);
+                    toast.success(`✅ Versão v${info.version} pronta! Clique em "Instalar Agora" para reiniciar.`, {
                         position: "top-center",
                         autoClose: false
                     });
                 });
             }
+
+            return () => {
+                clearInterval(periodicCheck);
+                window.removeEventListener('focus', handleFocus);
+            };
         }
     }, [isDesktop]);
 
@@ -1165,16 +1206,73 @@ export default function BiddingDashboardPage() {
                         </div>
                     </div>
                     
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={checkUpdate}
-                        className="h-9 border-slate-200 text-slate-600 hover:bg-slate-50 font-bold"
-                    >
-                        Verificar Atualizações
-                    </Button>
+                    {/* Bot\u00e3o de vers\u00e3o inteligente */}
+                    {updateInfo && isUpdateReady ? (
+                        <button
+                            onClick={() => (window as any).electronAPI?.installUpdate?.()}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[11px] font-black uppercase tracking-wider transition-colors shadow-md animate-pulse"
+                        >
+                            ⚡ Instalar v{updateInfo.version}
+                        </button>
+                    ) : updateInfo && !isUpdateReady ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                            <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+                            <span className="text-[10px] font-black text-amber-700 uppercase">
+                                {downloadProgress > 0 ? `${downloadProgress}%` : 'Baixando...'}
+                            </span>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => checkUpdate()}
+                            disabled={isCheckingUpdate}
+                            className="flex items-center gap-2 h-9 px-4 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold rounded-lg text-sm transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                            {isCheckingUpdate ? 'Verificando...' : `v${appVersion}`}
+                        </button>
+                    )}
                 </div>
             </header>
+
+            {/* === BANNER DE NOVA VERSÃO DISPONÍVEL (PERSISTENTE) === */}
+            {updateInfo && (
+                <div className={`w-full px-6 py-2.5 flex items-center justify-between gap-4 text-white text-xs font-bold transition-all ${
+                    isUpdateReady
+                        ? 'bg-emerald-600'
+                        : 'bg-slate-800'
+                }`}>
+                    <div className="flex items-center gap-3">
+                        <span className="text-lg">{isUpdateReady ? '✅' : '📥'}</span>
+                        <div>
+                            <span className="font-black uppercase tracking-wide">
+                                {isUpdateReady
+                                    ? `Versão v${updateInfo.version} pronta para instalar!`
+                                    : `Baixando atualização v${updateInfo.version}...`
+                                }
+                            </span>
+                            {!isUpdateReady && downloadProgress > 0 && (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <div className="w-32 h-1.5 bg-slate-600 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                                            style={{ width: `${downloadProgress}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-mono text-emerald-400">{downloadProgress}%</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {isUpdateReady && (
+                        <button
+                            onClick={() => (window as any).electronAPI?.installUpdate?.()}
+                            className="px-4 py-1.5 bg-white text-emerald-700 rounded-lg text-[11px] font-black uppercase tracking-wider hover:bg-emerald-50 transition-colors shadow-lg"
+                        >
+                            ⚡ Instalar Agora
+                        </button>
+                    )}
+                </div>
+            )}
 
 
                 <div className="w-full bg-slate-900 border-b border-white/5 py-2 px-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
