@@ -201,14 +201,9 @@ const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     };
 
     return (
-        <>
-            <td className="px-4 py-3.5 align-top text-muted-foreground font-medium text-[11px]">
-                {formatNativeDate(item.data_inicio_proposta || item.data_inicio_vigencia)}
-            </td>
-            <td className="px-4 py-3.5 align-top text-[11px] font-medium text-destructive">
-                {formatNativeDate(item.data_encerramento_proposta || item.data_fim_vigencia)}
-            </td>
-        </>
+        <td className="px-4 py-3.5 align-top text-[11px] font-medium text-destructive">
+            {formatNativeDate(item.data_encerramento_proposta || item.data_fim_vigencia)}
+        </td>
     );
 });
 
@@ -753,6 +748,25 @@ export default function OportunidadesSearch() {
                 return;
             }
 
+            const itemAny = exportTarget as any;
+            const detailAny = finalDetail as any;
+            
+            let estimatedValue = 
+                detailAny?.valorTotalEstimado || 
+                itemAny.valorTotalEstimado || 
+                itemAny.valor_global || 
+                itemAny.valor ||
+                0;
+
+            // Se o valor estimado for 0 ou ausente, calcula a partir dos itens
+            if (estimatedValue <= 0 && finalItems && Array.isArray(finalItems) && finalItems.length > 0) {
+                estimatedValue = finalItems.reduce((acc: number, it: any) => {
+                    const vUnit = it.valorUnitarioEstimated || it.valorUnitarioEstimado || it.valorUnitario || 0;
+                    const qtd = it.quantidade || 0;
+                    return acc + (vUnit * qtd);
+                }, 0);
+            }
+
             // Formatação Rica do Markdown
             const descriptionMD = `
 **[GOV.BR] Oportunidade PNCP mapeada pelo Polaryon**
@@ -765,7 +779,7 @@ export default function OportunidadesSearch() {
 **Instrumento:** ${exportTarget.tipo_instrumento_convocacao_nome || '-'}
 **SRP (Registro de Preços):** ${exportTarget.srp ? 'Sim' : 'Não'}
 **Amparo Legal:** ${exportTarget.amparo_legal_nome || 'N/A'}
-**Valor Estimado:** ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(exportTarget.valorTotalEstimado || exportTarget.valor_global || 0)}
+**Valor Estimado:** ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}
 **Datas do Edital:** Publicação PNCP (${exportTarget.data_publicacao_pncp ? new Date(exportTarget.data_publicacao_pncp).toLocaleDateString('pt-BR') : '-'}) • **Atualização:** ${exportTarget.data_atualizacao_pncp ? new Date(exportTarget.data_atualizacao_pncp).toLocaleDateString('pt-BR') : '-'}
 **Encerramento de Propostas:** ${exportTarget.data_fim_vigencia ? new Date(exportTarget.data_fim_vigencia).toLocaleDateString('pt-BR') : '-'}
 
@@ -777,16 +791,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
 [🔗 Acessar Edital Oficial Completo no PNCP](${getOfficialLink(exportTarget)})
             `.trim();
-
-            const itemAny = exportTarget as any;
-            const detailAny = finalDetail as any;
-            
-            const estimatedValue = 
-                detailAny?.valorTotalEstimado || 
-                itemAny.valorTotalEstimado || 
-                itemAny.valor_global || 
-                itemAny.valor ||
-                0;
 
             const formattedValue = estimatedValue > 0 
                 ? `  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(estimatedValue)}` 
@@ -922,8 +926,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     };
                     if (modMap[modalidadeFilter]) params.modalidades = modMap[modalidadeFilter];
                 }
-                if (dataInicialFilter) params.data_publicacao_inicial = dataInicialFilter.replace(/-/g, '');
-                if (dataFinalFilter) params.data_publicacao_final = dataFinalFilter.replace(/-/g, '');
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
                 return params;
             };
@@ -938,8 +940,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             
             if (isAll) {
                 const kw = keyword.trim();
-                // Turbo Discovery: Busca massiva em 10 páginas simultâneas (500 itens)
-                const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                // Busca das 2 páginas correspondentes da API PNCP para a página atual do frontend
+                const pages = [pncpPage1, pncpPage2];
                 const pncpFetches = pages.map(p => 
                     api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } }))
                 );
@@ -980,8 +982,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     );
                 }
                 const kw = keyword.trim();
-                // Turbo Discovery: Busca profunda de 10 páginas para garantir volume nos portais secundários
-                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(p => {
+                // Busca das 2 páginas correspondentes da API PNCP para a página atual
+                const pages = [pncpPage1, pncpPage2];
+                pages.forEach(p => {
                     taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
                 });
 
@@ -1097,6 +1100,27 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             }
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
+            
+            // Filtro client-side de período com base no "Fim Recepção" (data_encerramento_proposta ou data_fim_vigencia)
+            if (dataInicialFilter) {
+                const initDate = new Date(dataInicialFilter + 'T00:00:00');
+                items = items.filter((i: any) => {
+                    const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
+                    if (!targetDateStr) return false;
+                    const targetDate = new Date(targetDateStr);
+                    return targetDate >= initDate;
+                });
+            }
+            if (dataFinalFilter) {
+                const endDate = new Date(dataFinalFilter + 'T23:59:59');
+                items = items.filter((i: any) => {
+                    const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
+                    if (!targetDateStr) return false;
+                    const targetDate = new Date(targetDateStr);
+                    return targetDate <= endDate;
+                });
+            }
+
             if (orgaoFilter) items = items.filter((i: any) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
             if (modalidadeFilter) items = items.filter((i: any) => (i?.modalidade_licitacao_nome?.toLowerCase() || '').includes(modalidadeFilter.toLowerCase()));
             if (municipioFilter) items = items.filter((i: any) => (i?.municipio_nome?.toLowerCase() || '').includes(municipioFilter.toLowerCase()));
@@ -1583,8 +1607,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                 <thead className="bg-muted text-muted-foreground sticky top-0 z-10 shadow-sm">
                                     <tr>
                                         <th className="px-4 py-3 font-medium w-32">Status</th>
-                                        <th className="px-4 py-3 font-medium w-40">Publicação</th>
-                                        <th className="px-4 py-3 font-medium w-32">Início Recepção</th>
                                         <th className="px-4 py-3 font-medium w-32">Fim Recepção</th>
                                         <th className="px-4 py-3 font-medium w-32 text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/5">Valor Est.</th>
                                         <th className="px-4 py-3 font-medium">Órgão / Descrição Sintética</th>
@@ -1614,9 +1636,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                         </span>
                                                     )}
                                                 </div>
-                                            </td>
-                                            <td className="px-4 py-3.5 align-top text-muted-foreground">
-                                                {formatDate(item.data_publicacao_pncp)}
                                             </td>
                                             <ProposalDates item={item} />
                                             <PncpValue item={item} />
