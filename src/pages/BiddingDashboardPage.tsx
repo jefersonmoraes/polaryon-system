@@ -809,6 +809,7 @@ export default function BiddingDashboardPage() {
             }
 
             // 🏆 RANKING REAL: Atualiza rankingLances quando o backend busca o endpoint /lances
+            // Calcula a posição real do usuário usando buildRankingPorParticipante (melhor lance por participante)
             if ((window as any).electronAPI.onBiddingRankingUpdate) {
                 (window as any).electronAPI.onBiddingRankingUpdate((data: any) => {
                     const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
@@ -817,9 +818,17 @@ export default function BiddingDashboardPage() {
                         if (updated[sid]) {
                             updated[sid].items = updated[sid].items.map((it: any) => {
                                 if (String(it.itemId) === String(itemId)) {
+                                    // Calcula posição real pelo ranking por participante
+                                    let posicaoFinal = realPosicao;
+                                    if (rankingLances && rankingLances.length > 0) {
+                                        const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
+                                        if (minhaPosicao > 0) {
+                                            posicaoFinal = String(minhaPosicao);
+                                        }
+                                    }
                                     return {
                                         ...it,
-                                        ...(realPosicao ? { posicao: realPosicao } : {}),
+                                        ...(posicaoFinal ? { posicao: posicaoFinal } : {}),
                                         ...(rankingLances ? { rankingLances } : {})
                                     };
                                 }
@@ -1473,10 +1482,77 @@ function formatNumberPT(val: any, useFour = false): string {
     });
 }
 
+/**
+ * RANKING POR PARTICIPANTE (estilo SIGA)
+ * Recebe a lista bruta de todos os lances/propostas e retorna um ranking
+ * onde cada participante aparece UMA vez com seu MELHOR lance (menor valor).
+ * Ordenado do menor para o maior (1º = vencedor).
+ */
+function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
+    ranking: { participante: string; valor: number; origem: string; data: string; eMeuLance: boolean }[];
+    minhaPosicao: number;
+} {
+    if (!lancesRaw || lancesRaw.length === 0) return { ranking: [], minhaPosicao: 0 };
+
+    // Agrupa pelo identificador do participante (fornecedorId, cnpj, ou 'EU' se eMeuLance)
+    const mapaParticipantes = new Map<string, { valor: number; origem: string; data: string; eMeuLance: boolean }>();
+
+    lancesRaw.forEach((lance: any) => {
+        const valor = safeParseNumber(lance.valor || lance.valorInformado || lance.valorCalculado || 0);
+        if (valor <= 0) return;
+
+        // Identifica o participante
+        const eMeu = !!(lance.eMeuLance || lance.isMyBid || lance.meuLance);
+        const participante = eMeu
+            ? '__EU__'
+            : (lance.participanteId || lance.fornecedorId || lance.cnpjFornecedor || lance.codigoParticipante || lance.codigoFornecedor || String(valor)); // fallback por valor
+
+        const existente = mapaParticipantes.get(participante);
+        // Mantemos apenas o menor lance de cada participante
+        if (!existente || valor < existente.valor) {
+            mapaParticipantes.set(participante, {
+                valor,
+                origem: lance.origem || lance.tipoLance || (eMeu ? 'Lance (Você)' : 'Lance'),
+                data: lance.data || lance.dataHora || lance.dataRegistro || '',
+                eMeuLance: eMeu
+            });
+        }
+    });
+
+    // Se o meuValor veio do item mas não havia nenhum lance marcado como "meu", injeta
+    if (!mapaParticipantes.has('__EU__') && meuValor && meuValor > 0) {
+        mapaParticipantes.set('__EU__', {
+            valor: meuValor,
+            origem: 'Lance (Você)',
+            data: new Date().toLocaleString('pt-BR'),
+            eMeuLance: true
+        });
+    }
+
+    // Ordena do menor para o maior
+    const ranking = Array.from(mapaParticipantes.entries())
+        .map(([participante, dados]) => ({ participante, ...dados }))
+        .sort((a, b) => a.valor - b.valor);
+
+    // Descobre a posição real do usuário
+    const minhaPosicao = ranking.findIndex(r => r.eMeuLance) + 1; // 0 = não encontrado, 1 = 1º
+
+    return { ranking, minhaPosicao };
+}
+
 function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode }: any) {
+    // RANKING CORRETO: monta por participante (melhor lance de cada um)
+    const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
+        return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
+    }, [item.rankingLances, item.meuValor]);
+
+    // Posição real: usa a computada se > 0, senão usa a que veio da API
+    const posicaoReal = posicaoComputada > 0 ? String(posicaoComputada) : (item.posicao || '?');
+
     const isWinning = 
         item.ganhador === 'Você' || 
         item.position === 1 ||
+        posicaoReal === '1' ||
         String(item.posicao) === '1' || 
         String(item.posicao) === '1º' ||
         String(item.posicao) === '1°' ||
@@ -1741,8 +1817,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             }`}>
                                 <span className="text-[9px] font-black uppercase opacity-60">POSIÇÃO</span>
                                 <span className="text-xs font-black">
-                                    {item.posicao || '?'}
-                                    {/^\d+$/.test(String(item.posicao || '')) ? 'º' : ''}
+                                    {posicaoReal}
+                                    {/^\d+$/.test(String(posicaoReal || '')) ? 'º' : ''}
                                 </span>
                             </div>
 
@@ -1753,18 +1829,23 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                 title="Ver melhores lances deste item"
                             >
                                 Classificação
+                                {rankingComputado.length > 0 && (
+                                    <span className="ml-1 text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-black">
+                                        {rankingComputado.length}
+                                    </span>
+                                )}
                             </button>
                         </div>
-                        {/* Mini-ranking Preview */}
-                        {item.rankingLances && item.rankingLances.length > 0 && (
+                        {/* Mini-ranking Preview - mostra top 3 por participante */}
+                        {rankingComputado.length > 0 && (
                             <div className="mt-3 flex flex-col gap-1 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Top 3 Lances:</span>
-                                {item.rankingLances.slice(0, 3).map((lance: any, idx: number) => (
-                                    <div key={idx} className="flex justify-between items-center gap-2">
+                                <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Top 3 por Participante:</span>
+                                {rankingComputado.slice(0, 3).map((lance: any, idx: number) => (
+                                    <div key={idx} className={`flex justify-between items-center gap-2 ${lance.eMeuLance ? 'bg-blue-50 rounded px-1' : ''}`}>
                                         <span className="font-bold text-slate-600">
                                             {idx + 1}º {lance.eMeuLance ? <span className="text-blue-600 font-black">(Você)</span> : <span className="text-slate-400 font-medium">({lance.origem || 'Lance'})</span>}
                                         </span>
-                                        <span className={`font-mono font-bold ${idx === 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                        <span className={`font-mono font-bold ${idx === 0 ? 'text-emerald-600' : lance.eMeuLance ? 'text-blue-600' : 'text-slate-700'}`}>
                                             R$ {Number(lance.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2, maximumFractionDigits: useFourDecimals ? 4 : 2 })}
                                         </span>
                                     </div>
@@ -1936,36 +2017,62 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 </div>
             </div>
 
-            {/* ===== MODAL RANKING: MELHORES LANCES DO ITEM ===== */}
+            {/* ===== MODAL RANKING: MELHORES LANCES DO ITEM (POR PARTICIPANTE) ===== */}
             {showRankingModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowRankingModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between px-6 py-4 border-b">
-                            <h2 className="text-sm font-bold text-slate-800">Melhores lances do item {item.itemId}</h2>
+                            <div>
+                                <h2 className="text-sm font-bold text-slate-800">Ranking por Participante — Item {item.itemId}</h2>
+                                <p className="text-[10px] text-slate-400 mt-0.5">Melhor lance de cada fornecedor (menor vence)</p>
+                            </div>
                             <button onClick={() => setShowRankingModal(false)} className="text-slate-400 hover:text-slate-700 text-lg font-bold leading-none">×</button>
                         </div>
                         <div className="overflow-y-auto flex-1 px-6 py-4">
-                            {item.rankingLances && item.rankingLances.length > 0 ? (
+                            {rankingComputado.length > 0 ? (
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="text-left text-slate-500 text-xs border-b">
                                             <th className="pb-2 font-bold w-8">#</th>
-                                            <th className="pb-2 font-bold">Origem</th>
-                                            <th className="pb-2 font-bold">Valor</th>
-                                            <th className="pb-2 font-bold">Data</th>
+                                            <th className="pb-2 font-bold">Participante</th>
+                                            <th className="pb-2 font-bold text-right">Melhor Lance</th>
+                                            <th className="pb-2 font-bold text-right text-[10px]">Data/Hora</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {item.rankingLances.map((lance: any, idx: number) => (
-                                            <tr key={idx} className={`border-b border-slate-50 ${ idx === 0 ? 'bg-emerald-50' : '' }`}>
-                                                <td className="py-2 font-black text-slate-700">{idx + 1}</td>
-                                                <td className="py-2 text-slate-600">
-                                                    {lance.origem || 'Lance'} {lance.eMeuLance && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
+                                        {rankingComputado.map((lance: any, idx: number) => (
+                                            <tr key={idx} className={`border-b border-slate-50 transition-colors ${
+                                                lance.eMeuLance
+                                                    ? 'bg-blue-50 border-blue-100'
+                                                    : idx === 0
+                                                        ? 'bg-emerald-50'
+                                                        : ''
+                                            }`}>
+                                                <td className="py-2.5 font-black text-slate-700">
+                                                    {idx === 0 ? (
+                                                        <span className="text-emerald-600">🏆</span>
+                                                    ) : (
+                                                        <span>{idx + 1}</span>
+                                                    )}
                                                 </td>
-                                                <td className={`py-2 font-bold ${ idx === 0 ? 'text-emerald-600' : 'text-slate-800' }`}>
-                                                    R$ {Number(lance.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                                <td className="py-2.5 text-slate-600">
+                                                    {lance.eMeuLance ? (
+                                                        <span className="text-blue-700 font-black flex items-center gap-1">
+                                                            👤 Você
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-500">{lance.origem || 'Concorrente'}</span>
+                                                    )}
                                                 </td>
-                                                <td className="py-2 text-slate-400 text-xs">{lance.data || ''}</td>
+                                                <td className={`py-2.5 font-bold text-right ${
+                                                    lance.eMeuLance ? 'text-blue-700' : idx === 0 ? 'text-emerald-600' : 'text-slate-800'
+                                                }`}>
+                                                    R$ {Number(lance.valor || 0).toLocaleString('pt-BR', {
+                                                        minimumFractionDigits: 4,
+                                                        maximumFractionDigits: 4
+                                                    })}
+                                                </td>
+                                                <td className="py-2.5 text-slate-400 text-[10px] text-right">{lance.data || '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1978,8 +2085,17 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                 </div>
                             )}
                         </div>
-                        <div className="px-6 py-3 border-t text-[10px] text-slate-400 text-center">
-                            Atualizado em tempo real via endpoint /lances do Comprasnet
+                        <div className="px-6 py-3 border-t flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400">
+                                {rankingComputado.length > 0 ? `${rankingComputado.length} participante(s)` : 'Aguardando dados...'}
+                            </span>
+                            {posicaoComputada > 0 && (
+                                <span className={`text-[11px] font-black px-3 py-1 rounded-full ${
+                                    posicaoComputada === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                                }`}>
+                                    Sua Posição: {posicaoComputada}º
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
