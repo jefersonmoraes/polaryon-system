@@ -903,6 +903,25 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         setError('');
         setLoadingMessage('');
         try {
+            const subtractDays = (dateStr: string, days: number) => {
+                if (!dateStr) return '';
+                try {
+                    const date = new Date(dateStr + 'T00:00:00');
+                    date.setDate(date.getDate() - days);
+                    const yyyy = date.getFullYear();
+                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                    const dd = String(date.getDate()).padStart(2, '0');
+                    return `${yyyy}-${mm}-${dd}`;
+                } catch {
+                    return '';
+                }
+            };
+
+            const formatToApiDate = (dateStr: string) => {
+                if (!dateStr) return '';
+                return dateStr.replace(/-/g, '');
+            };
+
             const buildParams = (p: number) => {
                 const params: any = {
                     tam_pagina: 50,
@@ -927,6 +946,24 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     if (modMap[modalidadeFilter]) params.modalidades = modMap[modalidadeFilter];
                 }
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
+
+                // Envia data de publicação expandida para a API do PNCP para cobrir os prazos e permitir filtragem por encerramento
+                if (dataInicialFilter || dataFinalFilter) {
+                    let pubInicial = '';
+                    let pubFinal = '';
+
+                    if (dataFinalFilter) {
+                        pubFinal = dataFinalFilter;
+                        const baseDate = dataInicialFilter || dataFinalFilter;
+                        pubInicial = subtractDays(baseDate, 90);
+                    } else if (dataInicialFilter) {
+                        pubInicial = subtractDays(dataInicialFilter, 90);
+                    }
+
+                    if (pubInicial) params.data_publicacao_inicial = formatToApiDate(pubInicial);
+                    if (pubFinal) params.data_publicacao_final = formatToApiDate(pubFinal);
+                }
+
                 return params;
             };
 
