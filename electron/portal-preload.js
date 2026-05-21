@@ -325,6 +325,252 @@
         }
     }
 
+    // 🏆 RANKING INTERCEPTOR: Captura /lances/por-participante ou localhost/classificacao diretamente do tráfego do browser
+    function processRankingData(data, url) {
+        console.log(`%c[POLARYON RANKING INTERCEPTOR]  Dados brutos recebidos: type=${typeof data}, isArray=${Array.isArray(data)}, keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'}`, 'color: #f59e0b; font-size: 10px;');
+        
+        let compraId = null;
+        let itemId = null;
+
+        const matchCompra = url.match(/\/compras\/(\d+)\//);
+        const matchItem  = url.match(/\/itens\/(\d+)\//);
+        if (matchCompra && matchItem) {
+            compraId = matchCompra[1];
+            itemId = matchItem[1];
+        } else {
+            try {
+                // Tenta buscar nos query parameters (ex: localhost:36981/comprasnet/classificacao?codigo=X&numeroItem=Y)
+                let targetUrl = url;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    targetUrl = 'http://localhost' + (url.startsWith('/') ? '' : '/') + url;
+                }
+                const urlObj = new URL(targetUrl);
+                compraId = urlObj.searchParams.get('codigo') || urlObj.searchParams.get('compraId');
+                itemId = urlObj.searchParams.get('numeroItem') || urlObj.searchParams.get('itemId');
+            } catch (e) {
+                const matchQueryCodigo = url.match(/[?&]codigo=(\d+)/);
+                const matchQueryItem = url.match(/[?&]numeroItem=(\d+)/);
+                if (matchQueryCodigo) compraId = matchQueryCodigo[1];
+                if (matchQueryItem) itemId = matchQueryItem[1];
+            }
+        }
+
+        if (!compraId || !itemId) {
+            console.warn(`[POLARYON RANKING INTERCEPTOR]  Não conseguiu extrair compraId/itemId. url=${url}`);
+            return;
+        }
+
+        // FIX v3.8.20: Usa o mesmo formato que handlePortalSync usa para criar sessões: "virtual_{roomCode}"
+        const sessionId = `virtual_${compraId}`;
+
+        // Extrai lista de lances do formato que vier
+        let lancesList = [];
+        if (Array.isArray(data))                             lancesList = data;
+        else if (data && Array.isArray(data.itens))         lancesList = data.itens;
+        else if (data && Array.isArray(data.lances))        lancesList = data.lances;
+        else if (data && Array.isArray(data.conteudo))      lancesList = data.conteudo;
+        else if (data && Array.isArray(data.content))       lancesList = data.content;
+        else if (data && Array.isArray(data.data))          lancesList = data.data;
+
+        console.log(`%c[POLARYON RANKING INTERCEPTOR] 📋 lancesList encontrada: length=${lancesList.length}`, 'color: #6366f1; font-size: 10px;');
+        
+        if (lancesList.length === 0) {
+            console.warn(`[POLARYON RANKING INTERCEPTOR]  Lista vazia para item ${itemId}. keys: ${data && typeof data === 'object' ? Object.keys(data).join(',') : typeof data}`);
+            return;
+        }
+
+        console.log(`%c[POLARYON RANKING INTERCEPTOR] 🏆 ${lancesList.length} lances interceptados para item ${itemId} (Compra: ${compraId})`, 'color: #10b981; font-weight: bold;');
+
+        const rankingLances = lancesList.map((entry) => {
+            if (entry.excluido) return null;
+            const valObj = entry.melhorValorFornecedor || entry;
+            if (valObj.excluido) return null;
+
+            let val = null;
+            if (valObj.valor !== undefined && valObj.valor !== null) {
+                val = typeof valObj.valor === 'object'
+                    ? (valObj.valor.valorCalculado ?? valObj.valor.valorInformado)
+                    : valObj.valor;
+            } else {
+                val = valObj.valorCalculado ?? valObj.valorInformado ?? null;
+            }
+            if (val === null || val === undefined) return null;
+
+            const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance);
+            const origemRaw = entry.origem || valObj.origem || entry.tipo || valObj.tipo || '';
+            const origem = (origemRaw === 'P' || origemRaw === 'Proposta') ? 'Proposta' : 'Lance';
+            const dt = valObj.dataHoraInclusao || valObj.dataHoraAtualizacao || entry.dataHoraInclusao || entry.data || '';
+            const formattedDt = dt ? new Date(dt).toLocaleString('pt-BR') : '';
+
+            let partId = entry.participanteId || entry.fornecedorId || entry.cnpjFornecedor
+                      || entry.codigoParticipante || entry.codigoFornecedor || entry.identificadorParticipante
+                      || entry.numeroParticipante || entry.identificador || null;
+
+            if (!partId && entry.participante) partId = typeof entry.participante === 'object' ? (entry.participante.identificacao || entry.participante.nome) : entry.participante;
+            if (!partId && entry.fornecedor)   partId = typeof entry.fornecedor   === 'object' ? (entry.fornecedor.cnpj || entry.fornecedor.nome) : entry.fornecedor;
+            if (!partId && valObj.participanteId) partId = valObj.participanteId;
+
+            return {
+                valor: Number(val),
+                origem,
+                data: formattedDt,
+                eMeuLance,
+                classificacao: valObj.classificacao || entry.classificacao || null,
+                participanteId: partId ? String(partId) : null
+            };
+        }).filter(Boolean).sort((a, b) => a.valor - b.valor);
+
+        if (rankingLances.length === 0) {
+            console.warn(`[POLARYON RANKING INTERCEPTOR]  Nenhum lance válido após filtragem para item ${itemId}`);
+            return;
+        }
+
+        console.log(`%c[POLARYON RANKING INTERCEPTOR] 🏆 Enviando ${rankingLances.length} lances para sessionId=${sessionId} itemId=${itemId}`, 'color: #10b981; font-weight: bold; font-size: 11px;');
+        console.log(`%c[POLARYON RANKING INTERCEPTOR] 📊 Top 3: ${rankingLances.slice(0, 3).map(l => `R$${l.valor} (${l.eMeuLance ? 'MEU' : 'OUTRO'})`).join(', ')}`, 'color: #6366f1; font-size: 10px;');
+
+        // Envia para o processo principal Electron via IPC
+        ipcRenderer.send('portal-ranking-data', { sessionId, itemId, rankingLances });
+    }
+
+    // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado
+    let rankingRoundRobin = 0;
+    const activeRankingItems = []; // { purchaseId, itemId }
+    setInterval(async () => {
+        if (!shared.sessionToken) {
+            console.log(`%c[POLARYON RANKING LOOP] ⏳ Aguardando token... (items: ${activeRankingItems.length})`, 'color: #f59e0b; font-size: 10px;');
+            return;
+        }
+        if (activeRankingItems.length === 0) {
+            console.log(`%c[POLARYON RANKING LOOP]  Nenhum item ativo para buscar ranking`, 'color: #f59e0b; font-size: 10px;');
+            return;
+        }
+        const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
+        rankingRoundRobin++;
+        console.log(`%c[POLARYON RANKING LOOP] 🔍 Buscando ranking para item ${target.itemId} (compra: ${target.purchaseId})`, 'color: #6366f1; font-size: 10px;');
+        try {
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': shared.sessionToken,
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                signal: AbortSignal.timeout(5000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`%c[POLARYON RANKING LOOP] ✅ Resposta recebida: ${JSON.stringify(data).substring(0, 200)}...`, 'color: #10b981; font-size: 10px;');
+                processRankingData(data, url);
+            } else {
+                console.warn(`[POLARYON RANKING LOOP] ️ Status ${res.status} para item ${target.itemId}`);
+            }
+        } catch (e) {
+            console.error(`[POLARYON RANKING LOOP] ❌ Erro:`, e);
+        }
+    }, 5000);
+
+    function processSerproData(data, url) {
+        console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
+
+        // 🏆 RANKING: intercepta respostas de /lances/por-participante ou classificação local
+        if (url.includes('/lances/por-participante') || url.includes('/lances/compra/') || url.includes('/classificacao') || url.includes('comprasnet/classificacao')) {
+            processRankingData(data, url);
+            return;
+        }
+
+        if (url.includes('/participacoes')) {
+            const isDisputaQuery = url.includes('situacao=3') || url.includes('situacao=EM_DISPUTA') || url.includes('fase=disputa') || url.includes('situacao=disputa');
+            const hasOtherFilters = url.includes('situacao=1') || url.includes('situacao=2') || url.includes('situacao=4') || url.includes('AGENDADA') || url.includes('EM_ANDAMENTO') || url.includes('ENCERRADA');
+            if (hasOtherFilters && !isDisputaQuery) {
+                console.log(`%c[POLARYON] Ignorando participações fora da aba de Disputa Ativa: ${url}`, "color: #94a3b8; font-size: 10px; font-weight: bold;");
+                return;
+            }
+            const listObj = Array.isArray(data) ? data : (data.itens || []);
+            listObj.forEach(p => {
+                const situacaoRaw = p.situacao || (p.compra && p.compra.situacao) || p.situacaoCompra || (p.compra && p.compra.situacaoCompra) || p.situacaoParticipacao || '';
+                const situacaoStr = String(situacaoRaw).toUpperCase();
+                if (situacaoRaw) {
+                    const isDisputa = (situacaoStr.includes('DISPUTA') || situacaoStr === '3') && !situacaoStr.includes('ENCERRADA') && !situacaoStr.includes('ENCERRADO');
+                    if (!isDisputa) return;
+                } else {
+                    if (hasOtherFilters && !isDisputaQuery) return;
+                }
+                if (p.compra && p.compra.numeroUasg && p.compra.numero) {
+                    const uasg = String(p.compra.numeroUasg).padStart(6, '0');
+                    const numero = p.compra.numero;
+                    const ano = p.compra.ano;
+                    const modalityCode = String(p.compra.modalidade || '6').padStart(2, '0');
+                    const purchaseId = `${uasg}${modalityCode}${String(numero).padStart(5, '0')}${ano}`;
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DETECTOR] 🎯 Nova sala em disputa detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
+                        if (shared.sessionToken) {
+                            const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                            fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } })
+                                .then(r => r.ok ? r.json().then(d => processSerproData(d, roomUrl)) : null).catch(() => {});
+                        }
+                    }
+                }
+            });
+        } else {
+            const jsonStr = JSON.stringify(data || {});
+            const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
+            if (discoveredIds && discoveredIds.length > 0) {
+                discoveredIds.forEach(purchaseId => {
+                    if (!shared.synchronizedPurchases.has(purchaseId)) {
+                        shared.synchronizedPurchases.add(purchaseId);
+                        console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura de rede: ${purchaseId}`, "color: #10b981; font-weight: bold;");
+                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
+                    }
+                });
+            }
+        }
+
+        const items = Array.isArray(data) ? data : (data.itens || []);
+        const match = url.match(/\/compras\/(\d+)\//);
+        const roomCode = match ? match[1] : null;
+
+        if (items.length > 0 && roomCode) {
+            // 🏆 Registra itens ativos para o loop de ranking
+            items.forEach(it => {
+                const itemIdStr = String(it.numero || it.identificador);
+                const faseItem = (it.faseTraduzido || it.fase || '').toUpperCase();
+                const isEncerrado = faseItem.includes('ENCERRAD') || faseItem.includes('FINALIZ') || faseItem.includes('CANCEL');
+                if (!isEncerrado && itemIdStr) {
+                    const key = `${roomCode}_${itemIdStr}`;
+                    const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
+                    if (!alreadyTracked) {
+                        activeRankingItems.push({ purchaseId: roomCode, itemId: itemIdStr });
+                        console.log(`%c[POLARYON RANKING LOOP] ➕ Item ${itemIdStr} (compra: ${roomCode}) adicionado ao radar de ranking. Total: ${activeRankingItems.length}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
+                    }
+                }
+            });
+
+            if (typeof ipcRenderer !== 'undefined') {
+                ipcRenderer.send('send-portal-data', {
+                    type: 'portal-sync',
+                    roomCode: roomCode,
+                    timestamp: Date.now(),
+                    items: items.map(it => ({
+                        itemId: String(it.numero || it.identificador),
+                        purchaseId: roomCode,
+                        valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
+                        meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
+                        status: it.faseTraduzido || it.fase,
+                        posicao: it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
+                        timerSeconds: it.segundosParaEncerramento || -1,
+                        dataHoraFimContagem: it.dataHoraFimContagem,
+                        officialMargin: it.variacaoMinimaEntreLances || 1,
+                        officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
+                        desc: it.descricao
+                    }))
+                });
+            }
+        }
+    }
+
     // Escuta as mensagens da página injetada
     window.addEventListener('message', (event) => {
         if (event.data && event.data.source === 'polaryon-injector') {
@@ -336,6 +582,8 @@
             }
         }
     });
+
+
 
     // Injeta o interceptor de rede na página
     try {
@@ -373,7 +621,7 @@
                 }
                 const response = await originalFetch(...args);
                 const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-                const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br');
+                const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
                 if (isSerpro) {
                     const clone = response.clone();
                     clone.json().then(data => processSerproData(data, url)).catch(() => {});
@@ -403,7 +651,7 @@
             const send = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.send = function() {
                 this.addEventListener('load', function() {
-                    const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br'));
+                    const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || this._url.includes('/classificacao') || this._url.includes('comprasnet/classificacao'));
                     if (isSerpro) {
                         try {
                             const data = JSON.parse(this.responseText);
