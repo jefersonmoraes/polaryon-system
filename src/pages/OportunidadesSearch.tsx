@@ -946,21 +946,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
-                // Envia data de publicação expandida para a API do PNCP para cobrir os prazos e permitir filtragem por encerramento
+                // Envia a data de publicação exata selecionada pelo usuário para filtrar no PNCP
+                // NOTA: A API do PNCP ignora esses parâmetros na prática, mas os enviamos por completude.
+                // A filtragem real é feita no client-side usando data_publicacao_pncp.
                 if (dataInicialFilter || dataFinalFilter) {
-                    let pubInicial = '';
-                    let pubFinal = '';
-
-                    if (dataFinalFilter) {
-                        pubFinal = dataFinalFilter;
-                        const baseDate = dataInicialFilter || dataFinalFilter;
-                        pubInicial = subtractDays(baseDate, 90);
-                    } else if (dataInicialFilter) {
-                        pubInicial = subtractDays(dataInicialFilter, 90);
-                    }
-
-                    if (pubInicial) params.data_publicacao_inicial = formatToApiDate(pubInicial);
-                    if (pubFinal) params.data_publicacao_final = formatToApiDate(pubFinal);
+                    if (dataInicialFilter) params.data_publicacao_inicial = formatToApiDate(dataInicialFilter);
+                    if (dataFinalFilter) params.data_publicacao_final = formatToApiDate(dataFinalFilter);
                 }
 
                 return params;
@@ -1164,20 +1155,22 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
-            // Filtro client-side de período com base no "Fim Recepção" (data_encerramento_proposta ou data_fim_vigencia)
+            // Filtro client-side de período com base na DATA DE PUBLICAÇÃO (data_publicacao_pncp)
+            // Isso garante que dispensas sejam incluídas, pois sua data_fim_vigencia pode estar
+            // no futuro enquanto foram publicadas no período selecionado pelo usuário.
             if (dataInicialFilter) {
                 items = items.filter((i: any) => {
-                    const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
-                    if (!targetDateStr) return false;
-                    const datePart = targetDateStr.split('T')[0];
+                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                    if (!pubDateStr) return true; // Inclui itens sem data de publicação
+                    const datePart = pubDateStr.split('T')[0];
                     return datePart >= dataInicialFilter;
                 });
             }
             if (dataFinalFilter) {
                 items = items.filter((i: any) => {
-                    const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
-                    if (!targetDateStr) return false;
-                    const datePart = targetDateStr.split('T')[0];
+                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                    if (!pubDateStr) return true; // Inclui itens sem data de publicação
+                    const datePart = pubDateStr.split('T')[0];
                     return datePart <= dataFinalFilter;
                 });
             }
@@ -1595,14 +1588,14 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Início)</label>
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Publicado Após (Data Inicial)</label>
                                     <input 
                                         id="pncp-filter-data-ini"
                                         name="dataInicial"
                                         type="date" value={dataInicialFilter} onChange={(e) => setDataInicialFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Período (Fim)</label>
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Publicado Até (Data Final)</label>
                                     <input 
                                         id="pncp-filter-data-fim"
                                         name="dataFinal"
