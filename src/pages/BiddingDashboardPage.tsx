@@ -70,6 +70,7 @@ interface BiddingItem {
     timeout?: string;
     desc?: string;
     descricao?: string; // Fallback
+    rankingLances?: any[];
 }
 
 interface ItemStrategy {
@@ -1754,6 +1755,22 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                 Classificação
                             </button>
                         </div>
+                        {/* Mini-ranking Preview */}
+                        {item.rankingLances && item.rankingLances.length > 0 && (
+                            <div className="mt-3 flex flex-col gap-1 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Top 3 Lances:</span>
+                                {item.rankingLances.slice(0, 3).map((lance: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between items-center gap-2">
+                                        <span className="font-bold text-slate-600">
+                                            {idx + 1}º {lance.eMeuLance ? <span className="text-blue-600 font-black">(Você)</span> : <span className="text-slate-400 font-medium">({lance.origem || 'Lance'})</span>}
+                                        </span>
+                                        <span className={`font-mono font-bold ${idx === 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                            R$ {Number(lance.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2, maximumFractionDigits: useFourDecimals ? 4 : 2 })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1827,13 +1844,17 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
 
                 <div className="col-span-1 md:col-span-3 grid grid-cols-2 gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Melhor</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Melhor {isWinning && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
+                        </span>
                         <span className={`text-lg font-bold tracking-tight ${isWinning ? 'text-emerald-500' : 'text-red-500'}`}>
                             R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
                         </span>
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Meu Lance</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Meu Lance {item.meuValor !== undefined && item.meuValor > 0 && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
+                        </span>
                         <span className="text-lg font-bold tracking-tight text-slate-800">
                             R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
                         </span>
@@ -1938,7 +1959,9 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                         {item.rankingLances.map((lance: any, idx: number) => (
                                             <tr key={idx} className={`border-b border-slate-50 ${ idx === 0 ? 'bg-emerald-50' : '' }`}>
                                                 <td className="py-2 font-black text-slate-700">{idx + 1}</td>
-                                                <td className="py-2 text-slate-600">{lance.origem || 'Lance'}</td>
+                                                <td className="py-2 text-slate-600">
+                                                    {lance.origem || 'Lance'} {lance.eMeuLance && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
+                                                </td>
                                                 <td className={`py-2 font-bold ${ idx === 0 ? 'text-emerald-600' : 'text-slate-800' }`}>
                                                     R$ {Number(lance.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                                                 </td>

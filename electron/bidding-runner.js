@@ -105,6 +105,7 @@ class RoomRunner {
         this.biddingRunner = biddingRunner;
         this.active = true;
         this.timeoutId = null;
+        this.itemRankingsMap = new Map(); // Persist real-time competitor rankings
     }
 
     async run() {
@@ -140,7 +141,14 @@ class RoomRunner {
             if (itemsList.length > 0) {
                 const serverNow = this.clockSync.getServerTime();
                 const mappedItems = itemsList.map(item => {
-                    const posicaoTxt = item.classificacao || item.posicao || (item.melhorValorFornecedor && (item.melhorValorFornecedor.classificacao || item.melhorValorFornecedor.posicao)) || item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
+                    const itemIdStr = String(item.numero || item.identificador);
+                    const cachedRanking = this.itemRankingsMap.get(itemIdStr);
+                    
+                    let posicaoTxt = item.classificacao || item.posicao || (item.melhorValorFornecedor && (item.melhorValorFornecedor.classificacao || item.melhorValorFornecedor.posicao)) || item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
+                    if (cachedRanking && cachedRanking.realPosicao) {
+                        posicaoTxt = cachedRanking.realPosicao;
+                    }
+                    
                     let secondsLeft = item.segundosParaEncerramento;
                     if (secondsLeft === undefined || secondsLeft === null) {
                         if (item.dataHoraFimContagem) {
@@ -158,7 +166,7 @@ class RoomRunner {
                     }
 
                     return {
-                        itemId: String(item.numero || item.identificador),
+                        itemId: itemIdStr,
                         purchaseId: this.idCompra,
                         valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
                         meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : (item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0),
@@ -168,7 +176,8 @@ class RoomRunner {
                         dataHoraFimContagem: item.dataHoraFimContagem,
                         officialMargin: item.variacaoMinimaEntreLances || 1,
                         officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V',
-                        desc: item.descricao
+                        desc: item.descricao,
+                        rankingLances: cachedRanking ? cachedRanking.rankingLances : []
                     };
                 });
 
@@ -181,13 +190,13 @@ class RoomRunner {
                     items: mappedItems
                 });
 
-                // 🏆 RANKING REAL via /lances — busca assíncrona sem bloquear o polling
+                // 🏆 RANKING REAL via /lances/por-participante — busca assíncrona sem bloquear o polling
                 // Só busca em itens ativos para não gastar cota de rate-limit
                 const activeItems = mappedItems.filter(it => it.status !== 'Encerrado' && it.timerSeconds !== -1 || it.timerSeconds > 0);
                 if (activeItems.length > 0 && token) {
                     // Limita a 1 item por ciclo para evitar 429
                     const itemToCheck = activeItems[Math.floor(Date.now() / 5000) % activeItems.length];
-                    const lancesUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances`;
+                    const lancesUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${captchas.captcha1}&tamanhoPagina=50&pagina=0`;
                     axios.get(lancesUrl, {
                         httpsAgent: this.agent,
                         timeout: 5000,
@@ -198,40 +207,62 @@ class RoomRunner {
                             'x-version-number': '6.0.2'
                         }
                     }).then(lancesRes => {
-                        // A resposta contém os dados do item incluindo melhorValorFornecedor com classificação
-                        const lancesData = Array.isArray(lancesRes.data) ? lancesRes.data : (lancesRes.data.itens || []);
-                        if (lancesData.length === 0) return;
+                        const rawData = lancesRes.data;
+                        let lancesList = [];
+                        if (Array.isArray(rawData)) {
+                            lancesList = rawData;
+                        } else if (rawData && Array.isArray(rawData.itens)) {
+                            lancesList = rawData.itens;
+                        } else if (rawData && Array.isArray(rawData.lances)) {
+                            lancesList = rawData.lances;
+                        } else if (rawData && rawData.conteudo && Array.isArray(rawData.conteudo)) {
+                            lancesList = rawData.conteudo;
+                        }
 
-                        // O primeiro item tem o melhorValorFornecedor com a posição real
-                        const itemData = lancesData[0];
-                        if (!itemData) return;
+                        if (lancesList.length === 0) return;
 
-                        const realPosicao = itemData.melhorValorFornecedor 
-                            ? (itemData.melhorValorFornecedor.classificacao || itemData.melhorValorFornecedor.posicao)
-                            : null;
-
-                        // Monta o ranking visual igual ao modal "Melhores lances do item" do Siga/Comprasnet
-                        // Os lances são retornados em ordem de classificação (melhor = menor valor)
-                        // Cada item do array é o estado do item para um participante específico
-                        const rankingLances = lancesData.map((entry, idx) => {
-                            const val = entry.melhorValorFornecedor 
-                                ? (entry.melhorValorFornecedor.valorInformado || entry.melhorValorFornecedor.valorCalculado)
-                                : null;
-                            if (!val) return null;
-                            const dt = entry.dataHoraAtualizacao 
-                                ? new Date(entry.dataHoraAtualizacao).toLocaleString('pt-BR')
-                                : '';
+                        const rankingLances = lancesList.map((entry, idx) => {
+                            const valObj = entry.melhorValorFornecedor || entry;
+                            const val = valObj.valorCalculado || valObj.valorInformado || valObj.valor || null;
+                            if (val === null || val === undefined) return null;
+                            
+                            const dt = entry.dataHoraAtualizacao || valObj.dataHoraAtualizacao || valObj.data || '';
+                            const formattedDt = dt ? new Date(dt).toLocaleString('pt-BR') : '';
+                            const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance);
+                            
                             return {
-                                valor: val,
-                                origem: entry.tipo === 'P' ? 'Proposta' : 'Lance',
-                                data: dt,
-                                posicao: entry.melhorValorFornecedor?.classificacao || (idx + 1)
+                                valor: Number(val),
+                                origem: (entry.tipo === 'P' || valObj.tipo === 'P') ? 'Proposta' : 'Lance',
+                                data: formattedDt,
+                                eMeuLance: eMeuLance,
+                                classificacao: valObj.classificacao || valObj.posicao || entry.classificacao || entry.posicao || null
                             };
                         }).filter(Boolean).sort((a, b) => a.valor - b.valor);
 
-                        console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real = ${realPosicao} | ${rankingLances.length} lances no ranking`);
+                        if (rankingLances.length === 0) return;
+
+                        rankingLances.forEach((r, idx) => {
+                            r.posicao = r.classificacao || (idx + 1);
+                        });
+
+                        let myRankIndex = rankingLances.findIndex(r => r.eMeuLance);
+                        if (myRankIndex === -1 && itemToCheck.meuValor > 0) {
+                            myRankIndex = rankingLances.findIndex(r => Math.abs(r.valor - itemToCheck.meuValor) < 0.001);
+                            if (myRankIndex !== -1) {
+                                rankingLances[myRankIndex].eMeuLance = true;
+                            }
+                        }
+
+                        const realPosicao = myRankIndex !== -1 ? String(myRankIndex + 1) : null;
+
+                        console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real = ${realPosicao} | ${rankingLances.length} participantes`);
                         
-                        // Envia para o dashboard: posição real + lista de lances para o modal
+                        this.itemRankingsMap.set(itemToCheck.itemId, {
+                            realPosicao,
+                            rankingLances,
+                            updatedAt: Date.now()
+                        });
+
                         if (!this.webContents.isDestroyed()) {
                             this.webContents.send('bidding-ranking-update', {
                                 sessionId: this.sessionId,
@@ -240,7 +271,6 @@ class RoomRunner {
                                 rankingLances
                             });
                         }
-                        // Atualiza o objeto em memória para o motor de lance usar
                         if (realPosicao) itemToCheck.posicao = String(realPosicao);
                     }).catch(() => {}); // Silencioso — se falhar, continua com posição estimada
 
@@ -299,37 +329,94 @@ class RoomRunner {
 
                             // Calcular próximo lance
                             let nextBid = 0;
-                            const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin && maxAllowedToTakeLead >= myMin);
+                            let shouldBid = true;
 
-                            if (isLeaderBeatable) {
-                                // Tenta assumir a ponta usando nossa margem ou a margem obrigatória
-                                nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
+                            if (isKamikaze) {
+                                // Modo Kamikaze: mira no meuMin diretamente e atira imediatamente se estiver perdendo
+                                nextBid = myMin;
+                                if (myCurrentBid !== 999999999 && Math.abs(myCurrentBid - myMin) < 0.001) {
+                                    shouldBid = false;
+                                }
                             } else {
-                                // Líder imbatível: o nosso objetivo passa a ser o 2º lugar.
-                                const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
-                                
-                                if (isSecondPlace) {
-                                    // Já estamos na 2ª posição (a melhor posição possível atrás do líder imbatível).
-                                    // Não descemos mais NADA para proteger 100% da margem de lucro restante!
-                                    nextBid = myCurrentBid; 
-                                } else {
-                                    // Se estamos em 3º ou pior (ou sem posição), descemos gradativamente
-                                    // consumindo apenas a margem mínima necessária para tentar pegar o 2º lugar.
-                                    if (myCurrentBid !== 999999999) {
-                                        let decrementToUse = margin;
-                                        if (officialMarginVal > 0) {
-                                            const requiredDecrement = officialMarginType === 'P' 
-                                                ? currentBest * (officialMarginVal / 100) 
-                                                : officialMarginVal;
-                                            decrementToUse = Math.max(margin, requiredDecrement);
+                                // Modo Normal
+                                // Verificar se temos ranking dos concorrentes recente (máximo 15s)
+                                const cached = this.itemRankingsMap.get(sId);
+                                const hasRankings = cached && cached.rankingLances && (now - cached.updatedAt < 15000);
+
+                                if (hasRankings) {
+                                    // Filtrar lances dos concorrentes (onde eMeuLance é falso ou não é o nosso valor)
+                                    const competitorBids = cached.rankingLances
+                                        .filter(r => !r.eMeuLance)
+                                        .map(r => r.valor)
+                                        .sort((a, b) => a - b); // Crescente
+
+                                    // Calcular decrementToUse
+                                    let decrementToUse = margin;
+                                    if (officialMarginVal > 0) {
+                                        const requiredDecrement = officialMarginType === 'P' 
+                                            ? currentBest * (officialMarginVal / 100) 
+                                            : officialMarginVal;
+                                        decrementToUse = Math.max(margin, requiredDecrement);
+                                    }
+
+                                    // Encontrar o primeiro concorrente que conseguimos bater (c - decrementToUse >= myMin)
+                                    let targetCompetitorBid = null;
+                                    for (const c of competitorBids) {
+                                        if (c - decrementToUse >= myMin) {
+                                            targetCompetitorBid = c;
+                                            break;
                                         }
-                                        nextBid = myCurrentBid - decrementToUse;
+                                    }
+
+                                    if (targetCompetitorBid !== null) {
+                                        const targetBid = targetCompetitorBid - decrementToUse;
+
+                                        // Se nosso lance atual já é menor ou igual ao targetBid,
+                                        // já ocupamos essa posição (ou melhor) e economizamos margem!
+                                        if (myCurrentBid !== 999999999 && myCurrentBid <= targetBid) {
+                                            shouldBid = false;
+                                            console.log(`[BACKEND SNIPER] Item ${sId}: Já estamos na posição ideal (meuLance: ${myCurrentBid} <= target: ${targetBid} p/ concorrente ${targetCompetitorBid}). Protegendo margem.`);
+                                        } else {
+                                            nextBid = targetBid;
+                                        }
                                     } else {
-                                        // Se nunca deu lance, não tem referência para descer gradativamente
-                                        nextBid = myMin;
+                                        // Nenhum concorrente é batível acima de myMin.
+                                        // A melhor posição que podemos conseguir é o nosso próprio mínimo
+                                        if (myCurrentBid !== 999999999 && myCurrentBid <= myMin) {
+                                            shouldBid = false;
+                                        } else {
+                                            nextBid = myMin;
+                                        }
+                                    }
+                                } else {
+                                    // Fallback: Lógica padrão sem rankings detalhados
+                                    const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin && maxAllowedToTakeLead >= myMin);
+
+                                    if (isLeaderBeatable) {
+                                        nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
+                                    } else {
+                                        const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
+                                        if (isSecondPlace) {
+                                            shouldBid = false; // Já estamos em 2º lugar
+                                        } else {
+                                            if (myCurrentBid !== 999999999) {
+                                                let decrementToUse = margin;
+                                                if (officialMarginVal > 0) {
+                                                    const requiredDecrement = officialMarginType === 'P' 
+                                                        ? currentBest * (officialMarginVal / 100) 
+                                                        : officialMarginVal;
+                                                    decrementToUse = Math.max(margin, requiredDecrement);
+                                                }
+                                                nextBid = myCurrentBid - decrementToUse;
+                                            } else {
+                                                nextBid = myMin;
+                                            }
+                                        }
                                     }
                                 }
                             }
+
+                            if (!shouldBid) continue;
 
                             if (nextBid < myMin) nextBid = myMin;
                             nextBid = allow4
@@ -342,7 +429,7 @@ class RoomRunner {
                                 continue;
                             }
                             
-                            // Bloqueia se o lance não melhorar o PRÓPRIO lance (isso barra o nextBid = myCurrentBid do 2º lugar)
+                            // Bloqueia se o lance não melhorar o PRÓPRIO lance
                             if (myCurrentBid !== 999999999 && nextBid >= myCurrentBid) {
                                 console.log(`[BACKEND SNIPER] Item ${sId}: Já estamos na posição ideal ou lance (R$ ${nextBid}) não melhora o atual. Protegendo margem.`);
                                 continue;
