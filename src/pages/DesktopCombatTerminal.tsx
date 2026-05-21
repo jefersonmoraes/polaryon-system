@@ -351,7 +351,7 @@ export default function DesktopCombatTerminal() {
                     <span className="flex items-center gap-2"><Shield className="w-3 h-3" /> SECURITY: RSA-X8</span>
                 </div>
                 <div className="text-[10px] text-white/20 font-mono italic">
-                    POLARYON v3.8.11 // OPERAÇÃO INFILTRADO // {new Date().toLocaleTimeString()}
+                    POLARYON v3.8.20 // OPERAÇÃO INFILTRADO // {new Date().toLocaleTimeString()}
                 </div>
             </div>
 

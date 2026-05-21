@@ -810,33 +810,84 @@ export default function BiddingDashboardPage() {
                 });
             }
 
-            // 🏆 RANKING REAL: Atualiza rankingLances quando o backend busca o endpoint /lances
-            // Calcula a posição real do usuário usando buildRankingPorParticipante (melhor lance por participante)
+            // 🏆 RANKING REAL: Atualiza rankingLances quando o backend ou preload intercepta lances
+            // FIX v3.8.20: O portal-preload envia sessionId como "GLOBAL_{compraId}" (ex: GLOBAL_153208306062026).
+            // As sessões no mapa usam outros prefixos. Fazemos busca fuzzy pelo compraId em todos os itens.
             if ((window as any).electronAPI.onBiddingRankingUpdate) {
                 (window as any).electronAPI.onBiddingRankingUpdate((data: any) => {
                     const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
+                    if (!rankingLances || rankingLances.length === 0) return;
+
+                    // Extrai o compraId do sid (pode ser "GLOBAL_153208306062026" ou um sessionId direto)
+                    const compraIdFromSid = sid.startsWith('GLOBAL_') ? sid.replace('GLOBAL_', '') : null;
+
                     setSessions(prev => {
                         const updated = { ...prev };
-                        if (updated[sid]) {
-                            updated[sid].items = updated[sid].items.map((it: any) => {
-                                if (String(it.itemId) === String(itemId)) {
-                                    // Calcula posição real pelo ranking por participante
-                                    let posicaoFinal = realPosicao;
-                                    if (rankingLances && rankingLances.length > 0) {
-                                        const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
-                                        if (minhaPosicao > 0) {
-                                            posicaoFinal = String(minhaPosicao);
-                                        }
-                                    }
+
+                        const applyRankingToSession = (targetSid: string) => {
+                            if (!updated[targetSid]) return;
+                            updated[targetSid] = {
+                                ...updated[targetSid],
+                                items: updated[targetSid].items.map((it: any) => {
+                                    const itItemId = String(it.itemId || it.numero || '');
+                                    if (itItemId !== String(itemId)) return it;
+
+                                    const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
+                                    const posicaoFinal = minhaPosicao > 0
+                                        ? String(minhaPosicao)
+                                        : (realPosicao || it.posicao);
+
+                                    console.log(`%c[POLARYON RANKING UI] ✅ Ranking injetado: sessão=${targetSid} item=${itemId} posição=${posicaoFinal} participantes=${rankingLances.length}`, 'color:#10b981;font-weight:bold;');
                                     return {
                                         ...it,
-                                        ...(posicaoFinal ? { posicao: posicaoFinal } : {}),
-                                        ...(rankingLances ? { rankingLances } : {})
+                                        posicao: posicaoFinal,
+                                        rankingLances
                                     };
-                                }
-                                return it;
-                            });
+                                })
+                            };
+                        };
+
+                        // 1) Tentativa direta: sessionId bate exatamente
+                        if (updated[sid]) {
+                            applyRankingToSession(sid);
+                            return updated;
                         }
+
+                        // 2) Busca fuzzy: percorre todas as sessões procurando um item cujo purchaseId
+                        //    contenha o compraId, OU cujo itemId bata com o itemId recebido
+                        let matched = false;
+                        for (const [existingSid, session] of Object.entries(updated)) {
+                            const items: any[] = (session as any).items || [];
+                            const hasMatchingItem = items.some((it: any) => {
+                                const itItemId = String(it.itemId || it.numero || '');
+                                if (itItemId !== String(itemId)) return false;
+                                // Verifica se o purchaseId da sessão contém o compraId
+                                if (compraIdFromSid) {
+                                    const pid = String(it.purchaseId || '');
+                                    if (pid.includes(compraIdFromSid) || compraIdFromSid.includes(pid.substring(0, 17))) return true;
+                                    // Também aceita se o sid da sessão contém partes do compraId
+                                    if (existingSid.includes(compraIdFromSid) || compraIdFromSid.startsWith(existingSid.replace(/\D/g, '').substring(0, 6))) return true;
+                                }
+                                // Fallback: se só tem 1 sessão ativa, é ela
+                                return Object.keys(updated).length === 1;
+                            });
+                            if (hasMatchingItem) {
+                                applyRankingToSession(existingSid);
+                                matched = true;
+                                break;
+                            }
+                        }
+
+                        // 3) Último recurso: se só existe 1 sessão, injeta nela
+                        if (!matched) {
+                            const existingSids = Object.keys(updated);
+                            if (existingSids.length === 1) {
+                                applyRankingToSession(existingSids[0]);
+                            } else {
+                                console.warn(`[POLARYON RANKING UI] ⚠️ Não foi possível encontrar sessão para sid="${sid}" compraId="${compraIdFromSid}" itemId="${itemId}". Sessões ativas:`, existingSids);
+                            }
+                        }
+
                         return updated;
                     });
                 });
@@ -880,6 +931,86 @@ export default function BiddingDashboardPage() {
             restore();
         }
     }, [isDesktop, sessionId]);
+
+    // 🏆 SOCKET RANKING: Atualiza rankingLances via socket (modo web e desktop)
+    useEffect(() => {
+        const handleRankingUpdate = (data: any) => {
+            const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
+            if (!rankingLances || rankingLances.length === 0) return;
+
+            const compraIdFromSid = sid.startsWith('GLOBAL_') ? sid.replace('GLOBAL_', '') : null;
+
+            setSessions(prev => {
+                const updated = { ...prev };
+
+                const applyRankingToSession = (targetSid: string) => {
+                    if (!updated[targetSid]) return;
+                    updated[targetSid] = {
+                        ...updated[targetSid],
+                        items: updated[targetSid].items.map((it: any) => {
+                            const itItemId = String(it.itemId || it.numero || '');
+                            if (itItemId !== String(itemId)) return it;
+
+                            const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
+                            const posicaoFinal = minhaPosicao > 0
+                                ? String(minhaPosicao)
+                                : (realPosicao || it.posicao);
+
+                            console.log(`%c[POLARYON RANKING SOCKET] ✅ Ranking injetado: sessão=${targetSid} item=${itemId} posição=${posicaoFinal} participantes=${rankingLances.length}`, 'color:#10b981;font-weight:bold;');
+                            return {
+                                ...it,
+                                posicao: posicaoFinal,
+                                rankingLances
+                            };
+                        })
+                    };
+                };
+
+                // 1) Tentativa direta: sessionId bate exatamente
+                if (updated[sid]) {
+                    applyRankingToSession(sid);
+                    return updated;
+                }
+
+                // 2) Busca fuzzy
+                let matched = false;
+                for (const [existingSid, session] of Object.entries(updated)) {
+                    const items: any[] = (session as any).items || [];
+                    const hasMatchingItem = items.some((it: any) => {
+                        const itItemId = String(it.itemId || it.numero || '');
+                        if (itItemId !== String(itemId)) return false;
+                        if (compraIdFromSid) {
+                            const pid = String(it.purchaseId || '');
+                            if (pid.includes(compraIdFromSid) || compraIdFromSid.includes(pid.substring(0, 17))) return true;
+                            if (existingSid.includes(compraIdFromSid) || compraIdFromSid.startsWith(existingSid.replace(/\D/g, '').substring(0, 6))) return true;
+                        }
+                        return Object.keys(updated).length === 1;
+                    });
+                    if (hasMatchingItem) {
+                        applyRankingToSession(existingSid);
+                        matched = true;
+                        break;
+                    }
+                }
+
+                // 3) Último recurso
+                if (!matched) {
+                    const existingSids = Object.keys(updated);
+                    if (existingSids.length === 1) {
+                        applyRankingToSession(existingSids[0]);
+                    }
+                }
+
+                return updated;
+            });
+        };
+
+        socketService.on('biddingRankingUpdate', handleRankingUpdate);
+
+        return () => {
+            socketService.off('biddingRankingUpdate', handleRankingUpdate);
+        };
+    }, []);
 
 
     const startSniperTest = (itemId: string, targetSid?: string) => {
@@ -1617,14 +1748,32 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
         }
     });
 
-    // Se o meuValor veio do item mas não havia nenhum lance marcado como "meu", injeta
+    // Se o meuValor veio do item mas não havia nenhum lance marcado como "meu", tenta encontrar por valor ou injeta
     if (!mapaParticipantes.has('__EU__') && meuValor && meuValor > 0) {
-        mapaParticipantes.set('__EU__', {
-            valor: meuValor,
-            origem: 'Lance (Você)',
-            data: new Date().toLocaleString('pt-BR'),
-            eMeuLance: true
-        });
+        let matchingKey = null;
+        for (const [key, d] of mapaParticipantes.entries()) {
+            if (Math.abs(d.valor - meuValor) < 0.001) {
+                matchingKey = key;
+                break;
+            }
+        }
+        if (matchingKey) {
+            const d = mapaParticipantes.get(matchingKey);
+            if (d) {
+                mapaParticipantes.delete(matchingKey);
+                mapaParticipantes.set('__EU__', {
+                    ...d,
+                    eMeuLance: true
+                });
+            }
+        } else {
+            mapaParticipantes.set('__EU__', {
+                valor: meuValor,
+                origem: 'Lance (Você)',
+                data: new Date().toLocaleString('pt-BR'),
+                eMeuLance: true
+            });
+        }
     }
 
     // Ordena do menor para o maior

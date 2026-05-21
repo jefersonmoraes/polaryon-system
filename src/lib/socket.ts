@@ -63,6 +63,10 @@ class SocketService {
                 this.trigger('biddingUpdate', data);
             });
 
+            this.socket.on('biddingRankingUpdate', (data) => {
+                this.trigger('biddingRankingUpdate', data);
+            });
+
             this.socket.on('disconnect', () => {
                 console.log('❌ Disconnected from realtime server');
                 this.trigger('connection_change', false);

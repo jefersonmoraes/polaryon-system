@@ -134,14 +134,32 @@ export class BiddingListener {
                     
                     // FETCH DETAILED RANKING (Only if authenticated)
                     let myPosition = item.ganhador === 'Você' ? 1 : 0;
-                    if (session?.credentialId && myPosition === 0) {
+                    let rankingLancesForItem: any[] = [];
+                    
+                    if (session?.credentialId) {
                         try {
-                            const ranking = await this.fetchItemRanking(session.credentialId, idCompra, item.itemId);
-                            if (ranking && ranking.index !== undefined) {
-                                myPosition = ranking.index + 1; // 1-indexed
+                            const rankingData = await this.fetchItemRanking(session.credentialId, idCompra, item.itemId);
+                            if (rankingData) {
+                                if (rankingData.index !== undefined && rankingData.index >= 0) {
+                                    myPosition = rankingData.index + 1; // 1-indexed
+                                }
+                                // Envia o ranking completo para o frontend
+                                if (rankingData.rankingLances && rankingData.rankingLances.length > 0) {
+                                    rankingLancesForItem = rankingData.rankingLances;
+                                    
+                                    // Emite atualização de ranking em tempo real
+                                    if (io) {
+                                        io.to(`bidding_room_${sessionId}`).emit('biddingRankingUpdate', {
+                                            sessionId,
+                                            itemId: item.itemId,
+                                            realPosicao: myPosition,
+                                            rankingLances: rankingLancesForItem
+                                        });
+                                    }
+                                }
                             }
                         } catch (e) {
-                            // Silently fail ranking fetch
+                            console.error(`[PBE] Erro ao buscar ranking para item ${item.itemId}:`, e);
                         }
                     }
 
@@ -159,6 +177,7 @@ export class BiddingListener {
                     }
 
                     (item as any).position = myPosition;
+                    (item as any).rankingLances = rankingLancesForItem;
 
                     const decision = BiddingStrategyEngine.evaluate(item, config, nowWithOffset);
                     
@@ -254,6 +273,7 @@ export class BiddingListener {
 
     /**
      * Busca a posição exata (ranking) do fornecedor no item
+     * Retorna os dados completos de "Melhores valores por fornecedor"
      */
     private static async fetchItemRanking(credentialId: string, idCompra: string, itemId: string) {
         try {
@@ -271,15 +291,39 @@ export class BiddingListener {
                 }
             });
 
-            // O Serpro retorna uma lista de lances. Precisamos encontrar o NOSSO melhor lance e ver a posição.
+            // O Serpro retorna uma lista de lances ordenados por melhor valor
             if (response.data && Array.isArray(response.data)) {
-                // Simplificação: o primeiro item costuma ser o melhor. 
-                // Mas o Serpro as vezes retorna o objeto do fornecedor logado com o campo 'index' ou 'posicao'.
-                // Vamos assumir que a resposta contém um campo que indica nossa posição se disponível.
-                return response.data.find((l: any) => l.eMeuLance === true) || { index: -1 };
+                // Transforma os dados no formato esperado pelo frontend
+                const rankingLances = response.data.map((lance: any, index: number) => ({
+                    valor: lance.valorLance || lance.valor || 0,
+                    valorInformado: lance.valorLance || lance.valor || 0,
+                    participanteId: lance.idFornecedor || lance.fornecedorId || lance.codigoFornecedor || `fornecedor_${index}`,
+                    fornecedorId: lance.idFornecedor || lance.fornecedorId || lance.codigoFornecedor,
+                    cnpjFornecedor: lance.cnpjFornecedor || lance.cnpj || '',
+                    origem: lance.tipoLance || (lance.eMeuLance ? 'Lance (Você)' : 'Lance'),
+                    tipoLance: lance.tipoLance || 'Lance',
+                    data: lance.dataHoraRegistro || lance.dataRegistro || lance.data || new Date().toISOString(),
+                    dataHora: lance.dataHoraRegistro || lance.dataRegistro || lance.data || new Date().toISOString(),
+                    dataRegistro: lance.dataHoraRegistro || lance.dataRegistro || lance.data || new Date().toISOString(),
+                    eMeuLance: !!lance.eMeuLance || !!lance.meuLance || !!lance.isMyBid,
+                    isMyBid: !!lance.eMeuLance || !!lance.meuLance || !!lance.isMyBid,
+                    meuLance: !!lance.eMeuLance || !!lance.meuLance || !!lance.isMyBid,
+                    posicao: index + 1,
+                    index: index
+                }));
+
+                // Encontra a posição do usuário
+                const meuLance = rankingLances.find(l => l.eMeuLance);
+                
+                return {
+                    rankingLances,
+                    index: meuLance ? meuLance.index : -1,
+                    minhaPosicao: meuLance ? meuLance.posicao : 0
+                };
             }
             return null;
         } catch (e) {
+            console.error(`[PBE] Erro ao buscar ranking: ${e}`);
             return null;
         }
     }

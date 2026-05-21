@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 
 export default function DesktopDownloadPage() {
-    const [version, setVersion] = useState('3.8.11');
+    const [version, setVersion] = useState('3.8.20');
 
     useEffect(() => {
         if (typeof window !== 'undefined' && (window as any).electronAPI) {
