@@ -761,9 +761,8 @@ export default function OportunidadesSearch() {
             // Se o valor estimado for 0 ou ausente, calcula a partir dos itens
             if (estimatedValue <= 0 && finalItems && Array.isArray(finalItems) && finalItems.length > 0) {
                 estimatedValue = finalItems.reduce((acc: number, it: any) => {
-                    const vUnit = it.valorUnitarioEstimated || it.valorUnitarioEstimado || it.valorUnitario || 0;
-                    const qtd = it.quantidade || 0;
-                    return acc + (vUnit * qtd);
+                    const vTotal = it.valorTotalEstimado || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.valorUnitarioEstimated || 0) * Number(it.quantidade || 0));
+                    return acc + Number(vTotal || 0);
                 }, 0);
             }
 
@@ -967,31 +966,107 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return params;
             };
 
-            const pncpPage1 = (currentPage * 2) - 1;
-            const pncpPage2 = currentPage * 2;
+            const isAll = fonteFilter.includes('unificado');
+            const kw = keyword.trim();
             const searchParams = buildParams(currentPage);
+
+            const hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
+            const numPages = hasDateFilter ? 8 : 2;
+            const startPage = hasDateFilter ? (currentPage - 1) * 8 + 1 : (currentPage - 1) * 2 + 1;
+
+            // Determinar quais consultas únicas (queries) precisamos fazer
+            const activeQueries: { key: string; type: 'pncp' | 'pcp'; q_extra?: string }[] = [];
+
+            if (isAll) {
+                activeQueries.push({ key: 'pncp_geral', type: 'pncp' });
+                activeQueries.push({ key: 'pcp', type: 'pcp' });
+            } else {
+                // Se o usuário selecionou comprasnet ou pncp, precisamos fazer a query geral
+                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp')) {
+                    activeQueries.push({ key: 'pncp_geral', type: 'pncp' });
+                }
+                // Para os portais com termos específicos
+                if (fonteFilter.includes('bll')) {
+                    activeQueries.push({ key: 'bll_bolsa', type: 'pncp', q_extra: 'Bolsa Licitações' });
+                    activeQueries.push({ key: 'bll_bll', type: 'pncp', q_extra: 'BLL' });
+                }
+                if (fonteFilter.includes('licitacoese')) {
+                    activeQueries.push({ key: 'licitacoese', type: 'pncp', q_extra: 'Licitações-e' });
+                }
+                if (fonteFilter.includes('siga')) {
+                    activeQueries.push({ key: 'siga', type: 'pncp', q_extra: 'SIGA' });
+                }
+                if (fonteFilter.includes('compras-rs')) {
+                    activeQueries.push({ key: 'compras-rs', type: 'pncp', q_extra: 'Compras RS' });
+                }
+                if (fonteFilter.includes('pcp')) {
+                    activeQueries.push({ key: 'pcp', type: 'pcp' });
+                }
+            }
+
             let items: any[] = [];
             let total = 0;
 
-            const isAll = fonteFilter.includes('unificado');
-            
-            if (isAll) {
-                const kw = keyword.trim();
-                // Busca das 2 páginas correspondentes da API PNCP para a página atual do frontend
-                const pages = [pncpPage1, pncpPage2];
-                const pncpFetches = pages.map(p => 
-                    api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).catch(() => ({ data: { items: [] } }))
-                );
-                
-                const [pcpRes, ...pncpResults] = await Promise.all([
-                    api.get('/transparency/pcp-proxy', { params: searchParams }).catch(() => ({ data: { items: [] } })),
-                    ...pncpFetches
-                ]);
+            if (activeQueries.length > 0) {
+                const fetchPromises: Promise<{ key: string; page: number; items: any[]; total: number }>[] = [];
 
-                const allItems = [
-                    ...pncpResults.flatMap(r => r.data?.items || []),
-                    ...(pcpRes.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))
-                ];
+                activeQueries.forEach(qInfo => {
+                    for (let p = startPage; p < startPage + numPages; p++) {
+                        const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
+                        
+                        if (qInfo.q_extra) {
+                            params.q = kw ? `${kw} ${qInfo.q_extra}` : qInfo.q_extra;
+                        }
+
+                        const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
+                        
+                        const promise = api.get(url, { params })
+                            .then(res => {
+                                const itemsData = res.data?.items || [];
+                                const totalVal = res.data?.total || 0;
+                                
+                                let mappedItems = itemsData;
+                                if (qInfo.type === 'pcp') {
+                                    mappedItems = itemsData.map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }));
+                                }
+                                
+                                return {
+                                    key: qInfo.key,
+                                    page: p,
+                                    items: mappedItems,
+                                    total: totalVal
+                                };
+                            })
+                            .catch(() => {
+                                return {
+                                    key: qInfo.key,
+                                    page: p,
+                                    items: [],
+                                    total: 0
+                                };
+                            });
+                            
+                        fetchPromises.push(promise);
+                    }
+                });
+
+                const resultsList = await Promise.all(fetchPromises);
+
+                const allItems = resultsList.flatMap(r => r.items);
+                
+                // Soma dos totais reportados por cada query ativa (pega o total correspondente à página inicial)
+                const totalsMap = new Map<string, number>();
+                resultsList.forEach(r => {
+                    if (r.page === startPage) {
+                        totalsMap.set(r.key, r.total);
+                    }
+                });
+
+                totalsMap.forEach((val) => {
+                    total += val;
+                });
+
+                // Deduplicação dos itens
                 const uniqueMap = new Map();
                 allItems.forEach(item => {
                     const cnpj = item.orgao_cnpj || '';
@@ -1005,60 +1080,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         uniqueMap.set(key, { ...uniqueMap.get(key), ...item });
                     }
                 });
+                
                 items = Array.from(uniqueMap.values());
-                total = pncpResults[0]?.data?.total || items.length;
-            } else {
-                // Busca em Paralelo apenas dos selecionados — cada resposta é TAGGEADA com a fonte antes do merge
-                const taggedFetches: Promise<any[]>[] = [];
-
-                if (fonteFilter.includes('pcp')) {
-                    taggedFetches.push(
-                        api.get('/transparency/pcp-proxy', { params: searchParams })
-                            .then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 })))
-                            .catch(() => [])
-                    );
+                if (total === 0) {
+                    total = items.length;
                 }
-                const kw = keyword.trim();
-                // Busca das 2 páginas correspondentes da API PNCP para a página atual
-                const pages = [pncpPage1, pncpPage2];
-                pages.forEach(p => {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, pagina: p, tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                });
-
-                if (fonteFilter.includes('bll')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Bolsa Licitações` : 'Bolsa Licitações', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} BLL` : 'BLL', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('licitacoese')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Licitações-e` : 'Licitações-e', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('siga')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} SIGA` : 'SIGA', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('compras-rs')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Compras RS` : 'Compras RS', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('pncp')) {
-                    taggedFetches.push(api.get('/transparency/pncp-proxy', { params: { ...searchParams, q: kw ? `${kw} Prefeitura` : 'Prefeitura', tam_pagina: 50 } }).then(r => r.data?.items || []).catch(() => []));
-                }
-                if (fonteFilter.includes('pcp')) {
-                    taggedFetches.push(api.get('/transparency/pcp-proxy', { params: searchParams }).then(r => (r.data?.items || []).map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }))).catch(() => []));
-                }
-
-                const taggedResults = await Promise.all(taggedFetches);
-                const allItems: any[] = taggedResults.flat();
-
-                const uniqueMap = new Map();
-                allItems.forEach(item => {
-                    const cnpj = item.orgao_cnpj || '';
-                    const ano = (item as any).ano || (item as any).ano_compra || '';
-                    const seq = (item as any).numero_sequencial || (item as any).numero_compra || '';
-                    const key = item.numero_controle_pncp || `${cnpj}-${ano}-${seq}` || item.id;
-                    if (!uniqueMap.has(key)) uniqueMap.set(key, item);
-                });
-
-                items = Array.from(uniqueMap.values());
-                total = items.length;
             }
 
             items = items.map((i: any) => {
@@ -1140,21 +1166,19 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             
             // Filtro client-side de período com base no "Fim Recepção" (data_encerramento_proposta ou data_fim_vigencia)
             if (dataInicialFilter) {
-                const initDate = new Date(dataInicialFilter + 'T00:00:00');
                 items = items.filter((i: any) => {
                     const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
                     if (!targetDateStr) return false;
-                    const targetDate = new Date(targetDateStr);
-                    return targetDate >= initDate;
+                    const datePart = targetDateStr.split('T')[0];
+                    return datePart >= dataInicialFilter;
                 });
             }
             if (dataFinalFilter) {
-                const endDate = new Date(dataFinalFilter + 'T23:59:59');
                 items = items.filter((i: any) => {
                     const targetDateStr = i.data_encerramento_proposta || i.data_fim_vigencia;
                     if (!targetDateStr) return false;
-                    const targetDate = new Date(targetDateStr);
-                    return targetDate <= endDate;
+                    const datePart = targetDateStr.split('T')[0];
+                    return datePart <= dataFinalFilter;
                 });
             }
 
@@ -2042,7 +2066,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                 <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border pb-1">
                                                     <Calendar className="h-4 w-4" /> Valores & Cronograma
                                                 </h3>
-                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
+                                                <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
                                                     <div>
                                                         <span className="block text-[10px] text-muted-foreground uppercase mb-0.5 flex items-center"><DollarSign className="h-3 w-3 mr-0.5" /> Val. Estimado</span>
                                                         <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
@@ -2052,14 +2076,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                                 formatCurrency(itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || selectedItem.valor_global)
                                                             )}
                                                         </span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Publicação</span>
-                                                        <span className="text-sm">{formatDate(selectedItem.data_publicacao_pncp, true)}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Início Recepção</span>
-                                                        <span className="text-sm">{formatDate(selectedItem.data_inicio_vigencia, true)}</span>
                                                     </div>
                                                     <div>
                                                         <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Fim Recepção</span>
