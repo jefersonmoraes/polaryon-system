@@ -262,6 +262,7 @@ class RoomRunner {
 
                         const poolTokens = await captchaManager.getTokens().catch(() => ({}));
                         const freshToken = await captchaManager.getFreshToken().catch(() => '');
+                        console.log(`[POLARYON RANKING] 🎫 captcha1=${poolTokens.captcha1 ? poolTokens.captcha1.substring(0,20)+'...' : 'VAZIO'} | captcha2=${poolTokens.captcha2 ? poolTokens.captcha2.substring(0,20)+'...' : 'VAZIO'} | freshToken=${freshToken ? freshToken.substring(0,20)+'...' : 'VAZIO'}`);
 
                         const urlVariants = [
                             // Variante 0: com captcha1/2/3 (formato do endpoint /lances)

@@ -7,7 +7,7 @@ const password = "Jaguar2018jolela#";
 const remotePath = "/var/www/polaryon/storage/download/";
 const rootDir = path.resolve(__dirname, '..');
 
-const version = "3.8.29";
+const version = "3.8.30";
 const exeName = `Polaryon-v${version}-Setup.exe`;
 
 const filesToUpload = [

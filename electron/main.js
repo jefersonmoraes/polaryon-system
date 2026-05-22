@@ -319,6 +319,36 @@ ipcMain.handle('get-captcha-token', async () => {
     }
 });
 
+// DIAGNÓSTICO DE CAPTCHA: Testa cada variant da URL do ranking e retorna resultados (v3.8.30)
+ipcMain.handle('test-ranking-captcha', async (event, { purchaseId, itemId, token }) => {
+    const results = [];
+    const variants = [
+        { name: 'captcha1/2/3', url: `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances/por-participante?captcha1=${token}&captcha2=${token}&captcha3=${token}&tamanhoPagina=50&pagina=0` },
+        { name: 'captcha singular', url: `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances/por-participante?captcha=${token}&tamanhoPagina=50&pagina=0` },
+        { name: 'sem captcha', url: `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances/por-participante?tamanhoPagina=50&pagina=0` },
+        { name: 'propostas-iniciais', url: `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${purchaseId}/itens/${itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0` },
+    ];
+    for (const v of variants) {
+        try {
+            const res = await fetch(v.url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'Mozilla/5.0 SIGAClient/0.7.2',
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                signal: AbortSignal.timeout(5000)
+            });
+            const body = await res.text().catch(() => '');
+            results.push({ name: v.name, status: `${res.status} ${res.statusText}`, body: body.substring(0, 300) });
+        } catch (e) {
+            results.push({ name: v.name, status: 'ERRO', body: e.message });
+        }
+    }
+    return results;
+});
+
 // GESTÃO DE CERTIFICADO A1
 ipcMain.handle('save-a1-certificate', async (event, { fileName, buffer, password }) => {
   return certHelper.saveCertificate(fileName, Buffer.from(buffer), password);

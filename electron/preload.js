@@ -34,5 +34,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (event, progress) => callback(progress)),
   onUpdateError: (callback) => ipcRenderer.on('update-error', (event, error) => callback(error)),
   onUpdateLog: (callback) => ipcRenderer.on('bidding-update-log', (event, msg) => callback(msg)),
-  getRestoredSessions: () => ipcRenderer.invoke('get-restored-sessions')
+  getRestoredSessions: () => ipcRenderer.invoke('get-restored-sessions'),
+  testRankingCaptcha: (purchaseId, itemId, token) => ipcRenderer.invoke('test-ranking-captcha', { purchaseId, itemId, token })
 });
