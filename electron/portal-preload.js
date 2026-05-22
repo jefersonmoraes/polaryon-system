@@ -483,7 +483,8 @@
     // 🅱️ Função auxiliar: busca /propostas-iniciais (fallback sem captcha)
     async function tryPropostasIniciais(target) {
         try {
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${target.purchaseId}/itens/${target.itemId}/propostas-iniciais`;
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${target.purchaseId}/itens/${target.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`;
+            console.log(`%c[POLARYON RANKING LOOP] GET /propostas-iniciais`, 'color:#888;font-size:10px;');
             const res = await fetch(url, {
                 headers: {
                     'Authorization': shared.sessionToken,
@@ -493,16 +494,28 @@
                 },
                 signal: AbortSignal.timeout(8000)
             });
+            const statusText = `status=${res.status} ${res.statusText}`;
+            console.log(`%c[POLARYON RANKING LOOP] /propostas-iniciais ${statusText}`, 'color:#f59e0b;font-size:10px;');
             if (res.ok) {
-                const data = await res.json();
+                const text = await res.text();
+                console.log(`%c[POLARYON RANKING LOOP] body(200B): ${text.substring(0,200)}`, 'color:#888;font-size:10px;');
+                let data;
+                try { data = JSON.parse(text); } catch(e) { data = text; }
                 const list = Array.isArray(data) ? data : (data.itens || data.propostas || data.content || data.lista || []);
                 if (list.length > 0) {
                     console.log(`%c[POLARYON RANKING LOOP] ✅ /propostas-iniciais: ${list.length} propostas`, 'color: #10b981; font-size: 10px;');
                     processRankingData(list, url);
                     return true;
+                } else {
+                    console.warn(`[POLARYON RANKING LOOP] ⚠️ /propostas-iniciais lista vazia. keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : typeof data}`);
                 }
+            } else {
+                const errBody = await res.text().catch(()=>'');
+                console.warn(`[POLARYON RANKING LOOP] ⚠️ /propostas-iniciais ${statusText} body=${errBody.substring(0,100)}`);
             }
-        } catch (e) { /* ignora */ }
+        } catch (e) {
+            console.warn(`[POLARYON RANKING LOOP] ⚠️ /propostas-iniciais erro: ${e.message || e}`);
+        }
         return false;
     }
 
@@ -511,11 +524,11 @@
     const activeRankingItems = []; // { purchaseId, itemId }
     setInterval(async () => {
         if (!shared.sessionToken) {
-            console.log(`%c[POLARYON RANKING LOOP] ⏳ Aguardando token... (items: ${activeRankingItems.length})`, 'color: #f59e0b; font-size: 10px;');
+            console.log(`%c[POLARYON RANKING LOOP] ⏳ Aguardando token... (items: ${activeRankingItems.length}, captcha: ${shared.captchaToken ? 'SIM' : 'NAO'})`, 'color: #f59e0b; font-size: 10px;');
             return;
         }
         if (activeRankingItems.length === 0) {
-            console.log(`%c[POLARYON RANKING LOOP]  Nenhum item ativo para buscar ranking`, 'color: #f59e0b; font-size: 10px;');
+            console.log(`%c[POLARYON RANKING LOOP]  Nenhum item ativo para buscar ranking (captcha: ${shared.captchaToken ? 'SIM' : 'NAO'})`, 'color: #f59e0b; font-size: 10px;');
             return;
         }
         const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
@@ -536,7 +549,10 @@
 
             if (captcha) {
                 // ✅ Tem captcha → usa /lances/por-participante (melhores valores por fornecedor)
-                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encodeURIComponent(captcha)}&tamanhoPagina=50&pagina=0`;
+                // Usa captcha1/captcha2/captcha3 (formato que a SERPRO espera, igual ao /lances)
+                const encoded = encodeURIComponent(captcha);
+                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha1=${encoded}&captcha2=${encoded}&captcha3=${encoded}&tamanhoPagina=50&pagina=0`;
+                console.log(`%c[POLARYON RANKING LOOP] GET ${url.substring(0,120)}...`, 'color:#888;font-size:10px;');
                 const res = await fetch(url, {
                     headers: {
                         'Authorization': shared.sessionToken,
@@ -546,17 +562,21 @@
                     },
                     signal: AbortSignal.timeout(8000)
                 });
+                const statusText = `status=${res.status} ${res.statusText}`;
+                console.log(`%c[POLARYON RANKING LOOP] /lances/por-participante ${statusText}`, 'color:#f59e0b;font-size:10px;');
                 if (res.ok) {
-                    const data = await res.json();
-                    console.log(`%c[POLARYON RANKING LOOP] ✅ /lances/por-participante (${typeof data} keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : '?'})`, 'color: #10b981; font-size: 10px;');
+                    const text = await res.text();
+                    console.log(`%c[POLARYON RANKING LOOP] body(200B): ${text.substring(0,200)}`, 'color:#888;font-size:10px;');
+                    let data;
+                    try { data = JSON.parse(text); } catch(e) { data = text; }
                     if (!processRankingData(data, url)) {
-                        // Se processRankingData retornou false (não achou lances válidos), tenta /propostas-iniciais
                         console.log(`%c[POLARYON RANKING LOOP] ⚠️ /lances/por-participante não retornou lances válidos, tentando /propostas-iniciais`, 'color: #f59e0b; font-size: 10px;');
                         await tryPropostasIniciais(target);
                     }
                 } else {
-                    console.warn(`[POLARYON RANKING LOOP] ⚠️ /lances/por-participante status ${res.status} para item ${target.itemId}`);
                     if (res.status !== 429) {
+                        const errBody = await res.text().catch(()=>'');
+                        console.warn(`[POLARYON RANKING LOOP] ⚠️ /lances/por-participante ${statusText} body=${errBody.substring(0,100)}`);
                         await tryPropostasIniciais(target);
                     }
                 }
