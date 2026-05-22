@@ -28,6 +28,21 @@ class VisualRunner {
             }
         });
 
+        // 🏆 RANKING INTERCEPTADO: Repassa dados de /lances/por-participante capturados pelo portal-preload
+        ipcMain.removeAllListeners('portal-ranking-data');
+        ipcMain.on('portal-ranking-data', (event, { sessionId, itemId, rankingLances }) => {
+            console.log(`[POLARYON RANKING IPC] 📊 Recebido ranking do portal: sessionId=${sessionId} itemId=${itemId} lances=${rankingLances.length}`);
+            if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                this.dashboardWebContents.send('bidding-ranking-update', {
+                    sessionId,
+                    itemId,
+                    rankingLances,
+                    realPosicao: null // será calculado pelo frontend via buildRankingPorParticipante
+                });
+            }
+        });
+
+
         ipcMain.on('portal-native-click', async (event, { sessionId, x, y }) => {
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {

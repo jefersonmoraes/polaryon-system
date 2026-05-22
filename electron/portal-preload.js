@@ -305,12 +305,12 @@
     }
 
     async function autoFetchPurchaseItems(purchaseId) {
-        if (!sessionToken) return;
+        if (!shared.sessionToken) return;
         try {
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
             const res = await fetch(url, {
                 headers: {
-                    'Authorization': sessionToken,
+                    'Authorization': shared.sessionToken,
                     'Accept': 'application/json',
                     'x-device-platform': 'web',
                     'x-version-number': '6.0.2'
@@ -318,7 +318,10 @@
             });
             if (res.ok) {
                 const data = await res.json();
+                console.log(`%c[POLARYON AUTO FETCH] ✅ ${purchaseId}: ${Array.isArray(data) ? data.length + ' itens' : 'OK'}`, 'color: #10b981; font-size: 10px;');
                 processSerproData(data, url);
+            } else {
+                console.warn(`[POLARYON AUTO FETCH] ⚠️ ${purchaseId}: status ${res.status}`);
             }
         } catch (e) {
             console.error(`[POLARYON] Erro ao sincronizar itens da sala ${purchaseId}:`, e);
@@ -365,12 +368,36 @@
 
         // Extrai lista de lances do formato que vier
         let lancesList = [];
-        if (Array.isArray(data))                             lancesList = data;
-        else if (data && Array.isArray(data.itens))         lancesList = data.itens;
-        else if (data && Array.isArray(data.lances))        lancesList = data.lances;
-        else if (data && Array.isArray(data.conteudo))      lancesList = data.conteudo;
-        else if (data && Array.isArray(data.content))       lancesList = data.content;
-        else if (data && Array.isArray(data.data))          lancesList = data.data;
+        if (Array.isArray(data)) {
+            lancesList = data;
+        } else if (data) {
+            if (Array.isArray(data.itens))           lancesList = data.itens;
+            else if (Array.isArray(data.lances))      lancesList = data.lances;
+            else if (Array.isArray(data.conteudo))    lancesList = data.conteudo;
+            else if (Array.isArray(data.content))     lancesList = data.content;
+            else if (Array.isArray(data.data))        lancesList = data.data;
+            else if (Array.isArray(data.records))     lancesList = data.records;
+            else if (Array.isArray(data.lista))       lancesList = data.lista;
+            else if (Array.isArray(data.participantes)) lancesList = data.participantes;
+            else if (Array.isArray(data.fornecedores))  lancesList = data.fornecedores;
+            else if (Array.isArray(data.resultado))    lancesList = data.resultado;
+            else if (data._embedded && Array.isArray(data._embedded.lances)) lancesList = data._embedded.lances;
+            else if (data._embedded && Array.isArray(data._embedded.participantes)) lancesList = data._embedded.participantes;
+            else if (data._embedded && Array.isArray(data._embedded.content)) lancesList = data._embedded.content;
+            else {
+                // Fallback: varre chaves do objeto principal
+                for (const k of Object.keys(data)) {
+                    if (Array.isArray(data[k]) && data[k].length > 0) {
+                        const sample = data[k][0];
+                        if (sample && (typeof sample.valor !== 'undefined' || typeof sample.valorInformado !== 'undefined' || typeof sample.valorCalculado !== 'undefined')) {
+                            lancesList = data[k];
+                            console.log(`%c[POLARYON RANKING INTERCEPTOR] 🔄 Extraído de chave "${k}" (${lancesList.length})`, 'color: #f59e0b; font-size: 10px;');
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         console.log(`%c[POLARYON RANKING INTERCEPTOR] 📋 lancesList encontrada: length=${lancesList.length}`, 'color: #6366f1; font-size: 10px;');
         
@@ -391,15 +418,23 @@
                 val = typeof valObj.valor === 'object'
                     ? (valObj.valor.valorCalculado ?? valObj.valor.valorInformado)
                     : valObj.valor;
-            } else {
-                val = valObj.valorCalculado ?? valObj.valorInformado ?? null;
+            } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
+                val = valObj.valorCalculado;
+            } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
+                val = valObj.valorInformado;
+            } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
+                val = valObj.valorLance;
+            } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
+                val = valObj.valorProposta;
+            } else if (valObj.lance !== undefined && valObj.lance !== null) {
+                val = typeof valObj.lance === 'number' ? valObj.lance : null;
             }
             if (val === null || val === undefined) return null;
 
-            const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance);
-            const origemRaw = entry.origem || valObj.origem || entry.tipo || valObj.tipo || '';
+            const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance || entry.isMyBid || valObj.isMyBid);
+            const origemRaw = entry.origem || valObj.origem || entry.tipo || valObj.tipo || entry.tipoLance || valObj.tipoLance || '';
             const origem = (origemRaw === 'P' || origemRaw === 'Proposta') ? 'Proposta' : 'Lance';
-            const dt = valObj.dataHoraInclusao || valObj.dataHoraAtualizacao || entry.dataHoraInclusao || entry.data || '';
+            const dt = valObj.dataHoraInclusao || valObj.dataHoraAtualizacao || entry.dataHoraInclusao || entry.dataHoraAtualizacao || valObj.data || entry.data || entry.dataHora || valObj.dataHora || valObj.dataHoraRegistro || entry.dataHoraRegistro || '';
             const formattedDt = dt ? new Date(dt).toLocaleString('pt-BR') : '';
 
             let partId = entry.participanteId || entry.fornecedorId || entry.cnpjFornecedor
@@ -539,7 +574,6 @@
                 const faseItem = (it.faseTraduzido || it.fase || '').toUpperCase();
                 const isEncerrado = faseItem.includes('ENCERRAD') || faseItem.includes('FINALIZ') || faseItem.includes('CANCEL');
                 if (!isEncerrado && itemIdStr) {
-                    const key = `${roomCode}_${itemIdStr}`;
                     const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
                     if (!alreadyTracked) {
                         activeRankingItems.push({ purchaseId: roomCode, itemId: itemIdStr });
@@ -549,23 +583,33 @@
             });
 
             if (typeof ipcRenderer !== 'undefined') {
-                ipcRenderer.send('send-portal-data', {
-                    type: 'portal-sync',
-                    roomCode: roomCode,
-                    timestamp: Date.now(),
-                    items: items.map(it => ({
+                const mappedItems = items.map(it => {
+                    const spd = it.situacaoParticipanteDisputa;
+                    const rawPos = it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (spd === 'G' ? 'GANHANDO' : (spd === 'P' || spd === 'E' ? 'PERDENDO' : '?'));
+                    const numPos = parseInt(rawPos, 10);
+                    const posFinal = !isNaN(numPos) ? String(numPos) : rawPos;
+                    const meuValor = it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0);
+                    const valorAtual = it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0);
+                    return {
                         itemId: String(it.numero || it.identificador),
                         purchaseId: roomCode,
-                        valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
-                        meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
-                        status: it.faseTraduzido || it.fase,
-                        posicao: it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
+                        valorAtual,
+                        meuValor,
+                        ganhador: posFinal === '1' || posFinal === 'GANHANDO' ? 'Você' : 'Outro',
+                        status: it.faseTraduzido || it.fase || (it.situacaoItem || ''),
+                        posicao: posFinal,
                         timerSeconds: it.segundosParaEncerramento || -1,
                         dataHoraFimContagem: it.dataHoraFimContagem,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao
-                    }))
+                    };
+                });
+                ipcRenderer.send('send-portal-data', {
+                    type: 'portal-sync',
+                    roomCode: roomCode,
+                    timestamp: Date.now(),
+                    items: mappedItems
                 });
             }
         }

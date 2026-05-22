@@ -1,6 +1,6 @@
 const axios = require('axios');
 const https = require('https');
-const { ipcMain } = require('electron');
+const { ipcMain, session } = require('electron');
 
 /**
  * CaptchaManager - Bypass Automático via Nuvem Siga
@@ -26,6 +26,35 @@ class CaptchaManager {
             }
         }
         return { captcha1: this.token1, captcha2: this.token2, captcha3: this.token1 };
+    }
+
+    async getFreshToken() {
+        try {
+            const headers = {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'pt-BR',
+                'origin': 'https://disputas.sigapregao.com.br',
+                'referer': 'https://disputas.sigapregao.com.br/',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2 Chrome/112.0.5615.165 Electron/24.1.3 Safari/537.36'
+            };
+            const res = await axios.get('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers, timeout: 5000 });
+            if (res.data) {
+                return res.data;
+            }
+        } catch (e) {
+            console.error('[POLARYON] Erro ao obter captcha avulso do Siga:', e.message);
+        }
+
+        try {
+            const fallbackRes = await axios.get('https://polaryon.com.br/api/bidding/captcha-pool', { timeout: 4000 });
+            if (fallbackRes.data && fallbackRes.data.success && fallbackRes.data.captcha1) {
+                return fallbackRes.data.captcha1;
+            }
+        } catch (err) {
+            console.error('[POLARYON] Erro no fallback de captcha avulso:', err.message);
+        }
+
+        return this.token1;
     }
 
     async _fetchTokens() {
@@ -144,7 +173,8 @@ class RoomRunner {
                     const itemIdStr = String(item.numero || item.identificador);
                     const cachedRanking = this.itemRankingsMap.get(itemIdStr);
                     
-                    let posicaoTxt = item.classificacao || item.posicao || (item.melhorValorFornecedor && (item.melhorValorFornecedor.classificacao || item.melhorValorFornecedor.posicao)) || item.situacaoParticipanteDisputaTraduzido || (item.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO');
+                    const spd = item.situacaoParticipanteDisputa;
+                    let posicaoTxt = item.classificacao || item.posicao || (item.melhorValorFornecedor && (item.melhorValorFornecedor.classificacao || item.melhorValorFornecedor.posicao)) || item.situacaoParticipanteDisputaTraduzido || (spd === 'G' ? 'GANHANDO' : (spd === 'P' || spd === 'E' ? 'PERDENDO' : '?'));
                     if (cachedRanking && cachedRanking.realPosicao) {
                         posicaoTxt = cachedRanking.realPosicao;
                     }
@@ -165,11 +195,22 @@ class RoomRunner {
                         minTimer = secondsLeft;
                     }
 
+                    // 🔧 FIX: Extração correta de valorAtual e meuValor (bug do ternário duplicado)
+                    const melhorGeral = item.melhorValorGeral;
+                    const melhorFornec = item.melhorValorFornecedor;
+                    const valorAtual = melhorGeral
+                        ? (melhorGeral.valorCalculado !== undefined && melhorGeral.valorCalculado !== null ? melhorGeral.valorCalculado : (melhorGeral.valorInformado || 0))
+                        : 0;
+                    const meuValor = melhorFornec
+                        ? (melhorFornec.valorCalculado !== undefined && melhorFornec.valorCalculado !== null ? melhorFornec.valorCalculado : (melhorFornec.valorInformado || 0))
+                        : 0;
+
                     return {
                         itemId: itemIdStr,
                         purchaseId: this.idCompra,
-                        valorAtual: item.melhorValorGeral ? item.melhorValorGeral.valorCalculado : (item.melhorValorGeral ? item.melhorValorGeral.valorInformado : 0),
-                        meuValor: item.melhorValorFornecedor ? item.melhorValorFornecedor.valorCalculado : (item.melhorValorFornecedor ? item.melhorValorFornecedor.valorInformado : 0),
+                        valorAtual,
+                        meuValor,
+                        ganhador: posicaoTxt === '1' || posicaoTxt === 'GANHANDO' ? 'Você' : 'Outro',
                         status: item.faseTraduzido || item.fase || 'Em Disputa',
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
@@ -192,88 +233,230 @@ class RoomRunner {
 
                 // 🏆 RANKING REAL via /lances/por-participante — busca assíncrona sem bloquear o polling
                 // Só busca em itens ativos para não gastar cota de rate-limit
-                const activeItems = mappedItems.filter(it => it.status !== 'Encerrado' && it.timerSeconds !== -1 || it.timerSeconds > 0);
+                const activeItems = mappedItems.filter(it => {
+                    const statusLower = String(it.status).toLowerCase();
+                    const isClosed = statusLower.includes('encerrad') || statusLower.includes('finaliz') || statusLower.includes('cancel');
+                    return !isClosed;
+                });
                 if (activeItems.length > 0 && token) {
                     // Limita a 1 item por ciclo para evitar 429
                     const itemToCheck = activeItems[Math.floor(Date.now() / 5000) % activeItems.length];
-                    const lancesUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${captchas.captcha1}&tamanhoPagina=50&pagina=0`;
-                    axios.get(lancesUrl, {
-                        httpsAgent: this.agent,
-                        timeout: 5000,
-                        headers: {
-                            'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                            'x-device-platform': 'web',
-                            'x-version-number': '6.0.2'
+                    
+                    const fetchRanking = async () => {
+                        let cookieStr = '';
+                        try {
+                            const cookies = await session.fromPartition('persist:polaryon-global').cookies.get({ url: 'https://cnetmobile.estaleiro.serpro.gov.br' });
+                            cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+                        } catch (cookieErr) {
+                            console.error('[POLARYON] Erro ao extrair cookies da sessão:', cookieErr.message);
                         }
-                    }).then(lancesRes => {
+
+                        // 🔧 FIX: Tenta 3 variações de URL - sem captcha, com captchaPool, com getFresh
+                        const baseHeaders = {
+                            'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2 Chrome/112.0.5615.165 Electron/24.1.3 Safari/537.36',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2',
+                            ...(cookieStr ? { 'Cookie': cookieStr } : {})
+                        };
+
+                        const poolTokens = await captchaManager.getTokens().catch(() => ({}));
+                        const freshToken = await captchaManager.getFreshToken().catch(() => '');
+
+                        const urlVariants = [
+                            // Variante 1: sem parâmetro captcha (alguns endpoints aceitam)
+                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`,
+                            // Variante 2: com captcha1/2/3 igual ao /itens/em-disputa
+                            (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha1=${poolTokens.captcha1}&captcha2=${poolTokens.captcha2 || poolTokens.captcha1}&captcha3=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null),
+                            // Variante 3: com token do pool captcha (singular)
+                            (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null),
+                            // Variante 4: com token fresco do Siga
+                            (freshToken && freshToken !== poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${freshToken}&tamanhoPagina=50&pagina=0` : null),
+                        ].filter(Boolean);
+
+                        let lancesRes = null;
+                        for (const lancesUrl of urlVariants) {
+                            try {
+                                lancesRes = await axios.get(lancesUrl, {
+                                    httpsAgent: this.agent,
+                                    timeout: 5000,
+                                    headers: baseHeaders
+                                });
+                                console.log(`[POLARYON RANKING] ✅ URL funcionou (status ${lancesRes.status}): ${lancesUrl.split('?')[1]?.substring(0,40)}`);
+                                break;
+                            } catch (varErr) {
+                                console.warn(`[POLARYON RANKING] ⚠️ Variante falhou (${varErr.response?.status || varErr.message}): ${lancesUrl.split('?')[1]?.substring(0,40)}`);
+                            }
+                        }
+                        if (!lancesRes) return;
+
                         const rawData = lancesRes.data;
+                        console.log(`[POLARYON RANKING] 📦 rawData tipo: ${Array.isArray(rawData) ? 'array(' + rawData.length + ')' : typeof rawData} | keys: ${rawData && typeof rawData === 'object' ? Object.keys(rawData).join(',') : 'n/a'}`);
+
                         let lancesList = [];
                         if (Array.isArray(rawData)) {
                             lancesList = rawData;
-                        } else if (rawData && Array.isArray(rawData.itens)) {
-                            lancesList = rawData.itens;
-                        } else if (rawData && Array.isArray(rawData.lances)) {
-                            lancesList = rawData.lances;
-                        } else if (rawData && rawData.conteudo && Array.isArray(rawData.conteudo)) {
-                            lancesList = rawData.conteudo;
-                        }
-
-                        if (lancesList.length === 0) return;
-
-                        const rankingLances = lancesList.map((entry, idx) => {
-                            const valObj = entry.melhorValorFornecedor || entry;
-                            const val = valObj.valorCalculado || valObj.valorInformado || valObj.valor || null;
-                            if (val === null || val === undefined) return null;
-                            
-                            const dt = entry.dataHoraAtualizacao || valObj.dataHoraAtualizacao || valObj.data || '';
-                            const formattedDt = dt ? new Date(dt).toLocaleString('pt-BR') : '';
-                            const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance);
-                            
-                            return {
-                                valor: Number(val),
-                                origem: (entry.tipo === 'P' || valObj.tipo === 'P') ? 'Proposta' : 'Lance',
-                                data: formattedDt,
-                                eMeuLance: eMeuLance,
-                                classificacao: valObj.classificacao || valObj.posicao || entry.classificacao || entry.posicao || null
-                            };
-                        }).filter(Boolean).sort((a, b) => a.valor - b.valor);
-
-                        if (rankingLances.length === 0) return;
-
-                        rankingLances.forEach((r, idx) => {
-                            r.posicao = r.classificacao || (idx + 1);
-                        });
-
-                        let myRankIndex = rankingLances.findIndex(r => r.eMeuLance);
-                        if (myRankIndex === -1 && itemToCheck.meuValor > 0) {
-                            myRankIndex = rankingLances.findIndex(r => Math.abs(r.valor - itemToCheck.meuValor) < 0.001);
-                            if (myRankIndex !== -1) {
-                                rankingLances[myRankIndex].eMeuLance = true;
+                        } else if (rawData) {
+                            if (Array.isArray(rawData.itens))           lancesList = rawData.itens;
+                            else if (Array.isArray(rawData.lances))      lancesList = rawData.lances;
+                            else if (Array.isArray(rawData.conteudo))    lancesList = rawData.conteudo;
+                            else if (Array.isArray(rawData.content))     lancesList = rawData.content;
+                            else if (Array.isArray(rawData.data))        lancesList = rawData.data;
+                            else if (Array.isArray(rawData.records))     lancesList = rawData.records;
+                            else if (Array.isArray(rawData.lista))       lancesList = rawData.lista;
+                            else if (Array.isArray(rawData.participantes)) lancesList = rawData.participantes;
+                            else if (Array.isArray(rawData.fornecedores))  lancesList = rawData.fornecedores;
+                            else if (Array.isArray(rawData.resultado))    lancesList = rawData.resultado;
+                            else if (rawData.conteudo?.lista && Array.isArray(rawData.conteudo.lista)) lancesList = rawData.conteudo.lista;
+                            else if (rawData._embedded && Array.isArray(rawData._embedded.lances)) lancesList = rawData._embedded.lances;
+                            else if (rawData._embedded && Array.isArray(rawData._embedded.participantes)) lancesList = rawData._embedded.participantes;
+                            else if (rawData._embedded && Array.isArray(rawData._embedded.content)) lancesList = rawData._embedded.content;
+                            else {
+                                // Último recurso: varre chaves do objeto procurando qualquer array
+                                for (const key of Object.keys(rawData)) {
+                                    if (Array.isArray(rawData[key]) && rawData[key].length > 0) {
+                                        lancesList = rawData[key];
+                                        console.log(`[POLARYON RANKING] 📋 Extraído array da chave "${key}" (${lancesList.length} itens)`);
+                                        break;
+                                    }
+                                }
                             }
                         }
 
-                        const realPosicao = myRankIndex !== -1 ? String(myRankIndex + 1) : null;
-
-                        console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real = ${realPosicao} | ${rankingLances.length} participantes`);
-                        
-                        this.itemRankingsMap.set(itemToCheck.itemId, {
-                            realPosicao,
-                            rankingLances,
-                            updatedAt: Date.now()
-                        });
-
-                        if (!this.webContents.isDestroyed()) {
-                            this.webContents.send('bidding-ranking-update', {
-                                sessionId: this.sessionId,
-                                itemId: itemToCheck.itemId,
-                                realPosicao: realPosicao ? String(realPosicao) : null,
-                                rankingLances
-                            });
+                        console.log(`[POLARYON RANKING] 📋 lancesList.length = ${lancesList.length}`);
+                        if (lancesList.length === 0) {
+                            console.warn('[POLARYON RANKING] ⚠️ Lista vazia! rawData:', JSON.stringify(rawData).substring(0, 300));
+                            return;
                         }
-                        if (realPosicao) itemToCheck.posicao = String(realPosicao);
-                    }).catch(() => {}); // Silencioso — se falhar, continua com posição estimada
 
+                            const rankingLances = lancesList.map((entry, idx) => {
+                                if (entry.excluido) return null;
+                                const valObj = entry.melhorValorFornecedor || entry;
+                                if (valObj.excluido) return null;
+
+                                let val = null;
+                                if (valObj.valor !== undefined && valObj.valor !== null) {
+                                    if (typeof valObj.valor === 'object') {
+                                        val = valObj.valor.valorCalculado !== undefined ? valObj.valor.valorCalculado : valObj.valor.valorInformado;
+                                    } else {
+                                        val = valObj.valor;
+                                    }
+                                } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
+                                    val = valObj.valorCalculado;
+                                } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
+                                    val = valObj.valorInformado;
+                                } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
+                                    val = valObj.valorLance;
+                                } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
+                                    val = valObj.valorProposta;
+                                } else if (valObj.lance !== undefined && valObj.lance !== null) {
+                                    val = typeof valObj.lance === 'number' ? valObj.lance : null;
+                                }
+                                if (val === null || val === undefined) return null;
+                                
+                                const dt = valObj.dataHoraInclusao || valObj.dataHoraAtualizacao || entry.dataHoraInclusao || entry.dataHoraAtualizacao || valObj.data || entry.data || '';
+                                const formattedDt = dt ? new Date(dt).toLocaleString('pt-BR') : '';
+                                const eMeuLance = !!(entry.eMeuLance || valObj.eMeuLance || entry.meuLance || valObj.meuLance || entry.isMyBid || valObj.isMyBid || entry.meuLance === true);
+                                
+                                const origemRaw = entry.origem || valObj.origem || entry.tipo || valObj.tipo || entry.tipoLance || valObj.tipoLance || '';
+                                const origem = (origemRaw === 'P' || origemRaw === 'Proposta') ? 'Proposta' : 'Lance';
+
+                                // Extração robusta do participante para agrupamento correto e eliminação de duplicidades
+                                let partId = null;
+                                if (entry.participanteId) partId = entry.participanteId;
+                                else if (entry.fornecedorId) partId = entry.fornecedorId;
+                                else if (entry.cnpjFornecedor) partId = entry.cnpjFornecedor;
+                                else if (entry.codigoParticipante) partId = entry.codigoParticipante;
+                                else if (entry.codigoFornecedor) partId = entry.codigoFornecedor;
+                                else if (entry.identificadorParticipante) partId = entry.identificadorParticipante;
+                                else if (entry.numeroParticipante) partId = entry.numeroParticipante;
+                                else if (entry.identificador) partId = entry.identificador;
+                                else if (entry.participante) {
+                                    if (typeof entry.participante === 'object') {
+                                        partId = entry.participante.identificacao || entry.participante.nome || entry.participante.codigo;
+                                    } else {
+                                        partId = entry.participante;
+                                    }
+                                } else if (entry.fornecedor) {
+                                    if (typeof entry.fornecedor === 'object') {
+                                        partId = entry.fornecedor.cnpj || entry.fornecedor.codigo || entry.fornecedor.nome;
+                                    } else {
+                                        partId = entry.fornecedor;
+                                    }
+                                }
+
+                                if (!partId && valObj) {
+                                    if (valObj.participanteId) partId = valObj.participanteId;
+                                    else if (valObj.fornecedorId) partId = valObj.fornecedorId;
+                                    else if (valObj.cnpjFornecedor) partId = valObj.cnpjFornecedor;
+                                    else if (valObj.codigoParticipante) partId = valObj.codigoParticipante;
+                                    else if (valObj.codigoFornecedor) partId = valObj.codigoFornecedor;
+                                    else if (valObj.identificadorParticipante) partId = valObj.identificadorParticipante;
+                                    else if (valObj.numeroParticipante) partId = valObj.numeroParticipante;
+                                    else if (valObj.identificador) partId = valObj.identificador;
+                                    else if (valObj.participante) {
+                                        if (typeof valObj.participante === 'object') {
+                                            partId = valObj.participante.identificacao || valObj.participante.nome || valObj.participante.codigo;
+                                        } else {
+                                            partId = valObj.participante;
+                                        }
+                                    } else if (valObj.fornecedor) {
+                                        if (typeof valObj.fornecedor === 'object') {
+                                            partId = valObj.fornecedor.cnpj || valObj.fornecedor.codigo || valObj.fornecedor.nome;
+                                        } else {
+                                            partId = valObj.fornecedor;
+                                        }
+                                    }
+                                }
+
+                                return {
+                                    valor: Number(val),
+                                    origem: origem,
+                                    data: formattedDt,
+                                    eMeuLance: eMeuLance,
+                                    classificacao: valObj.classificacao || valObj.posicao || entry.classificacao || entry.posicao || null,
+                                    participanteId: partId ? String(partId) : null
+                                };
+                            }).filter(Boolean).sort((a, b) => a.valor - b.valor);
+
+                            if (rankingLances.length === 0) return;
+
+                            rankingLances.forEach((r, idx) => {
+                                r.posicao = r.classificacao || (idx + 1);
+                            });
+
+                            let myRankIndex = rankingLances.findIndex(r => r.eMeuLance);
+                            if (myRankIndex === -1 && itemToCheck.meuValor > 0) {
+                                myRankIndex = rankingLances.findIndex(r => Math.abs(r.valor - itemToCheck.meuValor) < 0.001);
+                                if (myRankIndex !== -1) {
+                                    rankingLances[myRankIndex].eMeuLance = true;
+                                }
+                            }
+
+                            const realPosicao = myRankIndex !== -1 ? String(myRankIndex + 1) : null;
+
+                            console.log(`[POLARYON RANKING] 📊 Item ${itemToCheck.itemId}: posição real = ${realPosicao} | ${rankingLances.length} participantes`);
+                            
+                            this.itemRankingsMap.set(itemToCheck.itemId, {
+                                realPosicao,
+                                rankingLances,
+                                updatedAt: Date.now()
+                            });
+
+                            if (!this.webContents.isDestroyed()) {
+                                this.webContents.send('bidding-ranking-update', {
+                                    sessionId: this.sessionId,
+                                    itemId: itemToCheck.itemId,
+                                    realPosicao: realPosicao ? String(realPosicao) : null,
+                                    rankingLances
+                                });
+                            }
+                            if (realPosicao) itemToCheck.posicao = String(realPosicao);
+                    };
+
+                    fetchRanking().catch(err => {
+                        console.error(`[POLARYON RANKING ERROR] ❌ Erro geral ao buscar ranking do item ${itemToCheck.itemId}:`, err.message);
+                    });
                 }
 
                 // 🎯 MOTOR DE AUTO-LANCE BACKEND (v3.8.4) - Independente da UI React!
@@ -304,9 +487,20 @@ class RoomRunner {
                             if (!timerFiring && !isKamikaze) continue;
 
                             // Verifica se está perdendo
-                            const posicao = String(mappedItem.posicao || '');
+                            const posicao = String(mappedItem.posicao || '').toUpperCase().trim();
+                            // 🔧 FIX: verifica se GANHANDO explicitamente; 'PERDENDO' confirma que deve disparar
                             const isGanhando = (posicao === '1' || posicao === '1º' || posicao === '1°' || posicao === 'G' || posicao === 'V' || posicao === 'GANHANDO' || posicao === 'VENCEDOR');
-                            if (isGanhando) continue;
+                            const isPerdendo = (posicao === 'PERDENDO' || posicao === 'P' || posicao === 'L' || posicao === 'LOSING');
+                            // Se explicitamente ganhando, para. Se posicao é desconhecida E não temos meuValor comparável, continua para avaliar
+                            if (isGanhando) {
+                                console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO (pos=${posicao}), protegendo.`);
+                                continue;
+                            }
+                            if (!isPerdendo && posicao !== '' && isNaN(Number(posicao))) {
+                                // Posição desconhecida (ex: 'Em Disputa'), mas não confirmada como perdendo
+                                // Deixa passar para avaliação pelo valor
+                                console.log(`[BACKEND SNIPER] Item ${sId}: Posição desconhecida='${posicao}', avaliando pelo valor...`);
+                            }
 
                             const currentBest = Number(mappedItem.valorAtual || 0);
                             const myCurrentBid = Number(mappedItem.meuValor || 999999999);
@@ -394,26 +588,39 @@ class RoomRunner {
 
                                     if (isLeaderBeatable) {
                                         nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
+                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder batível. nextBid=${nextBid} (lider=${currentBest} - margem=${margin})`);
                                     } else {
-                                        const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
-                                        if (isSecondPlace) {
-                                            shouldBid = false; // Já estamos em 2º lugar
-                                        } else {
-                                            if (myCurrentBid !== 999999999) {
-                                                let decrementToUse = margin;
-                                                if (officialMarginVal > 0) {
-                                                    const requiredDecrement = officialMarginType === 'P' 
-                                                        ? currentBest * (officialMarginVal / 100) 
-                                                        : officialMarginVal;
-                                                    decrementToUse = Math.max(margin, requiredDecrement);
-                                                }
-                                                nextBid = myCurrentBid - decrementToUse;
+                                        // 🔧 FIX: Sem ranking E líder não batível → dispara no mínimo do usuário
+                                        // Isso garante que o robô sempre tente participar nos 30s finais
+                                        if (currentBest <= 0) {
+                                            // Sem dados do líder da API, dispara no mínimo
+                                            if (myCurrentBid !== 999999999 && myCurrentBid <= myMin) {
+                                                shouldBid = false; // Já no mínimo
                                             } else {
                                                 nextBid = myMin;
+                                                console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder → disparando mínimo R$ ${nextBid}`);
                                             }
-                                        }
-                                    }
-                                }
+                                        } else {
+                                            const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
+                                            if (isSecondPlace) {
+                                                shouldBid = false; // Já estamos em 2º lugar
+                                            } else {
+                                                if (myCurrentBid !== 999999999) {
+                                                    let decrementToUse = margin;
+                                                    if (officialMarginVal > 0) {
+                                                        const requiredDecrement = officialMarginType === 'P' 
+                                                            ? currentBest * (officialMarginVal / 100) 
+                                                            : officialMarginVal;
+                                                        decrementToUse = Math.max(margin, requiredDecrement);
+                                                    }
+                                                    nextBid = myCurrentBid - decrementToUse;
+                                                } else {
+                                                    nextBid = myMin;
+                                                }
+                                            }
+                                        } // fim else currentBest > 0
+                                    } // fim else !isLeaderBeatable
+                                } // fim else fallback
                             }
 
                             if (!shouldBid) continue;

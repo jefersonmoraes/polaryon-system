@@ -60,6 +60,11 @@ function createWindow() {
   // Check for updates
   if (!isDev) {
     autoUpdater.allowDowngrade = true;
+    autoUpdater.requestHeaders = {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    };
     autoUpdater.checkForUpdatesAndNotify();
     
     // Check every 15 mins (Tactical Interval)

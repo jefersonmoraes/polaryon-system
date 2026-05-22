@@ -818,8 +818,11 @@ export default function BiddingDashboardPage() {
                     const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
                     if (!rankingLances || rankingLances.length === 0) return;
 
-                    // Extrai o compraId do sid (pode ser "GLOBAL_153208306062026" ou um sessionId direto)
-                    const compraIdFromSid = sid.startsWith('GLOBAL_') ? sid.replace('GLOBAL_', '') : null;
+                    // Extrai o compraId do sid (pode ser "GLOBAL_153208306062026", "virtual_153208306062026" ou "HYBRID_153208306062026")
+                    let compraIdFromSid = null;
+                    if (sid.startsWith('GLOBAL_') || sid.startsWith('virtual_') || sid.startsWith('HYBRID_')) {
+                        compraIdFromSid = sid.replace(/^(GLOBAL_|virtual_|HYBRID_)/, '');
+                    }
 
                     setSessions(prev => {
                         const updated = { ...prev };
@@ -938,7 +941,10 @@ export default function BiddingDashboardPage() {
             const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
             if (!rankingLances || rankingLances.length === 0) return;
 
-            const compraIdFromSid = sid.startsWith('GLOBAL_') ? sid.replace('GLOBAL_', '') : null;
+            let compraIdFromSid = null;
+            if (sid.startsWith('GLOBAL_') || sid.startsWith('virtual_') || sid.startsWith('HYBRID_')) {
+                compraIdFromSid = sid.replace(/^(GLOBAL_|virtual_|HYBRID_)/, '');
+            }
 
             setSessions(prev => {
                 const updated = { ...prev };
