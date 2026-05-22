@@ -10,6 +10,7 @@
     // Compartilhamento de Estado CORS-Safe entre Frames (v3.6.90)
     let shared = {
         sessionToken: '',
+        captchaToken: '',
         synchronizedPurchases: new Set()
     };
     try {
@@ -17,6 +18,7 @@
             if (!window.top._polaryonSharedState) {
                 window.top._polaryonSharedState = {
                     sessionToken: '',
+                    captchaToken: '',
                     synchronizedPurchases: new Set()
                 };
             }
@@ -414,20 +416,29 @@
             if (valObj.excluido) return null;
 
             let val = null;
-            if (valObj.valor !== undefined && valObj.valor !== null) {
-                val = typeof valObj.valor === 'object'
-                    ? (valObj.valor.valorCalculado ?? valObj.valor.valorInformado)
-                    : valObj.valor;
-            } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
-                val = valObj.valorCalculado;
-            } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
-                val = valObj.valorInformado;
-            } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
-                val = valObj.valorLance;
-            } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
-                val = valObj.valorProposta;
-            } else if (valObj.lance !== undefined && valObj.lance !== null) {
-                val = typeof valObj.lance === 'number' ? valObj.lance : null;
+            // Suporte a /propostas-iniciais: valores aninhados em entry.valores.valorPropostaInicial
+            if (entry.valores && entry.valores.valorPropostaInicial) {
+                const proposta = entry.valores.valorPropostaInicial;
+                val = proposta.valorInformado !== undefined && proposta.valorInformado !== null
+                    ? proposta.valorInformado
+                    : (proposta.valorCalculado ? proposta.valorCalculado.valorUnitario : null);
+            }
+            if (val === null || val === undefined) {
+                if (valObj.valor !== undefined && valObj.valor !== null) {
+                    val = typeof valObj.valor === 'object'
+                        ? (valObj.valor.valorCalculado ?? valObj.valor.valorInformado)
+                        : valObj.valor;
+                } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
+                    val = valObj.valorCalculado;
+                } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
+                    val = valObj.valorInformado;
+                } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
+                    val = valObj.valorLance;
+                } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
+                    val = valObj.valorProposta;
+                } else if (valObj.lance !== undefined && valObj.lance !== null) {
+                    val = typeof valObj.lance === 'number' ? valObj.lance : null;
+                }
             }
             if (val === null || val === undefined) return null;
 
@@ -439,7 +450,7 @@
 
             let partId = entry.participanteId || entry.fornecedorId || entry.cnpjFornecedor
                       || entry.codigoParticipante || entry.codigoFornecedor || entry.identificadorParticipante
-                      || entry.numeroParticipante || entry.identificador || null;
+                      || entry.numeroParticipante || entry.identificador || entry.sequencial || null;
 
             if (!partId && entry.participante) partId = typeof entry.participante === 'object' ? (entry.participante.identificacao || entry.participante.nome) : entry.participante;
             if (!partId && entry.fornecedor)   partId = typeof entry.fornecedor   === 'object' ? (entry.fornecedor.cnpj || entry.fornecedor.nome) : entry.fornecedor;
@@ -483,7 +494,31 @@
         rankingRoundRobin++;
         console.log(`%c[POLARYON RANKING LOOP] 🔍 Buscando ranking para item ${target.itemId} (compra: ${target.purchaseId})`, 'color: #6366f1; font-size: 10px;');
         try {
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
+            // Tenta com captcha interceptado primeiro (se disponível), depois sem
+            let captchaParam = shared.captchaToken ? `captcha=${encodeURIComponent(shared.captchaToken)}&` : '';
+            let url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?${captchaParam}tamanhoPagina=50&pagina=0`;
+
+            // Se não tem captcha ainda, tenta /propostas-iniciais primeiro (não precisa de captcha)
+            if (!shared.captchaToken) {
+                const propostasIniciaisUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${target.purchaseId}/itens/${target.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`;
+                const propostasRes = await fetch(propostasIniciaisUrl, {
+                    headers: {
+                        'Authorization': shared.sessionToken,
+                        'Accept': 'application/json',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+                if (propostasRes.ok) {
+                    const propostasData = await propostasRes.json();
+                    if (Array.isArray(propostasData) && propostasData.length > 0) {
+                        console.log(`%c[POLARYON RANKING LOOP] ✅ /propostas-iniciais: ${propostasData.length} propostas`, 'color: #10b981; font-size: 10px;');
+                        processRankingData(propostasData, propostasIniciaisUrl);
+                    }
+                }
+            }
+
             const res = await fetch(url, {
                 headers: {
                     'Authorization': shared.sessionToken,
@@ -498,29 +533,7 @@
                 console.log(`%c[POLARYON RANKING LOOP] ✅ Resposta recebida: ${JSON.stringify(data).substring(0, 200)}...`, 'color: #10b981; font-size: 10px;');
                 processRankingData(data, url);
             } else {
-                console.warn(`[POLARYON RANKING LOOP] ⚠️ Status ${res.status} para item ${target.itemId}, tentando /classificacao...`);
-                // Fallback: tenta /classificacao
-                try {
-                    const classifUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet/classificacao?codigo=${target.purchaseId}&numeroItem=${target.itemId}&captcha=${shared.sessionToken}`;
-                    const classifRes = await fetch(classifUrl, {
-                        headers: {
-                            'Authorization': shared.sessionToken,
-                            'Accept': 'application/json',
-                            'x-device-platform': 'web',
-                            'x-version-number': '6.0.2'
-                        },
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    if (classifRes.ok) {
-                        const classifData = await classifRes.json();
-                        console.log(`%c[POLARYON RANKING LOOP] ✅ /classificacao funcionou para item ${target.itemId}`, 'color: #10b981; font-size: 10px;');
-                        processRankingData(classifData, classifUrl);
-                    } else {
-                        console.warn(`[POLARYON RANKING LOOP] ⚠️ /classificacao status ${classifRes.status} para item ${target.itemId}`);
-                    }
-                } catch (classifErr) {
-                    console.error(`[POLARYON RANKING LOOP] ❌ /classificacao erro:`, classifErr.message);
-                }
+                console.warn(`[POLARYON RANKING LOOP] ⚠️ Status ${res.status} para item ${target.itemId}`);
             }
         } catch (e) {
             console.error(`[POLARYON RANKING LOOP] ❌ Erro:`, e);
@@ -643,6 +656,9 @@
             const { type, token, data, url } = event.data;
             if (type === 'token') {
                 shared.sessionToken = token;
+            } else if (type === 'captcha') {
+                shared.captchaToken = token;
+                console.log(`%c[POLARYON] 🔓 Captcha interceptado!`, 'color:#10b981;font-weight:bold;font-size:11px;');
             } else if (type === 'serpro-data') {
                 processSerproData(data, url);
             }
@@ -687,6 +703,14 @@
                 }
                 const response = await originalFetch(...args);
                 const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+                const captchaMatch = url.match(/[?&]captcha=([^&]+)/);
+                if (captchaMatch) {
+                    window.postMessage({
+                        source: 'polaryon-injector',
+                        type: 'captcha',
+                        token: decodeURIComponent(captchaMatch[1])
+                    }, '*');
+                }
                 const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
                 if (isSerpro) {
                     const clone = response.clone();
@@ -717,6 +741,14 @@
             const send = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.send = function() {
                 this.addEventListener('load', function() {
+                    const captchaMatch = this._url && this._url.match(/[?&]captcha=([^&]+)/);
+                    if (captchaMatch) {
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: 'captcha',
+                            token: decodeURIComponent(captchaMatch[1])
+                        }, '*');
+                    }
                     const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || this._url.includes('/classificacao') || this._url.includes('comprasnet/classificacao'));
                     if (isSerpro) {
                         try {

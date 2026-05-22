@@ -264,6 +264,8 @@ class RoomRunner {
                         const freshToken = await captchaManager.getFreshToken().catch(() => '');
 
                         const urlVariants = [
+                            // Variante 0: /propostas-iniciais (não precisa de captcha!)
+                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`,
                             // Variante 1: sem parâmetro captcha (alguns endpoints aceitam)
                             `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`,
                             // Variante 2: com captcha1/2/3 igual ao /itens/em-disputa
@@ -355,22 +357,31 @@ class RoomRunner {
                                 if (valObj.excluido) return null;
 
                                 let val = null;
-                                if (valObj.valor !== undefined && valObj.valor !== null) {
-                                    if (typeof valObj.valor === 'object') {
-                                        val = valObj.valor.valorCalculado !== undefined ? valObj.valor.valorCalculado : valObj.valor.valorInformado;
-                                    } else {
-                                        val = valObj.valor;
+                                // Suporte a /propostas-iniciais: entry.valores.valorPropostaInicial
+                                if (entry.valores && entry.valores.valorPropostaInicial) {
+                                    const proposta = entry.valores.valorPropostaInicial;
+                                    val = proposta.valorInformado !== undefined && proposta.valorInformado !== null
+                                        ? proposta.valorInformado
+                                        : (proposta.valorCalculado ? proposta.valorCalculado.valorUnitario : null);
+                                }
+                                if (val === null || val === undefined) {
+                                    if (valObj.valor !== undefined && valObj.valor !== null) {
+                                        if (typeof valObj.valor === 'object') {
+                                            val = valObj.valor.valorCalculado !== undefined ? valObj.valor.valorCalculado : valObj.valor.valorInformado;
+                                        } else {
+                                            val = valObj.valor;
+                                        }
+                                    } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
+                                        val = valObj.valorCalculado;
+                                    } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
+                                        val = valObj.valorInformado;
+                                    } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
+                                        val = valObj.valorLance;
+                                    } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
+                                        val = valObj.valorProposta;
+                                    } else if (valObj.lance !== undefined && valObj.lance !== null) {
+                                        val = typeof valObj.lance === 'number' ? valObj.lance : null;
                                     }
-                                } else if (valObj.valorCalculado !== undefined && valObj.valorCalculado !== null) {
-                                    val = valObj.valorCalculado;
-                                } else if (valObj.valorInformado !== undefined && valObj.valorInformado !== null) {
-                                    val = valObj.valorInformado;
-                                } else if (valObj.valorLance !== undefined && valObj.valorLance !== null) {
-                                    val = valObj.valorLance;
-                                } else if (valObj.valorProposta !== undefined && valObj.valorProposta !== null) {
-                                    val = valObj.valorProposta;
-                                } else if (valObj.lance !== undefined && valObj.lance !== null) {
-                                    val = typeof valObj.lance === 'number' ? valObj.lance : null;
                                 }
                                 if (val === null || val === undefined) return null;
                                 
@@ -391,6 +402,7 @@ class RoomRunner {
                                 else if (entry.identificadorParticipante) partId = entry.identificadorParticipante;
                                 else if (entry.numeroParticipante) partId = entry.numeroParticipante;
                                 else if (entry.identificador) partId = entry.identificador;
+                                else if (entry.sequencial !== undefined && entry.sequencial !== null) partId = `__PARTICIPANTE__${entry.sequencial}`;
                                 else if (entry.participante) {
                                     if (typeof entry.participante === 'object') {
                                         partId = entry.participante.identificacao || entry.participante.nome || entry.participante.codigo;
