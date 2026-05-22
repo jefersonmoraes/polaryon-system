@@ -331,6 +331,7 @@
     }
 
     // 🏆 RANKING INTERCEPTOR: Captura /lances/por-participante ou localhost/classificacao diretamente do tráfego do browser
+    // Retorna true se encontrou e processou lances válidos, false caso contrário.
     function processRankingData(data, url) {
         console.log(`%c[POLARYON RANKING INTERCEPTOR]  Dados brutos recebidos: type=${typeof data}, isArray=${Array.isArray(data)}, keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'}`, 'color: #f59e0b; font-size: 10px;');
         
@@ -362,7 +363,7 @@
 
         if (!compraId || !itemId) {
             console.warn(`[POLARYON RANKING INTERCEPTOR]  Não conseguiu extrair compraId/itemId. url=${url}`);
-            return;
+            return false;
         }
 
         // FIX v3.8.20: Usa o mesmo formato que handlePortalSync usa para criar sessões: "virtual_{roomCode}"
@@ -405,7 +406,7 @@
         
         if (lancesList.length === 0) {
             console.warn(`[POLARYON RANKING INTERCEPTOR]  Lista vazia para item ${itemId}. keys: ${data && typeof data === 'object' ? Object.keys(data).join(',') : typeof data}`);
-            return;
+            return false;
         }
 
         console.log(`%c[POLARYON RANKING INTERCEPTOR] 🏆 ${lancesList.length} lances interceptados para item ${itemId} (Compra: ${compraId})`, 'color: #10b981; font-weight: bold;');
@@ -468,7 +469,7 @@
 
         if (rankingLances.length === 0) {
             console.warn(`[POLARYON RANKING INTERCEPTOR]  Nenhum lance válido após filtragem para item ${itemId}`);
-            return;
+            return false;
         }
 
         console.log(`%c[POLARYON RANKING INTERCEPTOR] 🏆 Enviando ${rankingLances.length} lances para sessionId=${sessionId} itemId=${itemId}`, 'color: #10b981; font-weight: bold; font-size: 11px;');
@@ -476,6 +477,33 @@
 
         // Envia para o processo principal Electron via IPC
         ipcRenderer.send('portal-ranking-data', { sessionId, itemId, rankingLances });
+        return true;
+    }
+
+    // 🅱️ Função auxiliar: busca /propostas-iniciais (fallback sem captcha)
+    async function tryPropostasIniciais(target) {
+        try {
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${target.purchaseId}/itens/${target.itemId}/propostas-iniciais`;
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': shared.sessionToken,
+                    'Accept': 'application/json',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                signal: AbortSignal.timeout(8000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const list = Array.isArray(data) ? data : (data.itens || data.propostas || data.content || data.lista || []);
+                if (list.length > 0) {
+                    console.log(`%c[POLARYON RANKING LOOP] ✅ /propostas-iniciais: ${list.length} propostas`, 'color: #10b981; font-size: 10px;');
+                    processRankingData(list, url);
+                    return true;
+                }
+            }
+        } catch (e) { /* ignora */ }
+        return false;
     }
 
     // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado
@@ -495,53 +523,46 @@
         console.log(`%c[POLARYON RANKING LOOP] 🔍 Buscando ranking para item ${target.itemId} (compra: ${target.purchaseId})`, 'color: #6366f1; font-size: 10px;');
         try {
             // Busca captcha do main process (Siga Pregão API) se ainda não interceptou
-            if (!shared.captchaToken) {
+            let captcha = shared.captchaToken;
+            if (!captcha) {
                 try {
-                    const mainCaptcha = await ipcRenderer.invoke('get-captcha-token');
-                    if (mainCaptcha) {
-                        shared.captchaToken = mainCaptcha;
+                    captcha = await ipcRenderer.invoke('get-captcha-token');
+                    if (captcha) {
+                        shared.captchaToken = captcha;
                         console.log(`%c[POLARYON RANKING LOOP] 🔓 Captcha obtido do Siga!`, 'color:#10b981;font-weight:bold;');
                     }
                 } catch (e) { /* ignora */ }
             }
 
-            let captchaParam = shared.captchaToken ? `captcha=${encodeURIComponent(shared.captchaToken)}&` : '';
-            let url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?${captchaParam}tamanhoPagina=50&pagina=0`;
-
-            if (!shared.captchaToken) {
-                const propostasRes = await fetch(propostasIniciaisUrl, {
+            if (captcha) {
+                // ✅ Tem captcha → usa /lances/por-participante (melhores valores por fornecedor)
+                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encodeURIComponent(captcha)}&tamanhoPagina=50&pagina=0`;
+                const res = await fetch(url, {
                     headers: {
                         'Authorization': shared.sessionToken,
                         'Accept': 'application/json',
                         'x-device-platform': 'web',
                         'x-version-number': '6.0.2'
                     },
-                    signal: AbortSignal.timeout(5000)
+                    signal: AbortSignal.timeout(8000)
                 });
-                if (propostasRes.ok) {
-                    const propostasData = await propostasRes.json();
-                    if (Array.isArray(propostasData) && propostasData.length > 0) {
-                        console.log(`%c[POLARYON RANKING LOOP] ✅ /propostas-iniciais: ${propostasData.length} propostas`, 'color: #10b981; font-size: 10px;');
-                        processRankingData(propostasData, propostasIniciaisUrl);
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`%c[POLARYON RANKING LOOP] ✅ /lances/por-participante (${typeof data} keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : '?'})`, 'color: #10b981; font-size: 10px;');
+                    if (!processRankingData(data, url)) {
+                        // Se processRankingData retornou false (não achou lances válidos), tenta /propostas-iniciais
+                        console.log(`%c[POLARYON RANKING LOOP] ⚠️ /lances/por-participante não retornou lances válidos, tentando /propostas-iniciais`, 'color: #f59e0b; font-size: 10px;');
+                        await tryPropostasIniciais(target);
+                    }
+                } else {
+                    console.warn(`[POLARYON RANKING LOOP] ⚠️ /lances/por-participante status ${res.status} para item ${target.itemId}`);
+                    if (res.status !== 429) {
+                        await tryPropostasIniciais(target);
                     }
                 }
-            }
-
-            const res = await fetch(url, {
-                headers: {
-                    'Authorization': shared.sessionToken,
-                    'Accept': 'application/json',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
-                },
-                signal: AbortSignal.timeout(5000)
-            });
-            if (res.ok) {
-                const data = await res.json();
-                console.log(`%c[POLARYON RANKING LOOP] ✅ Resposta recebida: ${JSON.stringify(data).substring(0, 200)}...`, 'color: #10b981; font-size: 10px;');
-                processRankingData(data, url);
             } else {
-                console.warn(`[POLARYON RANKING LOOP] ⚠️ Status ${res.status} para item ${target.itemId}`);
+                // ❌ Sem captcha → usa /propostas-iniciais (fallback sem captcha)
+                await tryPropostasIniciais(target);
             }
         } catch (e) {
             console.error(`[POLARYON RANKING LOOP] ❌ Erro:`, e);
