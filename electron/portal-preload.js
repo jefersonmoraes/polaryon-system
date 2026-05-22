@@ -494,13 +494,21 @@
         rankingRoundRobin++;
         console.log(`%c[POLARYON RANKING LOOP] 🔍 Buscando ranking para item ${target.itemId} (compra: ${target.purchaseId})`, 'color: #6366f1; font-size: 10px;');
         try {
-            // Tenta com captcha interceptado primeiro (se disponível), depois sem
+            // Busca captcha do main process (Siga Pregão API) se ainda não interceptou
+            if (!shared.captchaToken) {
+                try {
+                    const mainCaptcha = await ipcRenderer.invoke('get-captcha-token');
+                    if (mainCaptcha) {
+                        shared.captchaToken = mainCaptcha;
+                        console.log(`%c[POLARYON RANKING LOOP] 🔓 Captcha obtido do Siga!`, 'color:#10b981;font-weight:bold;');
+                    }
+                } catch (e) { /* ignora */ }
+            }
+
             let captchaParam = shared.captchaToken ? `captcha=${encodeURIComponent(shared.captchaToken)}&` : '';
             let url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?${captchaParam}tamanhoPagina=50&pagina=0`;
 
-            // Se não tem captcha ainda, tenta /propostas-iniciais primeiro (não precisa de captcha)
             if (!shared.captchaToken) {
-                const propostasIniciaisUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${target.purchaseId}/itens/${target.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`;
                 const propostasRes = await fetch(propostasIniciaisUrl, {
                     headers: {
                         'Authorization': shared.sessionToken,

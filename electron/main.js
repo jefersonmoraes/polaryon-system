@@ -305,6 +305,20 @@ ipcMain.on('manual-bid', (event, data) => {
     }
 });
 
+// FORNECE CAPTCHA DO SIGA PARA O PORTAL-PRELOAD (v3.8.25)
+ipcMain.handle('get-captcha-token', async () => {
+    try {
+        const BiddingRunner = require('./bidding-runner');
+        const tokens = await BiddingRunner.getCaptchaTokens();
+        if (tokens && tokens.captcha1) return tokens.captcha1;
+        const fresh = await BiddingRunner.getFreshCaptchaToken();
+        return fresh || null;
+    } catch (e) {
+        console.error('[MAIN] Erro ao obter captcha:', e.message);
+        return null;
+    }
+});
+
 // GESTÃO DE CERTIFICADO A1
 ipcMain.handle('save-a1-certificate', async (event, { fileName, buffer, password }) => {
   return certHelper.saveCertificate(fileName, Buffer.from(buffer), password);

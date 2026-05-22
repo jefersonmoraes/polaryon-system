@@ -970,3 +970,5 @@ class BiddingRunner {
 }
 
 module.exports = BiddingRunner;
+module.exports.getCaptchaTokens = () => captchaManager.getTokens();
+module.exports.getFreshCaptchaToken = () => captchaManager.getFreshToken();
