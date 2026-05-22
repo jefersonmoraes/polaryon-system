@@ -288,6 +288,26 @@ class RoomRunner {
                                 console.warn(`[POLARYON RANKING] ⚠️ Variante falhou (${varErr.response?.status || varErr.message}): ${lancesUrl.split('?')[1]?.substring(0,40)}`);
                             }
                         }
+                        if (!lancesRes) {
+                            // 🏆 FALLBACK: Tenta o endpoint /classificacao (usado pelo portal ao clicar no botão "Classificação")
+                            const classifVariants = [
+                                (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/classificacao?captcha=${poolTokens.captcha1}` : null),
+                                (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet/classificacao?codigo=${this.idCompra}&numeroItem=${itemToCheck.itemId}&captcha=${poolTokens.captcha1}` : null),
+                                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/classificacao`,
+                                (freshToken && freshToken !== poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet/classificacao?codigo=${this.idCompra}&numeroItem=${itemToCheck.itemId}&captcha=${freshToken}` : null),
+                            ].filter(Boolean);
+                            for (const classifUrl of classifVariants) {
+                                try {
+                                    lancesRes = await axios.get(classifUrl, {
+                                        httpsAgent: this.agent, timeout: 5000, headers: baseHeaders
+                                    });
+                                    console.log(`[POLARYON RANKING] ✅ /classificacao funcionou (status ${lancesRes.status}): ${classifUrl.substring(0,100)}`);
+                                    break;
+                                } catch (classifErr) {
+                                    console.warn(`[POLARYON RANKING] ⚠️ /classificacao falhou (${classifErr.response?.status || classifErr.message})`);
+                                }
+                            }
+                        }
                         if (!lancesRes) return;
 
                         const rawData = lancesRes.data;
@@ -415,7 +435,7 @@ class RoomRunner {
                                     data: formattedDt,
                                     eMeuLance: eMeuLance,
                                     classificacao: valObj.classificacao || valObj.posicao || entry.classificacao || entry.posicao || null,
-                                    participanteId: partId ? String(partId) : null
+                                    participanteId: partId ? String(partId) : `__PARTICIPANTE__${idx}`
                                 };
                             }).filter(Boolean).sort((a, b) => a.valor - b.valor);
 

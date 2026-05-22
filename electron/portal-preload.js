@@ -408,7 +408,7 @@
 
         console.log(`%c[POLARYON RANKING INTERCEPTOR] 🏆 ${lancesList.length} lances interceptados para item ${itemId} (Compra: ${compraId})`, 'color: #10b981; font-weight: bold;');
 
-        const rankingLances = lancesList.map((entry) => {
+        const rankingLances = lancesList.map((entry, idx) => {
             if (entry.excluido) return null;
             const valObj = entry.melhorValorFornecedor || entry;
             if (valObj.excluido) return null;
@@ -451,7 +451,7 @@
                 data: formattedDt,
                 eMeuLance,
                 classificacao: valObj.classificacao || entry.classificacao || null,
-                participanteId: partId ? String(partId) : null
+                participanteId: partId ? String(partId) : `__PARTICIPANTE__${idx}`
             };
         }).filter(Boolean).sort((a, b) => a.valor - b.valor);
 
@@ -498,7 +498,29 @@
                 console.log(`%c[POLARYON RANKING LOOP] ✅ Resposta recebida: ${JSON.stringify(data).substring(0, 200)}...`, 'color: #10b981; font-size: 10px;');
                 processRankingData(data, url);
             } else {
-                console.warn(`[POLARYON RANKING LOOP] ️ Status ${res.status} para item ${target.itemId}`);
+                console.warn(`[POLARYON RANKING LOOP] ⚠️ Status ${res.status} para item ${target.itemId}, tentando /classificacao...`);
+                // Fallback: tenta /classificacao
+                try {
+                    const classifUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet/classificacao?codigo=${target.purchaseId}&numeroItem=${target.itemId}&captcha=${shared.sessionToken}`;
+                    const classifRes = await fetch(classifUrl, {
+                        headers: {
+                            'Authorization': shared.sessionToken,
+                            'Accept': 'application/json',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        },
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    if (classifRes.ok) {
+                        const classifData = await classifRes.json();
+                        console.log(`%c[POLARYON RANKING LOOP] ✅ /classificacao funcionou para item ${target.itemId}`, 'color: #10b981; font-size: 10px;');
+                        processRankingData(classifData, classifUrl);
+                    } else {
+                        console.warn(`[POLARYON RANKING LOOP] ⚠️ /classificacao status ${classifRes.status} para item ${target.itemId}`);
+                    }
+                } catch (classifErr) {
+                    console.error(`[POLARYON RANKING LOOP] ❌ /classificacao erro:`, classifErr.message);
+                }
             }
         } catch (e) {
             console.error(`[POLARYON RANKING LOOP] ❌ Erro:`, e);
