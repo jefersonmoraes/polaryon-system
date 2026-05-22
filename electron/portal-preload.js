@@ -548,37 +548,43 @@
             }
 
             if (captcha) {
-                // ✅ Tem captcha → usa /lances/por-participante (melhores valores por fornecedor)
-                // Usa captcha1/captcha2/captcha3 (formato que a SERPRO espera, igual ao /lances)
+                // ✅ Tem captcha → tenta /lances/por-participante com captcha (singular, formato do portal)
                 const encoded = encodeURIComponent(captcha);
-                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha1=${encoded}&captcha2=${encoded}&captcha3=${encoded}&tamanhoPagina=50&pagina=0`;
-                console.log(`%c[POLARYON RANKING LOOP] GET ${url.substring(0,120)}...`, 'color:#888;font-size:10px;');
-                const res = await fetch(url, {
-                    headers: {
-                        'Authorization': shared.sessionToken,
-                        'Accept': 'application/json',
-                        'x-device-platform': 'web',
-                        'x-version-number': '6.0.2'
-                    },
-                    signal: AbortSignal.timeout(8000)
-                });
-                const statusText = `status=${res.status} ${res.statusText}`;
-                console.log(`%c[POLARYON RANKING LOOP] /lances/por-participante ${statusText}`, 'color:#f59e0b;font-size:10px;');
-                if (res.ok) {
-                    const text = await res.text();
-                    console.log(`%c[POLARYON RANKING LOOP] body(200B): ${text.substring(0,200)}`, 'color:#888;font-size:10px;');
-                    let data;
-                    try { data = JSON.parse(text); } catch(e) { data = text; }
-                    if (!processRankingData(data, url)) {
-                        console.log(`%c[POLARYON RANKING LOOP] ⚠️ /lances/por-participante não retornou lances válidos, tentando /propostas-iniciais`, 'color: #f59e0b; font-size: 10px;');
-                        await tryPropostasIniciais(target);
-                    }
-                } else {
-                    if (res.status !== 429) {
+                const base = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante`;
+                const urlsTentar = [
+                    `${base}?captcha=${encoded}&tamanhoPagina=50&pagina=0`,
+                    `${base}?captcha1=${encoded}&captcha2=${encoded}&captcha3=${encoded}&tamanhoPagina=50&pagina=0`,
+                ];
+                let ok = false;
+                for (const tentativaUrl of urlsTentar) {
+                    console.log(`%c[POLARYON RANKING LOOP] GET ${tentativaUrl.substring(0,130)}...`, 'color:#888;font-size:10px;');
+                    const res = await fetch(tentativaUrl, {
+                        headers: {
+                            'Authorization': shared.sessionToken,
+                            'Accept': 'application/json',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        },
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    const statusText = `status=${res.status} ${res.statusText}`;
+                    if (res.ok) {
+                        const text = await res.text();
+                        console.log(`%c[POLARYON RANKING LOOP] /lances/por-participante ${statusText} body(200B): ${text.substring(0,200)}`, 'color:#10b981;font-size:10px;');
+                        let data;
+                        try { data = JSON.parse(text); } catch(e) { data = text; }
+                        if (processRankingData(data, tentativaUrl)) {
+                            ok = true;
+                            break;
+                        }
+                    } else {
                         const errBody = await res.text().catch(()=>'');
                         console.warn(`[POLARYON RANKING LOOP] ⚠️ /lances/por-participante ${statusText} body=${errBody.substring(0,100)}`);
-                        await tryPropostasIniciais(target);
                     }
+                }
+                if (!ok) {
+                    console.log(`%c[POLARYON RANKING LOOP] ⚠️ /lances/por-participante falhou, tentando /propostas-iniciais`, 'color: #f59e0b; font-size: 10px;');
+                    await tryPropostasIniciais(target);
                 }
             } else {
                 // ❌ Sem captcha → usa /propostas-iniciais (fallback sem captcha)

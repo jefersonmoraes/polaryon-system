@@ -264,16 +264,16 @@ class RoomRunner {
                         const freshToken = await captchaManager.getFreshToken().catch(() => '');
 
                         const urlVariants = [
-                            // Variante 0: /propostas-iniciais (não precisa de captcha!)
-                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`,
-                            // Variante 1: sem parâmetro captcha (alguns endpoints aceitam)
-                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`,
-                            // Variante 2: com captcha1/2/3 igual ao /itens/em-disputa
+                            // Variante 0: com captcha1/2/3 (formato do endpoint /lances)
                             (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha1=${poolTokens.captcha1}&captcha2=${poolTokens.captcha2 || poolTokens.captcha1}&captcha3=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null),
-                            // Variante 3: com token do pool captcha (singular)
+                            // Variante 1: com captcha (singular) via pool
                             (poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null),
-                            // Variante 4: com token fresco do Siga
+                            // Variante 2: com token fresco do Siga
                             (freshToken && freshToken !== poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${freshToken}&tamanhoPagina=50&pagina=0` : null),
+                            // Variante 3: sem parâmetro captcha (alguns endpoints aceitam)
+                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`,
+                            // Variante 4: /propostas-iniciais (não precisa de captcha!) — ÚLTIMO recurso
+                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`,
                         ].filter(Boolean);
 
                         let lancesRes = null;
