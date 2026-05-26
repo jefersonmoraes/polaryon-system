@@ -500,35 +500,40 @@
         return true;
     }
 
-    // 🔄 LOOP PROATIVO DE RANKING: a cada 6s busca ranking dos itens ativos usando o token já capturado.
-    // Usa hcaptcha programático e fetch concorrente para extrair todos os itens 100% automático.
-    let rankingRoundRobin = 0;
+    // 🔄 LOOP PROATIVO DE RANKING: atualização em tempo real de todos os itens ativos.
+    // Estratégia:
+    //   1. Ao detectar item novo → fetch imediato (carga instantânea na abertura da sala)
+    //   2. A cada 8s → atualiza todos os itens em paralelo com stagger de 500ms entre eles (sem impacto no robô)
     const activeRankingItems = []; // { purchaseId, itemId }
-    setInterval(() => {
-        if (!shared.sessionToken) {
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Aguardando token...', 'color: #f59e0b; font-size: 10px;');
-            return;
-        }
-        if (activeRankingItems.length === 0) {
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Nenhum item ativo ainda. Aguardando dados da sala...', 'color: #f59e0b; font-size: 10px;');
-            return;
-        }
+    const _rankingFetching = new Set(); // deduplicação: evita disparar para mesmo item simultâneo
 
-        const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
-        rankingRoundRobin++;
+    function triggerRankingFetch(target) {
+        const key = `${target.purchaseId}_${target.itemId}`;
+        if (_rankingFetching.has(key)) return;
+        _rankingFetching.add(key);
+        setTimeout(() => _rankingFetching.delete(key), 12000); // limpa após 12s
 
-        console.log(`%c[POLARYON RANKING LOOP] 🔄 Ciclo automático para item ${target.itemId} (Compra: ${target.purchaseId})`, 'color:#6366f1;font-weight:bold;font-size:10px;');
-
-        // 🎯 ESTRATÉGIA 1: Agenda o target e aciona hCaptcha programaticamente
+        // 🎯 Estratégia 1: hCaptcha programático para token P1_ fresco
         shared.pendingRankingTarget = target;
         document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
 
-        // 🎯 ESTRATÉGIA 2 (concorrente): Dispara também fetch sem captcha (para conta Governo ou cookies)
+        // 🎯 Estratégia 2 (concorrente): fetch direto sem captcha (cookie/GOVERNO)
         const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
         document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
             detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
         }));
-    }, 6000);
+    }
+
+    // 🏁 ATUALIZAÇÃO PARALELA: a cada 8s, dispara todos os itens com stagger de 500ms entre eles
+    setInterval(() => {
+        if (!shared.sessionToken || activeRankingItems.length === 0) return;
+        activeRankingItems.forEach((target, idx) => {
+            setTimeout(() => {
+                console.log(`%c[POLARYON RANKING LOOP] 🔄 Refresh item ${target.itemId} (Compra: ${target.purchaseId})`, 'color:#6366f1;font-size:9px;');
+                triggerRankingFetch(target);
+            }, idx * 500); // 500ms entre cada item → sem pico de rede
+        });
+    }, 8000);
 
     function processSerproData(data, url, status, ok) {
         if (typeof data === 'string') {
@@ -622,8 +627,13 @@
                 if (!isEncerrado && itemIdStr) {
                     const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
                     if (!alreadyTracked) {
-                        activeRankingItems.push({ purchaseId: roomCode, itemId: itemIdStr });
-                        console.log(`%c[POLARYON RANKING LOOP] ➕ Item ${itemIdStr} (compra: ${roomCode}) adicionado ao radar de ranking. Total: ${activeRankingItems.length}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
+                        const newTarget = { purchaseId: roomCode, itemId: itemIdStr };
+                        activeRankingItems.push(newTarget);
+                        console.log(`%c[POLARYON RANKING LOOP] ➕ Item ${itemIdStr} (compra: ${roomCode}) adicionado ao radar. Total: ${activeRankingItems.length}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
+                        // 🚀 Carga INSTANTÂNEA: busca classificação imediatamente ao descobrir o item
+                        if (shared.sessionToken) {
+                            setTimeout(() => triggerRankingFetch(newTarget), 300);
+                        }
                     }
                 }
             });
