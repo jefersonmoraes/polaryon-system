@@ -336,6 +336,13 @@
     // 🏆 RANKING INTERCEPTOR: Captura /lances/por-participante ou localhost/classificacao diretamente do tráfego do browser
     // Retorna true se encontrou e processou lances válidos, false caso contrário.
     function processRankingData(data, url, status, ok) {
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                // Keep raw string if parsing fails
+            }
+        }
         console.log(`%c[POLARYON RANKING INTERCEPTOR]  Dados brutos recebidos: type=${typeof data}, isArray=${Array.isArray(data)}, keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'} (status: ${status || 'N/A'}, ok: ${ok !== undefined ? ok : 'N/A'})`, 'color: #f59e0b; font-size: 10px;');
         if (typeof data === 'string') {
             console.log(`%c[POLARYON RANKING INTERCEPTOR] Preview da string recebida (primeiros 400 chars): ${data.substring(0, 400)}`, 'color: #ef4444; font-size: 10px;');
@@ -551,7 +558,15 @@
                 }
                 for (const el of elements) {
                     const text = (el.textContent || el.innerText || '').trim();
-                    if (text === 'Classificação' || text === 'Classificacao' || (text.length < 25 && text.toLowerCase().includes('classifica'))) {
+                    const textLower = text.toLowerCase();
+                    if (
+                        text === 'Classificação' || 
+                        text === 'Classificacao' || 
+                        textLower.includes('classifica') || 
+                        textLower.includes('melhores') || 
+                        textLower.includes('valores') || 
+                        (textLower.includes('fornecedor') && text.length < 40)
+                    ) {
                         classTab = el;
                         break;
                     }
@@ -563,7 +578,15 @@
                 const allElements = document.querySelectorAll('span, div');
                 for (const el of allElements) {
                     const text = (el.textContent || el.innerText || '').trim();
-                    if (text === 'Classificação' || text === 'Classificacao' || (text.length < 25 && text.toLowerCase().includes('classifica'))) {
+                    const textLower = text.toLowerCase();
+                    if (
+                        text === 'Classificação' || 
+                        text === 'Classificacao' || 
+                        textLower.includes('classifica') || 
+                        textLower.includes('melhores') || 
+                        textLower.includes('valores') || 
+                        (textLower.includes('fornecedor') && text.length < 40)
+                    ) {
                         let parent = el;
                         while (parent && parent !== document.body) {
                             const role = parent.getAttribute('role');
@@ -592,6 +615,13 @@
     }, 5000);
 
     function processSerproData(data, url, status, ok) {
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                // Keep raw string if parsing fails
+            }
+        }
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
         // 🏆 RANKING: intercepta respostas de /lances/por-participante ou classificação local
