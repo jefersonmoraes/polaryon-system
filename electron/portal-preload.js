@@ -725,6 +725,8 @@
             // 🔑 INTERCEPTA hcaptcha.render() E hcaptcha.execute()
             let _hcaptchaWrapped = false;
             let lastWidgetId = null;
+            let polaryonWidgetId = null;
+            
             const wrapHcaptcha = () => {
                 if (_hcaptchaWrapped || !window.hcaptcha) return;
                 _hcaptchaWrapped = true;
@@ -763,8 +765,47 @@
                 }
                 console.log('%c[POLARYON INJECTED] 🔑 hcaptcha APIs interceptadas!', 'color:#10b981;font-weight:bold;font-size:10px;');
             };
+
+            const initPolaryonHcaptcha = () => {
+                if (polaryonWidgetId !== null || !window.hcaptcha || !window.hcaptcha.render) return;
+                try {
+                    let div = document.getElementById('polaryon-hidden-hcaptcha');
+                    if (!div) {
+                        div = document.createElement('div');
+                        div.id = 'polaryon-hidden-hcaptcha';
+                        div.style.position = 'absolute';
+                        div.style.left = '-9999px';
+                        div.style.top = '-9999px';
+                        div.style.width = '1px';
+                        div.style.height = '1px';
+                        div.style.opacity = '0.01';
+                        document.body.appendChild(div);
+                    }
+                    polaryonWidgetId = window.hcaptcha.render('polaryon-hidden-hcaptcha', {
+                        sitekey: 'b8bbded1-9d04-4ace-9952-b67cde081a7b',
+                        size: 'invisible',
+                        callback: function(token) {
+                            if (token && token.startsWith('P1_')) {
+                                console.log('%c[POLARYON INJECTED] 🎉 Token programático gerado via widget próprio!', 'color:#10b981;font-weight:bold;font-size:10px;');
+                                window.postMessage({
+                                    source: 'polaryon-injector',
+                                    type: 'fresh-captcha',
+                                    token
+                                }, '*');
+                            }
+                        }
+                    });
+                    console.log('%c[POLARYON INJECTED] 🚀 Widget hcaptcha invisível inicializado com ID = ' + polaryonWidgetId, 'color:#10b981;font-weight:bold;font-size:10px;');
+                } catch (err) {
+                    console.error('[POLARYON INJECTED] ❌ Falha ao inicializar widget hcaptcha próprio:', err);
+                }
+            };
+
             wrapHcaptcha();
-            setInterval(wrapHcaptcha, 1500);
+            setInterval(() => {
+                wrapHcaptcha();
+                initPolaryonHcaptcha();
+            }, 1500);
 
             const originalFetch = window.fetch;
             window.fetch = async (...args) => {
@@ -897,13 +938,15 @@
 
         // ⚡ Dispara hcaptcha programaticamente sob demanda
         document.addEventListener('polaryon-trigger-hcaptcha', async () => {
-            if (!window.hcaptcha) {
-                console.warn('[POLARYON INJECTED] ⚠️ window.hcaptcha não disponível.');
+            if (!window.hcaptcha || !window.hcaptcha.execute) {
+                console.warn('[POLARYON INJECTED] ⚠️ window.hcaptcha não disponível ou sem suporte a execute.');
                 return;
             }
             try {
-                const widgetId = lastWidgetId !== null ? lastWidgetId : 0;
+                // Prioriza nosso widget invisível próprio, depois o interceptado do Angular, depois o ID padrão 0
+                const widgetId = polaryonWidgetId !== null ? polaryonWidgetId : (lastWidgetId !== null ? lastWidgetId : 0);
                 console.log('%c[POLARYON INJECTED] ⚡ hcaptcha.execute disparado para widgetId = ' + widgetId, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                
                 const result = window.hcaptcha.execute(widgetId, { async: true });
                 if (result && typeof result.then === 'function') {
                     const token = await result;
@@ -917,7 +960,7 @@
                     }
                 }
             } catch (err) {
-                console.error('[POLARYON INJECTED] ❌ Falha ao disparar hcaptcha programático:', err);
+                console.error('[POLARYON INJECTED] ❌ Falha ao disparar hcaptcha programático:', err.message || err);
             }
         });
         })();
