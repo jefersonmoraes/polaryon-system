@@ -1,10 +1,11 @@
 # SESSION SUMMARY — Ranking/Classificação do Robô Polaryon
 
 ## Objetivo
-Fazer o ranking (classificação) de cada item na sala de disputa do ComprasNet funcionar no robô Electron, exibindo a posição de cada participante com seu melhor valor (proposta ou lance) em tempo real.
+Fazer o ranking (classificação) de cada item na sala de disputa do ComprasNet funcionar no robô Electron, exibindo a posição de cada participante com seu melhor valor (proposta ou lance) em tempo real, **sem depender de clique manual do usuário em "Classificação"**.
 
 ## Data: 22/05/2026
-## Versão atual: 3.8.26
+## Última sessão: 22/05/2026
+## Versão atual: 3.8.26+
 
 ---
 
@@ -30,12 +31,81 @@ CAMINHO C: Socket (modo web)
 | Endpoint | URL | Precisa Captcha | Retorna |
 |----------|-----|-----------------|---------|
 | **lances/por-participante** ✅ | `/comprasnet-disputa/v1/compras/{id}/itens/{itemId}/lances/por-participante` | SIM (`?captcha=P1_...`) | Ranking com propostas (P) e lances (L) atuais de cada participante |
-| **propostas-iniciais** ⚠️ fallback | `/comprasnet-fase-externa/v1/compras/{id}/itens/{itemId}/propostas-iniciais` | NÃO | Apenas propostas iniciais (sem lances atualizados) |
+| **propostas-iniciais** ❌ REMOVIDO | `/comprasnet-fase-externa/v1/compras/{id}/itens/{itemId}/propostas-iniciais` | NÃO | Apenas propostas iniciais (sem lances atualizados) — NÃO USAR, formato de dados errado |
 | **classificacao** ❌ não usado | `/comprasnet/classificacao` | SIM | Desconhecido (provavelmente redireciona para lances/) |
 
 ---
 
-## PROBLEMAS ENCONTRADOS E SOLUÇÕES
+## 🔴 PROBLEMA ATUAL (NÃO RESOLVIDO) — Ranking loop retorna 204
+
+### Contexto
+O ranking loop em `portal-preload.js` (preload context) faz `fetch()` para `/lances/por-participante?captcha=P1_...` e **sempre recebe 204 No Content**, mesmo quando:
+- O captcha P1_... foi interceptado com sucesso do portal (log `🔓 Captcha P1_... interceptado!`)
+- O interceptor captura 10 lances reais quando o usuário clica "Classificação" (log `🏆 Enviando 10 lances para sessionId=virtual_...`)
+- O Siga captcha NÃO funciona neste endpoint (também retorna 204)
+
+### Causa Raiz Identificada
+O `fetch()` do preload script roda no **contexto isolado do Electron** (preload context) e NÃO inclui:
+1. **Cookies de sessão** — sem `credentials: 'include'`
+2. **Headers específicos** — `X-XSRF-TOKEN` (lido do cookie `XSRF-TOKEN`), `X-Requested-With: XMLHttpRequest`, `Origin`, `Referer`
+3. **Contexto da página** — o servidor SERPRO valida a sessão via cookies + token CSRF, não apenas via `Authorization: Bearer`
+
+A prova: quando o **portal Angular** faz a mesma request (ao clicar "Classificação"), o servidor retorna **200 com dados**. O interceptor captura essa resposta. A diferença é que a request do portal:
+- Usa `XMLHttpRequest` do Angular (não `fetch()` isolado)
+- Inclui `X-XSRF-TOKEN` lido do cookie
+- Inclui cookies automaticamente (mesma origem)
+- Possivelmente inclui `X-Requested-With`, `Origin`, `Referer`
+
+### Hipótese não confirmada: Captcha de uso único
+O token P1_... pode ser consumido na primeira request. Se o portal usar um token P1_... fresco (obtido via hCaptcha ao clicar na aba), o loop não conseguiria reutilizar o mesmo token. Mas isso é secundário ao problema de cookies.
+
+### SOLUÇÃO IMPLEMENTADA NESTA SESSÃO (patch ASAR manual)
+Em vez do `fetch()` isolado do preload, o ranking loop agora:
+1. **Dispara um evento DOM** `CustomEvent('polaryon-fetch-ranking')` com `{ url, purchaseId, itemId, captcha }`
+2. O **injected script** (page context, linha ~756) escuta o evento e faz a request usando `originalFetch` (o `window.fetch` verdadeiro da página) com:
+   - `credentials: 'include'` (envia cookies)
+   - `X-XSRF-TOKEN` lido de `document.cookie`
+   - `X-Requested-With: XMLHttpRequest`
+3. A resposta volta via `window.postMessage` → message handler do preload → `processSerproData()` → `processRankingData()`
+
+**Arquivo alterado**: `electron/portal-preload.js`
+- Linha ~517: substituído `fetch()` do preload por `document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', ...))`
+- Linha ~756: adicionado `document.addEventListener('polaryon-fetch-ranking', ...)` no injected script
+
+### Como testar (após abrir o app)
+1. Entre na sala de disputa
+2. Abra DevTools (F12) → console
+3. Procure pelos logs:
+   - `[POLARYON RANKING LOOP] 🎯 Delegando fetch para page context: ...` — loop disparou o evento
+   - `[POLARYON INJECTED] 🌐 Fetch ranking (page context): ...` — injected script recebeu e fez fetch
+   - `[POLARYON INJECTED] ✅ Ranking response: status=200 body(NNNB)` — **sucesso!**
+   - Ou `status=204 body(0B)` — ainda falha (provável: captcha expirado/consumido)
+
+### Se ainda falhar (204 mesmo com page-context fetch)
+A causa será o **captcha P1_... de uso único**. Estratégias possíveis:
+
+**Opção 1 (recomendada): Disparar clique programático na aba "Classificação"**
+- Quando o loop precisar de ranking, ao invés de fazer fetch próprio:
+  1. Encontrar o botão/aba "Classificação" no DOM
+  2. Clicar nele (dispara hCaptcha + request do portal)
+  3. Interceptor captura a resposta (já funciona)
+  4. Clicar de volta na aba anterior (ex: "Itens")
+- Vantagem: usa o fluxo legítimo do portal, captcha sempre fresco
+- Desvantagem: muda a UI visível (mas o portal fica em janela oculta?)
+
+**Opção 2: Resolver hCaptcha programaticamente**
+- Complexo, requer integração com serviço de resolução de captcha (2captcha, capsolver)
+- O portal usa hCaptcha, não reCAPTCHA
+
+### Pontos importantes
+- **NUNCA** cair no fallback `/propostas-iniciais` — os dados são de formato diferente (sem lances atualizados) e já causaram confusão. Foi removido.
+- **Só aceitar P1_...** — captcha do Siga retorna 204 no endpoint de ranking. O handler de mensagens (linha ~678) só armazena tokens que começam com `P1_`.
+- O `shared.captchaToken` é populado pelo interceptor (captura `?captcha=` ou `&captcha=` de qualquer URL interceptada via fetch ou XHR)
+- O `processSerproData()` (linha ~532) está DUPLICADO no arquivo (~200 e ~532). A segunda definição sobrescreve a primeira. Qualquer alteração precisa ser feita na segunda (linha 532+).
+
+---
+
+## PROBLEMAS RESOLVIDOS EM SESSÕES ANTERIORES
 
 ### 🔴 Problema 1: Ranking vazio — `participanteId` ausente na resposta
 
@@ -117,7 +187,7 @@ if (sid.startsWith('GLOBAL_') || sid.startsWith('virtual_') || sid.startsWith('H
 | Arquivo | Linhas alteradas | O que faz |
 |---------|-----------------|-----------|
 | `electron/bidding-runner.js` | 275, 291-309, 360-365, 393, 437, 972-974 | URLs fallback, parse propostas-iniciais, sequencial como ID, export captcha |
-| `electron/portal-preload.js` | 11-22, 420-425, 440, 454, 500-525, 656-658, 693-700, 728-736 | captchaToken state, parse propostas, captcha intercept, get-captcha-token IPC |
+| `electron/portal-preload.js` | 11-22, 420-425, 440, 454, 500-525, 656-658, 693-700, 728-736, 756-780, 517-525 (refeito) | captchaToken state, parse propostas, captcha intercept, get-captcha-token IPC, **event-based ranking fetch** |
 | `electron/main.js` | 308-321 | IPC handler get-captcha-token |
 | `electron/preload.js` | 26 | onBiddingRankingUpdate bridge (já existia) |
 | `electron/visual-runner.js` | 33-43 | Relé do portal-ranking-data (já existia) |
@@ -138,34 +208,49 @@ if (sid.startsWith('GLOBAL_') || sid.startsWith('virtual_') || sid.startsWith('H
 
 ---
 
-## COMO TESTAR
+## COMO TESTAR (após patch manual do ASAR)
 
-1. Abra o robô (após auto-update para 3.8.26+)
+1. Abra o robô
 2. Entre na sala de disputa
-3. Aguarde ~5s — o loop de ranking deve buscar `/lances/por-participante` com captcha do Siga
-4. Se não aparecer, clique **1 vez** no botão "Classificação" do portal — o captcha é interceptado
-5. O ranking mostra cada participante com seu melhor valor (P = proposta, L = lance)
-6. Abra DevTools (F12) → console → procure `[POLARYON RANKING LOOP]` para debug
+3. Aguarde ~5s — o loop de ranking deve disparar o evento `polaryon-fetch-ranking`
+4. Abra DevTools (F12) → console → procure:
+   - `🎯 Delegando fetch para page context` — loop ok
+   - `🌐 Fetch ranking (page context)` — injected script fez a request
+   - `✅ Ranking response: status=200` — **sucesso!**
+   - Se aparecer `status=204` — captcha expirado/consumido, tentar Opção 1 (clicar aba Classificação)
+5. Se só funcionar após clique manual em "Classificação" no portal, confirmado: captcha é de uso único
+6. Se funcionar automaticamente (200 sem clique): problema resolvido
 
-## PRÓXIMOS PASSOS SUGERIDOS
+---
 
-1. **Auto-bidding inteligente**: Quando o ranking estiver estável, implementar:
-   - Identificar a posição do usuário
-   - Se o valor mínimo do usuário for menor que o líder, não precisa dar lance
-   - Se for maior, calcular o lance mínimo necessário para vencer (líder - margem)
-   - Disparar lance automático nos últimos 30s
+## PRÓXIMOS PASSOS PRIORITÁRIOS
 
-2. **Campo "desconto"**: O usuário mencionou um campo de desconto/margem que deve ser usado para calcular o valor do lance competitivo
+### 1. (AGORA) Verificar se o patch resolveu o 204
+- Abrir app, ver logs. Se `status=200`: sucesso, fazer build + deploy oficial.
+- Se `status=204`: confirmado captcha de uso único → implementar **Opção 1** abaixo.
 
-3. **Polling mais frequente**: Nos últimos 30s da disputa, aumentar frequência do ranking poll de 5s para 1s
+### 2. Se captcha for de uso único: Clique programático na aba "Classificação"
+Estratégia correta:
+- O loop de ranking não faz fetch próprio
+- Em vez disso, encontra o elemento DOM da aba "Classificação" e clica
+- O portal resolve hCaptcha fresco, faz a request, interceptor captura
+- O loop precisa esperar a resposta (usando um callback/promise)
+- Opcional: clicar de volta na aba anterior para não alterar UI visível
 
-4. **Agrupar por participante**: O frontend `buildRankingPorParticipante()` já agrupa, mas como não temos `participanteId`, cada entrada fica separada. Ideal seria ter consistência entre chamadas.
+### 3. Se patch funcionar: Build oficial e deploy
+- Bump versão no `package.json`
+- Rodar `npm run electron:build:terminal`
+- SCP para VPS
+- Git push
+
+---
 
 ## OBSERVAÇÕES TÉCNICAS
 
-- O captcha do Siga (`capgen.sigapregao.com.br`) pode expirar — renovado a cada 3min pelo CaptchaManager
-- A resposta do `/lances/por-participante` NÃO tem `participanteId` nem `eMeuLance`
-- O `eMeuLance` é inferido por matching de valor: `Math.abs(r.valor - meuValor) < 0.001`
-- O portal-preload.js tem DUAS definições de `processSerproData()` (linhas ~202 e ~530) — a segunda sobrescreve a primeira
-- O `secure-proxy.js` cria um proxy HTTP em porta dinâmica para redirecionar tráfego com certificado A1
-- O `shared` state é compartilhado entre frames via `window.top._polaryonSharedState`
+- **Context Isolation**: Electron com `contextIsolation: true` isola JS globals entre preload e page, mas DOM events são compartilhados. `CustomEvent` com `detail` (structured clone) funciona para comunicação preload → page.
+- **Cookies vs Authorization**: O servidor SERPRO parece exigir cookies de sessão (não apenas `Authorization: Bearer`) para retornar dados de `/lances/por-participante`. O Angular do portal manda ambos.
+- **`originalFetch`**: No injected script, `originalFetch = window.fetch` é salvo ANTES do override. Usar `originalFetch` com `credentials: 'include'` equivale à request do navegador puro, com cookies e headers padrão.
+- **Removido `/propostas-iniciais`**: O fallback foi removido porque retorna dados em formato diferente (apenas propostas, sem lances) e atrapalhava o parsing.
+- **Duplicação de `processSerproData()`**: Existem duas definições no `portal-preload.js` (~linha 200 e ~linha 532). A segunda sobrescreve a primeira. Alterar sempre a segunda.
+- **Captcha do Siga**: `capgen.sigapregao.com.br` retorna tokens que NÃO funcionam em `/lances/por-participante` (retorna 204). Só o hCaptcha do portal (P1_...) funciona.
+- **ASAR patch manual**: Usar `npx asar extract` + substituir arquivo + `npx asar pack` para patchear o instalado. Backup salvo em `app.asar.backup`.

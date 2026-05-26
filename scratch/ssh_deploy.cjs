@@ -6,7 +6,8 @@ const vpsIp = "204.168.151.231";
 const password = "Jaguar2018jolela#";
 const remotePath = "/var/www/polaryon/storage/download/";
 
-const version = "3.8.19";
+const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const version = packageJson.version;
 const exeName = `Polaryon-v${version}-Setup.exe`;
 
 const filesToUpload = [

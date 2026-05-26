@@ -7,6 +7,11 @@ class VisualRunner {
         this.dashboardWebContents = dashboardWebContents;
         this.sessions = new Map();
 
+        ipcMain.removeHandler('get-login-token');
+        ipcMain.handle('get-login-token', () => {
+            return global.serproToken || null;
+        });
+
         ipcMain.removeAllListeners('portal-update');
         ipcMain.on('portal-update', (event, data) => {
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
@@ -223,10 +228,6 @@ class VisualRunner {
 
             if (auth && auth.toLowerCase().startsWith('bearer')) {
                 global.serproToken = auth.replace(/^bearer/i, 'Bearer'); // 🔥 SALVA GLOBALMENTE E NORMALIZADO PARA O MOTOR BACKGROUND (v3.6.47)
-                if (!global.ipcTokenRegistered) {
-                    global.ipcTokenRegistered = true;
-                    ipcMain.handle('get-login-token', () => global.serproToken);
-                }
                 
                 if (!win.isDestroyed()) {
                     // Injeta Token

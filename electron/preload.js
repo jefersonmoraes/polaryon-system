@@ -8,32 +8,88 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopVisualBidding: (sessionId) => ipcRenderer.send('stop-visual-bidding', sessionId),
   updateLocalBiddingConfig: (sessionId, config) => ipcRenderer.send('update-local-config', { sessionId, config }),
   setFocusedSession: (sessionId) => ipcRenderer.send('set-focused-session', sessionId),
-  onBiddingUpdate: (callback) => ipcRenderer.on('bidding-update', (event, data) => callback(data)),
-  onBiddingError: (callback) => ipcRenderer.on('bidding-error', (event, data) => callback(data)),
-  onBiddingChat: (callback) => ipcRenderer.on('bidding-chat', (event, data) => callback(data)),
-  onBiddingHybridDump: (callback) => ipcRenderer.on('bidding-hybrid-dump', (event, data) => callback(data)),
-  onBiddingDetectedRoom: (callback) => ipcRenderer.on('bidding-detected-room', (event, data) => callback(data)),
+  onBiddingUpdate: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-update', fn);
+    return () => { ipcRenderer.off('bidding-update', fn); };
+  },
+  onBiddingError: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-error', fn);
+    return () => { ipcRenderer.off('bidding-error', fn); };
+  },
+  onBiddingChat: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-chat', fn);
+    return () => { ipcRenderer.off('bidding-chat', fn); };
+  },
+  onBiddingHybridDump: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-hybrid-dump', fn);
+    return () => { ipcRenderer.off('bidding-hybrid-dump', fn); };
+  },
+  onBiddingDetectedRoom: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-detected-room', fn);
+    return () => { ipcRenderer.off('bidding-detected-room', fn); };
+  },
   // EQUIPAMENTO DE COMBATE V2.1 (SIGA PREGÃO PARITY)
   saveA1Certificate: (data) => ipcRenderer.invoke('save-a1-certificate', data),
   hasA1Certificate: () => ipcRenderer.invoke('has-a1-certificate'),
   focusVisualBidding: (sessionId) => ipcRenderer.send('visual-focus', sessionId),
   navigateVisualBidding: (sessionId, url) => ipcRenderer.send('visual-navigate', { sessionId, url }),
-  onBiddingLoginFinished: (callback) => ipcRenderer.on('bidding-login-finished', (event, data) => callback(data)),
-  onBiddingNetworkTraffic: (callback) => ipcRenderer.on('bidding-network-traffic', (event, data) => callback(data)),
+  onBiddingLoginFinished: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-login-finished', fn);
+    return () => { ipcRenderer.off('bidding-login-finished', fn); };
+  },
+  onBiddingNetworkTraffic: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-network-traffic', fn);
+    return () => { ipcRenderer.off('bidding-network-traffic', fn); };
+  },
   manualBid: (purchaseId, itemId, bidId, value, options) => ipcRenderer.send('manual-bid', { purchaseId, itemId, bidId, value, options }),
   sendPortalData: (data) => ipcRenderer.send('send-portal-data', data),
-  onPortalDataUpdate: (callback) => ipcRenderer.on('portal-data-update', (event, data) => callback(data)),
-  onBiddingRankingUpdate: (callback) => ipcRenderer.on('bidding-ranking-update', (event, data) => callback(data)),
+  onPortalDataUpdate: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('portal-data-update', fn);
+    return () => { ipcRenderer.off('portal-data-update', fn); };
+  },
+  onBiddingRankingUpdate: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bidding-ranking-update', fn);
+    return () => { ipcRenderer.off('bidding-ranking-update', fn); };
+  },
 
   isDesktop: true,
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   checkForUpdates: () => ipcRenderer.send('check-for-updates'),
   installUpdate: () => ipcRenderer.send('install-update'),
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, info) => callback(info)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, info) => callback(info)),
-  onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (event, progress) => callback(progress)),
-  onUpdateError: (callback) => ipcRenderer.on('update-error', (event, error) => callback(error)),
-  onUpdateLog: (callback) => ipcRenderer.on('bidding-update-log', (event, msg) => callback(msg)),
+  onUpdateAvailable: (callback) => {
+    const fn = (event, info) => callback(info);
+    ipcRenderer.on('update-available', fn);
+    return () => { ipcRenderer.off('update-available', fn); };
+  },
+  onUpdateDownloaded: (callback) => {
+    const fn = (event, info) => callback(info);
+    ipcRenderer.on('update-downloaded', fn);
+    return () => { ipcRenderer.off('update-downloaded', fn); };
+  },
+  onDownloadProgress: (callback) => {
+    const fn = (event, progress) => callback(progress);
+    ipcRenderer.on('download-progress', fn);
+    return () => { ipcRenderer.off('download-progress', fn); };
+  },
+  onUpdateError: (callback) => {
+    const fn = (event, error) => callback(error);
+    ipcRenderer.on('update-error', fn);
+    return () => { ipcRenderer.off('update-error', fn); };
+  },
+  onUpdateLog: (callback) => {
+    const fn = (event, msg) => callback(msg);
+    ipcRenderer.on('bidding-update-log', fn);
+    return () => { ipcRenderer.off('bidding-update-log', fn); };
+  },
   getRestoredSessions: () => ipcRenderer.invoke('get-restored-sessions'),
   testRankingCaptcha: (purchaseId, itemId, token) => ipcRenderer.invoke('test-ranking-captcha', { purchaseId, itemId, token })
 });

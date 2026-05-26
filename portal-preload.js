@@ -11,11 +11,8 @@
     let shared = {
         sessionToken: '',
         captchaToken: '',
-        synchronizedPurchases: new Set(),
-        lastClassificacaoClickTs: 0
+        synchronizedPurchases: new Set()
     };
-    // Staggered room-fetch delay counter (anti-429). Resets after all rooms queued.
-    let _roomFetchDelayMs = 0;
     try {
         if (window.top) {
             if (!window.top._polaryonSharedState) {
@@ -31,12 +28,13 @@
         // Ignora erro de cross-origin e usa o estado local isolado
     }
 
+    // Ativamente busca o token da sessão do processo principal Electron (Evita Race Condition)
     ipcRenderer.invoke('get-login-token').then(token => {
         if (token) {
             shared.sessionToken = token;
             console.log("%c[POLARYON] Token recuperado ativamente no startup!", "color: #ff00ff; font-size: 11px;");
         }
-    }).catch(err => console.error("[POLARYON] Erro get-login-token:", err));
+    }).catch(() => {});
 
     // AUTOMATIZADOR DE FILTRO: Seleciona "Disputa" automaticamente se estiver em outra opção (v3.6.86)
     // Garante que o usuário sempre seja guiado para a lista de disputas sem precisar de cliques manuais
@@ -371,11 +369,6 @@
         // FIX v3.8.20: Usa o mesmo formato que handlePortalSync usa para criar sessões: "virtual_{roomCode}"
         const sessionId = `virtual_${compraId}`;
 
-        if (data && (data.error || data.status >= 400 || data.message === 'Forbidden')) {
-            console.warn(`[POLARYON RANKING INTERCEPTOR] Ignorando resposta de erro para item ${itemId}: ${data.message || data.error}`);
-            return false;
-        }
-
         // Extrai lista de lances do formato que vier
         let lancesList = [];
         if (Array.isArray(data)) {
@@ -490,37 +483,50 @@
     // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado
     let rankingRoundRobin = 0;
     const activeRankingItems = []; // { purchaseId, itemId }
-    setInterval(() => {
+    setInterval(async () => {
         if (!shared.sessionToken) {
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Aguardando token...', 'color: #f59e0b; font-size: 10px;');
+            console.log(`%c[POLARYON RANKING LOOP] ⏳ Aguardando token... (items: ${activeRankingItems.length}, captcha: ${shared.captchaToken ? 'SIM' : 'NAO'})`, 'color: #f59e0b; font-size: 10px;');
             return;
         }
         if (activeRankingItems.length === 0) {
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Nenhum item ativo ainda. Aguardando dados da sala...', 'color: #f59e0b; font-size: 10px;');
+            console.log(`%c[POLARYON RANKING LOOP]  Nenhum item ativo para buscar ranking (captcha: ${shared.captchaToken ? 'SIM' : 'NAO'})`, 'color: #f59e0b; font-size: 10px;');
             return;
         }
+        const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
+        rankingRoundRobin++;
+        console.log(`%c[POLARYON RANKING LOOP] 🔍 Buscando ranking para item ${target.itemId} (compra: ${target.purchaseId})`, 'color: #6366f1; font-size: 10px;');
+        try {
+            // ⚠️ SÓ usa captcha do PORTAL (P1_... do hCaptcha). 
+            // Captcha do Siga retorna 204 (vazio) neste endpoint → ignora.
+            let captcha = shared.captchaToken;
+            if (captcha && !captcha.startsWith('P1_')) {
+                captcha = null; // Siga captcha não funciona para ranking
+            }
 
-        // ✅ ESTRATÉGIA: Clique programático na aba "Classificação" do portal Angular.
-        // O captcha P1_... é de uso único — NÃO pode ser reutilizado pelo preload.
-        // O portal Angular gera um captcha fresco internamente ao clicar a aba.
-        // O interceptor do injected script captura a resposta automaticamente.
-        const now = Date.now();
-        const cooldown = 10000; // 10s entre cliques
-        if (now - (shared.lastClassificacaoClickTs || 0) < cooldown) {
-            const remaining = Math.round((cooldown - (now - (shared.lastClassificacaoClickTs || 0))) / 1000);
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Cooldown: ' + remaining + 's até próximo clique em Classificação (' + activeRankingItems.length + ' itens monitorados)', 'color: #6366f1; font-size: 10px;');
-            return;
+            if (!captcha) {
+                // Tenta buscar do Siga mesmo assim, só pro log mostrar se está disponível
+                try {
+                    const sigaToken = await ipcRenderer.invoke('get-captcha-token');
+                    console.log(`%c[POLARYON RANKING LOOP] ⏳ Sem captcha do portal. Siga captcha=${sigaToken ? sigaToken.substring(0,15)+'...' : 'indisponivel'}. Aguardando clique em "Classificação" no portal...`, 'color: #f59e0b; font-size: 10px;');
+                } catch (e) {
+                    console.log(`%c[POLARYON RANKING LOOP] ⏳ Sem captcha do portal nem Siga. Aguardando...`, 'color: #f59e0b; font-size: 10px;');
+                }
+                return; // Não tenta /propostas-iniciais
+            }
+
+            // ✅ Tem captcha do portal (P1_...) → delega para o injected script (page context)
+            // O fetch isolado do preload NÃO inclui cookies → servidor retorna 204.
+            // O page-context fetch (originalFetch) inclui cookies automaticamente.
+            const encoded = encodeURIComponent(captcha);
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+            console.log(`%c[POLARYON RANKING LOOP] 🎯 Delegando fetch para page context: ${url.substring(0,130)}...`, 'color:#6366f1;font-size:10px;');
+            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                detail: { url, purchaseId: target.purchaseId, itemId: target.itemId, captcha }
+            }));
+            // Resposta chega assincronamente via message handler → processSerproData → processRankingData
+        } catch (e) {
+            console.error(`[POLARYON RANKING LOOP] ❌ Erro:`, e);
         }
-
-        shared.lastClassificacaoClickTs = now;
-        console.log('%c[POLARYON RANKING LOOP] 🖱️ Disparando clique na aba Classificação para obter ranking fresco (' + activeRankingItems.length + ' itens)...', 'color: #6366f1; font-weight: bold; font-size: 11px;');
-        window.postMessage({
-            source: 'polaryon-preload',
-            type: 'trigger-classificacao',
-            detail: { items: activeRankingItems.slice(0, 5) }
-        }, '*');
-        // Resposta capturada automaticamente pelo fetch interceptor do injected script
-        // → window.postMessage → message handler → processSerproData → processRankingData → IPC
     }, 5000);
 
     function processSerproData(data, url) {
@@ -557,26 +563,12 @@
                     const purchaseId = `${uasg}${modalityCode}${String(numero).padStart(5, '0')}${ano}`;
                     if (!shared.synchronizedPurchases.has(purchaseId)) {
                         shared.synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DETECTOR] 🎯 Nova sala em disputa detectada: ${purchaseId} (fetch em ${_roomFetchDelayMs}ms)`, "color: #10b981; font-weight: bold;");
+                        console.log(`%c[POLARYON DETECTOR] 🎯 Nova sala em disputa detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
                         ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
                         if (shared.sessionToken) {
-                            // ⚙️ Anti-429: Escalonamento com 2.5s entre cada sala detectada
-                            const myDelay = _roomFetchDelayMs;
-                            _roomFetchDelayMs += 2500;
-                            setTimeout(() => { _roomFetchDelayMs = Math.max(0, _roomFetchDelayMs - 2500); }, myDelay + 4000);
-                            setTimeout(async () => {
-                                try {
-                                    const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-                                    const r = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
-                                    if (r.ok) {
-                                        const d = await r.json();
-                                        processSerproData(d, roomUrl);
-                                    } else if (r.status === 429) {
-                                        console.warn(`[POLARYON DETECTOR] ⚠️ 429 para ${purchaseId}. Retentando em 15s...`);
-                                        setTimeout(() => autoFetchPurchaseItems(purchaseId), 15000);
-                                    }
-                                } catch (e) { console.error('[POLARYON DETECTOR] Erro fetch sala:', e); }
-                            }, myDelay);
+                            const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                            fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } })
+                                .then(r => r.ok ? r.json().then(d => processSerproData(d, roomUrl)) : null).catch(() => {});
                         }
                     }
                 }
@@ -657,13 +649,10 @@
                 // Só aceita P1_... (hCaptcha do portal). Siga captcha retorna 204 no ranking.
                 if (token && token.startsWith('P1_')) {
                     shared.captchaToken = token;
-                    console.log('%c[POLARYON] 🔓 Captcha P1_... interceptado!', 'color:#10b981;font-weight:bold;font-size:11px;');
+                    console.log(`%c[POLARYON] 🔓 Captcha P1_... interceptado!`, 'color:#10b981;font-weight:bold;font-size:11px;');
                 }
             } else if (type === 'serpro-data') {
                 processSerproData(data, url);
-            } else if (type === 'captcha-error') {
-                console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
-                shared.captchaToken = null;
             }
         }
     });
@@ -716,16 +705,8 @@
                 }
                 const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
                 if (isSerpro) {
-                    if (response.ok) {
-                        const clone = response.clone();
-                        clone.json().then(data => processSerproData(data, url)).catch(() => {});
-                    } else if (response.status === 403 && url.includes('/lances/por-participante')) {
-                        window.postMessage({
-                            source: 'polaryon-injector',
-                            type: 'captcha-error',
-                            status: response.status
-                        }, '*');
-                    }
+                    const clone = response.clone();
+                    clone.json().then(data => processSerproData(data, url)).catch(() => {});
                 }
                 return response;
             };
@@ -778,7 +759,7 @@
             try {
                 const xsrfCookie = document.cookie.split('; ').find(c => c.startsWith('XSRF-TOKEN='));
                 const xsrfToken = xsrfCookie ? xsrfCookie.split('=')[1] : '';
-                console.log('%c[POLARYON INJECTED] 🌐 Fetch ranking (page context): ' + url.substring(0,100) + '...', 'color:#888;font-size:10px;');
+                console.log(`%c[POLARYON INJECTED] 🌐 Fetch ranking (page context): ${url.substring(0,100)}...`, 'color:#888;font-size:10px;');
                 const res = await originalFetch(url, {
                     credentials: 'include',
                     headers: {
@@ -788,54 +769,12 @@
                     }
                 });
                 const body = await res.text();
-                console.log('%c[POLARYON INJECTED] ✅ Ranking response: status=' + res.status + ' body(' + body.length + 'B)', 'color:' + (res.ok ? '#10b981' : '#f59e0b') + ';font-size:10px;');
-                
-                if (!res.ok) {
-                    if (res.status === 403) {
-                        window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: res.status }, '*');
-                    }
-                }
-
+                console.log(`%c[POLARYON INJECTED] ✅ Ranking response: status=${res.status} body(${body.length}B)`, `color:${res.ok?'#10b981':'#f59e0b'};font-size:10px;`);
                 let data;
-                try { data = JSON.parse(body); } catch(err) { data = body; }
+                try { data = JSON.parse(body); } catch(e) { data = body; }
                 window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url }, '*');
-            } catch(err) {
-                console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
-                window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
-            }
-        });
-
-        // 🖱️ CLASSIFICAÇÃO AUTO-CLICKER: Disparado pelo ranking loop a cada 10s.
-        // O Angular do portal resolve o hCaptcha internamente ao clicar na aba.
-        // O fetch interceptor captura a resposta → postMessage → preload → processRankingData.
-        window.addEventListener('message', function(event) {
-            const data = event.data || {};
-            if (data.source === 'polaryon-preload' && data.type === 'trigger-classificacao') {
-                try {
-                    var allEls = document.querySelectorAll('[role="tab"], .mat-tab-label, .nav-link, li a, button, a');
-                    var classTab = null;
-                    for (var i = 0; i < allEls.length; i++) {
-                        var txt = (allEls[i].textContent || allEls[i].innerText || '').trim();
-                        if (txt === 'Classificação' || txt === 'Classificacao' || (txt.length < 30 && txt.toLowerCase().indexOf('classifica') !== -1)) {
-                            classTab = allEls[i];
-                            break;
-                        }
-                    }
-                    if (classTab) {
-                        console.log('%c[POLARYON INJECTED] 🖱️ Aba Classificação encontrada! Clicando para obter ranking fresco...', 'color:#6366f1;font-weight:bold;font-size:11px;');
-                        classTab.click();
-                    } else {
-                        console.log('%c[POLARYON INJECTED] ⚠️ Aba Classificação não encontrada. Logs de tabs disponíveis:', 'color:#f59e0b;font-size:10px;');
-                        var tabs = document.querySelectorAll('[role="tab"]');
-                        var tabTexts = Array.prototype.slice.call(tabs).map(function(t) { return '"' + (t.textContent || '').trim().substring(0, 20) + '"'; }).join(', ');
-                        if (tabTexts) console.log('%c[POLARYON INJECTED] [role=tab]: ' + tabTexts, 'color:#94a3b8;font-size:10px;');
-                        var btns = document.querySelectorAll('button');
-                        var btnTexts = Array.prototype.slice.call(btns).filter(function(b) { return (b.textContent||'').trim().length > 0 && (b.textContent||'').trim().length < 25; }).slice(0,10).map(function(b) { return '"' + (b.textContent||'').trim() + '"'; }).join(', ');
-                        if (btnTexts) console.log('%c[POLARYON INJECTED] buttons: ' + btnTexts, 'color:#94a3b8;font-size:10px;');
-                    }
-                } catch (err) {
-                    console.error('[POLARYON INJECTED] ❌ Erro ao clicar Classificação:', err);
-                }
+            } catch(e) {
+                console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', e);
             }
         });
         })();

@@ -125,6 +125,7 @@ export default function BiddingDashboardPage() {
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
     const [isLocalRunning, setIsLocalRunning] = useState(false);
     const [networkTraffic, setNetworkTraffic] = useState<any[]>([]);
+    const [trafficLogs, setTrafficLogs] = useState<string[]>([]);
     const [hybridRooms, setHybridRooms] = useState<string[]>([]);
     const [apiStatus, setApiStatus] = useState<string>('OFFLINE');
     const [uasgFilter, setUasgFilter] = useState('');
@@ -684,11 +685,12 @@ export default function BiddingDashboardPage() {
                 });
             };
 
-            (window as any).electronAPI.onBiddingUpdate(handleUpdate);
-            (window as any).electronAPI.onBiddingChat(handleChat);
+            const unsubs = [];
+            unsubs.push((window as any).electronAPI.onBiddingUpdate(handleUpdate));
+            unsubs.push((window as any).electronAPI.onBiddingChat(handleChat));
             
             if ((window as any).electronAPI.onBiddingError) {
-                (window as any).electronAPI.onBiddingError((data: any) => {
+                unsubs.push((window as any).electronAPI.onBiddingError((data: any) => {
                     const { sessionId: errSid, error, code, action } = data;
                     if (action === 'REQUIRE_REAUTH') {
                         setIsAuthenticated(false);
@@ -697,21 +699,21 @@ export default function BiddingDashboardPage() {
                     } else {
                         toast.error(`[POLARYON MOTOR] ${error}`);
                     }
-                });
+                }));
             }
 
             if ((window as any).electronAPI.onPortalDataUpdate) {
-                (window as any).electronAPI.onPortalDataUpdate(handlePortalSync);
+                unsubs.push((window as any).electronAPI.onPortalDataUpdate(handlePortalSync));
             }
 
             if ((window as any).electronAPI.onBiddingNetworkTraffic) {
-                (window as any).electronAPI.onBiddingNetworkTraffic((data: any) => {
+                unsubs.push((window as any).electronAPI.onBiddingNetworkTraffic((data: any) => {
                     setNetworkTraffic(prev => [data, ...(prev || [])].slice(0, 50));
-                });
+                }));
             }
 
             if ((window as any).electronAPI.onBiddingDetectedRoom) {
-                (window as any).electronAPI.onBiddingDetectedRoom((data: any) => {
+                unsubs.push((window as any).electronAPI.onBiddingDetectedRoom((data: any) => {
                     const { url } = data;
                     const match = url.match(/compra=(\d{6})06(\d{5})(\d{4})/);
                     if (match) {
@@ -721,19 +723,19 @@ export default function BiddingDashboardPage() {
                         setAnoPregao(detectedAno);
                         toast.success(`Sala Detectada: UASG ${detectedUasg} - Pregão ${detectedNum}. Sincronizando... ⚡`);
                     }
-                });
+                }));
             }
 
             if ((window as any).electronAPI.onBiddingLoginFinished) {
-                (window as any).electronAPI.onBiddingLoginFinished(() => {
+                unsubs.push((window as any).electronAPI.onBiddingLoginFinished(() => {
                     toast.success("Login confirmado! Ocultando janela e iniciando radar silencioso... 🛡️");
                     setIsListening(true);
                     setIsAuthenticated(true);
-                });
+                }));
             }
 
             if ((window as any).electronAPI.onBiddingHybridDump) {
-                (window as any).electronAPI.onBiddingHybridDump((pkg: any) => {
+                unsubs.push((window as any).electronAPI.onBiddingHybridDump((pkg: any) => {
                     const payload = pkg.data || {};
                     if (pkg.action === 'TOKEN_GRABBED') {
                          console.log("%c[POLARYON HYBRID] TOKEN CAPTURADO: ", "color: yellow; font-size: 14px; font-weight: bold;", payload.token);
@@ -807,14 +809,14 @@ export default function BiddingDashboardPage() {
                     } else if (pkg.action === 'HYBRID_API_ERROR') {
                          console.log("%c[❌ POLARYON HYBRID ERROR]: ", "color: #ff0000; font-weight: bold;", payload);
                     }
-                });
+                }));
             }
 
             // 🏆 RANKING REAL: Atualiza rankingLances quando o backend ou preload intercepta lances
             // FIX v3.8.20: O portal-preload envia sessionId como "GLOBAL_{compraId}" (ex: GLOBAL_153208306062026).
             // As sessões no mapa usam outros prefixos. Fazemos busca fuzzy pelo compraId em todos os itens.
             if ((window as any).electronAPI.onBiddingRankingUpdate) {
-                (window as any).electronAPI.onBiddingRankingUpdate((data: any) => {
+                unsubs.push((window as any).electronAPI.onBiddingRankingUpdate((data: any) => {
                     const { sessionId: sid, itemId, realPosicao, rankingLances } = data;
                     if (!rankingLances || rankingLances.length === 0) return;
 
@@ -893,7 +895,7 @@ export default function BiddingDashboardPage() {
 
                         return updated;
                     });
-                });
+                }));
             }
 
 
@@ -932,6 +934,9 @@ export default function BiddingDashboardPage() {
                 }
             };
             restore();
+            return () => {
+                unsubs.forEach(unsub => { if (typeof unsub === 'function') unsub(); });
+            };
         }
     }, [isDesktop, sessionId]);
 
@@ -1248,6 +1253,7 @@ export default function BiddingDashboardPage() {
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
             const electron = (window as any).electronAPI;
+            const unsubs: (() => void)[] = [];
 
             // Busca versão e dispara verificação ao iniciar (silent)
             electron.getAppVersion?.().then((v: string) => {
@@ -1265,13 +1271,14 @@ export default function BiddingDashboardPage() {
             window.addEventListener('focus', handleFocus);
 
             if (electron.onUpdateLog) {
-                electron.onUpdateLog((msg: string) => {
+                const unsub = electron.onUpdateLog((msg: string) => {
                     console.log('[POLARYON UPDATE]', msg);
                 });
+                if (typeof unsub === 'function') unsubs.push(unsub);
             }
 
             if (electron.onUpdateAvailable) {
-                electron.onUpdateAvailable((info: any) => {
+                const unsub = electron.onUpdateAvailable((info: any) => {
                     setUpdateInfo(info);
                     setIsUpdateReady(false);
                     setDownloadProgress(0);
@@ -1280,17 +1287,21 @@ export default function BiddingDashboardPage() {
                         autoClose: 8000
                     });
                 });
+                if (typeof unsub === 'function') unsubs.push(unsub);
             }
 
-            if (electron.onUpdateProgress) {
-                electron.onUpdateProgress((progress: any) => {
+            // Correção de correspondência: no preload é 'onDownloadProgress'
+            const registerProgress = electron.onDownloadProgress || electron.onUpdateProgress;
+            if (registerProgress) {
+                const unsub = registerProgress((progress: any) => {
                     const pct = Math.round(progress?.percent || 0);
                     setDownloadProgress(pct);
                 });
+                if (typeof unsub === 'function') unsubs.push(unsub);
             }
 
             if (electron.onUpdateDownloaded) {
-                electron.onUpdateDownloaded((info: any) => {
+                const unsub = electron.onUpdateDownloaded((info: any) => {
                     setUpdateInfo(info);
                     setIsUpdateReady(true);
                     setDownloadProgress(100);
@@ -1299,6 +1310,15 @@ export default function BiddingDashboardPage() {
                         autoClose: false
                     });
                 });
+                if (typeof unsub === 'function') unsubs.push(unsub);
+            }
+
+            if (electron.onUpdateError) {
+                const unsub = electron.onUpdateError((err: any) => {
+                    console.error('[POLARYON UPDATE ERROR]', err);
+                    toast.error(`❌ Falha ao processar atualização: ${err?.message || err}`);
+                });
+                if (typeof unsub === 'function') unsubs.push(unsub);
             }
 
             return () => {
