@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import multer from 'multer';
+import axios from 'axios';
 import { encryptBufferToString, decryptStringToBuffer, decryptString } from '../utils/crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth-middleware';
 import { Request, Response } from 'express';
@@ -295,6 +296,40 @@ router.get('/captcha-pool', async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// VPS Proxy Bid Dispatcher (⚡ Ultra-low latency backend routing)
+router.post('/proxy-bid', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { purchaseId, itemId, value, sessionToken, c1, c2 } = req.body;
+        if (!purchaseId || !itemId || !value || !sessionToken || !c1 || !c2) {
+            return res.status(400).json({ error: 'Faltam parâmetros obrigatórios para o disparo' });
+        }
+
+        const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
+        const payload = {
+            valorInformado: parseFloat(value),
+            faseItem: "LA"
+        };
+
+        const response = await axios.post(targetUrl, payload, {
+            timeout: 5000,
+            headers: {
+                'Authorization': sessionToken,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-device-platform': 'web',
+                'x-version-number': '6.0.2',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            }
+        });
+
+        res.json({ success: true, data: response.data });
+    } catch (error: any) {
+        const status = error.response?.status || 500;
+        const msg = error.response?.data?.message || error.response?.data || error.message;
+        res.status(status).json({ success: false, error: msg });
     }
 });
 

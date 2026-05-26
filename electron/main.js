@@ -305,6 +305,13 @@ ipcMain.on('manual-bid', (event, data) => {
     }
 });
 
+// [PROXY BID RELAY] Recebe disparo interceptado e repassa para o dashboard React
+ipcMain.on('execute-proxy-bid', (event, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('execute-proxy-bid', data);
+    }
+});
+
 // FORNECE CAPTCHA DO SIGA PARA O PORTAL-PRELOAD (v3.8.25)
 ipcMain.handle('get-captcha-token', async () => {
     try {

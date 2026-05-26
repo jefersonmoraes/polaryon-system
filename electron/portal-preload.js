@@ -209,34 +209,17 @@
             // 1. Captcha do Pool Rotativo (⚡ instantâneo) com fallback ao vivo
             const { c1, c2 } = await getNextCaptcha();
 
-            // 2. Monta a URL de Ataque do Serpro
-            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
-
-            // 3. Payload do Protocolo Oficial
-            const payload = {
-                valorInformado: parseFloat(value),
-                faseItem: "LA"
-            };
-
-            // 4. Disparo Furtivo
-            const response = await fetch(targetUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': shared.sessionToken,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
-                },
-                body: JSON.stringify(payload)
+            console.log(`%c[POLARYON] ⚡ Encaminhando disparo de R$ ${value} no Item ${itemId} para a VPS...`, "color: #a855f7; font-weight: bold;");
+            
+            // 2. Delega o disparo para a VPS através do processo principal
+            ipcRenderer.send('execute-proxy-bid', {
+                purchaseId,
+                itemId,
+                value: parseFloat(value),
+                sessionToken: shared.sessionToken,
+                c1,
+                c2
             });
-
-            if (response.ok) {
-                console.log(`%c[POLARYON] LANCE DE R$ ${value} ENVIADO COM SUCESSO! 🎯🎯🎯`, "color: #10b981; font-weight: bold; font-size: 16px;");
-            } else {
-                const errText = await response.text();
-                console.error(`%c[POLARYON] LANCE REJEITADO (Status ${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
-            }
         } catch (e) {
             console.error('[POLARYON] Exceção crítica durante o disparo:', e);
         }

@@ -91,5 +91,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => { ipcRenderer.off('bidding-update-log', fn); };
   },
   getRestoredSessions: () => ipcRenderer.invoke('get-restored-sessions'),
-  testRankingCaptcha: (purchaseId, itemId, token) => ipcRenderer.invoke('test-ranking-captcha', { purchaseId, itemId, token })
+  testRankingCaptcha: (purchaseId, itemId, token) => ipcRenderer.invoke('test-ranking-captcha', { purchaseId, itemId, token }),
+  onExecuteProxyBid: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('execute-proxy-bid', fn);
+    return () => { ipcRenderer.off('execute-proxy-bid', fn); };
+  }
 });

@@ -229,9 +229,8 @@ export default function BiddingDashboardPage() {
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
-                        let cooldown = isKamikaze ? 350 : 1500;
-                        if (tSeconds <= 10) cooldown = 250; 
-
+                        // ⚡ Cooldown ultra-rápido de 250ms constante (v3.8.52)
+                        const cooldown = 250; 
                         if (now - lastBid > cooldown) {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
@@ -954,6 +953,27 @@ export default function BiddingDashboardPage() {
             };
         }
     }, [isDesktop, sessionId]);
+
+    // VPS PROXY BID LISTENER (⚡ Ultra-low latency backend routing)
+    useEffect(() => {
+        if (isDesktop && (window as any).electronAPI && (window as any).electronAPI.onExecuteProxyBid) {
+            const unsub = (window as any).electronAPI.onExecuteProxyBid(async (data: any) => {
+                const { purchaseId, itemId, value, sessionToken, c1, c2 } = data;
+                try {
+                    console.log(`[PROXY BID] Disparando lance de R$ ${value} no Item ${itemId} via VPS...`);
+                    const res = await api.post('/bidding/proxy-bid', { purchaseId, itemId, value, sessionToken, c1, c2 });
+                    if (res.data.success) {
+                        console.log(`%c[PROXY BID] 🎯 Sucesso no lance via VPS!`, "color: #10b981; font-weight: bold;");
+                    } else {
+                        console.error(`[PROXY BID] VPS rejeitou o lance:`, res.data.error);
+                    }
+                } catch (err: any) {
+                    console.error(`[PROXY BID] Erro no envio via VPS:`, err.response?.data?.error || err.message);
+                }
+            });
+            return unsub;
+        }
+    }, [isDesktop]);
 
     // 🏆 SOCKET RANKING: Atualiza rankingLances via socket (modo web e desktop)
     useEffect(() => {
