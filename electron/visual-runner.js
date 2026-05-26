@@ -37,6 +37,24 @@ class VisualRunner {
         ipcMain.removeAllListeners('portal-ranking-data');
         ipcMain.on('portal-ranking-data', (event, { sessionId, itemId, rankingLances }) => {
             console.log(`[POLARYON RANKING IPC] 📊 Recebido ranking do portal: sessionId=${sessionId} itemId=${itemId} lances=${rankingLances.length}`);
+            
+            // 🔄 SINCRONIZAÇÃO DIRETA COM O MOTOR DE BACKGROUND:
+            // Permite ao RoomRunner do background ter lances de concorrentes atualizados em tempo real sem bater limite de 429
+            if (global.biddingRunner && global.biddingRunner.activeRunners) {
+                const runner = global.biddingRunner.activeRunners.get(sessionId);
+                if (runner) {
+                    const myRankIndex = rankingLances.findIndex(r => r.eMeuLance);
+                    const realPosicao = myRankIndex !== -1 ? String(myRankIndex + 1) : null;
+                    
+                    runner.itemRankingsMap.set(String(itemId), {
+                        realPosicao,
+                        rankingLances,
+                        updatedAt: Date.now()
+                    });
+                    console.log(`[POLARYON MOTOR SYNC] 🎯 Sincronizado ranking do item ${itemId} com o RoomRunner de background!`);
+                }
+            }
+
             if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                 this.dashboardWebContents.send('bidding-ranking-update', {
                     sessionId,

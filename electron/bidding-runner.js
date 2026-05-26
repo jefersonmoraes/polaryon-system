@@ -516,7 +516,7 @@ class RoomRunner {
 
                             // Só dispara nos 30 segundos finais, OU em modo kamikaze (qualquer timer)
                             // Timer -1 = sem countagem ativa, mas no modo kamikaze continua ativo
-                            const timerFiring = isTimerActive && tSeconds <= 30 && tSeconds > 0;
+                            const timerFiring = isTimerActive && tSeconds <= 30 && tSeconds >= 0;
                             if (!timerFiring && !isKamikaze) continue;
 
                             // Verifica se está perdendo
@@ -540,9 +540,9 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown para não spammar (Kamikaze: 500ms, Normal: 2000ms)
+                            // Cooldown para não spammar (Kamikaze: 500ms, Normal nos 30s finais: 1000ms, Normal geral: 2000ms)
                             const now = Date.now();
-                            const cooldown = isKamikaze ? 500 : 2000;
+                            const cooldown = isKamikaze ? 500 : (tSeconds <= 30 ? 1000 : 2000);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 
@@ -566,14 +566,14 @@ class RoomRunner {
                                 }
                             } else {
                                 // Modo Normal
-                                // Verificar se temos ranking dos concorrentes recente (máximo 15s)
+                                // Verificar se temos ranking dos concorrentes recente (máximo 60s, sincronizado via IPC)
                                 const cached = this.itemRankingsMap.get(sId);
-                                const hasRankings = cached && cached.rankingLances && (now - cached.updatedAt < 15000);
+                                const hasRankings = cached && cached.rankingLances && (now - cached.updatedAt < 60000);
 
                                 if (hasRankings) {
-                                    // Filtrar lances dos concorrentes (onde eMeuLance é falso ou não é o nosso valor)
+                                    // Filtrar lances dos concorrentes (onde eMeuLance é falso E não coincide com nosso próprio valor)
                                     const competitorBids = cached.rankingLances
-                                        .filter(r => !r.eMeuLance)
+                                        .filter(r => !r.eMeuLance && Math.abs(r.valor - myCurrentBid) > 0.001 && Math.abs(r.valor - Number(mappedItem.meuValor)) > 0.001)
                                         .map(r => r.valor)
                                         .sort((a, b) => a - b); // Crescente
 
