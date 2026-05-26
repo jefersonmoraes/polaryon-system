@@ -587,7 +587,15 @@ export default function BiddingDashboardPage() {
                     const itemMap = new Map(existingItems.map((it: any) => [it.itemId, it]));
                     
                     (newItems || []).forEach((it: any) => {
-                        itemMap.set(it.itemId, { ...(itemMap.get(it.itemId) || {}), ...it });
+                        const existing = itemMap.get(it.itemId) || {};
+                        // 🔒 PROTEÇÃO: Nunca apaga rankingLances ou posicao real já adquiridos com uma atualização vazia
+                        const mergedRanking = (it.rankingLances && it.rankingLances.length > 0)
+                            ? it.rankingLances
+                            : (existing.rankingLances || []);
+                        const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
+                            ? it.posicao
+                            : (existing.posicao || it.posicao);
+                        itemMap.set(it.itemId, { ...existing, ...it, rankingLances: mergedRanking, posicao: mergedPosicao });
                     });
 
                     updated[sid] = {
@@ -664,7 +672,15 @@ export default function BiddingDashboardPage() {
                         
                         (newItems || []).forEach((it: any) => {
                             const key = String(it.itemId);
-                            itemMap.set(key, { ...(itemMap.get(key) || {}), ...it, id: key });
+                            const existing = itemMap.get(key) || {};
+                            // 🔒 PROTEÇÃO: Preserva rankingLances e posicao se novo item não trouxer dados de ranking
+                            const mergedRanking = (it.rankingLances && it.rankingLances.length > 0)
+                                ? it.rankingLances
+                                : (existing.rankingLances || []);
+                            const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
+                                ? it.posicao
+                                : (existing.posicao || it.posicao);
+                            itemMap.set(key, { ...existing, ...it, rankingLances: mergedRanking, posicao: mergedPosicao, id: key });
                         });
 
                         updated[sid] = {
