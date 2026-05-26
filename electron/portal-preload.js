@@ -515,23 +515,34 @@
         const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
         rankingRoundRobin++;
 
-        // Híbrido: Se temos captcha token fresco interceptado do portal (começa com P1_), fazemos fetch silencioso
+        // 🎯 ESTRATÉGIA 1: Se temos captcha P1_, usa com prioridade
         if (shared.captchaToken && shared.captchaToken.startsWith('P1_')) {
             const captcha = shared.captchaToken;
-            shared.captchaToken = ''; // Consome o token
-            
+            shared.captchaToken = '';
             const encoded = encodeURIComponent(captcha);
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&captcha1=${encoded}&captcha2=${encoded}&captcha3=${encoded}&tamanhoPagina=50&pagina=0`;
-            console.log(`%c[POLARYON RANKING LOOP] 🎯 Delegando fetch silencioso para page context: ${url.substring(0, 130)}...`, 'color:#6366f1;font-size:10px;');
+            const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+            console.log(`%c[POLARYON RANKING LOOP] 🔐 Fetch com captcha P1_ para item ${target.itemId}`, 'color:#10b981;font-size:10px;');
             document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                detail: { url, purchaseId: target.purchaseId, itemId: target.itemId, captcha }
+                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
             }));
             return;
         }
 
-        // Caso contrário, fazemos o clique programático na aba "Classificação" para carregar/exibir captcha
+        // 🎯 ESTRATÉGIA 2: Fetch direto SEM captcha (funciona para usuários GOVERNO; tenta para FORNECEDOR com cookies)
         const now = Date.now();
-        const cooldown = 10000; // 10s entre cliques
+        const fetchCooldown = 6000;
+        if (now - (shared.lastDirectFetchTs || 0) >= fetchCooldown) {
+            shared.lastDirectFetchTs = now;
+            const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
+            console.log(`%c[POLARYON RANKING LOOP] 🔓 Fetch direto (sem captcha) para item ${target.itemId} compra ${target.purchaseId}`, 'color:#6366f1;font-size:10px;');
+            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
+            }));
+            return;
+        }
+
+        // 🎯 ESTRATÉGIA 3 (fallback): Clique na aba se estivermos na página de disputa
+        const cooldown = 15000;
         if (now - (shared.lastClassificacaoClickTs || 0) < cooldown) {
             return;
         }
@@ -553,9 +564,6 @@
             let classTab = null;
             for (const selector of selectors) {
                 const elements = document.querySelectorAll(selector);
-                if (elements.length > 0) {
-                    console.log(`[POLARYON DEBUG] Selector "${selector}" matchou ${elements.length} elementos:`, Array.from(elements).slice(0, 10).map(el => `[${el.tagName}: ${(el.textContent || el.innerText || '').trim().substring(0, 20)}]`).join(', '));
-                }
                 for (const el of elements) {
                     const text = (el.textContent || el.innerText || '').trim();
                     const textLower = text.toLowerCase();
