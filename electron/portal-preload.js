@@ -500,40 +500,58 @@
         return true;
     }
 
-    // 🔄 LOOP PROATIVO DE RANKING: atualização em tempo real de todos os itens ativos.
-    // Estratégia:
-    //   1. Ao detectar item novo → fetch imediato (carga instantânea na abertura da sala)
-    //   2. A cada 8s → atualiza todos os itens em paralelo com stagger de 500ms entre eles (sem impacto no robô)
+    // 🔄 LOOP DE RANKING COM FILA INTELIGENTE:
+    //   - Fila FIFO com rate-limit de 1 req/2s → sem 429
+    //   - Item novo → inserido no INÍCIO da fila (prioridade, carga instantânea)
+    //   - 429 → backoff de 15s automático antes de continuar
+    //   - Refresh periódico de todos os itens a cada 45s (re-enfileira no final)
     const activeRankingItems = []; // { purchaseId, itemId }
-    const _rankingFetching = new Set(); // deduplicação: evita disparar para mesmo item simultâneo
+    const _rankingQueue = [];      // fila FIFO
+    let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
+    let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
+    const RANKING_RATE_MS = 2000;  // 1 requisição a cada 2s (30 req/min)
 
+    // Enfileira item de ranking. priority=true coloca na frente da fila.
+    function enqueueRankingFetch(target, priority = false) {
+        const alreadyQueued = _rankingQueue.some(q => q.purchaseId === target.purchaseId && q.itemId === target.itemId);
+        if (alreadyQueued) return;
+        if (priority) {
+            _rankingQueue.unshift({ purchaseId: target.purchaseId, itemId: target.itemId });
+        } else {
+            _rankingQueue.push({ purchaseId: target.purchaseId, itemId: target.itemId });
+        }
+    }
+
+    // Dispara o fetch de um item: hCaptcha (P1_ token) + fetch direto concorrente
     function triggerRankingFetch(target) {
-        const key = `${target.purchaseId}_${target.itemId}`;
-        if (_rankingFetching.has(key)) return;
-        _rankingFetching.add(key);
-        setTimeout(() => _rankingFetching.delete(key), 12000); // limpa após 12s
-
-        // 🎯 Estratégia 1: hCaptcha programático para token P1_ fresco
         shared.pendingRankingTarget = target;
         document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
 
-        // 🎯 Estratégia 2 (concorrente): fetch direto sem captcha (cookie/GOVERNO)
         const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
         document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
             detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
         }));
     }
 
-    // 🏁 ATUALIZAÇÃO PARALELA: a cada 8s, dispara todos os itens com stagger de 500ms entre eles
+    // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo item
+    setInterval(() => {
+        if (!shared.sessionToken) return;
+        if (_rankingQueue.length === 0) return;
+        const now = Date.now();
+        if (now < _rankingBackoffUntil) return;           // 429 backoff ativo
+        if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit
+        const target = _rankingQueue.shift();
+        _lastRankingFetchTs = now;
+        console.log(`%c[POLARYON RANKING QUEUE] ▶️ Processando item ${target.itemId} (Compra: ${target.purchaseId}) | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
+        triggerRankingFetch(target);
+    }, 500);
+
+    // 🔁 REFRESH PERIÓDICO: a cada 45s re-enfileira todos os itens ativos (no final da fila)
     setInterval(() => {
         if (!shared.sessionToken || activeRankingItems.length === 0) return;
-        activeRankingItems.forEach((target, idx) => {
-            setTimeout(() => {
-                console.log(`%c[POLARYON RANKING LOOP] 🔄 Refresh item ${target.itemId} (Compra: ${target.purchaseId})`, 'color:#6366f1;font-size:9px;');
-                triggerRankingFetch(target);
-            }, idx * 500); // 500ms entre cada item → sem pico de rede
-        });
-    }, 8000);
+        console.log(`%c[POLARYON RANKING QUEUE] 🔁 Re-enfileirando ${activeRankingItems.length} itens para refresh periódico`, 'color:#a855f7;font-size:9px;');
+        activeRankingItems.forEach(target => enqueueRankingFetch(target, false));
+    }, 45000);
 
     function processSerproData(data, url, status, ok) {
         if (typeof data === 'string') {
@@ -629,11 +647,9 @@
                     if (!alreadyTracked) {
                         const newTarget = { purchaseId: roomCode, itemId: itemIdStr };
                         activeRankingItems.push(newTarget);
-                        console.log(`%c[POLARYON RANKING LOOP] ➕ Item ${itemIdStr} (compra: ${roomCode}) adicionado ao radar. Total: ${activeRankingItems.length}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
-                        // 🚀 Carga INSTANTÂNEA: busca classificação imediatamente ao descobrir o item
-                        if (shared.sessionToken) {
-                            setTimeout(() => triggerRankingFetch(newTarget), 300);
-                        }
+                        console.log(`%c[POLARYON RANKING QUEUE] ➕ Item ${itemIdStr} (compra: ${roomCode}) enfileirado com prioridade. Fila: ${_rankingQueue.length + 1}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
+                        // 🚀 Prioridade: coloca na FRENTE da fila → será o próximo processado (sem burst)
+                        enqueueRankingFetch(newTarget, true);
                     }
                 }
             });
@@ -688,6 +704,9 @@
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
+            } else if (type === '429-error') {
+                console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 15 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                _rankingBackoffUntil = Date.now() + 15000;
             } else if (type === 'fresh-captcha') {
                 // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
@@ -873,6 +892,12 @@
                             type: 'captcha-error',
                             status: response.status
                         }, '*');
+                    } else if (response.status === 429) {
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: '429-error',
+                            status: response.status
+                        }, '*');
                     }
                 }
                 return response;
@@ -910,6 +935,13 @@
                     }
                     const isSerpro = this._url && (this._url.includes('serpro.gov.br') || this._url.includes('/comprasnet-') || this._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || this._url.includes('/classificacao') || this._url.includes('comprasnet/classificacao'));
                     if (isSerpro) {
+                        if (this.status === 429) {
+                            window.postMessage({
+                                source: 'polaryon-injector',
+                                type: '429-error',
+                                status: this.status
+                            }, '*');
+                        }
                         try {
                             const data = JSON.parse(this.responseText);
                             processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300);
@@ -946,6 +978,8 @@
                 if (!res.ok) {
                     if (res.status === 403) {
                         window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: res.status }, '*');
+                    } else if (res.status === 429) {
+                        window.postMessage({ source: 'polaryon-injector', type: '429-error', status: res.status }, '*');
                     }
                 }
 
