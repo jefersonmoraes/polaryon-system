@@ -197,8 +197,7 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                const tSeconds = Number(item.timerSeconds);
-                if (isNaN(tSeconds)) return;
+                const tSeconds = isNaN(Number(item.timerSeconds)) ? -1 : Number(item.timerSeconds);
 
                 // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
                 if (tSeconds <= 40 && tSeconds > 0) {
@@ -595,7 +594,7 @@ export default function BiddingDashboardPage() {
                         const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
                             ? it.posicao
                             : (existing.posicao || it.posicao);
-                        itemMap.set(it.itemId, { ...existing, ...it, rankingLances: mergedRanking, posicao: mergedPosicao });
+                        itemMap.set(it.itemId, { ...existing, ...it, sid, rankingLances: mergedRanking, posicao: mergedPosicao });
                     });
 
                     updated[sid] = {
@@ -680,7 +679,7 @@ export default function BiddingDashboardPage() {
                             const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
                                 ? it.posicao
                                 : (existing.posicao || it.posicao);
-                            itemMap.set(key, { ...existing, ...it, rankingLances: mergedRanking, posicao: mergedPosicao, id: key });
+                            itemMap.set(key, { ...existing, ...it, sid, rankingLances: mergedRanking, posicao: mergedPosicao, id: key });
                         });
 
                         updated[sid] = {
@@ -2239,22 +2238,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                         <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
                     </div>
                     
-                    <Input 
-                        placeholder="R$ Direto"
-                        type="text"
-                        className="w-24 h-10 text-xs font-bold bg-slate-50 border-slate-200"
-                        value={directBidValue}
-                        onChange={(e) => setDirectBidValue(e.target.value)}
-                        title="Digite um valor exato para enviar diretamente com o Gatilho"
-                    />
-
-                    <Button 
-                        size="sm" 
-                        onClick={handleManualBid}
-                        className="h-10 px-4 text-[10px] font-bold uppercase bg-slate-900 hover:bg-black text-white"
-                    >
-                        Gatilho
-                    </Button>
 
 
                     
