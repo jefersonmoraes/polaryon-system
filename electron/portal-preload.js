@@ -515,34 +515,32 @@
         const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
         rankingRoundRobin++;
 
-        // 🎯 ESTRATÉGIA 1: Se temos captcha P1_, usa com prioridade
-        if (shared.captchaToken && shared.captchaToken.startsWith('P1_')) {
-            const captcha = shared.captchaToken;
+        // 🎯 ESTRATÉGIA 1 (FORNECEDOR com captcha disponível):
+        // NÃO reutilizamos o token (causaria 204). Em vez disso, clicamos na aba para que
+        // o Angular gere um token fresco e faça a chamada — o fetch interceptor captura a resposta 200.
+        const now = Date.now();
+        const hasCaptcha = shared.captchaToken && shared.captchaToken.startsWith('P1_');
+        if (hasCaptcha) {
+            // Limpa o token (não reusamos — Angular fará chamada própria)
             shared.captchaToken = '';
-            const encoded = encodeURIComponent(captcha);
-            const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
-            console.log(`%c[POLARYON RANKING LOOP] 🔐 Fetch com captcha P1_ para item ${target.itemId}`, 'color:#10b981;font-size:10px;');
-            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
-            }));
-            return;
+            // Cai para a estratégia de clique de aba abaixo
         }
 
-        // 🎯 ESTRATÉGIA 2: Fetch direto SEM captcha (funciona para usuários GOVERNO; tenta para FORNECEDOR com cookies)
-        const now = Date.now();
-        const fetchCooldown = 6000;
-        if (now - (shared.lastDirectFetchTs || 0) >= fetchCooldown) {
+        // 🎯 ESTRATÉGIA 2: Fetch direto SEM captcha (funciona para usuários GOVERNO)
+        const fetchCooldown = 8000;
+        if (!hasCaptcha && now - (shared.lastDirectFetchTs || 0) >= fetchCooldown) {
             shared.lastDirectFetchTs = now;
             const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
-            console.log(`%c[POLARYON RANKING LOOP] 🔓 Fetch direto (sem captcha) para item ${target.itemId} compra ${target.purchaseId}`, 'color:#6366f1;font-size:10px;');
+            console.log(`%c[POLARYON RANKING LOOP] 🔓 Fetch sem captcha para item ${target.itemId} (tentativa GOVERNO/cookie)`, 'color:#6366f1;font-size:10px;');
             document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
                 detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
             }));
             return;
         }
 
-        // 🎯 ESTRATÉGIA 3 (fallback): Clique na aba se estivermos na página de disputa
-        const cooldown = 15000;
+        // 🎯 ESTRATÉGIA 3: Clique na aba para acionar o Angular (que gera captcha fresco e faz a chamada)
+        // O fetch interceptor captura a resposta 200 automaticamente.
+        const cooldown = hasCaptcha ? 3000 : 12000; // Clique mais freqüente se captcha disponível
         if (now - (shared.lastClassificacaoClickTs || 0) < cooldown) {
             return;
         }
@@ -770,6 +768,15 @@
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
+            } else if (type === 'fresh-captcha') {
+                // 🔑 Token FRESCO: interceptado ANTES do Angular consumir
+                // O Angular vai usar para fazer a chamada legítima, que nosso interceptor captura automaticamente.
+                // Também armazenamos para uso no PRÓXIMO ciclo se o interceptor não capturar.
+                if (token && token.startsWith('P1_')) {
+                    shared.captchaToken = token;
+                    console.log('%c[POLARYON] 🔑 Token FRESCO interceptado antes do Angular! Aguardando resposta da chamada legítima...', 'color:#10b981;font-weight:bold;font-size:11px;');
+                    // Não consumimos o token aqui — o Angular vai usar e o fetch interceptor captura a resposta 200
+                }
             }
         }
     });
@@ -792,6 +799,34 @@
                     ok
                 }, '*');
             }
+
+            // 🔑 INTERCEPTA hcaptcha.execute() ANTES de qualquer consumo pelo Angular
+            // Captura o token P1_ fresco no momento de geração, não após uso
+            let _hcaptchaWrapped = false;
+            const wrapHcaptcha = () => {
+                if (_hcaptchaWrapped || !window.hcaptcha || !window.hcaptcha.execute) return;
+                _hcaptchaWrapped = true;
+                const originalExecute = window.hcaptcha.execute;
+                window.hcaptcha.execute = function(widgetId, options) {
+                    const result = originalExecute.apply(window.hcaptcha, arguments);
+                    if (result && typeof result.then === 'function') {
+                        result.then(token => {
+                            if (token && token.startsWith('P1_')) {
+                                // Envia como 'fresh-captcha' - token ainda não consumido
+                                window.postMessage({
+                                    source: 'polaryon-injector',
+                                    type: 'fresh-captcha',
+                                    token
+                                }, '*');
+                            }
+                        }).catch(() => {});
+                    }
+                    return result;
+                };
+                console.log('%c[POLARYON INJECTED] 🔑 hcaptcha.execute interceptado!', 'color:#10b981;font-weight:bold;font-size:10px;');
+            };
+            wrapHcaptcha();
+            setInterval(wrapHcaptcha, 1500);
 
             const originalFetch = window.fetch;
             window.fetch = async (...args) => {
