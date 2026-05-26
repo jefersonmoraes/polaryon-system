@@ -380,41 +380,42 @@ export default function BiddingDashboardPage() {
             return;
         }
 
-        if (simulationMode) {
-            const activeSid = sid || sessionId;
-            if (activeSid) {
-                setSessions(prev => {
-                    const updated = { ...prev };
-                    if (updated[activeSid]) {
-                        updated[activeSid].items = updated[activeSid].items.map((it: any) => {
-                            if (String(it.itemId) === String(itemId)) {
-                                return {
-                                    ...it,
-                                    meuValor: value,
-                                    valorAtual: value,
-                                    posicao: "1"
-                                };
-                            }
-                            return it;
-                        });
-                    }
-                    return updated;
-                });
-
-                setItems(prev => {
-                    return prev.map(it => {
+        // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA (v3.8.56): Evita múltiplos disparos do mesmo valor e erros 422 em tempo real
+        const activeSid = sid || sessionId;
+        if (activeSid) {
+            setSessions(prev => {
+                const updated = { ...prev };
+                if (updated[activeSid]) {
+                    updated[activeSid].items = updated[activeSid].items.map((it: any) => {
                         if (String(it.itemId) === String(itemId)) {
                             return {
                                 ...it,
                                 meuValor: value,
-                                valorAtual: value,
-                                posicao: "1"
+                                valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
+                                posicao: simulationMode ? "1" : it.posicao
                             };
                         }
                         return it;
                     });
-                });
+                }
+                return updated;
+            });
 
+            setItems(prev => {
+                return prev.map(it => {
+                    if (String(it.itemId) === String(itemId)) {
+                        return {
+                            ...it,
+                            meuValor: value,
+                            valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
+                            posicao: simulationMode ? "1" : it.posicao
+                        };
+                    }
+                    return it;
+                });
+            });
+
+            if (simulationMode) {
                 toast.success(`🎯 Sniper Atirou! R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: allow4 ? 4 : 2 })} enviado na simulação.`);
             }
         }
