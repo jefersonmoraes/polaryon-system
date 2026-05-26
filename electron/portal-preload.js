@@ -15,6 +15,53 @@
         lastClassificacaoClickTs: 0,
         pendingRankingTarget: null
     };
+
+    // ⚡ CACHE ROTATIVO DE CAPTCHAS (v3.8.50)
+    // Worker silencioso que pré-busca pares de captcha continuamente.
+    // O disparo consome do cache instantaneamente em vez de esperar ~300ms.
+    const captchaPool = [];
+    const CAP_POOL_MAX = 8;
+    const CAP_HEADERS = {
+        'origin': 'https://disputas.sigapregao.com.br',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2'
+    };
+
+    async function prefetchCaptchaPair() {
+        if (captchaPool.length >= CAP_POOL_MAX) return;
+        try {
+            const [c1, c2] = await Promise.all([
+                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
+                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+            ]);
+            if (c1 && c2) {
+                captchaPool.push({ c1, c2, ts: Date.now() });
+            }
+        } catch(e) { /* silencioso */ }
+    }
+
+    // Inicia o worker de pré-busca assim que o token de sessão for disponível
+    setInterval(() => {
+        if (shared.sessionToken) prefetchCaptchaPair();
+    }, 250);
+
+    async function getNextCaptcha() {
+        // Descarta captchas com mais de 25s (expiram no Serpro)
+        while (captchaPool.length > 0 && Date.now() - captchaPool[0].ts > 25000) {
+            captchaPool.shift();
+        }
+        if (captchaPool.length > 0) {
+            const pair = captchaPool.shift();
+            console.log(`%c[POLARYON CAPTCHA] ⚡ Pool hit! ${captchaPool.length} pares restantes.`, 'color: #a78bfa; font-size: 10px;');
+            return pair;
+        }
+        // Fallback: busca ao vivo se o pool estiver vazio
+        console.warn('[POLARYON CAPTCHA] Pool vazio — buscando ao vivo (cold path).');
+        const [c1, c2] = await Promise.all([
+            fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
+            fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+        ]);
+        return { c1, c2 };
+    }
     // Staggered room-fetch delay counter (anti-429). Resets after all rooms queued.
     let _roomFetchDelayMs = 0;
     try {
@@ -159,16 +206,8 @@
         }
 
         try {
-            // 1. Extração Sombria dos Captchas (Farmados da Nuvem do Siga)
-            const capHeaders = { 
-                'origin': 'https://disputas.sigapregao.com.br',
-                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2'
-            };
-            
-            const [c1, c2] = await Promise.all([
-                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: capHeaders }).then(r => r.text()).catch(() => ''),
-                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: capHeaders }).then(r => r.text()).catch(() => '')
-            ]);
+            // 1. Captcha do Pool Rotativo (⚡ instantâneo) com fallback ao vivo
+            const { c1, c2 } = await getNextCaptcha();
 
             // 2. Monta a URL de Ataque do Serpro
             const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;

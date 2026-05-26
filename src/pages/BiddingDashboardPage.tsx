@@ -290,7 +290,7 @@ export default function BiddingDashboardPage() {
                     }
                 }
             });
-        }, 500); 
+        }, 200); // ⚡ Loop ultra-rápido (v3.8.51)
 
         return () => clearInterval(autoBidInterval);
     }, [isListening]);
