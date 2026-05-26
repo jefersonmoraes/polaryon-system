@@ -22,7 +22,8 @@
                 window.top._polaryonSharedState = {
                     sessionToken: '',
                     captchaToken: '',
-                    synchronizedPurchases: new Set()
+                    synchronizedPurchases: new Set(),
+                    lastClassificacaoClickTs: 0
                 };
             }
             shared = window.top._polaryonSharedState;
@@ -487,7 +488,8 @@
         return true;
     }
 
-    // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado
+    // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado.
+    // Usa uma estratégia híbrida: fetch silencioso em background se tiver captcha, ou clique programático se não tiver.
     let rankingRoundRobin = 0;
     const activeRankingItems = []; // { purchaseId, itemId }
     setInterval(() => {
@@ -500,27 +502,87 @@
             return;
         }
 
-        // ✅ ESTRATÉGIA: Clique programático na aba "Classificação" do portal Angular.
-        // O captcha P1_... é de uso único — NÃO pode ser reutilizado pelo preload.
-        // O portal Angular gera um captcha fresco internamente ao clicar a aba.
-        // O interceptor do injected script captura a resposta automaticamente.
+        const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
+        rankingRoundRobin++;
+
+        // Híbrido: Se temos captcha token fresco interceptado do portal (começa com P1_), fazemos fetch silencioso
+        if (shared.captchaToken && shared.captchaToken.startsWith('P1_')) {
+            const captcha = shared.captchaToken;
+            shared.captchaToken = ''; // Consome o token
+            
+            const encoded = encodeURIComponent(captcha);
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+            console.log(`%c[POLARYON RANKING LOOP] 🎯 Delegando fetch silencioso para page context: ${url.substring(0, 130)}...`, 'color:#6366f1;font-size:10px;');
+            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                detail: { url, purchaseId: target.purchaseId, itemId: target.itemId, captcha }
+            }));
+            return;
+        }
+
+        // Caso contrário, fazemos o clique programático na aba "Classificação" para carregar/exibir captcha
         const now = Date.now();
         const cooldown = 10000; // 10s entre cliques
         if (now - (shared.lastClassificacaoClickTs || 0) < cooldown) {
-            const remaining = Math.round((cooldown - (now - (shared.lastClassificacaoClickTs || 0))) / 1000);
-            console.log('%c[POLARYON RANKING LOOP] ⏳ Cooldown: ' + remaining + 's até próximo clique em Classificação (' + activeRankingItems.length + ' itens monitorados)', 'color: #6366f1; font-size: 10px;');
             return;
         }
 
         shared.lastClassificacaoClickTs = now;
-        console.log('%c[POLARYON RANKING LOOP] 🖱️ Disparando clique na aba Classificação para obter ranking fresco (' + activeRankingItems.length + ' itens)...', 'color: #6366f1; font-weight: bold; font-size: 11px;');
-        window.postMessage({
-            source: 'polaryon-preload',
-            type: 'trigger-classificacao',
-            detail: { items: activeRankingItems.slice(0, 5) }
-        }, '*');
-        // Resposta capturada automaticamente pelo fetch interceptor do injected script
-        // → window.postMessage → message handler → processSerproData → processRankingData → IPC
+        console.log('%c[POLARYON RANKING LOOP] 🖱️ Executando clique programático na aba Classificação para item ' + target.itemId + '...', 'color: #6366f1; font-weight: bold; font-size: 11px;');
+        
+        try {
+            const selectors = [
+                '[role="tab"]',
+                '.mat-tab-label',
+                '.mat-mdc-tab',
+                '.nav-link',
+                'button',
+                'a',
+                '.mat-tab-link'
+            ];
+            
+            let classTab = null;
+            for (const selector of selectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    const text = (el.textContent || el.innerText || '').trim();
+                    if (text === 'Classificação' || text === 'Classificacao' || (text.length < 25 && text.toLowerCase().includes('classifica'))) {
+                        classTab = el;
+                        break;
+                    }
+                }
+                if (classTab) break;
+            }
+            
+            if (!classTab) {
+                const allElements = document.querySelectorAll('span, div');
+                for (const el of allElements) {
+                    const text = (el.textContent || el.innerText || '').trim();
+                    if (text === 'Classificação' || text === 'Classificacao') {
+                        let parent = el;
+                        while (parent && parent !== document.body) {
+                            const role = parent.getAttribute('role');
+                            const tagName = parent.tagName.toLowerCase();
+                            const className = parent.className || '';
+                            if (role === 'tab' || tagName === 'button' || tagName === 'a' || className.includes('tab') || className.includes('link')) {
+                                classTab = parent;
+                                break;
+                            }
+                            parent = parent.parentElement;
+                        }
+                        if (classTab) break;
+                    }
+                }
+            }
+
+            if (classTab) {
+                console.log('%c[POLARYON PRELOAD] 🖱️ Clicando na aba Classificação...', 'color:#6366f1;font-weight:bold;font-size:11px;');
+                classTab.click();
+            } else {
+                console.log('%c[POLARYON PRELOAD] ⚠️ Aba Classificação não encontrada para clique.', 'color:#f59e0b;font-size:10px;');
+            }
+        } catch (err) {
+            console.error('[POLARYON PRELOAD] ❌ Erro ao clicar na aba Classificação:', err);
+        }
     }, 5000);
 
     function processSerproData(data, url) {
@@ -784,6 +846,9 @@
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2',
+                        ...(sessionToken ? { 'Authorization': sessionToken } : {}),
                         ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {})
                     }
                 });
@@ -802,40 +867,6 @@
             } catch(err) {
                 console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
                 window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
-            }
-        });
-
-        // 🖱️ CLASSIFICAÇÃO AUTO-CLICKER: Disparado pelo ranking loop a cada 10s.
-        // O Angular do portal resolve o hCaptcha internamente ao clicar na aba.
-        // O fetch interceptor captura a resposta → postMessage → preload → processRankingData.
-        window.addEventListener('message', function(event) {
-            const data = event.data || {};
-            if (data.source === 'polaryon-preload' && data.type === 'trigger-classificacao') {
-                try {
-                    var allEls = document.querySelectorAll('[role="tab"], .mat-tab-label, .nav-link, li a, button, a');
-                    var classTab = null;
-                    for (var i = 0; i < allEls.length; i++) {
-                        var txt = (allEls[i].textContent || allEls[i].innerText || '').trim();
-                        if (txt === 'Classificação' || txt === 'Classificacao' || (txt.length < 30 && txt.toLowerCase().indexOf('classifica') !== -1)) {
-                            classTab = allEls[i];
-                            break;
-                        }
-                    }
-                    if (classTab) {
-                        console.log('%c[POLARYON INJECTED] 🖱️ Aba Classificação encontrada! Clicando para obter ranking fresco...', 'color:#6366f1;font-weight:bold;font-size:11px;');
-                        classTab.click();
-                    } else {
-                        console.log('%c[POLARYON INJECTED] ⚠️ Aba Classificação não encontrada. Logs de tabs disponíveis:', 'color:#f59e0b;font-size:10px;');
-                        var tabs = document.querySelectorAll('[role="tab"]');
-                        var tabTexts = Array.prototype.slice.call(tabs).map(function(t) { return '"' + (t.textContent || '').trim().substring(0, 20) + '"'; }).join(', ');
-                        if (tabTexts) console.log('%c[POLARYON INJECTED] [role=tab]: ' + tabTexts, 'color:#94a3b8;font-size:10px;');
-                        var btns = document.querySelectorAll('button');
-                        var btnTexts = Array.prototype.slice.call(btns).filter(function(b) { return (b.textContent||'').trim().length > 0 && (b.textContent||'').trim().length < 25; }).slice(0,10).map(function(b) { return '"' + (b.textContent||'').trim() + '"'; }).join(', ');
-                        if (btnTexts) console.log('%c[POLARYON INJECTED] buttons: ' + btnTexts, 'color:#94a3b8;font-size:10px;');
-                    }
-                } catch (err) {
-                    console.error('[POLARYON INJECTED] ❌ Erro ao clicar Classificação:', err);
-                }
             }
         });
         })();
