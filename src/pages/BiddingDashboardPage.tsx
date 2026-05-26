@@ -158,9 +158,21 @@ export default function BiddingDashboardPage() {
     const itemsRef = useRef(items);
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
+    // 🔒 DEDUPLICADOR DE LANCES (v3.8.58): bloqueia o mesmo valor por item até o servidor confirmar com um preço diferente
+    const lastFiredBidRef = useRef<Record<string, number>>({});
 
     useEffect(() => { 
         if (items && items.length > 0) {
+            // Ao sincronizar os itens, verifica se meuValor mudou e libera o deduplicador para esse item
+            items.forEach(item => {
+                const sId = String(item.itemId);
+                const lastFired = lastFiredBidRef.current[sId];
+                const currentMyBid = Number(item.meuValor || 0);
+                // Se o meuValor atual é diferente do último disparado, o servidor confirmou — libera o lock
+                if (lastFired !== undefined && currentMyBid !== lastFired && currentMyBid > 0) {
+                    delete lastFiredBidRef.current[sId];
+                }
+            });
             itemsRef.current = items; 
         }
     }, [items]);
@@ -310,6 +322,9 @@ export default function BiddingDashboardPage() {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} viola margem Serpro (Máximo permitido: R$ ${maxAllowedBidBySerpro})`);
                             } else if (nextBid >= myCurrentBid) {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} não é melhor que seu último lance (R$ ${myCurrentBid}). Evitando erro 422.`);
+                            } else if (lastFiredBidRef.current[sId] !== undefined && lastFiredBidRef.current[sId] === nextBid) {
+                                // 🔒 DEDUPLICADOR: já disparamos esse valor exato — aguardando confirmação do servidor antes de reenviar
+                                console.debug(`[SNIPER] Dedup: R$ ${nextBid} já foi enviado para Item ${sId}. Aguardando confirmação do servidor...`);
                             } else if (nextBid >= myMin) {
                                 if (nextBid >= currentBest && currentBest > 0) {
                                     console.log(`%c[SNIPER] Líder imbatível (R$ ${currentBest}). Enviando lance intermediário de R$ ${nextBid} para brigar por posição!`, "color: #eab308; font-weight: bold;");
@@ -329,6 +344,8 @@ export default function BiddingDashboardPage() {
                                     timestamp: new Date().toLocaleTimeString()
                                 }]);
 
+                                // 🔒 Registra o valor ANTES de enviar para bloquear reenvios imediatos
+                                lastFiredBidRef.current[sId] = nextBid;
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
                                 
                                 const nowUpdate = Date.now();
