@@ -12,7 +12,8 @@
         sessionToken: '',
         captchaToken: '',
         synchronizedPurchases: new Set(),
-        lastClassificacaoClickTs: 0
+        lastClassificacaoClickTs: 0,
+        pendingRankingTarget: null
     };
     // Staggered room-fetch delay counter (anti-429). Resets after all rooms queued.
     let _roomFetchDelayMs = 0;
@@ -23,7 +24,8 @@
                     sessionToken: '',
                     captchaToken: '',
                     synchronizedPurchases: new Set(),
-                    lastClassificacaoClickTs: 0
+                    lastClassificacaoClickTs: 0,
+                    pendingRankingTarget: null
                 };
             }
             shared = window.top._polaryonSharedState;
@@ -498,8 +500,8 @@
         return true;
     }
 
-    // 🔄 LOOP PROATIVO DE RANKING: a cada 5s busca ranking dos itens ativos usando o token já capturado.
-    // Usa uma estratégia híbrida: fetch silencioso em background se tiver captcha, ou clique programático se não tiver.
+    // 🔄 LOOP PROATIVO DE RANKING: a cada 6s busca ranking dos itens ativos usando o token já capturado.
+    // Usa hcaptcha programático e fetch concorrente para extrair todos os itens 100% automático.
     let rankingRoundRobin = 0;
     const activeRankingItems = []; // { purchaseId, itemId }
     setInterval(() => {
@@ -515,110 +517,18 @@
         const target = activeRankingItems[rankingRoundRobin % activeRankingItems.length];
         rankingRoundRobin++;
 
-        // 🎯 ESTRATÉGIA 1 (FORNECEDOR com captcha disponível):
-        // NÃO reutilizamos o token (causaria 204). Em vez disso, clicamos na aba para que
-        // o Angular gere um token fresco e faça a chamada — o fetch interceptor captura a resposta 200.
-        const now = Date.now();
-        const hasCaptcha = shared.captchaToken && shared.captchaToken.startsWith('P1_');
-        if (hasCaptcha) {
-            // Limpa o token (não reusamos — Angular fará chamada própria)
-            shared.captchaToken = '';
-            // Cai para a estratégia de clique de aba abaixo
-        }
+        console.log(`%c[POLARYON RANKING LOOP] 🔄 Ciclo automático para item ${target.itemId} (Compra: ${target.purchaseId})`, 'color:#6366f1;font-weight:bold;font-size:10px;');
 
-        // 🎯 ESTRATÉGIA 2: Fetch direto SEM captcha (funciona para usuários GOVERNO)
-        const fetchCooldown = 8000;
-        if (!hasCaptcha && now - (shared.lastDirectFetchTs || 0) >= fetchCooldown) {
-            shared.lastDirectFetchTs = now;
-            const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
-            console.log(`%c[POLARYON RANKING LOOP] 🔓 Fetch sem captcha para item ${target.itemId} (tentativa GOVERNO/cookie)`, 'color:#6366f1;font-size:10px;');
-            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
-            }));
-            return;
-        }
+        // 🎯 ESTRATÉGIA 1: Agenda o target e aciona hCaptcha programaticamente
+        shared.pendingRankingTarget = target;
+        document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
 
-        // 🎯 ESTRATÉGIA 3: Clique na aba para acionar o Angular (que gera captcha fresco e faz a chamada)
-        // O fetch interceptor captura a resposta 200 automaticamente.
-        const cooldown = hasCaptcha ? 3000 : 12000; // Clique mais freqüente se captcha disponível
-        if (now - (shared.lastClassificacaoClickTs || 0) < cooldown) {
-            return;
-        }
-
-        shared.lastClassificacaoClickTs = now;
-        console.log('%c[POLARYON RANKING LOOP] 🖱️ Executando clique programático na aba Classificação para item ' + target.itemId + '...', 'color: #6366f1; font-weight: bold; font-size: 11px;');
-        
-        try {
-            const selectors = [
-                '[role="tab"]',
-                '.mat-tab-label',
-                '.mat-mdc-tab',
-                '.nav-link',
-                'button',
-                'a',
-                '.mat-tab-link'
-            ];
-            
-            let classTab = null;
-            for (const selector of selectors) {
-                const elements = document.querySelectorAll(selector);
-                for (const el of elements) {
-                    const text = (el.textContent || el.innerText || '').trim();
-                    const textLower = text.toLowerCase();
-                    if (
-                        text === 'Classificação' || 
-                        text === 'Classificacao' || 
-                        textLower.includes('classifica') || 
-                        textLower.includes('melhores') || 
-                        textLower.includes('valores') || 
-                        (textLower.includes('fornecedor') && text.length < 40)
-                    ) {
-                        classTab = el;
-                        break;
-                    }
-                }
-                if (classTab) break;
-            }
-            
-            if (!classTab) {
-                const allElements = document.querySelectorAll('span, div');
-                for (const el of allElements) {
-                    const text = (el.textContent || el.innerText || '').trim();
-                    const textLower = text.toLowerCase();
-                    if (
-                        text === 'Classificação' || 
-                        text === 'Classificacao' || 
-                        textLower.includes('classifica') || 
-                        textLower.includes('melhores') || 
-                        textLower.includes('valores') || 
-                        (textLower.includes('fornecedor') && text.length < 40)
-                    ) {
-                        let parent = el;
-                        while (parent && parent !== document.body) {
-                            const role = parent.getAttribute('role');
-                            const tagName = parent.tagName.toLowerCase();
-                            const className = parent.className || '';
-                            if (role === 'tab' || tagName === 'button' || tagName === 'a' || className.includes('tab') || className.includes('link')) {
-                                classTab = parent;
-                                break;
-                            }
-                            parent = parent.parentElement;
-                        }
-                        if (classTab) break;
-                    }
-                }
-            }
-
-            if (classTab) {
-                console.log('%c[POLARYON PRELOAD] 🖱️ Clicando na aba Classificação...', 'color:#6366f1;font-weight:bold;font-size:11px;');
-                classTab.click();
-            } else {
-                console.log('%c[POLARYON PRELOAD] ⚠️ Aba Classificação não encontrada para clique.', 'color:#f59e0b;font-size:10px;');
-            }
-        } catch (err) {
-            console.error('[POLARYON PRELOAD] ❌ Erro ao clicar na aba Classificação:', err);
-        }
-    }, 5000);
+        // 🎯 ESTRATÉGIA 2 (concorrente): Dispara também fetch sem captcha (para conta Governo ou cookies)
+        const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
+        document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+            detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
+        }));
+    }, 6000);
 
     function processSerproData(data, url, status, ok) {
         if (typeof data === 'string') {
@@ -769,13 +679,25 @@
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
             } else if (type === 'fresh-captcha') {
-                // 🔑 Token FRESCO: interceptado ANTES do Angular consumir
-                // O Angular vai usar para fazer a chamada legítima, que nosso interceptor captura automaticamente.
-                // Também armazenamos para uso no PRÓXIMO ciclo se o interceptor não capturar.
+                // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
-                    shared.captchaToken = token;
-                    console.log('%c[POLARYON] 🔑 Token FRESCO interceptado antes do Angular! Aguardando resposta da chamada legítima...', 'color:#10b981;font-weight:bold;font-size:11px;');
-                    // Não consumimos o token aqui — o Angular vai usar e o fetch interceptor captura a resposta 200
+                    console.log('%c[POLARYON] 🔑 Token FRESCO recebido!', 'color:#10b981;font-weight:bold;font-size:11px;');
+                    
+                    if (shared.pendingRankingTarget) {
+                        const target = shared.pendingRankingTarget;
+                        shared.pendingRankingTarget = null; // consome target
+                        
+                        const encoded = encodeURIComponent(token);
+                        const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+                        console.log(`%c[POLARYON RANKING LOOP] 🚀 Executando fetch em background com token fresco gerado para item ${target.itemId}...`, 'color:#a855f7;font-weight:bold;font-size:11px;');
+                        
+                        document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                            detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
+                        }));
+                    } else {
+                        // Fallback: armazena
+                        shared.captchaToken = token;
+                    }
                 }
             }
         }
@@ -800,30 +722,46 @@
                 }, '*');
             }
 
-            // 🔑 INTERCEPTA hcaptcha.execute() ANTES de qualquer consumo pelo Angular
-            // Captura o token P1_ fresco no momento de geração, não após uso
+            // 🔑 INTERCEPTA hcaptcha.render() E hcaptcha.execute()
             let _hcaptchaWrapped = false;
+            let lastWidgetId = null;
             const wrapHcaptcha = () => {
-                if (_hcaptchaWrapped || !window.hcaptcha || !window.hcaptcha.execute) return;
+                if (_hcaptchaWrapped || !window.hcaptcha) return;
                 _hcaptchaWrapped = true;
-                const originalExecute = window.hcaptcha.execute;
-                window.hcaptcha.execute = function(widgetId, options) {
-                    const result = originalExecute.apply(window.hcaptcha, arguments);
-                    if (result && typeof result.then === 'function') {
-                        result.then(token => {
-                            if (token && token.startsWith('P1_')) {
-                                // Envia como 'fresh-captcha' - token ainda não consumido
-                                window.postMessage({
-                                    source: 'polaryon-injector',
-                                    type: 'fresh-captcha',
-                                    token
-                                }, '*');
-                            }
-                        }).catch(() => {});
-                    }
-                    return result;
-                };
-                console.log('%c[POLARYON INJECTED] 🔑 hcaptcha.execute interceptado!', 'color:#10b981;font-weight:bold;font-size:10px;');
+
+                if (window.hcaptcha.render) {
+                    const originalRender = window.hcaptcha.render;
+                    window.hcaptcha.render = function(container, parameters) {
+                        const widgetId = originalRender.apply(window.hcaptcha, arguments);
+                        lastWidgetId = widgetId;
+                        console.log('%c[POLARYON INJECTED] 🛠️ hcaptcha.render interceptado! widgetId = ' + widgetId, 'color:#10b981;font-weight:bold;font-size:10px;');
+                        return widgetId;
+                    };
+                }
+
+                if (window.hcaptcha.execute) {
+                    const originalExecute = window.hcaptcha.execute;
+                    window.hcaptcha.execute = function(widgetId, options) {
+                        if (widgetId !== undefined && widgetId !== null) {
+                            lastWidgetId = widgetId;
+                        }
+                        const result = originalExecute.apply(window.hcaptcha, arguments);
+                        if (result && typeof result.then === 'function') {
+                            result.then(token => {
+                                if (token && token.startsWith('P1_')) {
+                                    // Envia como 'fresh-captcha' - token ainda não consumido
+                                    window.postMessage({
+                                        source: 'polaryon-injector',
+                                        type: 'fresh-captcha',
+                                        token
+                                    }, '*');
+                                }
+                            }).catch(() => {});
+                        }
+                        return result;
+                    };
+                }
+                console.log('%c[POLARYON INJECTED] 🔑 hcaptcha APIs interceptadas!', 'color:#10b981;font-weight:bold;font-size:10px;');
             };
             wrapHcaptcha();
             setInterval(wrapHcaptcha, 1500);
@@ -954,6 +892,32 @@
             } catch(err) {
                 console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
                 window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
+            }
+        });
+
+        // ⚡ Dispara hcaptcha programaticamente sob demanda
+        document.addEventListener('polaryon-trigger-hcaptcha', async () => {
+            if (!window.hcaptcha) {
+                console.warn('[POLARYON INJECTED] ⚠️ window.hcaptcha não disponível.');
+                return;
+            }
+            try {
+                const widgetId = lastWidgetId !== null ? lastWidgetId : 0;
+                console.log('%c[POLARYON INJECTED] ⚡ hcaptcha.execute disparado para widgetId = ' + widgetId, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                const result = window.hcaptcha.execute(widgetId, { async: true });
+                if (result && typeof result.then === 'function') {
+                    const token = await result;
+                    if (token && token.startsWith('P1_')) {
+                        console.log('%c[POLARYON INJECTED] 🎉 Token programático gerado: ' + token.substring(0, 30) + '...', 'color:#10b981;font-weight:bold;font-size:10px;');
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: 'fresh-captcha',
+                            token
+                        }, '*');
+                    }
+                }
+            } catch (err) {
+                console.error('[POLARYON INJECTED] ❌ Falha ao disparar hcaptcha programático:', err);
             }
         });
         })();
