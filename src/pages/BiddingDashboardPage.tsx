@@ -190,9 +190,9 @@ export default function BiddingDashboardPage() {
             if (!currentItems || currentItems.length === 0) return;
 
             currentItems.forEach(item => {
-                // Garantimos que o ID bata (String ou Number)
                 const sId = String(item.itemId);
-                const strat = configs[sId] || configs[item.itemId] || {};
+                const itemSid = item.sid || '';
+                const strat = configs[`${itemSid}_${sId}`] || configs[sId] || configs[item.itemId] || {};
                 const isActive = strat.active || false;
                 
                 if (!isActive) return;
