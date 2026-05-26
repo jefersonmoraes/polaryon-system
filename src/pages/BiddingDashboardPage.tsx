@@ -149,6 +149,14 @@ export default function BiddingDashboardPage() {
             itemsRef.current = items; 
         }
     }, [items]);
+
+    // 🔄 SINCRONIZADOR DE ESTADO DE ITENS ATIVOS EM TEMPO REAL (v3.8.54)
+    useEffect(() => {
+        if (sessionId && sessions[sessionId]) {
+            const activeItems = sessions[sessionId].items || [];
+            setItems(activeItems);
+        }
+    }, [sessions, sessionId]);
     
     useEffect(() => { 
         configsRef.current = itemStrategies; 
