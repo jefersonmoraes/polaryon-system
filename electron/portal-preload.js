@@ -335,8 +335,11 @@
 
     // 🏆 RANKING INTERCEPTOR: Captura /lances/por-participante ou localhost/classificacao diretamente do tráfego do browser
     // Retorna true se encontrou e processou lances válidos, false caso contrário.
-    function processRankingData(data, url) {
-        console.log(`%c[POLARYON RANKING INTERCEPTOR]  Dados brutos recebidos: type=${typeof data}, isArray=${Array.isArray(data)}, keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'}`, 'color: #f59e0b; font-size: 10px;');
+    function processRankingData(data, url, status, ok) {
+        console.log(`%c[POLARYON RANKING INTERCEPTOR]  Dados brutos recebidos: type=${typeof data}, isArray=${Array.isArray(data)}, keys=${data && typeof data === 'object' ? Object.keys(data).join(',') : 'N/A'} (status: ${status || 'N/A'}, ok: ${ok !== undefined ? ok : 'N/A'})`, 'color: #f59e0b; font-size: 10px;');
+        if (typeof data === 'string') {
+            console.log(`%c[POLARYON RANKING INTERCEPTOR] Preview da string recebida (primeiros 400 chars): ${data.substring(0, 400)}`, 'color: #ef4444; font-size: 10px;');
+        }
         
         let compraId = null;
         let itemId = null;
@@ -511,7 +514,7 @@
             shared.captchaToken = ''; // Consome o token
             
             const encoded = encodeURIComponent(captcha);
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&captcha1=${encoded}&captcha2=${encoded}&captcha3=${encoded}&tamanhoPagina=50&pagina=0`;
             console.log(`%c[POLARYON RANKING LOOP] 🎯 Delegando fetch silencioso para page context: ${url.substring(0, 130)}...`, 'color:#6366f1;font-size:10px;');
             document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
                 detail: { url, purchaseId: target.purchaseId, itemId: target.itemId, captcha }
@@ -543,6 +546,9 @@
             let classTab = null;
             for (const selector of selectors) {
                 const elements = document.querySelectorAll(selector);
+                if (elements.length > 0) {
+                    console.log(`[POLARYON DEBUG] Selector "${selector}" matchou ${elements.length} elementos:`, Array.from(elements).slice(0, 10).map(el => `[${el.tagName}: ${(el.textContent || el.innerText || '').trim().substring(0, 20)}]`).join(', '));
+                }
                 for (const el of elements) {
                     const text = (el.textContent || el.innerText || '').trim();
                     if (text === 'Classificação' || text === 'Classificacao' || (text.length < 25 && text.toLowerCase().includes('classifica'))) {
@@ -557,7 +563,7 @@
                 const allElements = document.querySelectorAll('span, div');
                 for (const el of allElements) {
                     const text = (el.textContent || el.innerText || '').trim();
-                    if (text === 'Classificação' || text === 'Classificacao') {
+                    if (text === 'Classificação' || text === 'Classificacao' || (text.length < 25 && text.toLowerCase().includes('classifica'))) {
                         let parent = el;
                         while (parent && parent !== document.body) {
                             const role = parent.getAttribute('role');
@@ -585,12 +591,12 @@
         }
     }, 5000);
 
-    function processSerproData(data, url) {
+    function processSerproData(data, url, status, ok) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
         // 🏆 RANKING: intercepta respostas de /lances/por-participante ou classificação local
         if (url.includes('/lances/por-participante') || url.includes('/lances/compra/') || url.includes('/classificacao') || url.includes('comprasnet/classificacao')) {
-            processRankingData(data, url);
+            processRankingData(data, url, status, ok);
             return;
         }
 
@@ -712,7 +718,7 @@
     // Escuta as mensagens da página injetada
     window.addEventListener('message', (event) => {
         if (event.data && event.data.source === 'polaryon-injector') {
-            const { type, token, data, url } = event.data;
+            const { type, token, data, url, status, ok } = event.data;
             if (type === 'token') {
                 shared.sessionToken = token;
             } else if (type === 'captcha') {
@@ -722,7 +728,7 @@
                     console.log('%c[POLARYON] 🔓 Captcha P1_... interceptado!', 'color:#10b981;font-weight:bold;font-size:11px;');
                 }
             } else if (type === 'serpro-data') {
-                processSerproData(data, url);
+                processSerproData(data, url, status, ok);
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
@@ -738,12 +744,14 @@
         (function() {
             let sessionToken = '';
             
-            function processSerproData(data, url) {
+            function processSerproData(data, url, status, ok) {
                 window.postMessage({
                     source: 'polaryon-injector',
                     type: 'serpro-data',
                     data,
-                    url
+                    url,
+                    status,
+                    ok
                 }, '*');
             }
 
@@ -768,7 +776,7 @@
                 }
                 const response = await originalFetch(...args);
                 const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-                const captchaMatch = url.match(/[?&]captcha=([^&]+)/);
+                const captchaMatch = url.match(/[?&]captcha\d*=([^&]+)/);
                 if (captchaMatch) {
                     window.postMessage({
                         source: 'polaryon-injector',
@@ -780,7 +788,11 @@
                 if (isSerpro) {
                     if (response.ok) {
                         const clone = response.clone();
-                        clone.json().then(data => processSerproData(data, url)).catch(() => {});
+                        clone.json()
+                            .then(data => processSerproData(data, url, response.status, response.ok))
+                            .catch(() => {
+                                clone.text().then(text => processSerproData(text, url, response.status, response.ok)).catch(() => {});
+                            });
                     } else if (response.status === 403 && url.includes('/lances/por-participante')) {
                         window.postMessage({
                             source: 'polaryon-injector',
@@ -814,7 +826,7 @@
             const send = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.send = function() {
                 this.addEventListener('load', function() {
-                    const captchaMatch = this._url && this._url.match(/[?&]captcha=([^&]+)/);
+                    const captchaMatch = this._url && this._url.match(/[?&]captcha\d*=([^&]+)/);
                     if (captchaMatch) {
                         window.postMessage({
                             source: 'polaryon-injector',
@@ -826,8 +838,10 @@
                     if (isSerpro) {
                         try {
                             const data = JSON.parse(this.responseText);
-                            processSerproData(data, this._url);
-                        } catch (e) {}
+                            processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300);
+                        } catch (e) {
+                            processSerproData(this.responseText, this._url, this.status, this.status >= 200 && this.status < 300);
+                        }
                     }
                 });
                 return send.apply(this, arguments);
@@ -863,7 +877,7 @@
 
                 let data;
                 try { data = JSON.parse(body); } catch(err) { data = body; }
-                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url }, '*');
+                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url, status: res.status, ok: res.ok }, '*');
             } catch(err) {
                 console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
                 window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
