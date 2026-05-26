@@ -749,7 +749,13 @@
                         }
                         const result = originalExecute.apply(window.hcaptcha, arguments);
                         if (result && typeof result.then === 'function') {
-                            result.then(token => {
+                            result.then(tokenObj => {
+                                let token = '';
+                                if (typeof tokenObj === 'string') {
+                                    token = tokenObj;
+                                } else if (tokenObj && typeof tokenObj === 'object') {
+                                    token = tokenObj.response || tokenObj.token || '';
+                                }
                                 if (token && token.startsWith('P1_')) {
                                     // Envia como 'fresh-captcha' - token ainda não consumido
                                     window.postMessage({
@@ -784,7 +790,13 @@
                     polaryonWidgetId = window.hcaptcha.render('polaryon-hidden-hcaptcha', {
                         sitekey: 'b8bbded1-9d04-4ace-9952-b67cde081a7b',
                         size: 'invisible',
-                        callback: function(token) {
+                        callback: function(tokenObj) {
+                            let token = '';
+                            if (typeof tokenObj === 'string') {
+                                token = tokenObj;
+                            } else if (tokenObj && typeof tokenObj === 'object') {
+                                token = tokenObj.response || tokenObj.token || '';
+                            }
                             if (token && token.startsWith('P1_')) {
                                 console.log('%c[POLARYON INJECTED] 🎉 Token programático gerado via widget próprio!', 'color:#10b981;font-weight:bold;font-size:10px;');
                                 window.postMessage({
@@ -949,7 +961,14 @@
                 
                 const result = window.hcaptcha.execute(widgetId, { async: true });
                 if (result && typeof result.then === 'function') {
-                    const token = await result;
+                    const tokenObj = await result;
+                    let token = '';
+                    if (typeof tokenObj === 'string') {
+                        token = tokenObj;
+                    } else if (tokenObj && typeof tokenObj === 'object') {
+                        token = tokenObj.response || tokenObj.token || '';
+                    }
+
                     if (token && token.startsWith('P1_')) {
                         console.log('%c[POLARYON INJECTED] 🎉 Token programático gerado: ' + token.substring(0, 30) + '...', 'color:#10b981;font-weight:bold;font-size:10px;');
                         window.postMessage({
