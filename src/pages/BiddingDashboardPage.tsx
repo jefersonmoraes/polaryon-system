@@ -107,6 +107,21 @@ export default function BiddingDashboardPage() {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
     const [items, setItems] = useState<BiddingItem[]>([]);
+    
+    // MODO MULTI-UASG (v2.0 War Flow)
+    const [sessions, setSessions] = useState<Record<string, {
+        uasg: string;
+        numero: string;
+        items: BiddingItem[];
+        chatMessages: any[];
+        lastUpdate: string;
+        isAuthenticated: boolean;
+        simulationMode: boolean;
+        modality?: string;
+        sessionTitle?: string;
+        syncStatus?: string;
+    }>>({});
+
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
     const [itemStrategies, setItemStrategies] = useState<Record<string, ItemStrategy>>({});
     const [simulationMode, setSimulationMode] = useState(true);
@@ -302,16 +317,7 @@ export default function BiddingDashboardPage() {
         return () => clearInterval(autoBidInterval);
     }, [isListening]);
 
-    // MODO MULTI-UASG (v2.0 War Flow)
-    const [sessions, setSessions] = useState<Record<string, {
-        uasg: string;
-        numero: string;
-        items: BiddingItem[];
-        chatMessages: any[];
-        lastUpdate: string;
-        isAuthenticated: boolean;
-        simulationMode: boolean;
-    }>>({});
+
 
     // Helper para obter a configuração de itens de uma sessão específica
     const getSessionItemsConfig = (sid: string) => {
