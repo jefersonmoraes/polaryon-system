@@ -514,9 +514,9 @@ class RoomRunner {
                             const isKamikaze = strat.kamikazeMode || false;
                             const isTimerActive = (tSeconds >= 0);
 
-                            // Só dispara nos 30 segundos finais, OU em modo kamikaze (qualquer timer)
-                            // Timer -1 = sem countagem ativa, mas no modo kamikaze continua ativo
-                            const timerFiring = isTimerActive && tSeconds <= 30 && tSeconds >= 0;
+                            // 🔥 SNIPER ATIVO IMEDIATAMENTE (sem trava de 30s): dispara assim que strat.active = true
+                            // isKamikaze ainda mantém comportamento especial (mira direto no mínimo)
+                            const timerFiring = true;
                             if (!timerFiring && !isKamikaze) continue;
 
                             // Verifica se está perdendo

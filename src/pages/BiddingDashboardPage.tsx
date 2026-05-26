@@ -205,9 +205,9 @@ export default function BiddingDashboardPage() {
                     console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${tSeconds}s | Perdedor: ${item.posicao !== '1'}`);
                 }
 
-                // Kamikaze ou 30 Segundos Finais
+                // 🔥 SNIPER ATIVO IMEDIATAMENTE (sem trava de 30s)
                 const isKamikaze = strat.kamikazeMode || false;
-                if ((tSeconds <= 30 && tSeconds > 0) || isKamikaze) {
+                if (isActive) {
                     const myBid = Number(item.meuValor || 99999999);
                     const bestBid = Number(item.valorAtual || 0);
                     
@@ -2240,17 +2240,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                         Gatilho
                     </Button>
 
-                    {onStartSniperTest && (
-                        <Button 
-                            size="sm" 
-                            onClick={() => onStartSniperTest(item.itemId, sid)}
-                            className="h-10 px-3 text-[10px] font-black uppercase bg-purple-600 hover:bg-purple-700 text-white gap-1.5"
-                            title="Testar motor Sniper localmente com contagem regressiva de 30 segundos"
-                            disabled={!active}
-                        >
-                            <Target className="w-3.5 h-3.5" /> Teste Sniper
-                        </Button>
-                    )}
+
                     
                     <button 
                         onClick={handleToggle}
