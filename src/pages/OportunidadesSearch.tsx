@@ -318,12 +318,15 @@ async function processPncpQueue() {
             throw new Error("Missing keys for PNCP detail");
         }
 
-        // USANDO PROXY DO BACKEND PARA EVITAR CORS E RATE LIMIT (REQUISITO PRODUÇÃO)
-        // EM MODO DESKTOP (ELECTRON), CHAMAMOS A API OFICIAL DIRETAMENTE PARA EVITAR BLOQUEIO DE IP DA VPS
-        const isDesktop = (window as any).electronAPI?.isDesktop;
-        const res = isDesktop 
-            ? await fetchPncpDetailDirect(orgaoCnpj, ano, seq)
-            : await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+        // CHAMADAS DIRETAS AO PNCP: A API do governo retorna CORS *, funciona em qualquer browser
+        // Fallback para o proxy do backend apenas se a chamada direta falhar
+        let res;
+        try {
+            res = await fetchPncpDetailDirect(orgaoCnpj, ano, seq);
+        } catch (directErr) {
+            console.warn('[PNCP Direct] Falhou, tentando proxy backend:', directErr);
+            res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+        }
         const detail = res.data;
 
         const result = {
@@ -782,13 +785,15 @@ export default function OportunidadesSearch() {
                 setLoadingDetail(false);
             }
 
-            // 1. Fetch Files (Original)
+            // 1. Fetch Files (direto no PNCP - CORS * permite qualquer browser)
             setLoadingFiles(true);
             try {
-                const isDesktop = (window as any).electronAPI?.isDesktop;
-                const res = isDesktop
-                    ? await fetchPncpArquivosDirect(cnpj, ano, seq)
-                    : await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`);
+                let res;
+                try {
+                    res = await fetchPncpArquivosDirect(cnpj, ano, seq);
+                } catch {
+                    res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`);
+                }
                 setSelectedItemFiles(res.data || []);
                 setSelectedFilesToExport(res.data || []);
             } catch (e) {
@@ -797,15 +802,17 @@ export default function OportunidadesSearch() {
                 setLoadingFiles(false);
             }
 
-            // 2. Fetch Full Items (New)
+            // 2. Fetch Full Items (direto no PNCP - CORS * permite qualquer browser)
             setLoadingFullItems(true);
             try {
-                const isDesktop = (window as any).electronAPI?.isDesktop;
-                const res = isDesktop
-                    ? await fetchPncpItensCompletosDirect(cnpj, ano, seq)
-                    : await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, {
+                let res;
+                try {
+                    res = await fetchPncpItensCompletosDirect(cnpj, ano, seq);
+                } catch {
+                    res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, {
                         params: { termo: keyword }
                     });
+                }
                 setFullItems(res.data || []);
             } catch (e) {
                 console.error("Failed to fetch full items", e);
@@ -942,14 +949,13 @@ export default function OportunidadesSearch() {
                 if (cnpj && ano && seq) {
                     toast.info("Capturando anexos e itens do PNCP...");
                     
-                    const isDesktop = (window as any).electronAPI?.isDesktop;
                     const [filesRes, itemsRes, detailData] = await Promise.all([
-                        (isDesktop 
-                            ? fetchPncpArquivosDirect(cnpj, ano, seq) 
-                            : api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`)).catch(() => ({ data: [] })),
-                        (isDesktop 
-                            ? fetchPncpItensCompletosDirect(cnpj, ano, seq) 
-                            : api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, { params: { termo: keyword } })).catch(() => ({ data: [] })),
+                        fetchPncpArquivosDirect(cnpj, ano, seq).catch(() =>
+                            api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`).catch(() => ({ data: [] }))
+                        ),
+                        fetchPncpItensCompletosDirect(cnpj, ano, seq).catch(() =>
+                            api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, { params: { termo: keyword } }).catch(() => ({ data: [] }))
+                        ),
                         queuePncpFetch(exportTarget).catch(() => null)
                     ]);
 
@@ -1229,8 +1235,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                         const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
                         
-                        const isDesktop = (window as any).electronAPI?.isDesktop;
-                        const promise = (isDesktop ? executePncpSearchDirect(url, params) : api.get(url, { params }))
+                        // Direto no PNCP (CORS *) com fallback para proxy backend
+                        const promise = executePncpSearchDirect(url, params)
+                            .catch(() => api.get(url, { params }))
                             .then(res => {
                                 const itemsData = res.data?.items || [];
                                 const totalVal = res.data?.total || 0;
