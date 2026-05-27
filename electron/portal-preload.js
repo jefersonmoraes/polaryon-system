@@ -587,6 +587,10 @@
                     const posFinal = !isNaN(numPos) ? String(numPos) : rawPos;
                     const meuValor = it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0);
                     const valorAtual = it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0);
+                    // 🕒 Timer preciso: calcula com dataHoraFimContagem - Date.now() (igual ao DOM do Serpro)
+                    const sigaTimer = it.dataHoraFimContagem
+                        ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
+                        : (it.segundosParaEncerramento || -1);
                     return {
                         itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
@@ -595,7 +599,7 @@
                         ganhador: posFinal === '1' || posFinal === 'GANHANDO' ? 'Você' : 'Outro',
                         status: it.faseTraduzido || it.fase || (it.situacaoItem || ''),
                         posicao: posFinal,
-                        timerSeconds: it.segundosParaEncerramento || -1,
+                        timerSeconds: sigaTimer,
                         dataHoraFimContagem: it.dataHoraFimContagem,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
@@ -631,7 +635,8 @@
                     roomCode: roomCode,
                     timestamp: Date.now(),
                     serverOffset: serverOffset,
-                    items: mappedItems
+                    items: mappedItems,
+                    sigaTimerSeconds: shared.sigaTimerSeconds
                 });
             }
         }
@@ -657,6 +662,9 @@
             } else if (type === '429-error') {
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 15 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + 15000;
+            } else if (type === 'siga-timer') {
+                shared.sigaTimerSeconds = event.data.remainingSec;
+                shared.sigaTimerMs = event.data.remainingMs;
             } else if (type === 'fresh-captcha') {
                 // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
@@ -689,8 +697,11 @@
         const scriptContent = `
         (function() {
             let sessionToken = '';
+            let polaryonEndTime = 0;
             
             function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
+                // 🎯 Extrai dataHoraFimContagem para o timer contínuo
+                extractEndTime(data);
                 window.postMessage({
                     source: 'polaryon-injector',
                     type: 'serpro-data',
@@ -703,6 +714,37 @@
                     tEnd: tEnd || 0
                 }, '*');
             }
+
+            // 🎯 Extrai dataHoraFimContagem da resposta da API para timer contínuo
+            function extractEndTime(data) {
+                if (Array.isArray(data)) {
+                    for (const item of data) {
+                        if (item.dataHoraFimContagem) {
+                            const parsed = new Date(item.dataHoraFimContagem).getTime();
+                            if (!isNaN(parsed) && parsed > Date.now()) {
+                                polaryonEndTime = parsed;
+                                return;
+                            }
+                        }
+                    }
+                } else if (data && data.itens && Array.isArray(data.itens)) {
+                    extractEndTime(data.itens);
+                }
+            }
+
+            // 🕒 Timer contínuo que espelha o DOM do Serpro (mesmo Date.now(), mesma fórmula)
+            setInterval(function() {
+                if (polaryonEndTime > 0) {
+                    var remainingMs = Math.max(0, polaryonEndTime - Date.now());
+                    window.postMessage({
+                        source: 'polaryon-injector',
+                        type: 'siga-timer',
+                        remainingMs: remainingMs,
+                        remainingSec: remainingMs / 1000,
+                        timestamp: Date.now()
+                    }, '*');
+                }
+            }, 100);
 
             // 🔑 INTERCEPTA hcaptcha.render() E hcaptcha.execute()
             let _hcaptchaWrapped = false;

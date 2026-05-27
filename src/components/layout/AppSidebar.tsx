@@ -138,7 +138,7 @@ const AppSidebar = () => {
   };
 
 
-  const [appVersion, setAppVersion] = useState('3.8.74');
+  const [appVersion, setAppVersion] = useState('3.8.75');
 
   useEffect(() => {
     if (isElectron && (window as any).electronAPI) {
