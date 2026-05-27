@@ -862,6 +862,8 @@ export default function BiddingDashboardPage() {
                         itemMap.set(it.itemId, { 
                             ...existing, 
                             ...it, 
+                            portalTimer: existing.portalTimer,
+                            portalDataHoraFimContagem: existing.portalDataHoraFimContagem,
                             sid, 
                             meuValor: mergedMeuValor,
                             valorAtual: mergedValorAtual,
@@ -994,9 +996,15 @@ export default function BiddingDashboardPage() {
                                 mergedGanhador = "Você";
                             }
 
+                            // 🕒 Preserva timer e dataHoraFimContagem do portal-preload (mesmo cálculo do DOM Serpro)
+                            const portalTimer = it.timerSeconds !== undefined ? it.timerSeconds : existing.portalTimer;
+                            const portalDataHoraFimContagem = it.dataHoraFimContagem || existing.portalDataHoraFimContagem;
+
                             itemMap.set(key, { 
                                 ...existing, 
                                 ...it, 
+                                portalTimer,
+                                portalDataHoraFimContagem,
                                 sid, 
                                 meuValor: mergedMeuValor,
                                 valorAtual: mergedValorAtual,
@@ -2385,19 +2393,28 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.75)
-    // Usa dataHoraFimContagem - Date.now() local, MESMO cálculo do timer do Siga
+    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.76)
+    // Prioriza portalDataHoraFimContagem (do portal-preload, mesmo do DOM Serpro)
     useEffect(() => {
-        if (item.dataHoraFimContagem) {
-            const endTime = new Date(item.dataHoraFimContagem).getTime();
+        const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
+        if (endTimeStr) {
+            const endTime = new Date(endTimeStr).getTime();
             const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
+        } else if (item.portalTimer !== undefined && item.portalTimer !== null && item.portalTimer >= 0) {
+            const updatedAt = Date.now();
+            const tick = () => {
+                setTimeLeft(Math.max(0, item.portalTimer - (Date.now() - updatedAt) / 1000));
+            };
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
             setTimeLeft(Math.max(0, item.timerSeconds));
         }
-    }, [item.dataHoraFimContagem]);
+    }, [item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.portalTimer]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
