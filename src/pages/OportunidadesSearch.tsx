@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Search, Calendar, MapPin, Building2, ExternalLink, Filter, Loader2, AlertCircle, ChevronRight, FileText, X, DollarSign, Briefcase, KanbanSquare, Download, Clock, CheckSquare, LogIn } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogClose, DialogHeader, DialogDescription } from '@/components/ui/dialog';
@@ -21,6 +22,189 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+
+// --- Direct Government APIs Fetch Engine for Desktop Terminal (v3.8.60) ---
+// Bypasses the backend proxy to prevent F5 BIG-IP WAF block of the VPS IP
+const serializePncpParams = (params: any) => {
+    const parts: string[] = [];
+    Object.entries(params).forEach(([key, val]) => {
+        if (val === undefined || val === null || val === '') return;
+        const cleanKey = key.replace(/\[\d*\]$/, '');
+        if (Array.isArray(val)) {
+            parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
+        } else {
+            if (typeof val === 'string' && val.includes('|')) {
+                parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
+            } else {
+                parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
+            }
+        }
+    });
+    return parts.join('&');
+};
+
+const extractBrandLocal = (text: string): string => {
+    if (!text) return 'N/A';
+    const upperText = text.toUpperCase();
+    const commonBrands = [
+        'INTEL', 'AMD', 'DELL', 'HP', 'LENOVO', 'ASUS', 'ACER', 'APPLE', 'SAMSUNG', 'LG',
+        'SONY', 'PANASONIC', 'PHILIPS', 'TOSHIBA', 'XIAOMI', 'HUAWEI', 'CISCO', 'MICROSOFT',
+        'ORACLE', 'SAP', 'IBM', 'EPSON', 'CANON', 'XEROX', 'BROTHER', 'LOGITECH', 'CORSAIR',
+        'RAZER', 'KINGSTON', 'SANDISK', 'SEAGATE', 'WESTERN DIGITAL', 'NVIDIA', 'INTELBRAS',
+        'MULTILASER', 'POSITIVO', 'MANDAL', 'WEG', 'SIEMENS', 'ABB', 'SCHNEIDER', 'LEGRAND',
+        'TRAMONTINA', 'PIAL', 'CORONA', 'LORENZETTI', 'HYDRA', 'DECA', 'DOCOL', 'TIGRE',
+        'AMANCO', 'GERDAU', 'CSN', 'USIMINAS', 'VOTORANTIM', 'LAFARGEHOLCIM', 'INTERCEMENT',
+        'SUVINIL', 'CORAL', 'SHERWIN WILLIAMS', 'MEGATON', 'BOSCH', 'DEWALT', 'MAKITA',
+        'STANLEY', 'BLACK & DECKER', 'STIHL', 'HUSQVARNA', 'BRIGGS & STRATTON', 'HONDA',
+        'TOYOTA', 'FORD', 'CHEVROLET', 'FIAT', 'VOLKSWAGEN', 'RENAULT', 'PEUGEOT', 'CITROEN',
+        'HYUNDAI', 'KIA', 'MERCEDES-BENZ', 'BMW', 'AUDI', 'VOLVO', 'SCANIA', 'IVECO', 'MAN',
+        'RANDON', 'MARCOPOLO', 'CAIO', 'MASCARELLO', 'NEOBUS', 'COMIL', 'EMBRAER', 'BOEING',
+        'AIRBUS', 'BOMBARDIER', 'CESSNA', 'PIPER', 'BELL', 'SIKORSKY', 'ROBINSON', 'AGUSTAWESTLAND'
+    ];
+    for (const brand of commonBrands) {
+        if (new RegExp(`\\b${brand}\\b`, 'i').test(upperText)) {
+            return brand;
+        }
+    }
+    const regexList = [
+        /\b(?:marca\b|fabricante\b|fabr\b)\s*(?:\/modelo)?\s*[:=\-]?\s*([^;,\n\)\/\-]{2,50})/i,
+        /\bmarca\b(?:\s+e\s+modelo)?\s+([^;,\n\)\/\-]{2,50})/i,
+        /\bfabricado\s+por\s+([^;,\n\)\/\-]{2,50})/i
+    ];
+    for (const rx of regexList) {
+        const m = rx.exec(upperText);
+        if (m && m[1]) {
+            return m[1].trim();
+        }
+    }
+    return 'N/A';
+};
+
+const normalizeCnpjLocal = (val: string): string => {
+    if (!val) return '';
+    return val.replace(/\D/g, '').padStart(14, '0');
+};
+
+const executePncpSearchDirect = async (url: string, params: any) => {
+    let directUrl = 'https://pncp.gov.br/api/search/';
+    let directParams = { ...params };
+    
+    if (url.includes('pcp-proxy') || params.q?.includes('[Portal de Compras Públicas]')) {
+        directParams.q = directParams.q ? `${directParams.q}` : '[Portal de Compras Públicas]';
+    }
+    
+    const queryStr = serializePncpParams(directParams);
+    const fullUrl = `${directUrl}?${queryStr}`;
+    
+    const res = await axios.get(fullUrl, {
+        headers: {
+            'Accept': 'application/json, text/plain, */*'
+        }
+    });
+    return res;
+};
+
+const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
+    const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+    const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
+    const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
+
+    const [detailRes, countRes, itemsRes] = await Promise.allSettled([
+        axios.get(detailUrl),
+        axios.get(itemsCountUrl),
+        axios.get(itemsListUrl)
+    ]);
+
+    const detailData = detailRes.status === 'fulfilled' ? detailRes.value.data : {};
+    const itemCount = countRes.status === 'fulfilled' ? countRes.value.data : 0;
+    const itemsResponse = itemsRes.status === 'fulfilled' ? itemsRes.value.data : [];
+    const items = Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse.data || []);
+
+    let hasMeEppBenefit = false;
+    let minItemValue = Infinity;
+    let maxItemValue = -Infinity;
+
+    if (Array.isArray(items)) {
+        items.forEach((item: any) => {
+            if ([1, 2, 3].includes(item.tipoBeneficio)) {
+                hasMeEppBenefit = true;
+            }
+            const val = item.valorUnitarioEstimado || (item.quantidade > 0 ? (item.valorTotalEstimado / item.quantidade) : 0) || 0;
+            if (val > 0) {
+                if (val < minItemValue) minItemValue = val;
+                if (val > maxItemValue) maxItemValue = val;
+            }
+        });
+    }
+
+    return {
+        data: {
+            ...detailData,
+            itemCount: itemCount || detailData.quantidadeItens || 0,
+            hasMeEppBenefit,
+            minItemValue: minItemValue === Infinity ? 0 : minItemValue,
+            maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue,
+            items: items
+        }
+    };
+};
+
+const fetchPncpArquivosDirect = async (cnpj: string, ano: string, sequencial: string) => {
+    const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
+    const res = await axios.get(url);
+    const files = res.data || [];
+    const mappedFiles = files.map((f: any) => {
+        const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
+        const isWinnerDoc = name.includes('proposta') || name.includes('habilitacao') || name.includes('vencedor') || name.includes('homologacao') || name.includes('ata');
+        return { ...f, isWinnerDoc };
+    });
+    return { data: mappedFiles };
+};
+
+const fetchPncpItensCompletosDirect = async (cnpj: string, ano: string, sequencial: string) => {
+    const urlItems = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=500`;
+    const itemsRes = await axios.get(urlItems);
+    const items = itemsRes.data || [];
+
+    const detailedItems = await Promise.all(items.map(async (item: any) => {
+        let vencedor = null;
+        let marca = extractBrandLocal(item.descricao || item.description);
+        
+        try {
+            const urlResult = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
+            const rr = await axios.get(urlResult);
+            if (rr.data && rr.data.length > 0) {
+                const winner = rr.data[0];
+                
+                vencedor = { 
+                    nome: winner.nomeRazaoSocialFornecedor, 
+                    cnpj: winner.niFornecedor, 
+                    valor: winner.valorTotalHomologado,
+                    marcaFornecedor: winner.marcaFornecedor,
+                    modeloFornecedor: winner.modeloFornecedor,
+                    empenhoUrl: `https://portaldatransparencia.gov.br/busca?termo=${normalizeCnpjLocal(winner.niFornecedor)}`,
+                    empenhoDados: null
+                };
+                if (winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
+            }
+        } catch (e) {}
+
+        return {
+            id: item.id,
+            numero: item.numeroItem,
+            descricao: item.descricao || item.description,
+            quantidade: item.quantidade,
+            valorUnitarioEstimado: item.valorUnitarioEstimado,
+            valorTotalEstimado: item.valorTotalEstimado,
+            situacao: item.situacaoItemNome,
+            vencedor,
+            marca,
+            unidadeMedida: item.unidadeMedida
+        };
+    }));
+
+    return { data: detailedItems };
+};
 
 // --- Helper: Safe ID Generation (Works in non-HTTPS/secure contexts) ---
 const generateSafeId = () => {
@@ -135,7 +319,11 @@ async function processPncpQueue() {
         }
 
         // USANDO PROXY DO BACKEND PARA EVITAR CORS E RATE LIMIT (REQUISITO PRODUÇÃO)
-        const res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+        // EM MODO DESKTOP (ELECTRON), CHAMAMOS A API OFICIAL DIRETAMENTE PARA EVITAR BLOQUEIO DE IP DA VPS
+        const isDesktop = (window as any).electronAPI?.isDesktop;
+        const res = isDesktop 
+            ? await fetchPncpDetailDirect(orgaoCnpj, ano, seq)
+            : await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
         const detail = res.data;
 
         const result = {
@@ -431,6 +619,25 @@ export default function OportunidadesSearch() {
 
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
+    // --- WAF Cookie Bypass Solver Hook ---
+    useEffect(() => {
+        if ((window as any).electronAPI?.isDesktop) {
+            console.log("[PNCP WAF Solver] Mount hidden iframe for F5 challenge cookies...");
+            const iframe = document.createElement('iframe');
+            iframe.src = 'https://pncp.gov.br/';
+            iframe.style.display = 'none';
+            iframe.style.width = '0px';
+            iframe.style.height = '0px';
+            document.body.appendChild(iframe);
+            
+            return () => {
+                try {
+                    document.body.removeChild(iframe);
+                } catch (e) {}
+            };
+        }
+    }, []);
+
     const handleClearFilters = useCallback(() => {
         setKeyword('');
         setUfFilter('');
@@ -578,7 +785,10 @@ export default function OportunidadesSearch() {
             // 1. Fetch Files (Original)
             setLoadingFiles(true);
             try {
-                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`);
+                const isDesktop = (window as any).electronAPI?.isDesktop;
+                const res = isDesktop
+                    ? await fetchPncpArquivosDirect(cnpj, ano, seq)
+                    : await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`);
                 setSelectedItemFiles(res.data || []);
                 setSelectedFilesToExport(res.data || []);
             } catch (e) {
@@ -590,9 +800,12 @@ export default function OportunidadesSearch() {
             // 2. Fetch Full Items (New)
             setLoadingFullItems(true);
             try {
-                const res = await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, {
-                    params: { termo: keyword }
-                });
+                const isDesktop = (window as any).electronAPI?.isDesktop;
+                const res = isDesktop
+                    ? await fetchPncpItensCompletosDirect(cnpj, ano, seq)
+                    : await api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, {
+                        params: { termo: keyword }
+                    });
                 setFullItems(res.data || []);
             } catch (e) {
                 console.error("Failed to fetch full items", e);
@@ -729,9 +942,14 @@ export default function OportunidadesSearch() {
                 if (cnpj && ano && seq) {
                     toast.info("Capturando anexos e itens do PNCP...");
                     
+                    const isDesktop = (window as any).electronAPI?.isDesktop;
                     const [filesRes, itemsRes, detailData] = await Promise.all([
-                        api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`).catch(() => ({ data: [] })),
-                        api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, { params: { termo: keyword } }).catch(() => ({ data: [] })),
+                        (isDesktop 
+                            ? fetchPncpArquivosDirect(cnpj, ano, seq) 
+                            : api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/arquivos`)).catch(() => ({ data: [] })),
+                        (isDesktop 
+                            ? fetchPncpItensCompletosDirect(cnpj, ano, seq) 
+                            : api.get(`/transparency/licitacoes/${cnpj}/${ano}/${seq}/itens-completos`, { params: { termo: keyword } })).catch(() => ({ data: [] })),
                         queuePncpFetch(exportTarget).catch(() => null)
                     ]);
 
@@ -1011,7 +1229,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                         const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
                         
-                        const promise = api.get(url, { params })
+                        const isDesktop = (window as any).electronAPI?.isDesktop;
+                        const promise = (isDesktop ? executePncpSearchDirect(url, params) : api.get(url, { params }))
                             .then(res => {
                                 const itemsData = res.data?.items || [];
                                 const totalVal = res.data?.total || 0;
