@@ -584,7 +584,10 @@ export default function BiddingDashboardPage() {
         }
         try {
             toast.info(`Enviando lance R$ ${value.toFixed(2)}...`);
-            await api.post(`/bidding/sessions/${targetSid}/items/${itemId}/bid`, { value });
+            const isLocalSession = targetSid.startsWith('virtual_') || targetSid.startsWith('HYBRID_') || targetSid.startsWith('GLOBAL_');
+            if (!isLocalSession) {
+                await api.post(`/bidding/sessions/${targetSid}/items/${itemId}/bid`, { value });
+            }
         } catch (error) {
             console.error("Quick bid failed:", error);
             toast.error("Falha ao enviar lance rápido.");
@@ -1488,7 +1491,7 @@ export default function BiddingDashboardPage() {
         const sid = targetSid || sessionId;
         if (!sid || sid === 'undefined' || !itemId || itemId === 'undefined') return;
         try {
-            const isSimulated = sid.startsWith('virtual_') || sid.startsWith('HYBRID_');
+            const isSimulated = sid.startsWith('virtual_') || sid.startsWith('HYBRID_') || sid.startsWith('GLOBAL_');
             if (!isSimulated) {
                 await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
             }
