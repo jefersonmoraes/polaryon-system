@@ -163,7 +163,9 @@ export default function BiddingDashboardPage() {
     const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
     // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
     // para aguardar a API propagar nosso lance antes de re-avaliar concorrentes.
-    const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number; duration?: number }>>({}); 
+    const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number; duration?: number }>>({});
+    // 🔇 THROTTLE DE LOGS (v4.3.0): Limita logs de estado a 1x/seg por item para evitar spam no console (lentidão visual)
+    const lastLogRef = useRef<Record<string, number>>({}); 
 
     useEffect(() => { 
         itemsRef.current = items || []; 
@@ -242,7 +244,12 @@ export default function BiddingDashboardPage() {
 
                 // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
                 if (currentTimeLeft <= 40 && currentTimeLeft > 0) {
-                    console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${currentTimeLeft}s | Perdedor: ${item.posicao !== '1'}`);
+                    // 🔇 Throttle: só loga 1x por segundo por item
+                    const lastBrainLog = lastLogRef.current[`brain_${sId}`] || 0;
+                    if (Date.now() - lastBrainLog >= 1000) {
+                        console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${currentTimeLeft}s | Perdedor: ${item.posicao !== '1'}`);
+                        lastLogRef.current[`brain_${sId}`] = Date.now();
+                    }
                 }
 
                 // 🔥 SNIPER ATIVO IMEDIATAMENTE (sem trava de 30s)
@@ -307,7 +314,13 @@ export default function BiddingDashboardPage() {
                                 if (lastInter) {
                                     const currentDuration = lastInter.duration !== undefined ? lastInter.duration : 30000;
                                     if ((Date.now() - lastInter.timestamp) < currentDuration) {
-                                        console.debug(`[SNIPER] Aguardando propagação do bid intermediário de R$ ${lastInter.value} (${Math.round((Date.now() - lastInter.timestamp)/1000)}s atrás). Congelado por ${currentDuration/1000}s.`);
+                                        // 🔇 Throttle de log: só loga 1x por segundo por item para evitar spam no console
+                                        const lastFreezeLog = lastLogRef.current[`freeze_${sId}`] || 0;
+                                        if (Date.now() - lastFreezeLog >= 1000) {
+                                            const elapsed = Math.round((Date.now() - lastInter.timestamp)/1000);
+                                            console.debug(`[SNIPER] Aguardando propagação do bid intermediário de R$ ${lastInter.value} (${elapsed}s atrás). Congelado por ${currentDuration/1000}s.`);
+                                            lastLogRef.current[`freeze_${sId}`] = Date.now();
+                                        }
                                         return;
                                     }
                                 }
@@ -351,7 +364,12 @@ export default function BiddingDashboardPage() {
                                     // Se o nosso lance atual já é menor ou igual ao lance ideal, já garantimos essa posição!
                                     // Não precisamos queimar margem dando um lance menor à toa.
                                     if (myCurrentBid <= idealBid) {
-                                        console.log(`[SNIPER] Posição ideal já garantida para o orçamento. Mantendo R$ ${myCurrentBid} (Lance ideal seria R$ ${idealBid} para bater concorrente de R$ ${targetCompetitorBid}).`);
+                                        // 🔇 Throttle de log: só loga 1x por segundo por item para evitar spam no console
+                                        const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
+                                        if (Date.now() - lastLogTime >= 1000) {
+                                            console.log(`[SNIPER] Posição ideal já garantida para o orçamento. Mantendo R$ ${myCurrentBid} (Lance ideal seria R$ ${idealBid} para bater concorrente de R$ ${targetCompetitorBid}).`);
+                                            lastLogRef.current[`pos_${sId}`] = Date.now();
+                                        }
                                         return; // Pula este ciclo para economizar margem e CPU!
                                     } else {
                                         nextBid = Math.min(idealBid, maxAllowedBidBySerpro);
@@ -361,7 +379,11 @@ export default function BiddingDashboardPage() {
                                     // Se não conseguimos bater nenhum concorrente (todos abaixo do nosso mínimo):
                                     // Mantemos o nosso lance atual se ele já for válido, em vez de queimar margem até o mínimo.
                                     if (myCurrentBid > myMin && myCurrentBid !== 999999999) {
-                                        console.log(`[SNIPER] Nenhum concorrente batível acima do mínimo R$ ${myMin}. Mantendo lance atual de R$ ${myCurrentBid} para economizar margem.`);
+                                        const lastNobeatLog = lastLogRef.current[`nobeat_${sId}`] || 0;
+                                        if (Date.now() - lastNobeatLog >= 2000) {
+                                            console.log(`[SNIPER] Nenhum concorrente batível acima do mínimo R$ ${myMin}. Mantendo lance atual de R$ ${myCurrentBid} para economizar margem.`);
+                                            lastLogRef.current[`nobeat_${sId}`] = Date.now();
+                                        }
                                         return; // Pula este ciclo para não queimar margem!
                                     } else {
                                         nextBid = myMin;
