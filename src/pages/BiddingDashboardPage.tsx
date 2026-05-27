@@ -165,7 +165,9 @@ export default function BiddingDashboardPage() {
     // para aguardar a API propagar nosso lance antes de re-avaliar concorrentes.
     const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number; duration?: number }>>({});
     // 🔇 THROTTLE DE LOGS (v4.3.0): Limita logs de estado a 1x/seg por item para evitar spam no console (lentidão visual)
-    const lastLogRef = useRef<Record<string, number>>({}); 
+    const lastLogRef = useRef<Record<string, number>>({});
+    // 🔗 REFERÊNCIA DE SESSÃO ATIVA (v4.4.0): Fornece acesso síncrono ao sessionId nos callbacks assíncronos do IPC/Socket
+    const sessionIdRef = useRef<string | null>(null);
 
     useEffect(() => { 
         itemsRef.current = items || []; 
@@ -174,6 +176,10 @@ export default function BiddingDashboardPage() {
     useEffect(() => {
         serverOffsetRef.current = serverOffset;
     }, [serverOffset]);
+
+    useEffect(() => {
+        sessionIdRef.current = sessionId;
+    }, [sessionId]);
 
     // 🔄 SINCRONIZADOR DE ESTADO DE ITENS ATIVOS EM TEMPO REAL (v3.8.54)
     useEffect(() => {
@@ -1054,6 +1060,45 @@ export default function BiddingDashboardPage() {
                     setSessions(prev => {
                         const updated = { ...prev };
 
+                        // Auxiliar para fundir as propriedades atualizadas do item a partir do ranking (v4.4.0)
+                        const mergeItemRankingData = (it: any) => {
+                            const { ranking, minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
+                            const posicaoFinal = minhaPosicao > 0
+                                ? String(minhaPosicao)
+                                : (realPosicao || it.posicao);
+
+                            // Determinar meu lance e menor lance geral do ranking
+                            let finalMeuValor = it.meuValor;
+                            const meuLanceNoRanking = ranking.find(r => r.eMeuLance || r.participante === '__EU__');
+                            if (meuLanceNoRanking) {
+                                finalMeuValor = meuLanceNoRanking.valor;
+                            }
+
+                            // Proteção do lastFired recente (< 15s)
+                            const lastFired = lastFiredBidRef.current[String(itemId)];
+                            if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                                if (!finalMeuValor || lastFired.value < finalMeuValor) {
+                                    finalMeuValor = lastFired.value;
+                                }
+                            }
+
+                            let finalValorAtual = it.valorAtual;
+                            if (ranking && ranking.length > 0) {
+                                finalValorAtual = ranking[0].valor;
+                            }
+                            if (finalMeuValor && finalMeuValor > 0 && (!finalValorAtual || finalMeuValor < finalValorAtual)) {
+                                finalValorAtual = finalMeuValor;
+                            }
+
+                            return {
+                                ...it,
+                                meuValor: finalMeuValor,
+                                valorAtual: finalValorAtual,
+                                posicao: posicaoFinal,
+                                rankingLances
+                            };
+                        };
+
                         const applyRankingToSession = (targetSid: string) => {
                             if (!updated[targetSid]) return;
                             updated[targetSid] = {
@@ -1061,20 +1106,20 @@ export default function BiddingDashboardPage() {
                                 items: updated[targetSid].items.map((it: any) => {
                                     const itItemId = String(it.itemId || it.numero || '');
                                     if (itItemId !== String(itemId)) return it;
-
-                                    const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
-                                    const posicaoFinal = minhaPosicao > 0
-                                        ? String(minhaPosicao)
-                                        : (realPosicao || it.posicao);
-
-                                    console.log(`%c[POLARYON RANKING UI] ✅ Ranking injetado: sessão=${targetSid} item=${itemId} posição=${posicaoFinal} participantes=${rankingLances.length}`, 'color:#10b981;font-weight:bold;');
-                                    return {
-                                        ...it,
-                                        posicao: posicaoFinal,
-                                        rankingLances
-                                    };
+                                    return mergeItemRankingData(it);
                                 })
                             };
+
+                            // Sincroniza o estado ativo se for a sessão selecionada (v4.4.0)
+                            if (sessionIdRef.current === targetSid) {
+                                setItems(prevItems => {
+                                    return prevItems.map((it: any) => {
+                                        const itItemId = String(it.itemId || it.numero || '');
+                                        if (itItemId !== String(itemId)) return it;
+                                        return mergeItemRankingData(it);
+                                    });
+                                });
+                            }
                         };
 
                         // 1) Tentativa direta: sessionId bate exatamente
@@ -1519,6 +1564,52 @@ export default function BiddingDashboardPage() {
             if (electron.onUpdateLog) {
                 const unsub = electron.onUpdateLog((msg: string) => {
                     console.log('[POLARYON UPDATE]', msg);
+                    
+                    // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA PÓS-CONFIRMAÇÃO HTTP (v4.4.0)
+                    // Se o log for de sucesso no disparo (ex: "ACERTOU O ALVO!") ou "Disparando R$"
+                    if (msg.includes('ACERTOU O ALVO!') || msg.includes('Disparando R$')) {
+                        const match = msg.match(/(?:ACERTOU O ALVO!|Disparando R\$\s*([\d.]+).*?Item\s*(\w+))/i) || 
+                                      msg.match(/Lance Kamikaze de R\$\s*([\d.]+)\s*no Item\s*(\w+)/i) ||
+                                      msg.match(/Disparando R\$\s*([\d.]+)\s*→\s*Item\s*(\w+)/i);
+                        if (match) {
+                            const value = parseFloat(match[1]);
+                            const itemId = match[2];
+                            if (!isNaN(value) && itemId) {
+                                const activeSid = sessionIdRef.current;
+                                if (activeSid) {
+                                    setSessions(prev => {
+                                        const updated = { ...prev };
+                                        if (updated[activeSid]) {
+                                            updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                                                if (String(it.itemId) === String(itemId)) {
+                                                    return {
+                                                        ...it,
+                                                        meuValor: value,
+                                                        valorAtual: Math.min(Number(it.valorAtual || 99999999), value)
+                                                    };
+                                                }
+                                                return it;
+                                            });
+                                        }
+                                        return updated;
+                                    });
+
+                                    setItems(prev => {
+                                        return prev.map(it => {
+                                            if (String(it.itemId) === String(itemId)) {
+                                                return {
+                                                    ...it,
+                                                    meuValor: value,
+                                                    valorAtual: Math.min(Number(it.valorAtual || 99999999), value)
+                                                };
+                                            }
+                                            return it;
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                    }
                 });
                 if (typeof unsub === 'function') unsubs.push(unsub);
             }
