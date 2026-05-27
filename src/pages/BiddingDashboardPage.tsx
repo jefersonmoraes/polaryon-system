@@ -2414,31 +2414,14 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.78)
-    // O DOM do Serpro usa segundosParaEncerramento (server-side). Nossa prioridade:
-    // 1. segundosParaEncerramento bruto → decrementa por elapsed time (mesmo do DOM)
-    // 2. portalTimer (segundosParaEncerramento do portal-preload)
-    // 3. dataHoraFimContagem - Date.now() (fallback local)
+    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.79)
+    // O DOM NÃO decrementa entre chamadas da API — ele SNAP para o valor de
+    // segundosParaEncerramento recebido e fica congelado até o próximo update.
+    // Nós fazemos o mesmo: exibe o valor recebido, sem interpolação entre updates.
     useEffect(() => {
         const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer;
         if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0) {
-            const receivedAt = item.updatedAt || Date.now();
-            const tick = () => {
-                const elapsed = (Date.now() - receivedAt) / 1000;
-                setTimeLeft(Math.max(0, baseSeconds - elapsed));
-            };
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
-        } else if (item.portalTimer !== undefined && item.portalTimer !== null && item.portalTimer >= 0) {
-            const receivedAt = item.updatedAt || Date.now();
-            const tick = () => {
-                const elapsed = (Date.now() - receivedAt) / 1000;
-                setTimeLeft(Math.max(0, item.portalTimer - elapsed));
-            };
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
+            setTimeLeft(Math.floor(baseSeconds));
         } else {
             const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
             if (endTimeStr) {
