@@ -135,6 +135,7 @@ export default function BiddingDashboardPage() {
     const [showRealModeWarning, setShowRealModeWarning] = useState(false);
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [serverOffset, setServerOffset] = useState(0);
+    const [sigaTimerSeconds, setSigaTimerSeconds] = useState<number | undefined>(undefined);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
@@ -800,6 +801,10 @@ export default function BiddingDashboardPage() {
             const handleUpdate = (data: any) => {
                 const { sessionId: sid, items: newItems, timestamp } = data;
                 if (data.serverOffset !== undefined) setServerOffset(data.serverOffset);
+                if (newItems?.length > 0) {
+                    console.log(`[BIDDING UPDATE] sid=${sid} items=${newItems.length} serverOffset=${data.serverOffset}`);
+                    console.log(`[BIDDING UPDATE] first item: id=${newItems[0].itemId} dhfc=${newItems[0].dataHoraFimContagem} timer=${newItems[0].timerSeconds}`);
+                }
                 if (data.log) {
                     setTrafficLogs(prev => [`[${new Date().toLocaleTimeString()}] ${data.log}`, ...prev].slice(0, 50));
                 }
@@ -912,7 +917,15 @@ export default function BiddingDashboardPage() {
             };
             
             const handlePortalSync = (data: any) => {
-                const { roomCode, items: newItems, timestamp } = data;
+                const { roomCode, items: newItems, timestamp, sigaTimerSeconds } = data;
+                
+                console.log(`[PORTAL SYNC] room=${roomCode} items=${newItems?.length} sigaTimer=${sigaTimerSeconds} serverOffset=${data.serverOffset}`);
+                if (newItems?.length > 0) {
+                    console.log(`[PORTAL SYNC] first item: id=${newItems[0].itemId} dhfc=${newItems[0].dataHoraFimContagem} timer=${newItems[0].timerSeconds}`);
+                }
+                if (sigaTimerSeconds !== undefined) {
+                    setSigaTimerSeconds(sigaTimerSeconds);
+                }
                 
                 // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
                 setIsAuthenticated(true);
@@ -1847,6 +1860,11 @@ export default function BiddingDashboardPage() {
                                     {new Date(serverTime).toLocaleTimeString('pt-BR')}
                                 </span>
                                 <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">SINCRONIZADO</span>
+                                {sigaTimerSeconds !== undefined && (
+                                    <span className="text-[10px] font-mono text-amber-400 ml-1">
+                                        DOM:{sigaTimerSeconds.toFixed(1)}s
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2393,18 +2411,21 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.76)
-    // Prioriza portalDataHoraFimContagem (do portal-preload, mesmo do DOM Serpro)
+    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.77)
     useEffect(() => {
         const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
         if (endTimeStr) {
             const endTime = new Date(endTimeStr).getTime();
+            const now = Date.now();
+            const diff = (endTime - now) / 1000;
+            console.log(`[TIMER DIAG] ${item.itemId}: endTime=${endTime} now=${now} diff=${diff} source=${item.portalDataHoraFimContagem ? 'portal' : 'bidding'}`);
             const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         } else if (item.portalTimer !== undefined && item.portalTimer !== null && item.portalTimer >= 0) {
             const updatedAt = Date.now();
+            console.log(`[TIMER DIAG] ${item.itemId}: portalTimer fallback, val=${item.portalTimer}`);
             const tick = () => {
                 setTimeLeft(Math.max(0, item.portalTimer - (Date.now() - updatedAt) / 1000));
             };
@@ -2412,9 +2433,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
+            console.log(`[TIMER DIAG] ${item.itemId}: timerSeconds fallback, val=${item.timerSeconds}`);
             setTimeLeft(Math.max(0, item.timerSeconds));
         }
-    }, [item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.portalTimer]);
+    }, [item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.portalTimer, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
