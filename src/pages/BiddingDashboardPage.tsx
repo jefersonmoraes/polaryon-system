@@ -282,7 +282,7 @@ export default function BiddingDashboardPage() {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
                     currentTimeLeft = Math.max(0, Math.floor((endTime - activeServerTime) / 1000));
                 }
-                const isRetaFinal = currentTimeLeft > 0 && currentTimeLeft <= 30;
+                const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
                 // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
                 if (currentTimeLeft <= 40 && currentTimeLeft > 0) {
@@ -307,8 +307,8 @@ export default function BiddingDashboardPage() {
                     const isWinningByValue = (activeMyBid > 0 && bestBid > 0 && activeMyBid <= bestBid);
                     const isLosingPos = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
                     
-                    // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição é desconhecida mas o valor indica perda, atira!)
-                    const isLosing = isLosingPos || (!isWinningByValue && item.posicao === '?');
+                    // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição ou o valor indica perda, atira! Evita congelamento por falso positivo na posição)
+                    const isLosing = isLosingPos || (bestBid > 0 && activeMyBid > bestBid) || (!isWinningByValue && item.posicao === '?');
                     
                     if (isLosing) {
                         const myMin = Number(strat.minPrice || 0);
@@ -464,11 +464,12 @@ export default function BiddingDashboardPage() {
                                 }]);
 
                                 // 🔒 Grava o lock TTL ANTES de enviar para bloquear reenvios imediatos
-                                lastFiredBidRef.current[`${sId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now() };
+                                const lockSessionId = itemSid || sessionId;
+                                lastFiredBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now() };
                                 // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
                                 if (!isLeaderBeatable) {
                                     const freezeDuration = (isKamikaze || currentTimeLeft <= 15) ? 0 : (isRetaFinal ? 1500 : 30000);
-                                    lastIntermediateBidRef.current[`${sId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
+                                    lastIntermediateBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
                                 }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
                                 
@@ -562,11 +563,15 @@ export default function BiddingDashboardPage() {
             if (Array.isArray(itemsRef.current)) {
                 itemsRef.current = itemsRef.current.map((it) => {
                     if (String(it.itemId) === String(itemId)) {
+                        const isNewBest = value <= Number(it.valorAtual || 99999999);
+                        const nextPos = (simulationMode || isNewBest) ? "1" : it.posicao;
+                        const nextGanhador = (simulationMode || isNewBest) ? "Você" : it.ganhador;
                         return {
                             ...it,
                             meuValor: value,
                             valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
-                            posicao: simulationMode ? "1" : it.posicao
+                            posicao: nextPos,
+                            ganhador: nextGanhador
                         };
                     }
                     return it;
@@ -577,11 +582,15 @@ export default function BiddingDashboardPage() {
                 if (updated[activeSid]) {
                     updated[activeSid].items = updated[activeSid].items.map((it: any) => {
                         if (String(it.itemId) === String(itemId)) {
+                            const isNewBest = value <= Number(it.valorAtual || 99999999);
+                            const nextPos = (simulationMode || isNewBest) ? "1" : it.posicao;
+                            const nextGanhador = (simulationMode || isNewBest) ? "Você" : it.ganhador;
                             return {
                                 ...it,
                                 meuValor: value,
                                 valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
-                                posicao: simulationMode ? "1" : it.posicao
+                                posicao: nextPos,
+                                ganhador: nextGanhador
                             };
                         }
                         return it;
@@ -593,11 +602,15 @@ export default function BiddingDashboardPage() {
             setItems(prev => {
                 return prev.map(it => {
                     if (String(it.itemId) === String(itemId)) {
+                        const isNewBest = value <= Number(it.valorAtual || 99999999);
+                        const nextPos = (simulationMode || isNewBest) ? "1" : it.posicao;
+                        const nextGanhador = (simulationMode || isNewBest) ? "Você" : it.ganhador;
                         return {
                             ...it,
                             meuValor: value,
                             valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
-                            posicao: simulationMode ? "1" : it.posicao
+                            posicao: nextPos,
+                            ganhador: nextGanhador
                         };
                     }
                     return it;
@@ -696,8 +709,17 @@ export default function BiddingDashboardPage() {
 
         // Ordenação inteligente: Perdedores e Urgentes primeiro
         return list.sort((a, b) => {
-            const aIsWinning = a.ganhador === 'Você' || String(a.posicao) === '1';
-            const bIsWinning = b.ganhador === 'Você' || String(b.posicao) === '1';
+            const aMeuValor = safeParseNumber(a.meuValor);
+            const aValorAtual = safeParseNumber(a.valorAtual);
+            const aIsWinning = !(aMeuValor > 0 && aValorAtual > 0 && aMeuValor > aValorAtual) && (
+                a.ganhador === 'Você' || String(a.posicao) === '1' || String(a.posicao) === '1º' || String(a.posicao) === '1°'
+            );
+            
+            const bMeuValor = safeParseNumber(b.meuValor);
+            const bValorAtual = safeParseNumber(b.valorAtual);
+            const bIsWinning = !(bMeuValor > 0 && bValorAtual > 0 && bMeuValor > bValorAtual) && (
+                b.ganhador === 'Você' || String(b.posicao) === '1' || String(b.posicao) === '1º' || String(b.posicao) === '1°'
+            );
             
             if (!aIsWinning && bIsWinning) return -1;
             if (aIsWinning && !bIsWinning) return 1;
@@ -797,13 +819,15 @@ export default function BiddingDashboardPage() {
                         const mergedRanking = (it.rankingLances && it.rankingLances.length > 0)
                             ? it.rankingLances
                             : (existing.rankingLances || []);
-                        const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
-                            ? it.posicao
-                            : (existing.posicao || it.posicao);
 
                         // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
                         let mergedMeuValor = it.meuValor;
                         let mergedValorAtual = it.valorAtual;
+                        let mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
+                            ? it.posicao
+                            : (existing.posicao || it.posicao);
+                        let mergedGanhador = it.ganhador;
+
                         const lastFired = getRecentFiredBid(it.itemId);
                         if (lastFired) {
                             if (!it.meuValor || it.meuValor > lastFired.value) {
@@ -814,6 +838,27 @@ export default function BiddingDashboardPage() {
                             }
                         }
 
+                        // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
+                        if (mergedRanking && mergedRanking.length > 0) {
+                            const { minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
+                            if (minhaPosicao > 0) {
+                                mergedPosicao = String(minhaPosicao);
+                            }
+                        }
+
+                        // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
+                        if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
+                            if (mergedPosicao === "1" || mergedPosicao === "1º" || mergedPosicao === "1°" || mergedGanhador === "Você") {
+                                const portalPos = String(it.posicao || "");
+                                const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
+                                mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : "2";
+                                mergedGanhador = "Outro";
+                            }
+                        } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
+                            mergedPosicao = "1";
+                            mergedGanhador = "Você";
+                        }
+
                         itemMap.set(it.itemId, { 
                             ...existing, 
                             ...it, 
@@ -821,7 +866,8 @@ export default function BiddingDashboardPage() {
                             meuValor: mergedMeuValor,
                             valorAtual: mergedValorAtual,
                             rankingLances: mergedRanking, 
-                            posicao: mergedPosicao 
+                            posicao: mergedPosicao,
+                            ganhador: mergedGanhador
                         });
                     });
 
@@ -869,6 +915,10 @@ export default function BiddingDashboardPage() {
                 // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
                 setIsAuthenticated(true);
                 
+                if (data.serverOffset !== undefined && data.serverOffset !== null) {
+                    setServerOffset(data.serverOffset);
+                }
+                
                 setSessions(prev => {
                     const updated = { ...prev };
                     // Procura uma sessão que tenha o UASG/Número batendo com o roomCode
@@ -904,13 +954,15 @@ export default function BiddingDashboardPage() {
                             const mergedRanking = (it.rankingLances && it.rankingLances.length > 0)
                                 ? it.rankingLances
                                 : (existing.rankingLances || []);
-                            const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
-                                ? it.posicao
-                                : (existing.posicao || it.posicao);
 
                             // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
                             let mergedMeuValor = it.meuValor;
                             let mergedValorAtual = it.valorAtual;
+                            let mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
+                                ? it.posicao
+                                : (existing.posicao || it.posicao);
+                            let mergedGanhador = it.ganhador;
+
                             const lastFired = getRecentFiredBid(it.itemId);
                             if (lastFired) {
                                 if (!it.meuValor || it.meuValor > lastFired.value) {
@@ -921,6 +973,27 @@ export default function BiddingDashboardPage() {
                                 }
                             }
 
+                            // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
+                            if (mergedRanking && mergedRanking.length > 0) {
+                                const { minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
+                                if (minhaPosicao > 0) {
+                                    mergedPosicao = String(minhaPosicao);
+                                }
+                            }
+
+                            // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
+                            if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
+                                if (mergedPosicao === "1" || mergedPosicao === "1º" || mergedPosicao === "1°" || mergedGanhador === "Você") {
+                                    const portalPos = String(it.posicao || "");
+                                    const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
+                                    mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : "2";
+                                    mergedGanhador = "Outro";
+                                }
+                            } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
+                                mergedPosicao = "1";
+                                mergedGanhador = "Você";
+                            }
+
                             itemMap.set(key, { 
                                 ...existing, 
                                 ...it, 
@@ -929,6 +1002,7 @@ export default function BiddingDashboardPage() {
                                 valorAtual: mergedValorAtual,
                                 rankingLances: mergedRanking, 
                                 posicao: mergedPosicao, 
+                                ganhador: mergedGanhador,
                                 id: key 
                             });
                         });
@@ -1038,12 +1112,12 @@ export default function BiddingDashboardPage() {
 
                                  let melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                                  let melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
-                                  const itemIdStr = item.identificador || (item.numero ? item.numero.toString() : '0');
-                                  const lastFired = getRecentFiredBid(itemIdStr);
-                                  if (lastFired) {
+                                 const itemIdStr = String(item.identificador || item.numero || '0');
+                                 const lastFired = getRecentFiredBid(itemIdStr);
+                                 if (lastFired) {
                                       if (melhorMeu === 0 || melhorMeu > lastFired.value) melhorMeu = lastFired.value;
                                       if (melhorGeral === 0 || melhorGeral > lastFired.value) melhorGeral = lastFired.value;
-                                  }
+                                 }
                                  let pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
                                  if (!pos || pos === '0' || pos === '?') {
                                      const rows = Array.from(document.querySelectorAll('tr, .cp-item-row, .ng-star-inserted'));
@@ -1056,7 +1130,7 @@ export default function BiddingDashboardPage() {
                                  const isWinner = pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°';
                                  
                                  newSessions[sid].items.push({
-                                     itemId: itemIdStr || item.identificador || (item.numero ? item.numero.toString() : '0'),
+                                     itemId: itemIdStr,
                                      purchaseId: fullId,
                                      valorAtual: melhorGeral, 
                                      meuValor: melhorMeu, 
@@ -1104,7 +1178,7 @@ export default function BiddingDashboardPage() {
                         // Auxiliar para fundir as propriedades atualizadas do item a partir do ranking (v4.4.0)
                         const mergeItemRankingData = (it: any) => {
                             const { ranking, minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
-                            const posicaoFinal = minhaPosicao > 0
+                            let posicaoFinal = minhaPosicao > 0
                                 ? String(minhaPosicao)
                                 : (realPosicao || it.posicao);
 
@@ -1131,11 +1205,31 @@ export default function BiddingDashboardPage() {
                                 finalValorAtual = finalMeuValor;
                             }
 
+                            // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
+                            if (minhaPosicao > 0) {
+                                posicaoFinal = String(minhaPosicao);
+                            }
+
+                            // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
+                            let finalGanhador = it.ganhador;
+                            if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor > finalValorAtual) {
+                                if (posicaoFinal === "1" || posicaoFinal === "1º" || posicaoFinal === "1°" || finalGanhador === "Você") {
+                                    const portalPos = String(it.posicao || "");
+                                    const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
+                                    posicaoFinal = (!isPortalPosWinning && portalPos) ? portalPos : "2";
+                                    finalGanhador = "Outro";
+                                }
+                            } else if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor <= finalValorAtual) {
+                                posicaoFinal = "1";
+                                finalGanhador = "Você";
+                            }
+
                             return {
                                 ...it,
                                 meuValor: finalMeuValor,
                                 valorAtual: finalValorAtual,
                                 posicao: posicaoFinal,
+                                ganhador: finalGanhador,
                                 rankingLances
                             };
                         };
@@ -1636,10 +1730,13 @@ export default function BiddingDashboardPage() {
                                 if (updated[activeSid]) {
                                     updated[activeSid].items = updated[activeSid].items.map((it: any) => {
                                         if (String(it.itemId) === String(itemId)) {
+                                            const isNewBest = value! <= Number(it.valorAtual || 99999999);
                                             return {
                                                 ...it,
                                                 meuValor: value!,
-                                                valorAtual: Math.min(Number(it.valorAtual || 99999999), value!)
+                                                valorAtual: Math.min(Number(it.valorAtual || 99999999), value!),
+                                                posicao: isNewBest ? "1" : it.posicao,
+                                                ganhador: isNewBest ? "Você" : it.ganhador
                                             };
                                         }
                                         return it;
@@ -1651,10 +1748,13 @@ export default function BiddingDashboardPage() {
                             setItems(prev => {
                                 return prev.map(it => {
                                     if (String(it.itemId) === String(itemId)) {
+                                        const isNewBest = value! <= Number(it.valorAtual || 99999999);
                                         return {
                                             ...it,
                                             meuValor: value!,
-                                            valorAtual: Math.min(Number(it.valorAtual || 99999999), value!)
+                                            valorAtual: Math.min(Number(it.valorAtual || 99999999), value!),
+                                            posicao: isNewBest ? "1" : it.posicao,
+                                            ganhador: isNewBest ? "Você" : it.ganhador
                                         };
                                     }
                                     return it;
@@ -2211,16 +2311,20 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     // Posição real: usa a computada se > 0, senão usa a que veio da API
     const posicaoReal = posicaoComputada > 0 ? String(posicaoComputada) : (item.posicao || '?');
 
+    const myBidVal = safeParseNumber(item.meuValor);
+    const bestBidVal = safeParseNumber(item.valorAtual);
     const isWinning = 
-        item.ganhador === 'Você' || 
-        item.position === 1 ||
-        posicaoReal === '1' ||
-        String(item.posicao) === '1' || 
-        String(item.posicao) === '1º' ||
-        String(item.posicao) === '1°' ||
-        String(item.posicao).toUpperCase() === 'G' ||
-        String(item.posicao).toUpperCase() === 'GANHANDO' ||
-        String(item.posicao).toUpperCase() === 'VENCEDOR';
+        !(myBidVal > 0 && bestBidVal > 0 && myBidVal > bestBidVal) && (
+            item.ganhador === 'Você' || 
+            item.position === 1 ||
+            posicaoReal === '1' ||
+            String(item.posicao) === '1' || 
+            String(item.posicao) === '1º' ||
+            String(item.posicao) === '1°' ||
+            String(item.posicao).toUpperCase() === 'G' ||
+            String(item.posicao).toUpperCase() === 'GANHANDO' ||
+            String(item.posicao).toUpperCase() === 'VENCEDOR'
+        );
     
     const defaultMargin = item.officialMargin || 1.00;
     const defaultType = item.officialMarginType || 'fixed';
@@ -2329,7 +2433,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         if (!hasMin && active) {
             nextActive = false;
             setActive(false);
-            toast.warning(`ITEM ${item.itemId} DESATIVADO: Valor mínimo inválido ou não preenchido.`);
+            toast.warning(`ITEM ${item.numero || item.itemId} DESATIVADO: Valor mínimo inválido ou não preenchido.`);
         }
 
         onSaveStrategy(sid, item.itemId, {
@@ -2355,7 +2459,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         handleSave({ active: newState });
         
         if (newState) {
-            toast.success(`ITEM ${item.itemId} ATIVO`);
+            toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
             // Se kamikaze ativado e bot ligado, dispara imediatamente no mínimo
             if (kamikazeMode && !isWinning) {
                 const currentBest = safeParseNumber(item.valorAtual);
@@ -2366,12 +2470,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 if (myBid <= 0 || fireVal < myBid) {
                     setTimeout(() => {
                         onManualBid(item.purchaseId, item.itemId, item.bidId, fireVal);
-                        toast.info(`💥 [KAMIKAZE IMEDIATO] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.itemId}!`);
+                        toast.info(`💥 [KAMIKAZE IMEDIATO] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.numero || item.itemId}!`);
                     }, 500);
                 }
             }
         } else {
-            toast.warning(`ITEM ${item.itemId} PAUSADO`);
+            toast.warning(`ITEM ${item.numero || item.itemId} PAUSADO`);
         }
     };
 
@@ -2462,7 +2566,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                         <div className="flex items-center gap-3 mb-3">
                             <div className={`w-2 h-2 rounded-full ${isWinning ? 'bg-emerald-500' : 'bg-red-500'}`} />
                             <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">
-                                ITEM {item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
+                                ITEM {item.numero || item.itemId} <span className="text-slate-400 font-medium ml-1">— {item.desc || 'Sem Descrição'}</span>
                             </span>
                         </div>
                         <div className="flex gap-2 flex-wrap">
@@ -2659,7 +2763,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between px-6 py-4 border-b">
                             <div>
-                                <h2 className="text-sm font-bold text-slate-800">Ranking por Participante — Item {item.itemId}</h2>
+                                <h2 className="text-sm font-bold text-slate-800">Ranking por Participante — Item {item.numero || item.itemId}</h2>
                                 <p className="text-[10px] text-slate-400 mt-0.5">Melhor lance de cada fornecedor (menor vence)</p>
                             </div>
                             <button onClick={() => setShowRankingModal(false)} className="text-slate-400 hover:text-slate-700 text-lg font-bold leading-none">×</button>

@@ -228,7 +228,7 @@
     // -------------------------------------------------------------------------
     // SISTEMA DE INTERCEPTAÇÃO DE REDE (O "ESCUTA-GERAL")
     // -------------------------------------------------------------------------
-    function processSerproData(data, url) {
+    function processSerproData(data, url, dateHeader) {
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
 
         if (url.includes('/participacoes')) {
@@ -283,7 +283,10 @@
                                     'x-device-platform': 'web',
                                     'x-version-number': '6.0.2'
                                 }
-                            }).then(r => r.ok ? r.json().then(d => processSerproData(d, roomUrl)) : null)
+                            }).then(r => r.ok ? r.json().then(d => {
+                                const dateHeader = r.headers.get('Date') || r.headers.get('date') || '';
+                                processSerproData(d, roomUrl, dateHeader);
+                            }) : null)
                               .catch(() => {});
                         }
                     }
@@ -311,12 +314,20 @@
 
         if (items.length > 0 && roomCode) {
             if (typeof ipcRenderer !== 'undefined') {
+                let serverOffset = undefined;
+                if (dateHeader) {
+                    const serverTime = new Date(dateHeader).getTime();
+                    if (!isNaN(serverTime)) {
+                        serverOffset = serverTime - Date.now();
+                    }
+                }
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
                     timestamp: Date.now(),
+                    serverOffset: serverOffset,
                     items: items.map(it => ({
-                        itemId: String(it.numero || it.identificador),
+                        itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
                         valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
                         meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
@@ -348,7 +359,8 @@
             if (res.ok) {
                 const data = await res.json();
                 console.log(`%c[POLARYON AUTO FETCH] ✅ ${purchaseId}: ${Array.isArray(data) ? data.length + ' itens' : 'OK'}`, 'color: #10b981; font-size: 10px;');
-                processSerproData(data, url);
+                const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
+                processSerproData(data, url, dateHeader);
             } else {
                 console.warn(`[POLARYON AUTO FETCH] ⚠️ ${purchaseId}: status ${res.status}`);
             }
@@ -575,7 +587,7 @@
         activeRankingItems.forEach(target => enqueueRankingFetch(target, false));
     }, 45000);
 
-    function processSerproData(data, url, status, ok) {
+    function processSerproData(data, url, status, ok, dateHeader) {
         if (typeof data === 'string') {
             try {
                 data = JSON.parse(data);
@@ -628,8 +640,9 @@
                                     const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
                                     const r = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
                                     if (r.ok) {
-                                        const d = await r.json();
-                                        processSerproData(d, roomUrl);
+                                         const d = await r.json();
+                                         const dateHeader = r.headers.get('Date') || r.headers.get('date') || '';
+                                         processSerproData(d, roomUrl, r.status, r.ok, dateHeader);
                                     } else if (r.status === 429) {
                                         console.warn(`[POLARYON DETECTOR] ⚠️ 429 para ${purchaseId}. Retentando em 15s...`);
                                         setTimeout(() => autoFetchPurchaseItems(purchaseId), 15000);
@@ -661,7 +674,7 @@
         if (items.length > 0 && roomCode) {
             // 🏆 Registra itens ativos para o loop de ranking
             items.forEach(it => {
-                const itemIdStr = String(it.numero || it.identificador);
+                const itemIdStr = String(it.identificador || it.numero);
                 const faseItem = (it.faseTraduzido || it.fase || '').toUpperCase();
                 const isEncerrado = faseItem.includes('ENCERRAD') || faseItem.includes('FINALIZ') || faseItem.includes('CANCEL');
                 if (!isEncerrado && itemIdStr) {
@@ -685,7 +698,7 @@
                     const meuValor = it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0);
                     const valorAtual = it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0);
                     return {
-                        itemId: String(it.numero || it.identificador),
+                        itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
                         valorAtual,
                         meuValor,
@@ -699,10 +712,18 @@
                         desc: it.descricao
                     };
                 });
+                let serverOffset = undefined;
+                if (dateHeader) {
+                    const serverTime = new Date(dateHeader).getTime();
+                    if (!isNaN(serverTime)) {
+                        serverOffset = serverTime - Date.now();
+                    }
+                }
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
                     timestamp: Date.now(),
+                    serverOffset: serverOffset,
                     items: mappedItems
                 });
             }
@@ -722,7 +743,7 @@
                     console.log('%c[POLARYON] 🔓 Captcha P1_... interceptado!', 'color:#10b981;font-weight:bold;font-size:11px;');
                 }
             } else if (type === 'serpro-data') {
-                processSerproData(data, url, status, ok);
+                processSerproData(data, url, status, ok, event.data.dateHeader);
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
@@ -762,14 +783,15 @@
         (function() {
             let sessionToken = '';
             
-            function processSerproData(data, url, status, ok) {
+            function processSerproData(data, url, status, ok, dateHeader) {
                 window.postMessage({
                     source: 'polaryon-injector',
                     type: 'serpro-data',
                     data,
                     url,
                     status,
-                    ok
+                    ok,
+                    dateHeader: dateHeader || ''
                 }, '*');
             }
 
@@ -902,11 +924,12 @@
                 const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
                 if (isSerpro) {
                     if (response.ok) {
+                        const dateHeader = response.headers.get('Date') || response.headers.get('date') || '';
                         const clone = response.clone();
                         clone.json()
-                            .then(data => processSerproData(data, url, response.status, response.ok))
+                            .then(data => processSerproData(data, url, response.status, response.ok, dateHeader))
                             .catch(() => {
-                                clone.text().then(text => processSerproData(text, url, response.status, response.ok)).catch(() => {});
+                                clone.text().then(text => processSerproData(text, url, response.status, response.ok, dateHeader)).catch(() => {});
                             });
                     } else if (response.status === 403 && url.includes('/lances/por-participante')) {
                         window.postMessage({
@@ -964,11 +987,12 @@
                                 status: this.status
                             }, '*');
                         }
+                        const dateHeader = this.getResponseHeader('Date') || this.getResponseHeader('date') || '';
                         try {
                             const data = JSON.parse(this.responseText);
-                            processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300);
+                            processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader);
                         } catch (e) {
-                            processSerproData(this.responseText, this._url, this.status, this.status >= 200 && this.status < 300);
+                            processSerproData(this.responseText, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader);
                         }
                     }
                 });
@@ -1186,7 +1210,8 @@
             if (res.ok) {
                 consecutiveLoopFailures = 0; // Reset na tolerância
                 const data = await res.json();
-                processSerproData(data, url);
+                const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
+                processSerproData(data, url, res.status, res.ok, dateHeader);
             } else if (res.status === 401 || res.status === 403) {
                 consecutiveLoopFailures++;
                 console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
@@ -1233,9 +1258,10 @@
                 signal: AbortSignal.timeout(15000)
             });
             if (res.ok) {
-                const data = await res.json();
-                console.log(`%c[POLARYON SCAN] 🔍 Varredura proativa de participações concluída.`, 'color: #6366f1; font-size: 10px;');
-                processSerproData(data, url);
+                 const data = await res.json();
+                 console.log(`%c[POLARYON SCAN] 🔍 Varredura proativa de participações concluída.`, 'color: #6366f1; font-size: 10px;');
+                 const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
+                 processSerproData(data, url, res.status, res.ok, dateHeader);
             }
         } catch (e) {
             // Silencioso

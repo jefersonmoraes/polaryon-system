@@ -170,7 +170,7 @@ class RoomRunner {
             if (itemsList.length > 0) {
                 const serverNow = this.clockSync.getServerTime();
                 const mappedItems = itemsList.map(item => {
-                    const itemIdStr = String(item.numero || item.identificador);
+                    const itemIdStr = String(item.identificador || item.numero);
                     const cachedRanking = this.itemRankingsMap.get(itemIdStr);
                     
                     const spd = item.situacaoParticipanteDisputa;
@@ -228,7 +228,8 @@ class RoomRunner {
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: `Disputa Oficial - ${this.idCompra}`,
                     log: `[MOTOR KAMIKAZE] Escaneamento Limpo: ${mappedItems.length} itens detectados.`,
-                    items: mappedItems
+                    items: mappedItems,
+                    serverOffset: this.clockSync.getServerTime() - Date.now()
                 });
 
                 // 🏆 RANKING REAL via /lances/por-participante — busca assíncrona sem bloquear o polling
