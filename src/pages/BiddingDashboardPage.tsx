@@ -160,6 +160,9 @@ export default function BiddingDashboardPage() {
     const lastBidTimesRef = useRef<Record<string, number>>({});
     // 🔒 DEDUPLICADOR COM TTL (v3.8.59): bloqueia redisparo do mesmo valor por 5s, independente do ciclo React
     const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
+    // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
+    // para aguardar a API propagar nosso lance antes de re-avaliar concorrentes.
+    const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number }>>({}); 
 
     useEffect(() => { 
         if (items && items.length > 0) {
@@ -278,14 +281,33 @@ export default function BiddingDashboardPage() {
                                 // Se o líder não é batível, procuramos no ranking o melhor concorrente (menor valor)
                                 // que conseguimos bater respeitando o nosso mínimo (myMin).
                                 let targetCompetitorBid = null;
+                                // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): se acabamos de disparar um bid intermediário
+                                // nos últimos 30s, aguardamos a propagação da API para não cobrir o próprio lance.
+                                const lastInter = lastIntermediateBidRef.current[sId];
+                                if (lastInter && (Date.now() - lastInter.timestamp) < 30000) {
+                                    console.debug(`[SNIPER] Aguardando propagação do bid intermediário de R$ ${lastInter.value} (${Math.round((Date.now() - lastInter.timestamp)/1000)}s atrás). Congelado por 30s.`);
+                                    return;
+                                }
+
                                 if (item.rankingLances && item.rankingLances.length > 0) {
-                                    // Filtra e ordena todos os lances de concorrentes
-                                    const competitorBids = item.rankingLances
-                                        .map(l => {
-                                            const eMeu = !!(l.eMeuLance || l.isMyBid || l.meuLance);
-                                            return eMeu ? 0 : safeParseNumber(l.valor || l.valorInformado || l.valorCalculado || 0);
+                                    // 🏆 COMPILADOR DE RANKING PARTICIPATIVO INTELIGENTE (v4.1.1)
+                                    // Agrupa e consolida o ranking para identificar a nós mesmos ('__EU__') usando meuCurrentBid.
+                                    // Usa buildRankingPorParticipante para consolidar por participante único.
+                                    const { ranking: computedRanking } = buildRankingPorParticipante(item.rankingLances, myCurrentBid);
+
+                                    // Filtra lances que não são nossos (excluindo __EU__ E qualquer valor == myCurrentBid
+                                    // como proteção dupla caso a API não propague a flag eMeuLance a tempo)
+                                    const myBidRounded = Math.floor(myCurrentBid * 100) / 100;
+                                    const competitorBids = computedRanking
+                                        .filter(r => r.participante !== '__EU__')
+                                        .map(r => safeParseNumber(r.valor))
+                                        .filter(val => {
+                                            if (val <= 0) return false;
+                                            // 🛡️ Proteção dupla: exclui valores iguais ao nosso lance atual
+                                            // para evitar cobrir o próprio bid retornado pela API sem flag
+                                            const valRounded = Math.floor(val * 100) / 100;
+                                            return Math.abs(valRounded - myBidRounded) > 0.001;
                                         })
-                                        .filter(val => val > 0) // Todos os lances válidos de concorrentes
                                         .sort((a, b) => a - b); // Ordena do menor (melhor posição) para o maior
 
                                     // Procura a melhor posição (menor lance) que podemos cobrir
@@ -329,9 +351,9 @@ export default function BiddingDashboardPage() {
                             } else if (nextBid >= myCurrentBid) {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} não é melhor que seu último lance (R$ ${myCurrentBid}). Evitando erro 422.`);
                             } else if ((() => {
-                                // 🔒 DEDUP TTL: bloqueia redisparo do mesmo valor por 5 segundos (ignora ciclo React)
+                                // 🔒 DEDUP TTL: bloqueia redisparo do mesmo valor por 15 segundos (ignora ciclo React)
                                 const fired = lastFiredBidRef.current[sId];
-                                return fired && fired.value === nextBid && (Date.now() - fired.timestamp) < 5000;
+                                return fired && fired.value === nextBid && (Date.now() - fired.timestamp) < 15000;
                             })()) {
                                 console.debug(`[SNIPER] Dedup TTL: R$ ${nextBid} já foi enviado para Item ${sId} há menos de 5s. Aguardando confirmação...`);
                             } else if (nextBid >= myMin) {
@@ -355,6 +377,10 @@ export default function BiddingDashboardPage() {
 
                                 // 🔒 Grava o lock TTL ANTES de enviar para bloquear reenvios imediatos
                                 lastFiredBidRef.current[sId] = { value: nextBid, timestamp: Date.now() };
+                                // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
+                                if (!isLeaderBeatable) {
+                                    lastIntermediateBidRef.current[sId] = { value: nextBid, timestamp: Date.now() };
+                                }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
                                 
                                 const nowUpdate = Date.now();
