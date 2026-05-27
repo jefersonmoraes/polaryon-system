@@ -1568,49 +1568,60 @@ export default function BiddingDashboardPage() {
                 const unsub = electron.onUpdateLog((msg: string) => {
                     console.log('[POLARYON UPDATE]', msg);
                     
-                    // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA PÓS-CONFIRMAÇÃO HTTP (v4.4.0)
-                    // Se o log for de sucesso no disparo (ex: "ACERTOU O ALVO!") ou "Disparando R$"
-                    if (msg.includes('ACERTOU O ALVO!') || msg.includes('Disparando R$')) {
-                        const match = msg.match(/(?:ACERTOU O ALVO!|Disparando R\$\s*([\d.]+).*?Item\s*(\w+))/i) || 
-                                      msg.match(/Lance Kamikaze de R\$\s*([\d.]+)\s*no Item\s*(\w+)/i) ||
-                                      msg.match(/Disparando R\$\s*([\d.]+)\s*→\s*Item\s*(\w+)/i);
-                        if (match) {
-                            const value = parseFloat(match[1]);
-                            const itemId = match[2];
-                            if (!isNaN(value) && itemId) {
-                                const activeSid = sessionIdRef.current;
-                                if (activeSid) {
-                                    setSessions(prev => {
-                                        const updated = { ...prev };
-                                        if (updated[activeSid]) {
-                                            updated[activeSid].items = updated[activeSid].items.map((it: any) => {
-                                                if (String(it.itemId) === String(itemId)) {
-                                                    return {
-                                                        ...it,
-                                                        meuValor: value,
-                                                        valorAtual: Math.min(Number(it.valorAtual || 99999999), value)
-                                                    };
-                                                }
-                                                return it;
-                                            });
-                                        }
-                                        return updated;
-                                    });
+                    // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA PÓS-CONFIRMAÇÃO HTTP (v4.4.2)
+                    // Analisa os logs detalhadamente via regexes específicas e individuais para evitar falhas de precedência
+                    let value: number | null = null;
+                    let itemId: string | null = null;
 
-                                    setItems(prev => {
-                                        return prev.map(it => {
-                                            if (String(it.itemId) === String(itemId)) {
-                                                return {
-                                                    ...it,
-                                                    meuValor: value,
-                                                    valorAtual: Math.min(Number(it.valorAtual || 99999999), value)
-                                                };
-                                            }
-                                            return it;
-                                        });
+                    if (msg.includes('ACERTOU O ALVO!') || msg.includes('Lance Kamikaze')) {
+                        const m = msg.match(/Lance Kamikaze de R\$\s*([\d.]+)\s*no Item\s*(\w+)/i);
+                        if (m) {
+                            value = parseFloat(m[1]);
+                            itemId = m[2];
+                        }
+                    }
+
+                    if (!itemId && (msg.includes('Disparando R$') || msg.includes('DISPARANDO LANCE'))) {
+                        const m = msg.match(/Disparando R\$\s*([\d.]+)\s*→\s*Item\s*(\w+)/i) ||
+                                  msg.match(/DISPARANDO LANCE:\s*R\$\s*([\d.]+)\s*para\s*Item\s*(\w+)/i);
+                        if (m) {
+                            value = parseFloat(m[1]);
+                            itemId = m[2];
+                        }
+                    }
+
+                    if (itemId && value !== null && !isNaN(value)) {
+                        const activeSid = sessionIdRef.current;
+                        if (activeSid) {
+                            setSessions(prev => {
+                                const updated = { ...prev };
+                                if (updated[activeSid]) {
+                                    updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                                        if (String(it.itemId) === String(itemId)) {
+                                            return {
+                                                ...it,
+                                                meuValor: value!,
+                                                valorAtual: Math.min(Number(it.valorAtual || 99999999), value!)
+                                            };
+                                        }
+                                        return it;
                                     });
                                 }
-                            }
+                                return updated;
+                            });
+
+                            setItems(prev => {
+                                return prev.map(it => {
+                                    if (String(it.itemId) === String(itemId)) {
+                                        return {
+                                            ...it,
+                                            meuValor: value!,
+                                            valorAtual: Math.min(Number(it.valorAtual || 99999999), value!)
+                                        };
+                                    }
+                                    return it;
+                                });
+                            });
                         }
                     }
                 });
