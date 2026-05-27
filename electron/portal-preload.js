@@ -1095,64 +1095,93 @@
         }
     }, 2000);
 
-    // LOOP DE FUNDO DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL COM PREVENÇÃO DE 429 (v3.6.89)
-    // Distribui as consultas em Round-Robin (1 sala a cada 3 segundos) para nunca sobrecarregar a API do Serpro
+    // ⚡ LOOP DE FUNDO ADAPTATIVO — MODO GUERRA DE LANCES (v3.8.70)
+    // Detecta rajadas de lances (valorAtual mudando a cada ciclo) e acelera para 150ms.
+    // Volta ao ritmo normal (800ms) quando o mercado estabiliza. Anti-429 em modo passivo (3000ms).
     let currentIndex = 0;
     let consecutiveLoopFailures = 0;
-    setInterval(async () => {
-        if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) return;
-        
-        const purchaseIds = Array.from(shared.synchronizedPurchases);
-        // Processa até 3 salas por tick para salas grandes (ex: 10 salas = ~10s para ciclo completo)
-        const batchSize = Math.min(3, purchaseIds.length);
-        for (let b = 0; b < batchSize; b++) {
-        const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
-        currentIndex++;
+    const _loopLastBestValues = new Map();  // purchaseId → valorAtual anterior
+    const _loopWarCycles = new Map();       // purchaseId → contador de ciclos em guerra
 
-        try {
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-            const tStart = Date.now();
-            const res = await fetch(url, {
-                headers: {
-                    'Authorization': shared.sessionToken,
-                    'Accept': 'application/json',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
-                }
-            });
-            const tEnd = Date.now();
-
-            if (res.ok) {
-                consecutiveLoopFailures = 0; // Reset na tolerância
-                const data = await res.json();
-                const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
-                processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
-            } else if (res.status === 401 || res.status === 403) {
-                consecutiveLoopFailures++;
-                console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
-                
-                if (consecutiveLoopFailures >= 3) {
-                    consecutiveLoopFailures = 0;
-                    shared.sessionToken = '';
-                    ipcRenderer.send('portal-error', {
-                        sessionId: 'GLOBAL',
-                        error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
-                        code: res.status,
-                        action: 'REQUIRE_REAUTH'
-                    });
-                }
-            } else if (res.status === 422) {
-                console.log(`[POLARYON LOOP] ⏳ Sala aguardando início ou pausada (422): ${purchaseId}. Mantendo no radar...`);
-            } else if (res.status === 404) {
-                // Auto-limpeza apenas se a sala realmente não existir
-                shared.synchronizedPurchases.delete(purchaseId);
-                console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por não existir (${res.status}): ${purchaseId}`);
-            }
-        } catch (e) {
-            console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
+    async function _adaptiveLoop() {
+        if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) {
+            setTimeout(_adaptiveLoop, 3000);
+            return;
         }
+
+        const purchaseIds = Array.from(shared.synchronizedPurchases);
+        const batchSize = Math.min(3, purchaseIds.length);
+        let anyWar = false;
+
+        for (let b = 0; b < batchSize; b++) {
+            const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
+            currentIndex++;
+
+            try {
+                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                const tStart = Date.now();
+                const res = await fetch(url, {
+                    headers: {
+                        'Authorization': shared.sessionToken,
+                        'Accept': 'application/json',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
+                    }
+                });
+                const tEnd = Date.now();
+
+                if (res.ok) {
+                    consecutiveLoopFailures = 0;
+                    const data = await res.json();
+                    const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
+
+                    // ⚡ Detecta guerra de lances: valorAtual mudou desde o ciclo anterior?
+                    const items = Array.isArray(data) ? data : (data.itens || []);
+                    for (const it of items) {
+                        const best = it.melhorValorGeral ? (it.melhorValorGeral.valorCalculado ?? 0) : 0;
+                        const prev = _loopLastBestValues.get(purchaseId + '_' + (it.identificador || it.numero));
+                        if (prev !== undefined && prev !== best && best > 0) {
+                            _loopWarCycles.set(purchaseId, (_loopWarCycles.get(purchaseId) || 0) + 1);
+                            anyWar = true;
+                        } else if (prev === best) {
+                            const w = _loopWarCycles.get(purchaseId) || 0;
+                            if (w > 0) _loopWarCycles.set(purchaseId, w - 1);
+                        }
+                        _loopLastBestValues.set(purchaseId + '_' + (it.identificador || it.numero), best);
+                    }
+
+                    processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
+                } else if (res.status === 401 || res.status === 403) {
+                    consecutiveLoopFailures++;
+                    console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
+                    if (consecutiveLoopFailures >= 3) {
+                        consecutiveLoopFailures = 0;
+                        shared.sessionToken = '';
+                        ipcRenderer.send('portal-error', {
+                            sessionId: 'GLOBAL',
+                            error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
+                            code: res.status,
+                            action: 'REQUIRE_REAUTH'
+                        });
+                    }
+                } else if (res.status === 422) {
+                    console.log(`[POLARYON LOOP] ⏳ Sala aguardando início ou pausada (422): ${purchaseId}. Mantendo no radar...`);
+                } else if (res.status === 404) {
+                    shared.synchronizedPurchases.delete(purchaseId);
+                    console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por não existir (${res.status}): ${purchaseId}`);
+                }
+            } catch (e) {
+                console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
+            }
         } // fim do batch
-    }, 3000);
+
+        // ⚡ Intervalo adaptativo
+        const warLevel = Math.max(...Array.from(_loopWarCycles.values()), 0);
+        const nextMs = warLevel >= 2 ? 150 : (warLevel >= 1 ? 500 : 3000);
+        if (warLevel >= 2) console.log(`%c[POLARYON LOOP] ⚔️ GUERRA DE LANCES! Polling=${nextMs}ms (war=${warLevel})`, 'color:#f59e0b;font-weight:bold;');
+        setTimeout(_adaptiveLoop, nextMs);
+    }
+    _adaptiveLoop();
 
     // =========================================================================
     // 🔍 SCANNER PROATIVO DE PARTICIPAÇÕES (v3.7.4)

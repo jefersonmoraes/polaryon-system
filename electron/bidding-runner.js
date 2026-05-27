@@ -158,6 +158,8 @@ class RoomRunner {
         this.active = true;
         this.timeoutId = null;
         this.itemRankingsMap = new Map(); // Persist real-time competitor rankings
+        this.lastBestValues = new Map();  // ⚡ Guerra: rastrea valorAtual por item para detectar mudança
+        this.warModeCycles = new Map();   // ⚡ Guerra: conta ciclos consecutivos com mudança de valor
     }
 
     async run() {
@@ -257,16 +259,37 @@ class RoomRunner {
                     serverOffset: this.clockSync.getServerTime() - Date.now()
                 });
 
+                // ⚡ GUERRA DE LANCES: detecta rajada de lances por mudança rápida de valorAtual
+                for (const mappedItem of mappedItems) {
+                    const sId = String(mappedItem.itemId);
+                    const prevBest = this.lastBestValues.get(sId);
+                    const currBest = mappedItem.valorAtual;
+                    if (prevBest !== undefined && prevBest !== currBest && currBest > 0) {
+                        // Valor mudou: incrementa contador de guerra
+                        this.warModeCycles.set(sId, (this.warModeCycles.get(sId) || 0) + 1);
+                    } else if (prevBest === currBest) {
+                        // Valor estável: decai gradualmente (1 ciclo de graça)
+                        const w = this.warModeCycles.get(sId) || 0;
+                        if (w > 0) this.warModeCycles.set(sId, w - 1);
+                    }
+                    this.lastBestValues.set(sId, currBest);
+                }
+
                 // 🏆 RANKING REAL via /lances/por-participante — busca assíncrona sem bloquear o polling
-                // Só busca em itens ativos para não gastar cota de rate-limit
+                // Em modo de guerra: atualiza em TODOS os ciclos. Normal: 1 item a cada 5s.
                 const activeItems = mappedItems.filter(it => {
                     const statusLower = String(it.status).toLowerCase();
                     const isClosed = statusLower.includes('encerrad') || statusLower.includes('finaliz') || statusLower.includes('cancel');
                     return !isClosed;
                 });
+                // Verifica se QUALQUER item ativo está em guerra
+                const itemsInWar = activeItems.filter(it => (this.warModeCycles.get(String(it.itemId)) || 0) >= 2);
+                const inWarMode = itemsInWar.length > 0;
+
                 if (activeItems.length > 0 && token) {
-                    // Limita a 1 item por ciclo para evitar 429
-                    const itemToCheck = activeItems[Math.floor(Date.now() / 5000) % activeItems.length];
+                    // Em guerra: busca todos os itens em guerra; fora: rotaciona 1 item a cada 5s
+                    const itemsToFetch = inWarMode ? itemsInWar : [activeItems[Math.floor(Date.now() / 5000) % activeItems.length]];
+                    const itemToCheck = itemsToFetch[0];
                     
                     const fetchRanking = async () => {
                         let cookieStr = '';
@@ -566,9 +589,12 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown para não spammar (Kamikaze: 500ms, Normal nos 30s finais: 1000ms, Normal geral: 2000ms)
+                            // Cooldown adaptativo: Guerra de lances (300ms) > Kamikaze (500ms) > Reta final 30s (800ms) > Normal (2000ms)
                             const now = Date.now();
-                            const cooldown = isKamikaze ? 500 : (tSeconds <= 30 ? 1000 : 2000);
+                            const itemWarCycles = this.warModeCycles.get(sId) || 0;
+                            const isInWarMode = itemWarCycles >= 2;
+                            const cooldown = isInWarMode ? 300 : (isKamikaze ? 500 : (tSeconds <= 30 ? 800 : 2000));
+                            if (isInWarMode) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA ATIVO (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 
@@ -720,23 +746,33 @@ class RoomRunner {
                 }
             }
 
-            // Polling dinâmico inteligente e adaptativo contra erro 422/429
-            let nextInterval = 10000; // Por padrão, ritmo passivo de 10s para evitar 429
+            // ⚡ POLLING ADAPTATIVO MULTI-MODO
+            // Guerra de lances → 150ms | Reta final 30s → 300ms | Reta final 60s → 500ms | Ativo normal → 800ms | Passivo → 10s
+            let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
+            // Verifica se há algum item em modo de guerra
+            let anyItemInWar = false;
+            for (const [, cycles] of this.warModeCycles) {
+                if (cycles >= 2) { anyItemInWar = true; break; }
+            }
+
             if (isBiddingActive) {
-                nextInterval = 1000;
-                if (minTimer <= 30) {
-                    nextInterval = 350; // Ritmo frenético de 350ms nos segundos finais! 🔥🚀
-                    console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA (${this.sessionId}): Item iminente a ${minTimer.toFixed(1)}s do fim! Polling ajustado para ${nextInterval}ms`);
+                if (anyItemInWar) {
+                    nextInterval = 150; // ⚔️ GUERRA DE LANCES: reage em 150ms!
+                    console.log(`[POLARYON MOTOR] ⚔️ GUERRA DE LANCES (${this.sessionId}): Rajada detectada! Polling=${nextInterval}ms`);
+                } else if (minTimer <= 30) {
+                    nextInterval = 300; // 🔥 Reta final <30s
+                    console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
                 } else if (minTimer <= 60) {
-                    nextInterval = 600; // Ritmo intermediário de 600ms
-                    console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado (${this.sessionId}): Item a ${minTimer.toFixed(1)}s do fim. Polling ajustado para ${nextInterval}ms`);
+                    nextInterval = 500; // ⚡ Reta final <60s
+                    console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
+                } else {
+                    nextInterval = 800; // Ativo estável
                 }
             } else {
-                // Se a sessão está inativa e em plano de fundo, polling de 10 segundos é suficiente e extremamente seguro
-                if (Math.random() < 0.1) { // Reduz poluição do log
-                    console.log(`[POLARYON MOTOR] 💤 Radar Passivo (${this.sessionId}) rodando a 10s para preservação de banda e proteção de IP (Anti-429).`);
+                if (Math.random() < 0.1) {
+                    console.log(`[POLARYON MOTOR] 💤 Radar Passivo (${this.sessionId}) a 10s (Anti-429).`);
                 }
             }
 
