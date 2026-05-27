@@ -869,6 +869,7 @@ export default function BiddingDashboardPage() {
                             ...it, 
                             portalTimer: existing.portalTimer,
                             portalDataHoraFimContagem: existing.portalDataHoraFimContagem,
+                            updatedAt: existing.updatedAt,
                             sid, 
                             meuValor: mergedMeuValor,
                             valorAtual: mergedValorAtual,
@@ -1009,15 +1010,17 @@ export default function BiddingDashboardPage() {
                                 mergedGanhador = "Você";
                             }
 
-                            // 🕒 Preserva timer e dataHoraFimContagem do portal-preload (mesmo cálculo do DOM Serpro)
+                            // 🕒 Preserva timer do portal-preload e timestamp de quando foi recebido
                             const portalTimer = it.timerSeconds !== undefined ? it.timerSeconds : existing.portalTimer;
                             const portalDataHoraFimContagem = it.dataHoraFimContagem || existing.portalDataHoraFimContagem;
+                            const updatedAt = timestamp || Date.now();
 
                             itemMap.set(key, { 
                                 ...existing, 
                                 ...it, 
                                 portalTimer,
                                 portalDataHoraFimContagem,
+                                updatedAt,
                                 sid, 
                                 meuValor: mergedMeuValor,
                                 valorAtual: mergedValorAtual,
@@ -2411,32 +2414,44 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.77)
+    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.78)
+    // O DOM do Serpro usa segundosParaEncerramento (server-side). Nossa prioridade:
+    // 1. segundosParaEncerramento bruto → decrementa por elapsed time (mesmo do DOM)
+    // 2. portalTimer (segundosParaEncerramento do portal-preload)
+    // 3. dataHoraFimContagem - Date.now() (fallback local)
     useEffect(() => {
-        const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
-        if (endTimeStr) {
-            const endTime = new Date(endTimeStr).getTime();
-            const now = Date.now();
-            const diff = (endTime - now) / 1000;
-            console.log(`[TIMER DIAG] ${item.itemId}: endTime=${endTime} now=${now} diff=${diff} source=${item.portalDataHoraFimContagem ? 'portal' : 'bidding'}`);
-            const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
-        } else if (item.portalTimer !== undefined && item.portalTimer !== null && item.portalTimer >= 0) {
-            const updatedAt = Date.now();
-            console.log(`[TIMER DIAG] ${item.itemId}: portalTimer fallback, val=${item.portalTimer}`);
+        const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer;
+        if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0) {
+            const receivedAt = item.updatedAt || Date.now();
             const tick = () => {
-                setTimeLeft(Math.max(0, item.portalTimer - (Date.now() - updatedAt) / 1000));
+                const elapsed = (Date.now() - receivedAt) / 1000;
+                setTimeLeft(Math.max(0, baseSeconds - elapsed));
             };
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
-        } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
-            console.log(`[TIMER DIAG] ${item.itemId}: timerSeconds fallback, val=${item.timerSeconds}`);
-            setTimeLeft(Math.max(0, item.timerSeconds));
+        } else if (item.portalTimer !== undefined && item.portalTimer !== null && item.portalTimer >= 0) {
+            const receivedAt = item.updatedAt || Date.now();
+            const tick = () => {
+                const elapsed = (Date.now() - receivedAt) / 1000;
+                setTimeLeft(Math.max(0, item.portalTimer - elapsed));
+            };
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
+        } else {
+            const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
+            if (endTimeStr) {
+                const endTime = new Date(endTimeStr).getTime();
+                const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
+                tick();
+                const interval = setInterval(tick, 100);
+                return () => clearInterval(interval);
+            } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
+                setTimeLeft(Math.max(0, item.timerSeconds));
+            }
         }
-    }, [item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.portalTimer, item.itemId]);
+    }, [item.segundosParaEncerramento, item.portalTimer, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.updatedAt, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {

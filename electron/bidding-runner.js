@@ -243,6 +243,7 @@ class RoomRunner {
                         status: item.faseTraduzido || item.fase || 'Em Disputa',
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
+                        segundosParaEncerramento: item.segundosParaEncerramento,
                         dataHoraFimContagem: item.dataHoraFimContagem,
                         officialMargin: item.variacaoMinimaEntreLances || 1,
                         officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V',

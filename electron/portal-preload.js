@@ -16,6 +16,15 @@
         pendingRankingTarget: null
     };
 
+    // Estabiliza serverOffset com média dos últimos N valores (Date header tem precisão de 1s)
+    const offsetHistory = [];
+    const OFFSET_SAMPLES = 5;
+    function smoothOffset(rawOffset) {
+        offsetHistory.push(rawOffset);
+        if (offsetHistory.length > OFFSET_SAMPLES) offsetHistory.shift();
+        return offsetHistory.reduce((a, b) => a + b, 0) / offsetHistory.length;
+    }
+
     // ⚡ CACHE ROTATIVO DE CAPTCHAS (v3.8.50)
     // Worker silencioso que pré-busca pares de captcha continuamente.
     // O disparo consome do cache instantaneamente em vez de esperar ~300ms.
@@ -587,10 +596,15 @@
                     const posFinal = !isNaN(numPos) ? String(numPos) : rawPos;
                     const meuValor = it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0);
                     const valorAtual = it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0);
-                    // 🕒 Timer preciso: calcula com dataHoraFimContagem - Date.now() (igual ao DOM do Serpro)
-                    const sigaTimer = it.dataHoraFimContagem
-                        ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
-                        : (it.segundosParaEncerramento || -1);
+                    // 🕒 Timer síncrono com o DOM do Serpro
+                    // O DOM usa segundosParaEncerramento (server-side). dataHoraFimContagem - Date.now()
+                    // pode divergir porque o relógio local pode estar diferente do servidor.
+                    const segundosRaw = it.segundosParaEncerramento;
+                    const sigaTimer = segundosRaw !== undefined && segundosRaw !== null && segundosRaw >= 0
+                        ? segundosRaw
+                        : (it.dataHoraFimContagem
+                            ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
+                            : -1);
                     return {
                         itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
@@ -600,6 +614,7 @@
                         status: it.faseTraduzido || it.fase || (it.situacaoItem || ''),
                         posicao: posFinal,
                         timerSeconds: sigaTimer,
+                        segundosParaEncerramento: segundosRaw,
                         dataHoraFimContagem: it.dataHoraFimContagem,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
@@ -630,13 +645,30 @@
                         }
                     }
                 }
+                // Estabiliza o offset (Date header tem precisão de 1s, causando saltos)
+                const stabilizedOffset = serverOffset !== undefined ? smoothOffset(serverOffset) : undefined;
+                if (stabilizedOffset !== undefined && serverOffset !== undefined) {
+                    // Atualiza shared com offset estabilizado para o ClockSync
+                    shared.stabilizedOffset = stabilizedOffset;
+                }
+
+                // Se o injector ainda não enviou siga-timer, usa o primeiro item para calcular
+                let sigaSecs = shared.sigaTimerSeconds;
+                if (sigaSecs === undefined && mappedItems.length > 0) {
+                    const first = mappedItems[0];
+                    if (first.segundosParaEncerramento !== undefined && first.segundosParaEncerramento >= 0) {
+                        sigaSecs = first.segundosParaEncerramento;
+                    } else if (first.timerSeconds !== undefined && first.timerSeconds >= 0) {
+                        sigaSecs = first.timerSeconds;
+                    }
+                }
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
                     timestamp: Date.now(),
-                    serverOffset: serverOffset,
+                    serverOffset: stabilizedOffset,
                     items: mappedItems,
-                    sigaTimerSeconds: shared.sigaTimerSeconds
+                    sigaTimerSeconds: sigaSecs
                 });
             }
         }
