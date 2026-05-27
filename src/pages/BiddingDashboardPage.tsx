@@ -136,6 +136,7 @@ export default function BiddingDashboardPage() {
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [serverOffset, setServerOffset] = useState(0);
     const [sigaTimerSeconds, setSigaTimerSeconds] = useState<number | undefined>(undefined);
+    const [sigaTimerReceivedAt, setSigaTimerReceivedAt] = useState<number>(0);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
@@ -926,6 +927,7 @@ export default function BiddingDashboardPage() {
                 }
                 if (sigaTimerSeconds !== undefined) {
                     setSigaTimerSeconds(sigaTimerSeconds);
+                    setSigaTimerReceivedAt(Date.now());
                 }
                 
                 // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
@@ -2070,6 +2072,8 @@ export default function BiddingDashboardPage() {
                                                 strategyConfig={getStrategy(sid, item.itemId || item.numero)}
                                                 onStartSniperTest={startSniperTest}
                                                 simulationMode={session.simulationMode}
+                                                sigaTimerSeconds={sigaTimerSeconds}
+                                                sigaTimerReceivedAt={sigaTimerReceivedAt}
                                             />
                                         ))
                                     ) : (
@@ -2236,7 +2240,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} sigaTimerSeconds={sigaTimerSeconds} sigaTimerReceivedAt={sigaTimerReceivedAt} />
                         ))}
                     </div>
                 </CardContent>
@@ -2331,7 +2335,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, sigaTimerSeconds, sigaTimerReceivedAt }: any) {
     // RANKING CORRETO: monta por participante (melhor lance de cada um)
     const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
         return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
@@ -2414,14 +2418,29 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.79)
-    // O DOM NÃO decrementa entre chamadas da API — ele SNAP para o valor de
-    // segundosParaEncerramento recebido e fica congelado até o próximo update.
-    // Nós fazemos o mesmo: exibe o valor recebido, sem interpolação entre updates.
+    // 🕒 CRONÔMETRO CONTÍNUO SÍNCRONO COM O DOM DO SERPRO (v3.8.81)
+    // Usa sigaTimerSeconds do injector (lido do DOM a cada 100ms) como fonte primária.
+    // Decrementa continuamente por elapsed time desde sigaTimerReceivedAt.
     useEffect(() => {
-        const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer;
+        let baseSeconds: number | undefined | null;
+        let receivedAt: number;
+
+        if (sigaTimerSeconds !== undefined && sigaTimerSeconds !== null && sigaTimerSeconds >= 0 && sigaTimerReceivedAt > 0) {
+            baseSeconds = sigaTimerSeconds;
+            receivedAt = sigaTimerReceivedAt;
+        } else {
+            baseSeconds = item.segundosParaEncerramento ?? item.portalTimer;
+            receivedAt = item.updatedAt || Date.now();
+        }
+
         if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0) {
-            setTimeLeft(Math.floor(baseSeconds));
+            const tick = () => {
+                const elapsed = (Date.now() - receivedAt) / 1000;
+                setTimeLeft(Math.max(0, baseSeconds - elapsed));
+            };
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
         } else {
             const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
             if (endTimeStr) {
@@ -2434,7 +2453,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 setTimeLeft(Math.max(0, item.timerSeconds));
             }
         }
-    }, [item.segundosParaEncerramento, item.portalTimer, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.updatedAt, item.itemId]);
+    }, [sigaTimerSeconds, sigaTimerReceivedAt, item.segundosParaEncerramento, item.portalTimer, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.updatedAt, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
