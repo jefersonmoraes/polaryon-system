@@ -169,6 +169,42 @@ export default function BiddingDashboardPage() {
     // 🔗 REFERÊNCIA DE SESSÃO ATIVA (v4.4.0): Fornece acesso síncrono ao sessionId nos callbacks assíncronos do IPC/Socket
     const sessionIdRef = useRef<string | null>(null);
 
+    // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
+    // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
+    // ignorando qualquer incompatibilidade de prefixo de sessionId (GLOBAL_, virtual_, HYBRID_, UUID)
+    const getRecentFiredBid = (itemId: string): { value: number; timestamp: number } | null => {
+        let bestMatch: { value: number; timestamp: number } | null = null;
+        const now = Date.now();
+        const itemIdStr = String(itemId);
+        
+        for (const [k, fired] of Object.entries(lastFiredBidRef.current)) {
+            if ((k === itemIdStr || k.endsWith(`_${itemIdStr}`)) && (now - fired.timestamp) < 15000) {
+                if (!bestMatch || fired.timestamp > bestMatch.timestamp) {
+                    bestMatch = fired;
+                }
+            }
+        }
+        return bestMatch;
+    };
+
+    const getRecentIntermediateBid = (itemId: string): { value: number; timestamp: number; duration?: number } | null => {
+        let bestMatch: { value: number; timestamp: number; duration?: number } | null = null;
+        const now = Date.now();
+        const itemIdStr = String(itemId);
+
+        for (const [k, inter] of Object.entries(lastIntermediateBidRef.current)) {
+            if ((k === itemIdStr || k.endsWith(`_${itemIdStr}`))) {
+                const duration = inter.duration !== undefined ? inter.duration : 30000;
+                if ((now - inter.timestamp) < duration) {
+                    if (!bestMatch || inter.timestamp > bestMatch.timestamp) {
+                        bestMatch = inter;
+                    }
+                }
+            }
+        }
+        return bestMatch;
+    };
+
     useEffect(() => { 
         itemsRef.current = items || []; 
     }, [items]);
@@ -265,10 +301,8 @@ export default function BiddingDashboardPage() {
                     const bestBid = Number(item.valorAtual || 0);
                     
                     // Considera também o lastFired para evitar loop se a API estiver lenta
-                    const lastFired = lastFiredBidRef.current[sId];
-                    const activeMyBid = (lastFired && (Date.now() - lastFired.timestamp) < 15000)
-                        ? Math.min(myBid, lastFired.value)
-                        : myBid;
+                    const lastFired = getRecentFiredBid(item.itemId);
+                    const activeMyBid = lastFired ? Math.min(myBid, lastFired.value) : myBid;
 
                     const isWinningByValue = (activeMyBid > 0 && bestBid > 0 && activeMyBid <= bestBid);
                     const isLosingPos = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
@@ -316,7 +350,7 @@ export default function BiddingDashboardPage() {
                                 
                                 // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): se acabamos de disparar um bid intermediário,
                                 // aguardamos a propagação da API para não cobrir o próprio lance (tempo reduzido ou nulo na reta final/kamikaze)
-                                const lastInter = lastIntermediateBidRef.current[sId];
+                                const lastInter = getRecentIntermediateBid(item.itemId);
                                 if (lastInter) {
                                     const currentDuration = lastInter.duration !== undefined ? lastInter.duration : 30000;
                                     if ((Date.now() - lastInter.timestamp) < currentDuration) {
@@ -406,10 +440,10 @@ export default function BiddingDashboardPage() {
                                 console.log(`[SNIPER] Lance bloqueado: R$ ${nextBid} não é melhor que seu último lance (R$ ${myCurrentBid}). Evitando erro 422.`);
                             } else if ((() => {
                                 // 🔒 DEDUP TTL: bloqueia redisparo do mesmo valor por 15 segundos (ignora ciclo React)
-                                const fired = lastFiredBidRef.current[sId];
+                                const fired = getRecentFiredBid(item.itemId);
                                 return fired && fired.value === nextBid && (Date.now() - fired.timestamp) < 15000;
                             })()) {
-                                console.debug(`[SNIPER] Dedup TTL: R$ ${nextBid} já foi enviado para Item ${sId} há menos de 5s. Aguardando confirmação...`);
+                                console.debug(`[SNIPER] Dedup TTL: R$ ${nextBid} já foi enviado para Item ${sId} há menos de 15s. Aguardando confirmação...`);
                             } else if (nextBid >= myMin) {
                                 if (nextBid >= currentBest && currentBest > 0) {
                                     console.log(`%c[SNIPER] Líder imbatível (R$ ${currentBest}). Enviando lance intermediário de R$ ${nextBid} para brigar por posição!`, "color: #eab308; font-weight: bold;");
@@ -430,11 +464,11 @@ export default function BiddingDashboardPage() {
                                 }]);
 
                                 // 🔒 Grava o lock TTL ANTES de enviar para bloquear reenvios imediatos
-                                lastFiredBidRef.current[sId] = { value: nextBid, timestamp: Date.now() };
+                                lastFiredBidRef.current[`${sId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now() };
                                 // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
                                 if (!isLeaderBeatable) {
                                     const freezeDuration = (isKamikaze || currentTimeLeft <= 15) ? 0 : (isRetaFinal ? 1500 : 30000);
-                                    lastIntermediateBidRef.current[sId] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
+                                    lastIntermediateBidRef.current[`${sId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
                                 }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
                                 
@@ -515,10 +549,14 @@ export default function BiddingDashboardPage() {
         }
 
         // 🔥 Grava o lock TTL do lance de forma global (evita múltiplos disparos manuais e automáticos)
-        lastFiredBidRef.current[itemId] = { value, timestamp: Date.now() };
+        const activeSid = sid || sessionId;
+        if (activeSid) {
+            lastFiredBidRef.current[`${activeSid}_${itemId}`] = { value, timestamp: Date.now() };
+        } else {
+            lastFiredBidRef.current[itemId] = { value, timestamp: Date.now() };
+        }
 
         // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA (v3.8.56): Evita múltiplos disparos do mesmo valor e erros 422 em tempo real
-        const activeSid = sid || sessionId;
         if (activeSid) {
             // Atualiza a referência em tempo real do sniper instantaneamente
             if (Array.isArray(itemsRef.current)) {
@@ -766,8 +804,8 @@ export default function BiddingDashboardPage() {
                         // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
                         let mergedMeuValor = it.meuValor;
                         let mergedValorAtual = it.valorAtual;
-                        const lastFired = lastFiredBidRef.current[String(it.itemId)];
-                        if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                        const lastFired = getRecentFiredBid(it.itemId);
+                        if (lastFired) {
                             if (!it.meuValor || it.meuValor > lastFired.value) {
                                 mergedMeuValor = lastFired.value;
                             }
@@ -873,8 +911,8 @@ export default function BiddingDashboardPage() {
                             // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
                             let mergedMeuValor = it.meuValor;
                             let mergedValorAtual = it.valorAtual;
-                            const lastFired = lastFiredBidRef.current[key];
-                            if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                            const lastFired = getRecentFiredBid(it.itemId);
+                            if (lastFired) {
                                 if (!it.meuValor || it.meuValor > lastFired.value) {
                                     mergedMeuValor = lastFired.value;
                                 }
@@ -1001,8 +1039,8 @@ export default function BiddingDashboardPage() {
                                  let melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
                                  let melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
                                   const itemIdStr = item.identificador || (item.numero ? item.numero.toString() : '0');
-                                  const lastFired = lastFiredBidRef.current[itemIdStr];
-                                  if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                                  const lastFired = getRecentFiredBid(itemIdStr);
+                                  if (lastFired) {
                                       if (melhorMeu === 0 || melhorMeu > lastFired.value) melhorMeu = lastFired.value;
                                       if (melhorGeral === 0 || melhorGeral > lastFired.value) melhorGeral = lastFired.value;
                                   }
@@ -1078,8 +1116,8 @@ export default function BiddingDashboardPage() {
                             }
 
                             // Proteção do lastFired recente (< 15s)
-                            const lastFired = lastFiredBidRef.current[String(itemId)];
-                            if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                            const lastFired = getRecentFiredBid(itemId);
+                            if (lastFired) {
                                 if (!finalMeuValor || lastFired.value < finalMeuValor) {
                                     finalMeuValor = lastFired.value;
                                 }
