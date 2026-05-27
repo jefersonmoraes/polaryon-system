@@ -158,17 +158,20 @@ export default function BiddingDashboardPage() {
     const itemsRef = useRef(items);
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
+    const serverOffsetRef = useRef<number>(serverOffset);
     // 🔒 DEDUPLICADOR COM TTL (v3.8.59): bloqueia redisparo do mesmo valor por 5s, independente do ciclo React
     const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
     // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
     // para aguardar a API propagar nosso lance antes de re-avaliar concorrentes.
-    const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number }>>({}); 
+    const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number; duration?: number }>>({}); 
 
     useEffect(() => { 
-        if (items && items.length > 0) {
-            itemsRef.current = items; 
-        }
+        itemsRef.current = items || []; 
     }, [items]);
+
+    useEffect(() => {
+        serverOffsetRef.current = serverOffset;
+    }, [serverOffset]);
 
     // 🔄 SINCRONIZADOR DE ESTADO DE ITENS ATIVOS EM TEMPO REAL (v3.8.54)
     useEffect(() => {
@@ -214,6 +217,8 @@ export default function BiddingDashboardPage() {
             const currentItems = itemsRef.current;
             const configs = configsRef.current;
             const lastAutoBidTimesLocal = lastBidTimesRef.current;
+            const currentServerOffset = serverOffsetRef.current;
+            const activeServerTime = Date.now() + currentServerOffset;
 
             if (!currentItems || currentItems.length === 0) return;
 
@@ -227,9 +232,17 @@ export default function BiddingDashboardPage() {
 
                 const tSeconds = isNaN(Number(item.timerSeconds)) ? -1 : Number(item.timerSeconds);
 
+                // 🔥 Sincronia absoluta de tempo restante para a reta final
+                let currentTimeLeft = tSeconds;
+                if (item.dataHoraFimContagem && activeServerTime) {
+                    const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    currentTimeLeft = Math.max(0, Math.floor((endTime - activeServerTime) / 1000));
+                }
+                const isRetaFinal = currentTimeLeft > 0 && currentTimeLeft <= 30;
+
                 // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
-                if (tSeconds <= 40 && tSeconds > 0) {
-                    console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${tSeconds}s | Perdedor: ${item.posicao !== '1'}`);
+                if (currentTimeLeft <= 40 && currentTimeLeft > 0) {
+                    console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${currentTimeLeft}s | Perdedor: ${item.posicao !== '1'}`);
                 }
 
                 // 🔥 SNIPER ATIVO IMEDIATAMENTE (sem trava de 30s)
@@ -238,7 +251,13 @@ export default function BiddingDashboardPage() {
                     const myBid = Number(item.meuValor || 99999999);
                     const bestBid = Number(item.valorAtual || 0);
                     
-                    const isWinningByValue = (myBid > 0 && bestBid > 0 && myBid <= bestBid);
+                    // Considera também o lastFired para evitar loop se a API estiver lenta
+                    const lastFired = lastFiredBidRef.current[sId];
+                    const activeMyBid = (lastFired && (Date.now() - lastFired.timestamp) < 15000)
+                        ? Math.min(myBid, lastFired.value)
+                        : myBid;
+
+                    const isWinningByValue = (activeMyBid > 0 && bestBid > 0 && activeMyBid <= bestBid);
                     const isLosingPos = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
                     
                     // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição é desconhecida mas o valor indica perda, atira!)
@@ -257,8 +276,8 @@ export default function BiddingDashboardPage() {
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
-                        // ⚡ Cooldown ultra-rápido de 250ms constante (v3.8.52)
-                        const cooldown = 250; 
+                        // ⚡ Cooldown adaptativo: 0ms nos 30s finais ou se Kamikaze ativado, senão 250ms
+                        const cooldown = (isKamikaze || isRetaFinal) ? 0 : 250;
                         if (now - lastBid > cooldown) {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
@@ -281,12 +300,16 @@ export default function BiddingDashboardPage() {
                                 // Se o líder não é batível, procuramos no ranking o melhor concorrente (menor valor)
                                 // que conseguimos bater respeitando o nosso mínimo (myMin).
                                 let targetCompetitorBid = null;
-                                // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): se acabamos de disparar um bid intermediário
-                                // nos últimos 30s, aguardamos a propagação da API para não cobrir o próprio lance.
+                                
+                                // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): se acabamos de disparar um bid intermediário,
+                                // aguardamos a propagação da API para não cobrir o próprio lance (tempo reduzido ou nulo na reta final/kamikaze)
                                 const lastInter = lastIntermediateBidRef.current[sId];
-                                if (lastInter && (Date.now() - lastInter.timestamp) < 30000) {
-                                    console.debug(`[SNIPER] Aguardando propagação do bid intermediário de R$ ${lastInter.value} (${Math.round((Date.now() - lastInter.timestamp)/1000)}s atrás). Congelado por 30s.`);
-                                    return;
+                                if (lastInter) {
+                                    const currentDuration = lastInter.duration !== undefined ? lastInter.duration : 30000;
+                                    if ((Date.now() - lastInter.timestamp) < currentDuration) {
+                                        console.debug(`[SNIPER] Aguardando propagação do bid intermediário de R$ ${lastInter.value} (${Math.round((Date.now() - lastInter.timestamp)/1000)}s atrás). Congelado por ${currentDuration/1000}s.`);
+                                        return;
+                                    }
                                 }
 
                                 if (item.rankingLances && item.rankingLances.length > 0) {
@@ -298,15 +321,18 @@ export default function BiddingDashboardPage() {
                                     // Filtra lances que não são nossos (excluindo __EU__ E qualquer valor == myCurrentBid
                                     // como proteção dupla caso a API não propague a flag eMeuLance a tempo)
                                     const myBidRounded = Math.floor(myCurrentBid * 100) / 100;
+                                    const lastFiredValRounded = lastFired ? Math.floor(lastFired.value * 100) / 100 : null;
+
                                     const competitorBids = computedRanking
                                         .filter(r => r.participante !== '__EU__')
                                         .map(r => safeParseNumber(r.valor))
                                         .filter(val => {
                                             if (val <= 0) return false;
-                                            // 🛡️ Proteção dupla: exclui valores iguais ao nosso lance atual
-                                            // para evitar cobrir o próprio bid retornado pela API sem flag
+                                            // 🛡️ Proteção dupla: exclui valores iguais ao nosso lance atual ou ao recém-enviado
                                             const valRounded = Math.floor(val * 100) / 100;
-                                            return Math.abs(valRounded - myBidRounded) > 0.001;
+                                            if (Math.abs(valRounded - myBidRounded) <= 0.001) return false;
+                                            if (lastFiredValRounded !== null && Math.abs(valRounded - lastFiredValRounded) <= 0.001) return false;
+                                            return true;
                                         })
                                         .sort((a, b) => a - b); // Ordena do menor (melhor posição) para o maior
 
@@ -379,7 +405,8 @@ export default function BiddingDashboardPage() {
                                 lastFiredBidRef.current[sId] = { value: nextBid, timestamp: Date.now() };
                                 // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
                                 if (!isLeaderBeatable) {
-                                    lastIntermediateBidRef.current[sId] = { value: nextBid, timestamp: Date.now() };
+                                    const freezeDuration = (isKamikaze || currentTimeLeft <= 15) ? 0 : (isRetaFinal ? 1500 : 30000);
+                                    lastIntermediateBidRef.current[sId] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
                                 }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
                                 
@@ -391,7 +418,7 @@ export default function BiddingDashboardPage() {
                     }
                 }
             });
-        }, 200); // ⚡ Loop ultra-rápido (v3.8.51)
+        }, 50); // ⚡ Loop ultra-rápido de 50ms (v4.2.0)
 
         return () => clearInterval(autoBidInterval);
     }, [isListening]);
@@ -459,9 +486,26 @@ export default function BiddingDashboardPage() {
             return;
         }
 
+        // 🔥 Grava o lock TTL do lance de forma global (evita múltiplos disparos manuais e automáticos)
+        lastFiredBidRef.current[itemId] = { value, timestamp: Date.now() };
+
         // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA (v3.8.56): Evita múltiplos disparos do mesmo valor e erros 422 em tempo real
         const activeSid = sid || sessionId;
         if (activeSid) {
+            // Atualiza a referência em tempo real do sniper instantaneamente
+            if (Array.isArray(itemsRef.current)) {
+                itemsRef.current = itemsRef.current.map((it) => {
+                    if (String(it.itemId) === String(itemId)) {
+                        return {
+                            ...it,
+                            meuValor: value,
+                            valorAtual: simulationMode ? value : Math.min(Number(it.valorAtual || 99999999), value),
+                            posicao: simulationMode ? "1" : it.posicao
+                        };
+                    }
+                    return it;
+                });
+            }
             setSessions(prev => {
                 const updated = { ...prev };
                 if (updated[activeSid]) {
@@ -687,7 +731,29 @@ export default function BiddingDashboardPage() {
                         const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
                             ? it.posicao
                             : (existing.posicao || it.posicao);
-                        itemMap.set(it.itemId, { ...existing, ...it, sid, rankingLances: mergedRanking, posicao: mergedPosicao });
+
+                        // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
+                        let mergedMeuValor = it.meuValor;
+                        let mergedValorAtual = it.valorAtual;
+                        const lastFired = lastFiredBidRef.current[String(it.itemId)];
+                        if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                            if (!it.meuValor || it.meuValor > lastFired.value) {
+                                mergedMeuValor = lastFired.value;
+                            }
+                            if (!it.valorAtual || it.valorAtual > lastFired.value) {
+                                mergedValorAtual = lastFired.value;
+                            }
+                        }
+
+                        itemMap.set(it.itemId, { 
+                            ...existing, 
+                            ...it, 
+                            sid, 
+                            meuValor: mergedMeuValor,
+                            valorAtual: mergedValorAtual,
+                            rankingLances: mergedRanking, 
+                            posicao: mergedPosicao 
+                        });
                     });
 
                     updated[sid] = {
@@ -772,7 +838,30 @@ export default function BiddingDashboardPage() {
                             const mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
                                 ? it.posicao
                                 : (existing.posicao || it.posicao);
-                            itemMap.set(key, { ...existing, ...it, sid, rankingLances: mergedRanking, posicao: mergedPosicao, id: key });
+
+                            // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
+                            let mergedMeuValor = it.meuValor;
+                            let mergedValorAtual = it.valorAtual;
+                            const lastFired = lastFiredBidRef.current[key];
+                            if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                                if (!it.meuValor || it.meuValor > lastFired.value) {
+                                    mergedMeuValor = lastFired.value;
+                                }
+                                if (!it.valorAtual || it.valorAtual > lastFired.value) {
+                                    mergedValorAtual = lastFired.value;
+                                }
+                            }
+
+                            itemMap.set(key, { 
+                                ...existing, 
+                                ...it, 
+                                sid, 
+                                meuValor: mergedMeuValor,
+                                valorAtual: mergedValorAtual,
+                                rankingLances: mergedRanking, 
+                                posicao: mergedPosicao, 
+                                id: key 
+                            });
                         });
 
                         updated[sid] = {
@@ -878,8 +967,14 @@ export default function BiddingDashboardPage() {
                                      setIsListening(true);
                                  }
 
-                                 const melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
-                                 const melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
+                                 let melhorGeral = (item.melhorValorGeral ? (item.melhorValorGeral.valorInformado ?? item.melhorValorGeral.valorCalculado) : 0) || 0;
+                                 let melhorMeu = (item.melhorValorFornecedor ? (item.melhorValorFornecedor.valorInformado ?? item.melhorValorFornecedor.valorCalculado) : 0) || 0;
+                                  const itemIdStr = item.identificador || (item.numero ? item.numero.toString() : '0');
+                                  const lastFired = lastFiredBidRef.current[itemIdStr];
+                                  if (lastFired && (Date.now() - lastFired.timestamp) < 15000) {
+                                      if (melhorMeu === 0 || melhorMeu > lastFired.value) melhorMeu = lastFired.value;
+                                      if (melhorGeral === 0 || melhorGeral > lastFired.value) melhorGeral = lastFired.value;
+                                  }
                                  let pos = String(item.posicaoParticipanteDisputa || '').trim().toUpperCase();
                                  if (!pos || pos === '0' || pos === '?') {
                                      const rows = Array.from(document.querySelectorAll('tr, .cp-item-row, .ng-star-inserted'));
@@ -892,7 +987,7 @@ export default function BiddingDashboardPage() {
                                  const isWinner = pos === '1' || pos === '1º' || pos === 'V' || pos === 'VENCEDOR' || pos === '1°';
                                  
                                  newSessions[sid].items.push({
-                                     itemId: item.identificador || (item.numero ? item.numero.toString() : '0'),
+                                     itemId: itemIdStr || item.identificador || (item.numero ? item.numero.toString() : '0'),
                                      purchaseId: fullId,
                                      valorAtual: melhorGeral, 
                                      meuValor: melhorMeu, 
