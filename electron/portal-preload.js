@@ -622,7 +622,7 @@
                 } else if (dateHeader) {
                     const serverTime = new Date(dateHeader).getTime();
                     if (!isNaN(serverTime)) {
-                        serverOffset = (serverTime + 500 + rtt / 2) - (tEnd || Date.now());
+                        serverOffset = (serverTime + rtt / 2) - (tEnd || Date.now());
                     }
                 }
                 ipcRenderer.send('send-portal-data', {

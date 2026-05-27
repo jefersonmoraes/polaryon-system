@@ -133,7 +133,7 @@ class ClockSync {
         } else if (serverDateHeader) {
             const serverTime = new Date(serverDateHeader).getTime();
             if (!isNaN(serverTime)) {
-                this.serverTimeAtLastUpdate = serverTime + 500 + (rtt / 2);
+                this.serverTimeAtLastUpdate = serverTime + (rtt / 2);
                 this.localTimeAtLastUpdate = now;
             }
         }
@@ -207,13 +207,14 @@ class RoomRunner {
                     }
                     
                     let secondsLeft = item.segundosParaEncerramento;
-                    if (secondsLeft === undefined || secondsLeft === null) {
-                        if (item.dataHoraFimContagem) {
-                            const endTime = new Date(item.dataHoraFimContagem).getTime();
-                            secondsLeft = Math.max(0, (endTime - serverNow) / 1000);
-                        } else {
-                            secondsLeft = -1;
-                        }
+                    if (secondsLeft !== undefined && secondsLeft !== null && secondsLeft >= 0) {
+                        const rttSeconds = (tEnd - tStart) / 2000;
+                        secondsLeft = Math.max(0, secondsLeft - rttSeconds);
+                    } else if (item.dataHoraFimContagem) {
+                        const endTime = new Date(item.dataHoraFimContagem).getTime();
+                        secondsLeft = Math.max(0, (endTime - serverNow) / 1000);
+                    } else {
+                        secondsLeft = -1;
                     }
 
                     // Apenas considera itens ativos na fase de disputa (LA) para aceleração
