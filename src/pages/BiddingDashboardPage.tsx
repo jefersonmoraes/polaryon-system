@@ -239,11 +239,11 @@ export default function BiddingDashboardPage() {
         }
     }, [sessionId, isDesktop]);
 
-    // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.6.13
+    // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.8.73 — atualiza a cada 100ms para cronômetro contínuo
     useEffect(() => {
         const timer = setInterval(() => {
             setServerTime(Date.now() + serverOffset);
-        }, 1000);
+        }, 100);
         return () => clearInterval(timer);
     }, [serverOffset]);
 
@@ -2354,7 +2354,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     const [active, setActive] = useState(
         currentStrat.active !== undefined ? currentStrat.active : (item.active || false)
     );
-    const [timeLeft, setTimeLeft] = useState(item.timerSeconds || 0);
+    const [timeLeft, setTimeLeft] = useState<number>(item.timerSeconds || 0);
 
     const [useFourDecimals, setUseFourDecimals] = useState(
         currentStrat.useFourDecimals !== undefined ? currentStrat.useFourDecimals : (item.useFourDecimals || false)
@@ -2385,11 +2385,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🔥 FIX CRONÔMETRO: Sincronia absoluta baseada em dataHoraFimContagem e serverTime
+    // 🔥 CRONÔMETRO CONTÍNUO v3.8.73: sem Math.floor, preserva sub-segundos
     useEffect(() => {
         if (item.dataHoraFimContagem && serverTime) {
             const endTime = new Date(item.dataHoraFimContagem).getTime();
-            const diff = Math.max(0, Math.floor((endTime - serverTime) / 1000));
+            const diff = Math.max(0, (endTime - serverTime) / 1000);
             setTimeLeft(diff);
         } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
             setTimeLeft(Math.max(0, item.timerSeconds));
@@ -2543,15 +2543,19 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     };
 
     const formatTime = (seconds: number) => {
-        if (seconds <= 0) return '00:00:00';
+        if (seconds <= 0) return '00:00.0';
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
+        const ds = Math.floor((seconds % 1) * 10);
         
         if (h > 0) {
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        if (m > 0 || s >= 10) {
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ds}`;
+        }
+        return `${s}:${ds}`;
     };
 
     return (
