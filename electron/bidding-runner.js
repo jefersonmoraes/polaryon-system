@@ -110,10 +110,33 @@ class ClockSync {
         this.serverTimeAtLastUpdate = Date.now();
         this.localTimeAtLastUpdate = Date.now();
     }
-    update(serverDateHeader) {
-        if (!serverDateHeader) return;
-        this.serverTimeAtLastUpdate = new Date(serverDateHeader).getTime();
-        this.localTimeAtLastUpdate = Date.now();
+    update(serverDateHeader, itemsList, tStart, tEnd) {
+        const now = tEnd || Date.now();
+        const rtt = (tStart && tEnd) ? (tEnd - tStart) : 0;
+        let calculatedServerTime = null;
+
+        if (Array.isArray(itemsList)) {
+            for (const item of itemsList) {
+                if (item.dataHoraFimContagem && item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0) {
+                    const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    if (!isNaN(endTime)) {
+                        calculatedServerTime = (endTime - item.segundosParaEncerramento * 1000) + (rtt / 2);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (calculatedServerTime !== null) {
+            this.serverTimeAtLastUpdate = calculatedServerTime;
+            this.localTimeAtLastUpdate = now;
+        } else if (serverDateHeader) {
+            const serverTime = new Date(serverDateHeader).getTime();
+            if (!isNaN(serverTime)) {
+                this.serverTimeAtLastUpdate = serverTime + 500 + (rtt / 2);
+                this.localTimeAtLastUpdate = now;
+            }
+        }
     }
     getServerTime() {
         const elapsed = Date.now() - this.localTimeAtLastUpdate;
@@ -152,6 +175,7 @@ class RoomRunner {
 
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
             
+            const tStart = Date.now();
             const res = await axios.get(url, {
                 httpsAgent: this.agent,
                 headers: { 
@@ -161,9 +185,10 @@ class RoomRunner {
                     'x-version-number': '6.0.2'
                 }
             });
+            const tEnd = Date.now();
 
-            this.clockSync.update(res.headers.date);
             const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
+            this.clockSync.update(res.headers.date, itemsList, tStart, tEnd);
             
             let minTimer = Infinity;
 

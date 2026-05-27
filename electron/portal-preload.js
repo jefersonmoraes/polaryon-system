@@ -228,126 +228,13 @@
     // -------------------------------------------------------------------------
     // SISTEMA DE INTERCEPTAÇÃO DE REDE (O "ESCUTA-GERAL")
     // -------------------------------------------------------------------------
-    function processSerproData(data, url, dateHeader) {
-        console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
-
-        if (url.includes('/participacoes')) {
-            // 🔥 FILTRO INTELIGENTE ULTRA-RIGOROSO: Ignora abas "Em Andamento" ou "Agendadas"
-            // e foca unicamente nas salas ativas em disputa (situacao=3 ou contendo "DISPUTA")
-            const isDisputaQuery = url.includes('situacao=3') || url.includes('situacao=EM_DISPUTA') || url.includes('fase=disputa') || url.includes('situacao=disputa');
-            const hasOtherFilters = url.includes('situacao=1') || url.includes('situacao=2') || url.includes('situacao=4') || url.includes('AGENDADA') || url.includes('EM_ANDAMENTO') || url.includes('ENCERRADA');
-            
-            if (hasOtherFilters && !isDisputaQuery) {
-                console.log(`%c[POLARYON] Ignorando participações fora da aba de Disputa Ativa: ${url}`, "color: #94a3b8; font-size: 10px; font-weight: bold;");
-                return;
-            }
-
-            const listObj = Array.isArray(data) ? data : (data.itens || []);
-            listObj.forEach(p => {
-                // Filtro individual rigoroso por qualquer campo de situação presente no objeto
-                const situacaoRaw = p.situacao || (p.compra && p.compra.situacao) || p.situacaoCompra || (p.compra && p.compra.situacaoCompra) || p.situacaoParticipacao || '';
-                const situacaoStr = String(situacaoRaw).toUpperCase();
-                
-                if (situacaoRaw) {
-                    // ✅ Aceita apenas EM_DISPUTA / DISPUTA (código 3) — exclui DISPUTA_ENCERRADA explicitamente
-                    const isDisputa = (situacaoStr.includes('DISPUTA') || situacaoStr === '3') && !situacaoStr.includes('ENCERRADA') && !situacaoStr.includes('ENCERRADO');
-                    if (!isDisputa) {
-                        return; // Descarte imediato
-                    }
-                } else {
-                    // Sem campos de situação, descarta preventivamente se a consulta for de outra aba
-                    if (hasOtherFilters && !isDisputaQuery) return;
-                }
-
-                if (p.compra && p.compra.numeroUasg && p.compra.numero) {
-                    const uasg = String(p.compra.numeroUasg).padStart(6, '0');
-                    const numero = p.compra.numero;
-                    const ano = p.compra.ano;
-                    const modalityCode = String(p.compra.modalidade || '6').padStart(2, '0');
-                    const purchaseId = `${uasg}${modalityCode}${String(numero).padStart(5, '0')}${ano}`;
-                    
-                    if (!shared.synchronizedPurchases.has(purchaseId)) {
-                        shared.synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DETECTOR] 🎯 Nova sala em disputa detectada: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                        
-                        // Notifica o processo Electron principal sobre a nova sala
-                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
-
-                        // ⚡ BUSCA IMEDIATA — não espera o round-robin
-                        if (shared.sessionToken) {
-                            const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-                            fetch(roomUrl, {
-                                headers: {
-                                    'Authorization': shared.sessionToken,
-                                    'Accept': 'application/json',
-                                    'x-device-platform': 'web',
-                                    'x-version-number': '6.0.2'
-                                }
-                            }).then(r => r.ok ? r.json().then(d => {
-                                const dateHeader = r.headers.get('Date') || r.headers.get('date') || '';
-                                processSerproData(d, roomUrl, dateHeader);
-                            }) : null)
-                              .catch(() => {});
-                        }
-                    }
-                }
-            });
-        } else {
-            const jsonStr = JSON.stringify(data || {});
-            const discoveredIds = jsonStr.match(/\b\d{17}\b/g);
-            if (discoveredIds && discoveredIds.length > 0) {
-                discoveredIds.forEach(purchaseId => {
-                    if (!shared.synchronizedPurchases.has(purchaseId)) {
-                        shared.synchronizedPurchases.add(purchaseId);
-                        console.log(`%c[POLARYON DETECTOR] Nova sala detectada por varredura de rede: ${purchaseId}`, "color: #10b981; font-weight: bold;");
-                        
-                        // Notifica o processo Electron principal sobre a nova sala
-                        ipcRenderer.send('portal-detected-room', { url: `compra=${purchaseId}` });
-                    }
-                });
-            }
-        }
-
-        const items = Array.isArray(data) ? data : (data.itens || []);
-        const match = url.match(/\/compras\/(\d+)\//);
-        const roomCode = match ? match[1] : null;
-
-        if (items.length > 0 && roomCode) {
-            if (typeof ipcRenderer !== 'undefined') {
-                let serverOffset = undefined;
-                if (dateHeader) {
-                    const serverTime = new Date(dateHeader).getTime();
-                    if (!isNaN(serverTime)) {
-                        serverOffset = serverTime - Date.now();
-                    }
-                }
-                ipcRenderer.send('send-portal-data', {
-                    type: 'portal-sync',
-                    roomCode: roomCode,
-                    timestamp: Date.now(),
-                    serverOffset: serverOffset,
-                    items: items.map(it => ({
-                        itemId: String(it.identificador || it.numero),
-                        purchaseId: roomCode,
-                        valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : it.melhorLance,
-                        meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : it.valorLanceProposta,
-                        status: it.faseTraduzido || it.fase,
-                        posicao: it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (it.situacaoParticipanteDisputa === 'G' ? 'GANHANDO' : 'PERDENDO'),
-                        timerSeconds: it.segundosParaEncerramento || -1,
-                        dataHoraFimContagem: it.dataHoraFimContagem,
-                        officialMargin: it.variacaoMinimaEntreLances || 1,
-                        officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
-                        desc: it.descricao
-                    }))
-                });
-            }
-        }
-    }
+    // (Nota: processSerproData antigo removido para evitar colisão e sombreamento)
 
     async function autoFetchPurchaseItems(purchaseId) {
         if (!shared.sessionToken) return;
         try {
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+            const tStart = Date.now();
             const res = await fetch(url, {
                 headers: {
                     'Authorization': shared.sessionToken,
@@ -356,11 +243,12 @@
                     'x-version-number': '6.0.2'
                 }
             });
+            const tEnd = Date.now();
             if (res.ok) {
                 const data = await res.json();
                 console.log(`%c[POLARYON AUTO FETCH] ✅ ${purchaseId}: ${Array.isArray(data) ? data.length + ' itens' : 'OK'}`, 'color: #10b981; font-size: 10px;');
                 const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
-                processSerproData(data, url, dateHeader);
+                processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
             } else {
                 console.warn(`[POLARYON AUTO FETCH] ⚠️ ${purchaseId}: status ${res.status}`);
             }
@@ -587,7 +475,7 @@
         activeRankingItems.forEach(target => enqueueRankingFetch(target, false));
     }, 45000);
 
-    function processSerproData(data, url, status, ok, dateHeader) {
+    function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
         if (typeof data === 'string') {
             try {
                 data = JSON.parse(data);
@@ -638,11 +526,13 @@
                             setTimeout(async () => {
                                 try {
                                     const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+                                    const tStart = Date.now();
                                     const r = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                                    const tEnd = Date.now();
                                     if (r.ok) {
                                          const d = await r.json();
                                          const dateHeader = r.headers.get('Date') || r.headers.get('date') || '';
-                                         processSerproData(d, roomUrl, r.status, r.ok, dateHeader);
+                                         processSerproData(d, roomUrl, r.status, r.ok, dateHeader, tStart, tEnd);
                                     } else if (r.status === 429) {
                                         console.warn(`[POLARYON DETECTOR] ⚠️ 429 para ${purchaseId}. Retentando em 15s...`);
                                         setTimeout(() => autoFetchPurchaseItems(purchaseId), 15000);
@@ -713,10 +603,26 @@
                     };
                 });
                 let serverOffset = undefined;
-                if (dateHeader) {
+                const rtt = (tStart && tEnd) ? (tEnd - tStart) : 0;
+                let calculatedServerTime = null;
+
+                // Tenta calcular o tempo do servidor usando segundosParaEncerramento do primeiro item ativo
+                for (const it of mappedItems) {
+                    if (it.dataHoraFimContagem && it.timerSeconds !== undefined && it.timerSeconds >= 0) {
+                        const endTime = new Date(it.dataHoraFimContagem).getTime();
+                        if (!isNaN(endTime)) {
+                            calculatedServerTime = (endTime - it.timerSeconds * 1000) + (rtt / 2);
+                            break;
+                        }
+                    }
+                }
+
+                if (calculatedServerTime !== null) {
+                    serverOffset = calculatedServerTime - (tEnd || Date.now());
+                } else if (dateHeader) {
                     const serverTime = new Date(dateHeader).getTime();
                     if (!isNaN(serverTime)) {
-                        serverOffset = serverTime - Date.now();
+                        serverOffset = (serverTime + 500 + rtt / 2) - (tEnd || Date.now());
                     }
                 }
                 ipcRenderer.send('send-portal-data', {
@@ -743,7 +649,7 @@
                     console.log('%c[POLARYON] 🔓 Captcha P1_... interceptado!', 'color:#10b981;font-weight:bold;font-size:11px;');
                 }
             } else if (type === 'serpro-data') {
-                processSerproData(data, url, status, ok, event.data.dateHeader);
+                processSerproData(data, url, status, ok, event.data.dateHeader, event.data.tStart, event.data.tEnd);
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
@@ -783,7 +689,7 @@
         (function() {
             let sessionToken = '';
             
-            function processSerproData(data, url, status, ok, dateHeader) {
+            function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
                 window.postMessage({
                     source: 'polaryon-injector',
                     type: 'serpro-data',
@@ -791,7 +697,9 @@
                     url,
                     status,
                     ok,
-                    dateHeader: dateHeader || ''
+                    dateHeader: dateHeader || '',
+                    tStart: tStart || 0,
+                    tEnd: tEnd || 0
                 }, '*');
             }
 
@@ -911,7 +819,9 @@
                         }, '*');
                     }
                 }
+                const tStart = Date.now();
                 const response = await originalFetch(...args);
+                const tEnd = Date.now();
                 const url = typeof args[0] === 'string' ? args[0] : args[0].url;
                 const captchaMatch = url.match(/[?&]captcha\d*=([^&]+)/);
                 if (captchaMatch) {
@@ -927,9 +837,9 @@
                         const dateHeader = response.headers.get('Date') || response.headers.get('date') || '';
                         const clone = response.clone();
                         clone.json()
-                            .then(data => processSerproData(data, url, response.status, response.ok, dateHeader))
+                            .then(data => processSerproData(data, url, response.status, response.ok, dateHeader, tStart, tEnd))
                             .catch(() => {
-                                clone.text().then(text => processSerproData(text, url, response.status, response.ok, dateHeader)).catch(() => {});
+                                clone.text().then(text => processSerproData(text, url, response.status, response.ok, dateHeader, tStart, tEnd)).catch(() => {});
                             });
                     } else if (response.status === 403 && url.includes('/lances/por-participante')) {
                         window.postMessage({
@@ -969,7 +879,10 @@
 
             const send = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.send = function() {
+                this._tStart = Date.now();
                 this.addEventListener('load', function() {
+                    const tEnd = Date.now();
+                    const tStart = this._tStart || tEnd;
                     const captchaMatch = this._url && this._url.match(/[?&]captcha\d*=([^&]+)/);
                     if (captchaMatch) {
                         window.postMessage({
@@ -990,9 +903,9 @@
                         const dateHeader = this.getResponseHeader('Date') || this.getResponseHeader('date') || '';
                         try {
                             const data = JSON.parse(this.responseText);
-                            processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader);
+                            processSerproData(data, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader, tStart, tEnd);
                         } catch (e) {
-                            processSerproData(this.responseText, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader);
+                            processSerproData(this.responseText, this._url, this.status, this.status >= 200 && this.status < 300, dateHeader, tStart, tEnd);
                         }
                     }
                 });
@@ -1198,6 +1111,7 @@
 
         try {
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
+            const tStart = Date.now();
             const res = await fetch(url, {
                 headers: {
                     'Authorization': shared.sessionToken,
@@ -1206,12 +1120,13 @@
                     'x-version-number': '6.0.2'
                 }
             });
+            const tEnd = Date.now();
 
             if (res.ok) {
                 consecutiveLoopFailures = 0; // Reset na tolerância
                 const data = await res.json();
                 const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
-                processSerproData(data, url, res.status, res.ok, dateHeader);
+                processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
             } else if (res.status === 401 || res.status === 403) {
                 consecutiveLoopFailures++;
                 console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
@@ -1248,6 +1163,7 @@
         if (!shared.sessionToken) return;
         try {
             const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=50&pagina=0&filtro=4`;
+            const tStart = Date.now();
             const res = await fetch(url, {
                 headers: {
                     'Authorization': shared.sessionToken,
@@ -1257,11 +1173,12 @@
                 },
                 signal: AbortSignal.timeout(15000)
             });
+            const tEnd = Date.now();
             if (res.ok) {
                  const data = await res.json();
                  console.log(`%c[POLARYON SCAN] 🔍 Varredura proativa de participações concluída.`, 'color: #6366f1; font-size: 10px;');
                  const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
-                 processSerproData(data, url, res.status, res.ok, dateHeader);
+                 processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
             }
         } catch (e) {
             // Silencioso
