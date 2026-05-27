@@ -2385,16 +2385,19 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🔥 CRONÔMETRO CONTÍNUO v3.8.73: sem Math.floor, preserva sub-segundos
+    // 🕒 CRONÔMETRO SÍNCRONO COM O DOM DO SERPRO (v3.8.75)
+    // Usa dataHoraFimContagem - Date.now() local, MESMO cálculo do timer do Siga
     useEffect(() => {
-        if (item.dataHoraFimContagem && serverTime) {
+        if (item.dataHoraFimContagem) {
             const endTime = new Date(item.dataHoraFimContagem).getTime();
-            const diff = Math.max(0, (endTime - serverTime) / 1000);
-            setTimeLeft(diff);
+            const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
         } else if (item.timerSeconds !== undefined && item.timerSeconds !== null) {
             setTimeLeft(Math.max(0, item.timerSeconds));
         }
-    }, [item.dataHoraFimContagem, item.timerSeconds, serverTime]);
+    }, [item.dataHoraFimContagem]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
