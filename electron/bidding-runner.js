@@ -103,7 +103,8 @@ class CaptchaManager {
 const captchaManager = new CaptchaManager();
 
 /**
- * ClockSync - Sincronizador de Relógio Atômico v2
+ * ClockSync - Sincronizador de Relógio Atômico v3
+ * Prioriza o HTTP Date header (autoritativo) sobre segundosParaEncerramento (inteiro truncado).
  */
 class ClockSync {
     constructor() {
@@ -113,28 +114,28 @@ class ClockSync {
     update(serverDateHeader, itemsList, tStart, tEnd) {
         const now = tEnd || Date.now();
         const rtt = (tStart && tEnd) ? (tEnd - tStart) : 0;
-        let calculatedServerTime = null;
 
+        // PRIORIDADE 1: HTTP Date header - timestamp oficial do servidor
+        if (serverDateHeader) {
+            const serverTime = new Date(serverDateHeader).getTime();
+            if (!isNaN(serverTime)) {
+                this.serverTimeAtLastUpdate = serverTime + (rtt / 2);
+                this.localTimeAtLastUpdate = now;
+                return;
+            }
+        }
+
+        // PRIORIDADE 2: Calcular via segundosParaEncerramento (fallback)
         if (Array.isArray(itemsList)) {
             for (const item of itemsList) {
                 if (item.dataHoraFimContagem && item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0) {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
                     if (!isNaN(endTime)) {
-                        calculatedServerTime = (endTime - item.segundosParaEncerramento * 1000) + (rtt / 2);
-                        break;
+                        this.serverTimeAtLastUpdate = (endTime - item.segundosParaEncerramento * 1000) + (rtt / 2);
+                        this.localTimeAtLastUpdate = now;
+                        return;
                     }
                 }
-            }
-        }
-
-        if (calculatedServerTime !== null) {
-            this.serverTimeAtLastUpdate = calculatedServerTime;
-            this.localTimeAtLastUpdate = now;
-        } else if (serverDateHeader) {
-            const serverTime = new Date(serverDateHeader).getTime();
-            if (!isNaN(serverTime)) {
-                this.serverTimeAtLastUpdate = serverTime + (rtt / 2);
-                this.localTimeAtLastUpdate = now;
             }
         }
     }
@@ -207,12 +208,12 @@ class RoomRunner {
                     }
                     
                     let secondsLeft = item.segundosParaEncerramento;
-                    if (secondsLeft !== undefined && secondsLeft !== null && secondsLeft >= 0) {
-                        const rttSeconds = (tEnd - tStart) / 2000;
-                        secondsLeft = Math.max(0, secondsLeft - rttSeconds);
-                    } else if (item.dataHoraFimContagem) {
+                    if (item.dataHoraFimContagem && serverNow) {
                         const endTime = new Date(item.dataHoraFimContagem).getTime();
                         secondsLeft = Math.max(0, (endTime - serverNow) / 1000);
+                    } else if (secondsLeft !== undefined && secondsLeft !== null && secondsLeft >= 0) {
+                        const rttSeconds = (tEnd - tStart) / 2000;
+                        secondsLeft = Math.max(0, secondsLeft - rttSeconds);
                     } else {
                         secondsLeft = -1;
                     }

@@ -604,25 +604,26 @@
                 });
                 let serverOffset = undefined;
                 const rtt = (tStart && tEnd) ? (tEnd - tStart) : 0;
-                let calculatedServerTime = null;
 
-                // Tenta calcular o tempo do servidor usando segundosParaEncerramento do primeiro item ativo
-                for (const it of mappedItems) {
-                    if (it.dataHoraFimContagem && it.timerSeconds !== undefined && it.timerSeconds >= 0) {
-                        const endTime = new Date(it.dataHoraFimContagem).getTime();
-                        if (!isNaN(endTime)) {
-                            calculatedServerTime = (endTime - it.timerSeconds * 1000) + (rtt / 2);
-                            break;
-                        }
-                    }
-                }
-
-                if (calculatedServerTime !== null) {
-                    serverOffset = calculatedServerTime - (tEnd || Date.now());
-                } else if (dateHeader) {
+                // PRIORIDADE 1: HTTP Date header - timestamp oficial do servidor
+                if (dateHeader) {
                     const serverTime = new Date(dateHeader).getTime();
                     if (!isNaN(serverTime)) {
                         serverOffset = (serverTime + rtt / 2) - (tEnd || Date.now());
+                    }
+                }
+
+                // PRIORIDADE 2: Fallback via segundosParaEncerramento (se Date header falhou)
+                if (serverOffset === undefined && Array.isArray(mappedItems)) {
+                    for (const it of mappedItems) {
+                        if (it.dataHoraFimContagem && it.timerSeconds !== undefined && it.timerSeconds >= 0) {
+                            const endTime = new Date(it.dataHoraFimContagem).getTime();
+                            if (!isNaN(endTime)) {
+                                const calculatedServerTime = (endTime - it.timerSeconds * 1000) + (rtt / 2);
+                                serverOffset = calculatedServerTime - (tEnd || Date.now());
+                                break;
+                            }
+                        }
                     }
                 }
                 ipcRenderer.send('send-portal-data', {
