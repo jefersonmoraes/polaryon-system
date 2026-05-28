@@ -277,7 +277,7 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante: WebSocket serverTime > serverOffset > segundosParaEncerramento
+                // 🔥 Tempo restante: WebSocket serverTime > DOM siga timer > segundosParaEncerramento
                 let currentTimeLeft: number;
                 const srvMs = serverTimeMsRef.current;
                 const srvReceivedAt = serverTimeReceivedAtRef.current;
@@ -285,10 +285,8 @@ export default function BiddingDashboardPage() {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
                     const serverNow = srvMs + (Date.now() - srvReceivedAt);
                     currentTimeLeft = Math.max(0, Math.floor((endTime - serverNow) / 1000));
-                } else if (item.dataHoraFimContagem && serverOffsetRef.current) {
-                    const endTime = new Date(item.dataHoraFimContagem).getTime();
-                    const serverNowE = Date.now() + serverOffsetRef.current;
-                    currentTimeLeft = Math.max(0, Math.floor((endTime - serverNowE) / 1000));
+                } else if (sigaTimerSecondsRef.current !== undefined && sigaTimerSecondsRef.current >= 0 && sigaTimerReceivedAtRef.current > 0) {
+                    currentTimeLeft = Math.max(0, Math.floor(sigaTimerSecondsRef.current - (Date.now() - sigaTimerReceivedAtRef.current) / 1000));
                 } else if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
                     currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
                 } else if (item.dataHoraFimContagem) {
