@@ -760,6 +760,7 @@
                 window.WebSocket = function(url, protocols) {
                     var ws = new OriginalWS(url, protocols);
                     if (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1) {
+                        console.log('%c[WS INTERCEPT] WebSocket criado: ' + url.substring(0, 80), 'color:#6366f1');
                         var origAddEventListener = ws.addEventListener.bind(ws);
                         ws.addEventListener = function(type, fn) {
                             if (type === 'message' && typeof fn === 'function') {
@@ -792,17 +793,23 @@
 
                 function tryParseServerTime(data) {
                     try {
-                        if (typeof data === 'string' && data.indexOf('/topic/dataHoraBrasilia') !== -1) {
-                            var match = data.match(/"([^"]+)"/);
-                            if (match && match[1]) {
-                                var serverTimeMs = new Date(match[1]).getTime();
-                                if (!isNaN(serverTimeMs)) {
-                                    window.postMessage({
-                                        source: 'polaryon-injector',
-                                        type: 'server-time',
-                                        serverTimeMs: serverTimeMs,
-                                        timestamp: Date.now()
-                                    }, '*');
+                        if (typeof data === 'string') {
+                            if (data.indexOf('/topic/dataHoraBrasilia') !== -1) {
+                                console.log('%c[WS RAW] STOMP frame with dataHoraBrasilia detected', 'color:#f59e0b');
+                                var match = data.match(/"([^"]+)"/);
+                                if (match && match[1]) {
+                                    var serverTimeMs = new Date(match[1]).getTime();
+                                    if (!isNaN(serverTimeMs)) {
+                                        console.log('%c[WS PARSED] Server time: ' + match[1] + ' -> ' + serverTimeMs + 'ms', 'color:#10b981;font-weight:bold');
+                                        window.postMessage({
+                                            source: 'polaryon-injector',
+                                            type: 'server-time',
+                                            serverTimeMs: serverTimeMs,
+                                            timestamp: Date.now()
+                                        }, '*');
+                                    }
+                                } else {
+                                    console.log('%c[WS PARTIAL] STOMP frame with dataHoraBrasilia but no quoted timestamp yet', 'color:#f59e0b');
                                 }
                             }
                         }
@@ -845,9 +852,39 @@
                 }
             }
 
-            // 🕒 Timer contínuo — usa segundosParaEncerramento (server-side, sem skew de clock)
+            // 🕒 Timer contínuo — lê do DOM do Siga (exato) ou fallback segundosParaEncerramento
+            var savedDomTimer = -1;
+            var savedDomTimerAt = 0;
+            function readDomTimer() {
+                try {
+                    var allEls = document.querySelectorAll('span, div, p, strong, b, label, td');
+                    var best = -1;
+                    for (var i = 0; i < allEls.length; i++) {
+                        var txt = (allEls[i].textContent || '').trim();
+                        if (/^\d{4,}\.\d{3}$/.test(txt)) {
+                            var val = parseFloat(txt);
+                            if (val > best) best = val;
+                        }
+                    }
+                    if (best > 0) {
+                        savedDomTimer = best;
+                        savedDomTimerAt = Date.now();
+                    }
+                } catch(e) {}
+            }
             setInterval(function() {
-                if (savedSegundos >= 0 && savedTimestamp > 0) {
+                // Tenta ler timer do DOM (mais preciso que segundosParaEncerramento)
+                readDomTimer();
+                if (savedDomTimer > 0 && savedDomTimerAt > 0) {
+                    var remainingSec = Math.max(0, savedDomTimer - (Date.now() - savedDomTimerAt) / 1000);
+                    window.postMessage({
+                        source: 'polaryon-injector',
+                        type: 'siga-timer',
+                        remainingMs: remainingSec * 1000,
+                        remainingSec: remainingSec,
+                        timestamp: Date.now()
+                    }, '*');
+                } else if (savedSegundos >= 0 && savedTimestamp > 0) {
                     var remainingSec = Math.max(0, savedSegundos - (Date.now() - savedTimestamp) / 1000);
                     window.postMessage({
                         source: 'polaryon-injector',
