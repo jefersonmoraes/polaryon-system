@@ -137,6 +137,7 @@ export default function BiddingDashboardPage() {
     const [serverOffset, setServerOffset] = useState(0);
     const [sigaTimerSeconds, setSigaTimerSeconds] = useState<number | undefined>(undefined);
     const [sigaTimerReceivedAt, setSigaTimerReceivedAt] = useState<number>(0);
+    const [syncEndTimeMs, setSyncEndTimeMs] = useState<number>(0);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [coveredItems, setCoveredItems] = useState<Set<string>>(new Set());
     const [isDesktop] = useState(!!(window as any).electronAPI?.isDesktop);
@@ -251,13 +252,19 @@ export default function BiddingDashboardPage() {
         }
     }, [sessionId, isDesktop]);
 
-    // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.8.73 — atualiza a cada 100ms para cronômetro contínuo
+    // 🎯 MOTOR DE SINCRONIA DE RELÓGIO v3.8.83 — deriva de dataHoraFimContagem - sigaTimerSeconds
     useEffect(() => {
         const timer = setInterval(() => {
-            setServerTime(Date.now() + serverOffset);
+            if (syncEndTimeMs > 0 && sigaTimerSeconds !== undefined && sigaTimerSeconds >= 0 && sigaTimerReceivedAt > 0) {
+                const elapsed = Date.now() - sigaTimerReceivedAt;
+                const serverNow = syncEndTimeMs - sigaTimerSeconds * 1000 + elapsed;
+                setServerTime(serverNow);
+            } else {
+                setServerTime(Date.now() + serverOffset);
+            }
         }, 100);
         return () => clearInterval(timer);
-    }, [serverOffset]);
+    }, [syncEndTimeMs, sigaTimerSeconds, sigaTimerReceivedAt, serverOffset]);
 
     // 🎯 MOTOR DE DISPARO INDEPENDENTE (v3.5.89)
     useEffect(() => {
@@ -940,6 +947,13 @@ export default function BiddingDashboardPage() {
                 if (sigaTimerSeconds !== undefined) {
                     setSigaTimerSeconds(sigaTimerSeconds);
                     setSigaTimerReceivedAt(Date.now());
+                }
+                // Extrai dataHoraFimContagem do primeiro item para o relógio de sincronismo
+                if (newItems?.length > 0 && newItems[0].dataHoraFimContagem) {
+                    const parsed = new Date(newItems[0].dataHoraFimContagem).getTime();
+                    if (!isNaN(parsed)) {
+                        setSyncEndTimeMs(parsed);
+                    }
                 }
                 
                 // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
