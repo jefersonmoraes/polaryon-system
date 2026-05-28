@@ -275,13 +275,9 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante usando sigaTimerSeconds do injector (DOM reading, v3.8.82)
-                const curSigaTimer = sigaTimerSecondsRef.current;
-                const curSigaReceivedAt = sigaTimerReceivedAtRef.current;
+                // 🔥 Tempo restante via segundosParaEncerramento (server-side, sem skew de clock, v3.8.87)
                 let currentTimeLeft: number;
-                if (curSigaTimer !== undefined && curSigaTimer >= 0 && curSigaReceivedAt > 0) {
-                    currentTimeLeft = Math.max(0, Math.floor(curSigaTimer - (Date.now() - curSigaReceivedAt) / 1000));
-                } else if (item.segundosParaEncerramento !== undefined && item.updatedAt) {
+                if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
                     currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
                 } else if (item.dataHoraFimContagem) {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
@@ -2407,17 +2403,24 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO CONTÍNUO — decrementa sigaTimerSeconds do injector (DOM reading, v3.8.87)
+    // 🕒 CRONÔMETRO via segundosParaEncerramento (server-side, sem skew de clock, v3.8.87)
     useEffect(() => {
+        const base = item.segundosParaEncerramento;
+        if (base !== undefined && base !== null && base >= 0 && item.updatedAt) {
+            const tick = () => setTimeLeft(Math.max(0, base - (Date.now() - item.updatedAt) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
+        }
         if (sigaTimerSeconds !== undefined && sigaTimerSeconds >= 0 && sigaTimerReceivedAt > 0) {
             const tick = () => setTimeLeft(Math.max(0, sigaTimerSeconds - (Date.now() - sigaTimerReceivedAt) / 1000));
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-        const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer ?? item.timerSeconds;
-        if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0) {
-            const tick = () => setTimeLeft(Math.max(0, baseSeconds - (Date.now() - (item.updatedAt || Date.now())) / 1000));
+        const baseSeconds = item.portalTimer ?? item.timerSeconds;
+        if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0 && item.updatedAt) {
+            const tick = () => setTimeLeft(Math.max(0, baseSeconds - (Date.now() - item.updatedAt) / 1000));
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
@@ -2430,7 +2433,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-    }, [sigaTimerSeconds, sigaTimerReceivedAt, item.segundosParaEncerramento, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.updatedAt, item.itemId]);
+    }, [item.segundosParaEncerramento, item.updatedAt, sigaTimerSeconds, sigaTimerReceivedAt, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {

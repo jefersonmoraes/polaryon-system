@@ -678,7 +678,7 @@
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
-                    timestamp: Date.now(),
+                    timestamp: tEnd || Date.now(),
                     serverOffset: stabilizedOffset,
                     items: mappedItems,
                     sigaTimerSeconds: sigaSecs
@@ -760,16 +760,18 @@
                 }, '*');
             }
 
-            // 🎯 Extrai dataHoraFimContagem da resposta da API para timer contínuo
+            // 🎯 Extrai dataHoraFimContagem + segundosParaEncerramento da resposta da API para timer contínuo
+            var savedSegundos = -1;
+            var savedTimestamp = 0;
             function extractEndTime(data) {
                 if (Array.isArray(data)) {
                     for (const item of data) {
                         if (item.dataHoraFimContagem) {
-                            const parsed = new Date(item.dataHoraFimContagem).getTime();
-                            if (!isNaN(parsed) && parsed > Date.now()) {
-                                polaryonEndTime = parsed;
-                                return;
-                            }
+                            polaryonEndTime = new Date(item.dataHoraFimContagem).getTime();
+                        }
+                        if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento !== null && item.segundosParaEncerramento >= 0) {
+                            savedSegundos = item.segundosParaEncerramento;
+                            savedTimestamp = Date.now();
                         }
                     }
                 } else if (data && data.itens && Array.isArray(data.itens)) {
@@ -777,15 +779,15 @@
                 }
             }
 
-            // 🕒 Timer contínuo que espelha o DOM do Serpro (mesmo Date.now(), mesma fórmula)
+            // 🕒 Timer contínuo — usa segundosParaEncerramento (server-side, sem skew de clock)
             setInterval(function() {
-                if (polaryonEndTime > 0) {
-                    var remainingMs = Math.max(0, polaryonEndTime - Date.now());
+                if (savedSegundos >= 0 && savedTimestamp > 0) {
+                    var remainingSec = Math.max(0, savedSegundos - (Date.now() - savedTimestamp) / 1000);
                     window.postMessage({
                         source: 'polaryon-injector',
                         type: 'siga-timer',
-                        remainingMs: remainingMs,
-                        remainingSec: remainingMs / 1000,
+                        remainingMs: remainingSec * 1000,
+                        remainingSec: remainingSec,
                         timestamp: Date.now()
                     }, '*');
                 }
