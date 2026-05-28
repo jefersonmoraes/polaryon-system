@@ -2100,8 +2100,6 @@ export default function BiddingDashboardPage() {
                                                 onStartSniperTest={startSniperTest}
                                                 simulationMode={session.simulationMode}
                                                 domCorrection={domCorrectionRef.current}
-                                                sigaTimerSeconds={sigaTimerSeconds}
-                                                sigaTimerReceivedAt={sigaTimerReceivedAt}
                                             />
                                         ))
                                     ) : (
@@ -2268,7 +2266,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} domCorrection={domCorrectionRef.current} sigaTimerSeconds={sigaTimerSeconds} sigaTimerReceivedAt={sigaTimerReceivedAt} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} domCorrection={domCorrectionRef.current} />
                         ))}
                     </div>
                 </CardContent>
@@ -2363,7 +2361,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, domCorrection, sigaTimerSeconds, sigaTimerReceivedAt }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, domCorrection }: any) {
     // RANKING CORRETO: monta por participante (melhor lance de cada um)
     const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
         return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
@@ -2446,16 +2444,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO: prioridade DOM timer → segundosParaEncerramento → dataHoraFimContagem (v3.8.95)
+    // 🕒 CRONÔMETRO SUAVE: segundosParaEncerramento + correção DOM (sem flutuação)
     useEffect(() => {
-        // PRIORIDADE 1: sigaTimerSeconds do DOM (preciso, em tempo real via injector)
-        if (sigaTimerSeconds !== undefined && sigaTimerSeconds >= 0 && sigaTimerReceivedAt > 0) {
-            const tick = () => setTimeLeft(Math.max(0, sigaTimerSeconds - (Date.now() - sigaTimerReceivedAt) / 1000));
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
-        }
-        // PRIORIDADE 2: segundosParaEncerramento + correção DOM
         const base = item.segundosParaEncerramento;
         if (base !== undefined && base !== null && base >= 0 && item.updatedAt) {
             const tick = () => setTimeLeft(Math.max(0, base - (Date.now() - item.updatedAt) / 1000 + (domCorrection || 0)));
@@ -2463,7 +2453,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-        // PRIORIDADE 3: portalTimer / timerSeconds (fallback)
         const baseSeconds = item.portalTimer ?? item.timerSeconds;
         if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0 && item.updatedAt) {
             const tick = () => setTimeLeft(Math.max(0, baseSeconds - (Date.now() - item.updatedAt) / 1000));
@@ -2471,7 +2460,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-        // PRIORIDADE 4: dataHoraFimContagem (último recurso)
         const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
         if (endTimeStr) {
             const endTime = new Date(endTimeStr).getTime();
@@ -2480,7 +2468,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-    }, [item.segundosParaEncerramento, item.updatedAt, domCorrection, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.itemId, sigaTimerSeconds, sigaTimerReceivedAt]);
+    }, [item.segundosParaEncerramento, item.updatedAt, domCorrection, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
