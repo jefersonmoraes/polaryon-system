@@ -275,14 +275,19 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante SNAP — igual ao DOM do Serpro (frozen entre API polls, v3.8.86)
-                const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer ?? item.timerSeconds;
-                let currentTimeLeft = baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0
-                    ? Math.floor(baseSeconds)
-                    : -1;
-                if (currentTimeLeft < 0 && item.dataHoraFimContagem) {
+                // 🔥 Tempo restante usando sigaTimerSeconds do injector (DOM reading, v3.8.82)
+                const curSigaTimer = sigaTimerSecondsRef.current;
+                const curSigaReceivedAt = sigaTimerReceivedAtRef.current;
+                let currentTimeLeft: number;
+                if (curSigaTimer !== undefined && curSigaTimer >= 0 && curSigaReceivedAt > 0) {
+                    currentTimeLeft = Math.max(0, Math.floor(curSigaTimer - (Date.now() - curSigaReceivedAt) / 1000));
+                } else if (item.segundosParaEncerramento !== undefined && item.updatedAt) {
+                    currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
+                } else if (item.dataHoraFimContagem) {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
                     currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+                } else {
+                    currentTimeLeft = -1;
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
@@ -2402,24 +2407,30 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SNAP — IGUAL AO DOM DO SERPRO (v3.8.86)
-    // O DOM usa segundosParaEncerramento da API e **não decrementa** entre updates.
-    // Nós fazemos o mesmo: snap para Math.floor(segundosParaEncerramento).
+    // 🕒 CRONÔMETRO CONTÍNUO — decrementa sigaTimerSeconds do injector (DOM reading, v3.8.87)
     useEffect(() => {
+        if (sigaTimerSeconds !== undefined && sigaTimerSeconds >= 0 && sigaTimerReceivedAt > 0) {
+            const tick = () => setTimeLeft(Math.max(0, sigaTimerSeconds - (Date.now() - sigaTimerReceivedAt) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
+        }
         const baseSeconds = item.segundosParaEncerramento ?? item.portalTimer ?? item.timerSeconds;
         if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0) {
-            setTimeLeft(Math.floor(baseSeconds));
-        } else {
-            const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
-            if (endTimeStr) {
-                const endTime = new Date(endTimeStr).getTime();
-                const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
-                tick();
-                const interval = setInterval(tick, 100);
-                return () => clearInterval(interval);
-            }
+            const tick = () => setTimeLeft(Math.max(0, baseSeconds - (Date.now() - (item.updatedAt || Date.now())) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
         }
-    }, [item.segundosParaEncerramento, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.itemId]);
+        const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
+        if (endTimeStr) {
+            const endTime = new Date(endTimeStr).getTime();
+            const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
+            tick();
+            const interval = setInterval(tick, 100);
+            return () => clearInterval(interval);
+        }
+    }, [sigaTimerSeconds, sigaTimerReceivedAt, item.segundosParaEncerramento, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.updatedAt, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
@@ -2572,14 +2583,15 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
+        const ds = Math.floor((seconds % 1) * 10);
         
         if (h > 0) {
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
         if (m > 0 || s >= 10) {
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ds}`;
         }
-        return `${s}`;
+        return `${s}:${ds}`;
     };
 
     return (
