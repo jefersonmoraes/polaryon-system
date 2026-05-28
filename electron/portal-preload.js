@@ -760,31 +760,25 @@
                 window.WebSocket = function(url, protocols) {
                     var ws = new OriginalWS(url, protocols);
                     if (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1) {
-                        var origOnMessage = ws.onmessage;
+                        var origAddEventListener = ws.addEventListener.bind(ws);
+                        ws.addEventListener = function(type, fn) {
+                            if (type === 'message' && typeof fn === 'function') {
+                                var wrappedFn = function(event) {
+                                    tryParseServerTime(event.data);
+                                    fn.call(ws, event);
+                                };
+                                return origAddEventListener(type, wrappedFn);
+                            }
+                            return origAddEventListener(type, fn);
+                        };
+                        var origOnMessage = null;
                         Object.defineProperty(ws, 'onmessage', {
                             get: function() { return origOnMessage; },
                             set: function(fn) {
                                 origOnMessage = function(event) {
-                                    try {
-                                        var data = event.data;
-                                        if (typeof data === 'string' && data.indexOf('/topic/dataHoraBrasilia') !== -1) {
-                                            var match = data.match(/"([^"]+)"/);
-                                            if (match && match[1]) {
-                                                var serverTimeMs = new Date(match[1]).getTime();
-                                                if (!isNaN(serverTimeMs)) {
-                                                    window.postMessage({
-                                                        source: 'polaryon-injector',
-                                                        type: 'server-time',
-                                                        serverTimeMs: serverTimeMs,
-                                                        timestamp: Date.now()
-                                                    }, '*');
-                                                }
-                                            }
-                                        }
-                                    } catch(e) {}
+                                    tryParseServerTime(event.data);
                                     if (typeof fn === 'function') fn.call(ws, event);
                                 };
-                                return origOnMessage;
                             }
                         });
                     }
@@ -795,6 +789,25 @@
                 window.WebSocket.OPEN = OriginalWS.OPEN;
                 window.WebSocket.CLOSING = OriginalWS.CLOSING;
                 window.WebSocket.CLOSED = OriginalWS.CLOSED;
+
+                function tryParseServerTime(data) {
+                    try {
+                        if (typeof data === 'string' && data.indexOf('/topic/dataHoraBrasilia') !== -1) {
+                            var match = data.match(/"([^"]+)"/);
+                            if (match && match[1]) {
+                                var serverTimeMs = new Date(match[1]).getTime();
+                                if (!isNaN(serverTimeMs)) {
+                                    window.postMessage({
+                                        source: 'polaryon-injector',
+                                        type: 'server-time',
+                                        serverTimeMs: serverTimeMs,
+                                        timestamp: Date.now()
+                                    }, '*');
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
             })();
             
             function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
