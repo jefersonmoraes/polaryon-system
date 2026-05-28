@@ -161,6 +161,8 @@ export default function BiddingDashboardPage() {
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
     const serverOffsetRef = useRef<number>(serverOffset);
+    const sigaTimerSecondsRef = useRef<number | undefined>(undefined);
+    const sigaTimerReceivedAtRef = useRef<number>(0);
     // 🔒 DEDUPLICADOR COM TTL (v3.8.59): bloqueia redisparo do mesmo valor por 5s, independente do ciclo React
     const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
     // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
@@ -219,6 +221,14 @@ export default function BiddingDashboardPage() {
         sessionIdRef.current = sessionId;
     }, [sessionId]);
 
+    useEffect(() => {
+        sigaTimerSecondsRef.current = sigaTimerSeconds;
+    }, [sigaTimerSeconds]);
+
+    useEffect(() => {
+        sigaTimerReceivedAtRef.current = sigaTimerReceivedAt;
+    }, [sigaTimerReceivedAt]);
+
     // 🔄 SINCRONIZADOR DE ESTADO DE ITENS ATIVOS EM TEMPO REAL (v3.8.54)
     useEffect(() => {
         if (sessionId && sessions[sessionId]) {
@@ -263,9 +273,6 @@ export default function BiddingDashboardPage() {
             const currentItems = itemsRef.current;
             const configs = configsRef.current;
             const lastAutoBidTimesLocal = lastBidTimesRef.current;
-            const currentServerOffset = serverOffsetRef.current;
-            const activeServerTime = Date.now() + currentServerOffset;
-
             if (!currentItems || currentItems.length === 0) return;
 
             currentItems.forEach(item => {
@@ -277,12 +284,17 @@ export default function BiddingDashboardPage() {
                 if (!isActive) return;
 
                 const tSeconds = isNaN(Number(item.timerSeconds)) ? -1 : Number(item.timerSeconds);
-
-                // 🔥 Sincronia absoluta de tempo restante para a reta final
+                // 🔥 Tempo restante usando sigaTimerSeconds do injector (DOM reading, v3.8.82)
                 let currentTimeLeft = tSeconds;
-                if (item.dataHoraFimContagem && activeServerTime) {
+                const curSigaTimer = sigaTimerSecondsRef.current;
+                const curSigaReceivedAt = sigaTimerReceivedAtRef.current;
+                if (curSigaTimer !== undefined && curSigaTimer >= 0 && curSigaReceivedAt > 0) {
+                    currentTimeLeft = Math.max(0, Math.floor(curSigaTimer - (Date.now() - curSigaReceivedAt) / 1000));
+                } else if (item.segundosParaEncerramento !== undefined && item.updatedAt) {
+                    currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
+                } else if (item.dataHoraFimContagem) {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
-                    currentTimeLeft = Math.max(0, Math.floor((endTime - activeServerTime) / 1000));
+                    currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
