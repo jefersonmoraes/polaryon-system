@@ -25,11 +25,10 @@
         return offsetHistory.reduce((a, b) => a + b, 0) / offsetHistory.length;
     }
 
-    // ⚡ CACHE ROTATIVO DE CAPTCHAS (v3.8.50)
-    // Worker silencioso que pré-busca pares de captcha continuamente.
-    // O disparo consome do cache instantaneamente em vez de esperar ~300ms.
+    // ⚡ CACHE ROTATIVO DE CAPTCHAS (v3.8.85)
+    // Worker agressivo que mantém pool cheio para disparos sem espera.
     const captchaPool = [];
-    const CAP_POOL_MAX = 8;
+    const CAP_POOL_MAX = 16;
     const CAP_HEADERS = {
         'origin': 'https://disputas.sigapregao.com.br',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2'
@@ -51,11 +50,11 @@
     // Inicia o worker de pré-busca assim que o token de sessão for disponível
     setInterval(() => {
         if (shared.sessionToken) prefetchCaptchaPair();
-    }, 250);
+    }, 150);
 
     async function getNextCaptcha() {
-        // Descarta captchas com mais de 25s (expiram no Serpro)
-        while (captchaPool.length > 0 && Date.now() - captchaPool[0].ts > 25000) {
+        // Descarta captchas com mais de 20s (expiram no Serpro)
+        while (captchaPool.length > 0 && Date.now() - captchaPool[0].ts > 20000) {
             captchaPool.shift();
         }
         if (captchaPool.length > 0) {
@@ -199,12 +198,12 @@
         }
     });
 
-    // 🎯 O GATILHO KAMIKAZE: Envia o lance utilizando o Bypass de Captcha do Siga
+    // 🎯 O GATILHO KAMIKAZE: Envia o lance direto do BrowserView (sem proxy VPS, v3.8.85)
     ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
-        // Ignora disparos se a janela atual não corresponder à compra selecionada
         const currentUrl = window.location.href;
         if (!currentUrl.includes(purchaseId)) {
-            return;
+            console.warn(`[POLARYON] ⚠️ purchaseId ${purchaseId} não está na URL atual (${currentUrl.substring(0,60)}). Tentando mesmo assim...`);
+            // Tenta mesmo sem bater a URL — o servidor rejeita se estiver errado
         }
 
         console.log(`%c[POLARYON TÁTICO] Iniciando Sequência de Disparo - Item: ${itemId} | Valor: R$ ${value}`, "color: #ffaa00; font-weight: bold;");
@@ -218,19 +217,33 @@
             // 1. Captcha do Pool Rotativo (⚡ instantâneo) com fallback ao vivo
             const { c1, c2 } = await getNextCaptcha();
 
-            console.log(`%c[POLARYON] ⚡ Encaminhando disparo de R$ ${value} no Item ${itemId} para a VPS...`, "color: #a855f7; font-weight: bold;");
-            
-            // 2. Delega o disparo para a VPS através do processo principal
-            ipcRenderer.send('execute-proxy-bid', {
-                purchaseId,
-                itemId,
-                value: parseFloat(value),
-                sessionToken: shared.sessionToken,
-                c1,
-                c2
+            // 2. Monta URL de ataque direto ao Serpro (sem passar pela VPS)
+            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
+            const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
+
+            console.log(`%c[POLARYON] 🚀 Disparando lance de R$ ${value} no Item ${itemId} direto do BrowserView...`, "color: #a855f7; font-weight: bold;");
+
+            // 3. Disparo direto do BrowserView (elimina latência do proxy VPS)
+            const response = await fetch(targetUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': shared.sessionToken,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json, text/plain, */*',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
+                },
+                body: JSON.stringify(payload)
             });
+
+            if (response.ok) {
+                console.log(`%c[POLARYON] ✅ Lance de R$ ${value} enviado com sucesso!`, "color: #10b981; font-weight: bold;");
+            } else {
+                const errText = await response.text();
+                console.error(`%c[POLARYON] ❌ Lance rejeitado (${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
+            }
         } catch (e) {
-            console.error('[POLARYON] Exceção crítica durante o disparo:', e);
+            console.error('[POLARYON] Exceção crítica durante o disparo direto:', e);
         }
     });
 

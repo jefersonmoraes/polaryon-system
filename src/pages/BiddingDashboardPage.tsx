@@ -221,14 +221,6 @@ export default function BiddingDashboardPage() {
         sessionIdRef.current = sessionId;
     }, [sessionId]);
 
-    useEffect(() => {
-        sigaTimerSecondsRef.current = sigaTimerSeconds;
-    }, [sigaTimerSeconds]);
-
-    useEffect(() => {
-        sigaTimerReceivedAtRef.current = sigaTimerReceivedAt;
-    }, [sigaTimerReceivedAt]);
-
     // 🔄 SINCRONIZADOR DE ESTADO DE ITENS ATIVOS EM TEMPO REAL (v3.8.54)
     useEffect(() => {
         if (sessionId && sessions[sessionId]) {
@@ -482,7 +474,7 @@ export default function BiddingDashboardPage() {
                                 lastFiredBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now() };
                                 // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
                                 if (!isLeaderBeatable) {
-                                    const freezeDuration = (isKamikaze || currentTimeLeft <= 15) ? 0 : (isRetaFinal ? 1500 : 30000);
+                                    const freezeDuration = (isKamikaze || currentTimeLeft <= 15 || isRetaFinal) ? 0 : 30000;
                                     lastIntermediateBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
                                 }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);
@@ -939,7 +931,11 @@ export default function BiddingDashboardPage() {
                 }
                 if (sigaTimerSeconds !== undefined) {
                     setSigaTimerSeconds(sigaTimerSeconds);
-                    setSigaTimerReceivedAt(Date.now());
+                    const now = Date.now();
+                    setSigaTimerReceivedAt(now);
+                    // ⚡ Atualiza refs SINCRONAMENTE (sem esperar re-render do React)
+                    sigaTimerSecondsRef.current = sigaTimerSeconds;
+                    sigaTimerReceivedAtRef.current = now;
                 }
                 // Força desbloqueio defensivo se dados de lances estão entrando (v3.6.45)
                 setIsAuthenticated(true);
@@ -1382,26 +1378,7 @@ export default function BiddingDashboardPage() {
         }
     }, [isDesktop, sessionId]);
 
-    // VPS PROXY BID LISTENER (⚡ Ultra-low latency backend routing)
-    useEffect(() => {
-        if (isDesktop && (window as any).electronAPI && (window as any).electronAPI.onExecuteProxyBid) {
-            const unsub = (window as any).electronAPI.onExecuteProxyBid(async (data: any) => {
-                const { purchaseId, itemId, value, sessionToken, c1, c2 } = data;
-                try {
-                    console.log(`[PROXY BID] Disparando lance de R$ ${value} no Item ${itemId} via VPS...`);
-                    const res = await api.post('/bidding/proxy-bid', { purchaseId, itemId, value, sessionToken, c1, c2 });
-                    if (res.data.success) {
-                        console.log(`%c[PROXY BID] 🎯 Sucesso no lance via VPS!`, "color: #10b981; font-weight: bold;");
-                    } else {
-                        console.error(`[PROXY BID] VPS rejeitou o lance:`, res.data.error);
-                    }
-                } catch (err: any) {
-                    console.error(`[PROXY BID] Erro no envio via VPS:`, err.response?.data?.error || err.message);
-                }
-            });
-            return unsub;
-        }
-    }, [isDesktop]);
+    // [PROXY BID REMOVIDO v3.8.85] — lance agora vai direto do BrowserView via fetch()
 
     // 🏆 SOCKET RANKING: Atualiza rankingLances via socket (modo web e desktop)
     useEffect(() => {

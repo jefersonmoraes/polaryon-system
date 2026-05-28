@@ -295,20 +295,12 @@ ipcMain.on('send-portal-data', (event, data) => {
     }
 });
 
-// [GATILHO MANUAL] RELAY PARA O MOTOR INVISÍVEL HTTP (bidding-runner) E NAVEGADOR VISUAL (visual-runner)
+// [GATILHO MANUAL] RELAY: Prioriza Visual Runner (BrowserView), fallback bidding-runner
 ipcMain.on('manual-bid', (event, data) => {
-    if (global.biddingRunner) {
-        global.biddingRunner.sendBid(data);
-    }
     if (visualRunner) {
         visualRunner.sendManualBid(data);
-    }
-});
-
-// [PROXY BID RELAY] Recebe disparo interceptado e repassa para o dashboard React
-ipcMain.on('execute-proxy-bid', (event, data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('execute-proxy-bid', data);
+    } else if (global.biddingRunner) {
+        global.biddingRunner.sendBid(data);
     }
 });
 
