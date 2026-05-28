@@ -163,6 +163,8 @@ export default function BiddingDashboardPage() {
     const serverOffsetRef = useRef<number>(serverOffset);
     const sigaTimerSecondsRef = useRef<number | undefined>(undefined);
     const sigaTimerReceivedAtRef = useRef<number>(0);
+    const serverTimeMsRef = useRef<number>(0);
+    const serverTimeReceivedAtRef = useRef<number>(0);
     // 🔒 DEDUPLICADOR COM TTL (v3.8.59): bloqueia redisparo do mesmo valor por 5s, independente do ciclo React
     const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
     // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
@@ -275,9 +277,15 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante via segundosParaEncerramento (server-side, sem skew de clock, v3.8.87)
+                // 🔥 Tempo restante via server time WebSocket (v3.8.89) ou segundosParaEncerramento (v3.8.88)
                 let currentTimeLeft: number;
-                if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
+                const srvMs = serverTimeMsRef.current;
+                const srvReceivedAt = serverTimeReceivedAtRef.current;
+                if (srvMs > 0 && srvReceivedAt > 0 && item.dataHoraFimContagem) {
+                    const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    const serverNow = srvMs + (Date.now() - srvReceivedAt);
+                    currentTimeLeft = Math.max(0, Math.floor((endTime - serverNow) / 1000));
+                } else if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
                     currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
                 } else if (item.dataHoraFimContagem) {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
@@ -920,6 +928,13 @@ export default function BiddingDashboardPage() {
             };
             
             const handlePortalSync = (data: any) => {
+                // 🕒 Server time via WebSocket /topic/dataHoraBrasilia (v3.8.89)
+                if (data.type === 'server-time') {
+                    console.log(`[SERVER TIME] WebSocket dataHoraBrasilia=${new Date(data.serverTimeMs).toISOString()}`);
+                    serverTimeMsRef.current = data.serverTimeMs;
+                    serverTimeReceivedAtRef.current = data.serverTimeReceivedAt;
+                    return;
+                }
                 const { roomCode, items: newItems, timestamp, sigaTimerSeconds } = data;
                 
                 console.log(`[PORTAL SYNC] room=${roomCode} items=${newItems?.length} sigaTimer=${sigaTimerSeconds} serverOffset=${data.serverOffset}`);

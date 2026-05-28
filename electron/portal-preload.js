@@ -710,6 +710,14 @@
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
+            } else if (type === 'server-time') {
+                shared.serverTimeMs = event.data.serverTimeMs;
+                shared.serverTimeReceivedAt = event.data.timestamp;
+                ipcRenderer.send('send-portal-data', {
+                    type: 'server-time',
+                    serverTimeMs: event.data.serverTimeMs,
+                    serverTimeReceivedAt: event.data.timestamp
+                });
             } else if (type === 'fresh-captcha') {
                 // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
@@ -743,6 +751,51 @@
         (function() {
             let sessionToken = '';
             let polaryonEndTime = 0;
+            var savedSegundos = -1;
+            var savedTimestamp = 0;
+
+            // 🕒 Intercepta WebSocket STOMP /topic/dataHoraBrasilia (server time sync)
+            (function() {
+                var OriginalWS = window.WebSocket;
+                window.WebSocket = function(url, protocols) {
+                    var ws = new OriginalWS(url, protocols);
+                    if (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1) {
+                        var origOnMessage = ws.onmessage;
+                        Object.defineProperty(ws, 'onmessage', {
+                            get: function() { return origOnMessage; },
+                            set: function(fn) {
+                                origOnMessage = function(event) {
+                                    try {
+                                        var data = event.data;
+                                        if (typeof data === 'string' && data.indexOf('/topic/dataHoraBrasilia') !== -1) {
+                                            var match = data.match(/"([^"]+)"/);
+                                            if (match && match[1]) {
+                                                var serverTimeMs = new Date(match[1]).getTime();
+                                                if (!isNaN(serverTimeMs)) {
+                                                    window.postMessage({
+                                                        source: 'polaryon-injector',
+                                                        type: 'server-time',
+                                                        serverTimeMs: serverTimeMs,
+                                                        timestamp: Date.now()
+                                                    }, '*');
+                                                }
+                                            }
+                                        }
+                                    } catch(e) {}
+                                    if (typeof fn === 'function') fn.call(ws, event);
+                                };
+                                return origOnMessage;
+                            }
+                        });
+                    }
+                    return ws;
+                };
+                window.WebSocket.prototype = OriginalWS.prototype;
+                window.WebSocket.CONNECTING = OriginalWS.CONNECTING;
+                window.WebSocket.OPEN = OriginalWS.OPEN;
+                window.WebSocket.CLOSING = OriginalWS.CLOSING;
+                window.WebSocket.CLOSED = OriginalWS.CLOSED;
+            })();
             
             function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
                 // 🎯 Extrai dataHoraFimContagem para o timer contínuo
