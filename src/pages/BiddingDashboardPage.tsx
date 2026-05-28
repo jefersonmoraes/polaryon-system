@@ -161,6 +161,7 @@ export default function BiddingDashboardPage() {
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
     const serverOffsetRef = useRef<number>(serverOffset);
+    const smoothedServerOffsetRef = useRef<number | null>(null);
     const sigaTimerSecondsRef = useRef<number | undefined>(undefined);
     const sigaTimerReceivedAtRef = useRef<number>(0);
     const serverTimeMsRef = useRef<number>(0);
@@ -277,7 +278,7 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante: WebSocket serverTime > segundosParaEncerramento (por item)
+                // 🔥 Tempo restante: WebSocket serverTime > serverOffset suavizado > segundosParaEncerramento
                 let currentTimeLeft: number;
                 const srvMs = serverTimeMsRef.current;
                 const srvReceivedAt = serverTimeReceivedAtRef.current;
@@ -285,6 +286,10 @@ export default function BiddingDashboardPage() {
                     const endTime = new Date(item.dataHoraFimContagem).getTime();
                     const serverNow = srvMs + (Date.now() - srvReceivedAt);
                     currentTimeLeft = Math.max(0, Math.floor((endTime - serverNow) / 1000));
+                } else if (item.dataHoraFimContagem && smoothedServerOffsetRef.current !== null) {
+                    const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    const serverTimeEst = Date.now() + smoothedServerOffsetRef.current;
+                    currentTimeLeft = Math.max(0, Math.floor((endTime - serverTimeEst) / 1000));
                 } else if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
                     currentTimeLeft = Math.max(0, Math.floor(item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000));
                 } else if (item.dataHoraFimContagem) {
@@ -954,6 +959,12 @@ export default function BiddingDashboardPage() {
                 
                 if (data.serverOffset !== undefined && data.serverOffset !== null) {
                     setServerOffset(data.serverOffset);
+                    // EMA suavizado no cliente para evitar flutuação (v3.8.93)
+                    if (smoothedServerOffsetRef.current === null) {
+                        smoothedServerOffsetRef.current = data.serverOffset;
+                    } else {
+                        smoothedServerOffsetRef.current = smoothedServerOffsetRef.current * 0.9 + data.serverOffset * 0.1;
+                    }
                 }
                 
                 setSessions(prev => {
