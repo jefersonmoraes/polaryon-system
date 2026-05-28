@@ -161,7 +161,7 @@ export default function BiddingDashboardPage() {
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
     const serverOffsetRef = useRef<number>(serverOffset);
-    const domCorrectionRef = useRef<number>(0); // Correção: DOM timer - segundosParaEncerramento
+    const clockSkewRef = useRef<number>(0); // Clock skew: sigaTimerSeconds - (endTime - Date.now())/1000
     const sigaTimerSecondsRef = useRef<number | undefined>(undefined);
     const sigaTimerReceivedAtRef = useRef<number>(0);
     const serverTimeMsRef = useRef<number>(0);
@@ -278,28 +278,21 @@ export default function BiddingDashboardPage() {
                 
                 if (!isActive) return;
 
-                // 🔥 Tempo restante: sigaTimerSeconds (DOM) > WebSocket serverTime > segundosParaEncerramento + correção DOM
+                // 🔥 Tempo restante: clockSkew ajusta dataHoraFimContagem para o relógio local
                 let currentTimeLeft: number;
                 const sts = sigaTimerSecondsRef.current;
                 const sta = sigaTimerReceivedAtRef.current;
                 if (sts !== undefined && sts >= 0 && sta > 0) {
                     currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
-                } else {
-                    const srvMs = serverTimeMsRef.current;
-                    const srvReceivedAt = serverTimeReceivedAtRef.current;
-                    if (srvMs > 0 && srvReceivedAt > 0 && item.dataHoraFimContagem) {
-                        const endTime = new Date(item.dataHoraFimContagem).getTime();
-                        const serverNow = srvMs + (Date.now() - srvReceivedAt);
-                        currentTimeLeft = Math.max(0, Math.floor((endTime - serverNow) / 1000));
-                    } else if (item.segundosParaEncerramento !== undefined && item.segundosParaEncerramento >= 0 && item.updatedAt) {
-                        const baseTime = item.segundosParaEncerramento - (Date.now() - item.updatedAt) / 1000;
-                        currentTimeLeft = Math.max(0, Math.floor(baseTime + domCorrectionRef.current));
-                    } else if (item.dataHoraFimContagem) {
-                        const endTime = new Date(item.dataHoraFimContagem).getTime();
-                        currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+                } else if (item.dataHoraFimContagem) {
+                    const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    if (!isNaN(endTime)) {
+                        currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
                     } else {
                         currentTimeLeft = -1;
                     }
+                } else {
+                    currentTimeLeft = -1;
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
@@ -964,19 +957,19 @@ export default function BiddingDashboardPage() {
                     setSigaTimerReceivedAt(now);
                     sigaTimerSecondsRef.current = sigaTimerSeconds;
                     sigaTimerReceivedAtRef.current = now;
-                    // 🔄 Correção DOM: diferença entre o timer real do Siga e o segundosParaEncerramento
-                    if (newItems?.length > 0) {
-                        const first = newItems[0];
-                        if (first.segundosParaEncerramento !== undefined && first.segundosParaEncerramento >= 0 && first.updatedAt) {
-                            const expectedFromApi = first.segundosParaEncerramento - (now - first.updatedAt) / 1000;
-                            const rawCorrection = sigaTimerSeconds - expectedFromApi;
-                            if (domCorrectionRef.current === 0) {
-                                domCorrectionRef.current = rawCorrection;
+                    // Calibrar clock skew: diferença entre o timer preciso (sigaTimerSeconds) e o calculado localmente (dataHoraFimContagem - Date.now())
+                    if (newItems?.length > 0 && newItems[0].dataHoraFimContagem) {
+                        const endTime = new Date(newItems[0].dataHoraFimContagem).getTime();
+                        if (!isNaN(endTime)) {
+                            const localPrediction = (endTime - now) / 1000;
+                            const rawSkew = sigaTimerSeconds - localPrediction;
+                            if (clockSkewRef.current === 0) {
+                                clockSkewRef.current = rawSkew;
                             } else {
-                                domCorrectionRef.current = domCorrectionRef.current * 0.85 + rawCorrection * 0.15;
+                                clockSkewRef.current = clockSkewRef.current * 0.9 + rawSkew * 0.1;
                             }
-                            if (Math.abs(rawCorrection) > 0.5) {
-                                console.log(`[DOM CORRECTION] raw=${rawCorrection.toFixed(2)}s smoothed=${domCorrectionRef.current.toFixed(2)}s sigaTimer=${sigaTimerSeconds} expected=${expectedFromApi.toFixed(2)}`);
+                            if (Math.abs(rawSkew) > 0.5) {
+                                console.log(`[CLOCK SKEW] raw=${rawSkew.toFixed(2)}s smoothed=${clockSkewRef.current.toFixed(2)}s sigaTimer=${sigaTimerSeconds} localPred=${localPrediction.toFixed(2)}`);
                             }
                         }
                     }
@@ -2099,7 +2092,7 @@ export default function BiddingDashboardPage() {
                                                 strategyConfig={getStrategy(sid, item.itemId || item.numero)}
                                                 onStartSniperTest={startSniperTest}
                                                 simulationMode={session.simulationMode}
-                                                domCorrection={domCorrectionRef.current}
+                                                clockSkew={clockSkewRef.current}
                                             />
                                         ))
                                     ) : (
@@ -2266,7 +2259,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} domCorrection={domCorrectionRef.current} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} />
                         ))}
                     </div>
                 </CardContent>
@@ -2361,7 +2354,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, domCorrection }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew }: any) {
     // RANKING CORRETO: monta por participante (melhor lance de cada um)
     const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
         return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
@@ -2444,31 +2437,26 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         }
     }, [strategyConfig]);
 
-    // 🕒 CRONÔMETRO SUAVE: segundosParaEncerramento + correção DOM (sem flutuação)
+    // 🕒 CRONÔMETRO SUAVE: dataHoraFimContagem + clockSkew (sem flutuação, sem depender de segundosParaEncerramento)
     useEffect(() => {
-        const base = item.segundosParaEncerramento;
-        if (base !== undefined && base !== null && base >= 0 && item.updatedAt) {
-            const tick = () => setTimeLeft(Math.max(0, base - (Date.now() - item.updatedAt) / 1000 + (domCorrection || 0)));
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
-        }
-        const baseSeconds = item.portalTimer ?? item.timerSeconds;
-        if (baseSeconds !== undefined && baseSeconds !== null && baseSeconds >= 0 && item.updatedAt) {
-            const tick = () => setTimeLeft(Math.max(0, baseSeconds - (Date.now() - item.updatedAt) / 1000));
-            tick();
-            const interval = setInterval(tick, 100);
-            return () => clearInterval(interval);
-        }
         const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
         if (endTimeStr) {
             const endTime = new Date(endTimeStr).getTime();
-            const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000));
+            if (!isNaN(endTime)) {
+                const tick = () => setTimeLeft(Math.max(0, (endTime - Date.now()) / 1000 + (clockSkew || 0)));
+                tick();
+                const interval = setInterval(tick, 100);
+                return () => clearInterval(interval);
+            }
+        }
+        const base = item.segundosParaEncerramento;
+        if (base !== undefined && base !== null && base >= 0 && item.updatedAt) {
+            const tick = () => setTimeLeft(Math.max(0, base - (Date.now() - item.updatedAt) / 1000));
             tick();
             const interval = setInterval(tick, 100);
             return () => clearInterval(interval);
         }
-    }, [item.segundosParaEncerramento, item.updatedAt, domCorrection, item.portalTimer, item.timerSeconds, item.portalDataHoraFimContagem, item.dataHoraFimContagem, item.itemId]);
+    }, [item.portalDataHoraFimContagem, item.dataHoraFimContagem, clockSkew, item.segundosParaEncerramento, item.updatedAt, item.itemId]);
 
     // 🎯 AUTO-FILL MARGEM OFICIAL DO GOVERNO
     useEffect(() => {
