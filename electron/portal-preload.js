@@ -618,6 +618,7 @@
                         : (it.dataHoraFimContagem
                             ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
                             : -1);
+                    var nowTs = tEnd || Date.now();
                     return {
                         itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
@@ -629,6 +630,7 @@
                         timerSeconds: sigaTimer,
                         segundosParaEncerramento: segundosRaw,
                         dataHoraFimContagem: it.dataHoraFimContagem,
+                        updatedAt: nowTs,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao
@@ -710,6 +712,11 @@
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
+                ipcRenderer.send('send-portal-data', {
+                    type: 'siga-timer',
+                    sigaTimerSeconds: event.data.remainingSec,
+                    sigaTimerReceivedAt: event.data.timestamp
+                });
             } else if (type === 'server-time') {
                 shared.serverTimeMs = event.data.serverTimeMs;
                 shared.serverTimeReceivedAt = event.data.timestamp;
@@ -861,7 +868,16 @@
                     var best = -1;
                     for (var i = 0; i < allEls.length; i++) {
                         var txt = (allEls[i].textContent || '').trim();
-                        if (/^\d{4,}\.\d{3}$/.test(txt)) {
+                        // Formato HH:MM:SS (ex: "05:08:35")
+                        var hmsMatch = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})$/);
+                        if (hmsMatch) {
+                            var val = parseInt(hmsMatch[1]) * 3600 + parseInt(hmsMatch[2]) * 60 + parseInt(hmsMatch[3]);
+                            if (val > best) best = val;
+                            continue;
+                        }
+                        // Formato decimal (ex: "5893.39")
+                        var decMatch = txt.match(/^(\d{2,})\.(\d{2,3})$/);
+                        if (decMatch) {
                             var val = parseFloat(txt);
                             if (val > best) best = val;
                         }
@@ -869,6 +885,7 @@
                     if (best > 0) {
                         savedDomTimer = best;
                         savedDomTimerAt = Date.now();
+                        console.log('%c[DOM TIMER] Read from DOM: ' + best + 's', 'color:#22c55e');
                     }
                 } catch(e) {}
             }
