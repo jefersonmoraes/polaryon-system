@@ -688,29 +688,8 @@
                             shared.subItemsCache = shared.subItemsCache || {};
                             const pfGroupIdMatch = epUrl.match(/\/itens\/(?:em-disputa\/)?(-?\d+)\/itens-grupo/);
                             const pfParentId = pfGroupIdMatch ? pfGroupIdMatch[1] : '-1';
-                            shared.subItemsCache[roomCode] = dItems.map(si => ({ ...si, isGroupItem: true, parentGroupId: pfParentId }));
-                            // ✈️ Envio direto via IPC (interceptor não processa /itens-grupo por race condition no clone.json)
-                            if (typeof ipcRenderer !== 'undefined') {
-                                const subMapped = dItems.map(si => ({
-                                    itemId: String(si.identificador || si.numero),
-                                    purchaseId: roomCode,
-                                    valorAtual: 0, meuValor: 0, ganhador: 'Outro',
-                                    status: '', posicao: '?',
-                                    timerSeconds: -1, segundosParaEncerramento: undefined,
-                                    dataHoraFimContagem: undefined,
-                                    updatedAt: Date.now(),
-                                    officialMargin: 1, officialMarginType: 'V',
-                                    desc: si.descricao, tipo: si.tipo || 'I',
-                                    isGroup: false, isGroupItem: true, parentGroupId: pfParentId,
-                                    qtdeItensDoGrupo: 0, subItens: undefined
-                                }));
-                                console.log(`%c[GRUPO FETCH] ✈️ Enviando ${subMapped.length} sub-itens via IPC direto`, 'color:#22c55e;font-weight:bold;font-size:12px;');
-                                ipcRenderer.send('send-portal-data', {
-                                    type: 'portal-sync', roomCode, timestamp: Date.now(),
-                                    items: subMapped, serverOffset: undefined,
-                                    sigaTimerSeconds: undefined, clockSkew: 0
-                                });
-                            }
+                            // 🔁 Processa via processSerproData diretamente (interceptor falha por race no clone.json)
+                            processSerproData(d, epUrl, 200, true, '', Date.now(), Date.now());
                             // Re-fetch em-disputa para mostrar sub-itens (em-disputa vai pelo interceptor normal, sem race)
                             const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
                             const rr = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
@@ -721,7 +700,7 @@
                             }
                         }
                     }
-                } catch(e) { /* silently ignore */ }
+                } catch(e) { console.error(`[GRUPO FETCH] ❌ Erro: ${e?.message || e}`, e); }
             }, 3000);
         }
 
