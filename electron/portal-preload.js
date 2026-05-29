@@ -664,7 +664,9 @@
                         if (dItems.length > 0) {
                             console.log(`%c[GRUPO FETCH] ✅ Sub-itens encontrados (auto): ${dItems.length}`, 'color:#22c55e;font-weight:bold;font-size:11px;');
                             shared.subItemsCache = shared.subItemsCache || {};
-                            shared.subItemsCache[roomCode] = dItems.map(si => ({ ...si, isGroupItem: true, parentGroupId: 'G1' }));
+                            const pfGroupIdMatch = epUrl.match(/\/itens\/(?:em-disputa\/)?(-?\d+)\/itens-grupo/);
+                            const pfParentId = pfGroupIdMatch ? pfGroupIdMatch[1] : '-1';
+                            shared.subItemsCache[roomCode] = dItems.map(si => ({ ...si, isGroupItem: true, parentGroupId: pfParentId }));
                             // Re-fetch em-disputa para mostrar sub-itens
                             const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
                             const rr = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });

@@ -2083,8 +2083,8 @@ export default function BiddingDashboardPage() {
                                             const childItems = session.items.filter((i: any) => !i.isGroup && !i.isGroupItem);
                                             if (groupItems.length > 0) {
                                                 const renderedGroups = groupItems.flatMap((grp: any) => {
-                                                    const grpId = grp.identificador || grp.itemId || 'G1';
-                                                    const mySubItems = subItems.filter((sub: any) => (sub.parentGroupId || 'G1') === grpId);
+                                                    const grpId = String(grp.identificador || grp.itemId || 'G1');
+                                                    const mySubItems = subItems.filter((sub: any) => String(sub.parentGroupId || 'G1') === grpId);
                                                     const subCount = mySubItems.length || grp.qtdeItensDoGrupo || '?';
                                                     return [
                                                         <div key={grp.itemId || 'grupo'} className="bg-amber-50 border border-amber-200 rounded-lg mb-3 p-3">
