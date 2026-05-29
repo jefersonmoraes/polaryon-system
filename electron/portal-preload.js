@@ -587,10 +587,10 @@
         const urlShort = url.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
         console.log(`%c[API] 📡 ${urlShort} | items=${items.length} | isArray=${Array.isArray(data)} | hasItens=${!!data.itens}`, 'color:#6366f1;font-size:10px;');
         // Procura sub-itens (tipo "S") em qualquer resposta
-        const subItemsFound = items.filter((it: any) => it.tipo === 'S' || it.tipo === 's');
+        const subItemsFound = items.filter(it => it.tipo === 'S' || it.tipo === 's');
         if (subItemsFound.length > 0) {
             console.log(`%c[API] 🎯 SUB-ITENS encontrados! ${subItemsFound.length} em ${urlShort}`, 'color:#22c55e;font-weight:bold;font-size:12px;');
-            subItemsFound.forEach((si: any, idx: number) => {
+            subItemsFound.forEach((si, idx) => {
                 console.log(`%c[API]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}" parentGrupo=${si.grupo || si.grupoIdentificador || si.grupoId || '?'}`, 'color:#22c55e;');
             });
         }
