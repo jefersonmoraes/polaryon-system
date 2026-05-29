@@ -2084,6 +2084,7 @@ export default function BiddingDashboardPage() {
                                                 return groupItems.flatMap((grp: any) => {
                                                     const grpKey = grp.itemId || 'grupo';
                                                     const isCollapsed = expandedGroups.has(grpKey);
+                                                    const grpSubItens = grp.subItens || [];
                                                     return [
                                                         <div key={grpKey} className="bg-amber-50 border border-amber-200 rounded-lg mb-2">
                                                             <button
@@ -2097,25 +2098,28 @@ export default function BiddingDashboardPage() {
                                                             >
                                                                 {isCollapsed ? <ChevronRight className="w-4 h-4 text-amber-600" /> : <ChevronDown className="w-4 h-4 text-amber-600" />}
                                                                 <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
-                                                                <span className="text-xs text-amber-600 ml-auto">{childItems.length} {childItems.length === 1 ? 'item' : 'itens'}</span>
+                                                                <span className="text-xs text-amber-600 ml-auto">{grpSubItens.length > 0 ? `${grpSubItens.length} itens` : 'carregando...'}</span>
                                                             </button>
-                                                            {!isCollapsed && (
+                                                            {!isCollapsed && grpSubItens.length > 0 && (
                                                                 <div className="px-2 pb-2 space-y-2">
-                                                                    {childItems.map((item: any) => (
+                                                                    {grpSubItens.map((sub: any, idx: number) => (
                                                                         <SigaItemRow 
-                                                                            key={item.itemId || item.numero} 
-                                                                            item={item} 
+                                                                            key={sub.itemId || sub.numero || `sub_${idx}`} 
+                                                                            item={sub} 
                                                                             sid={sid} 
                                                                             onSaveStrategy={onSaveStrategy}
                                                                             onManualBid={handleManualBid}
                                                                             serverTime={serverTime}
-                                                                            strategyConfig={getStrategy(sid, item.itemId || item.numero)}
+                                                                            strategyConfig={getStrategy(sid, sub.itemId || sub.numero || `sub_${idx}`)}
                                                                             onStartSniperTest={startSniperTest}
                                                                             simulationMode={session.simulationMode}
                                                                             clockSkew={clockSkewRef.current}
                                                                         />
                                                                     ))}
                                                                 </div>
+                                                            )}
+                                                            {!isCollapsed && grpSubItens.length === 0 && (
+                                                                <div className="px-4 pb-3 text-xs text-amber-600 italic">Itens do grupo não disponíveis</div>
                                                             )}
                                                         </div>
                                                     ];

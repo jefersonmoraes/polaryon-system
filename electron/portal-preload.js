@@ -583,11 +583,27 @@
         const match = url.match(/\/compras\/(\d+)\//);
         const roomCode = match ? match[1] : null;
 
+        // Log EVERY URL que chega no processSerproData
+        const urlShort = url.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
+        console.log(`%c[API] 📡 ${urlShort} | items=${items.length} | isArray=${Array.isArray(data)} | hasItens=${!!data.itens}`, 'color:#6366f1;font-size:10px;');
+
         // 🔍 Detecta item grupo (tipo "G", numero -1) para debug
         const groupItem = items.find(it => it.tipo === 'G' || it.numero === -1);
         if (groupItem) {
             const subItens = groupItem.itens || [];
-            console.log(`%c[GRUPO] Item grupo detectado em ${url}: numero=${groupItem.numero} identificador=${groupItem.identificador} desc="${(groupItem.descricao || '').substring(0, 40)}" subItens=${subItens.length} keys=${Object.keys(groupItem).join(',')}`, 'color:#f59e0b;font-weight:bold;');
+            console.log(`%c[GRUPO] Item grupo detectado em ${url}: numero=${groupItem.numero} identificador=${groupItem.identificador} desc="${(groupItem.descricao || '').substring(0, 40)}" subItens=${subItens.length} qtdeItensDoGrupo=${groupItem.qtdeItensDoGrupo || '?'} keys=${Object.keys(groupItem).join(',')}`, 'color:#f59e0b;font-weight:bold;');
+            // Log all group fields as JSON
+            const gKeys = Object.keys(groupItem).filter(k => !k.startsWith('_') && !k.startsWith('$'));
+            gKeys.forEach(k => {
+                const v = groupItem[k];
+                if (Array.isArray(v)) {
+                    console.log(`%c[GRUPO]   🔑 ${k}: Array(${v.length})`, 'color:#f59e0b;');
+                } else if (typeof v === 'object' && v !== null) {
+                    console.log(`%c[GRUPO]   🔑 ${k}: ${JSON.stringify(v).substring(0, 100)}`, 'color:#f59e0b;');
+                } else {
+                    console.log(`%c[GRUPO]   🔑 ${k}: ${v}`, 'color:#f59e0b;');
+                }
+            });
             if (subItens.length > 0) {
                 console.log(`%c[GRUPO] 1o sub-item:`, 'color:#f59e0b;', JSON.stringify(subItens[0]).substring(0, 300));
             }
@@ -595,9 +611,44 @@
                 const nonGroup = items.filter(i => !(i.tipo === 'G' || i.numero === -1));
                 console.log(`%c[GRUPO] Itens avulsos (fora do grupo): ${nonGroup.length}`, 'color:#f59e0b;font-weight:bold;');
                 nonGroup.forEach((ig, idx) => {
-                    console.log(`%c[GRUPO]   Avulso #${idx}: numero=${ig.numero} identificador=${ig.identificador} desc="${(ig.descricao || '').substring(0, 30)}"`, 'color:#f59e0b;');
+                    const keysSub = Object.keys(ig).filter(k => k !== 'descricao' && k !== 'disputaPorValorUnitario' && k !== 'criterioJulgamento');
+                    console.log(`%c[GRUPO]   Avulso #${idx}: numero=${ig.numero} identificador=${ig.identificador} desc="${(ig.descricao || '').substring(0, 30)}" grupo=${ig.grupo || ig.grupoIdentificador || ig.grupoId || ig.grupoNumero || '?'} keys=${keysSub.join(',')}`, 'color:#f59e0b;');
                 });
+                // Log detalhado do primeiro item avulso (procura campo de grupo)
+                if (nonGroup.length > 0) {
+                    console.log(`%c[GRUPO]   FULL 1o avulso: ${JSON.stringify(nonGroup[0])}`, 'color:#f59e0b;font-size:9px;');
+                }
             }
+        }
+
+        // 🔄 Se detectou grupo, tenta buscar sub-itens de endpoints alternativos
+        if (groupItem && roomCode && shared.sessionToken) {
+            const groupId = groupItem.identificador || 'G1';
+            const altEndpoints = [
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?grupo=${groupId}`,
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?identificador=${groupId}`,
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens?grupo=${groupId}`,
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/grupos/${groupId}`
+            ];
+            altEndpoints.forEach(epUrl => {
+                setTimeout(async () => {
+                    try {
+                        const r = await fetch(epUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                        if (r.ok) {
+                            const d = await r.json();
+                            const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
+                            const dItems = Array.isArray(d) ? d : (d.itens || []);
+                            console.log(`%c[GRUPO FETCH] ✅ ${epShort} retornou ${dItems.length} itens ${JSON.stringify(d).substring(0, 200)}`, 'color:#22c55e;font-weight:bold;font-size:10px;');
+                        } else {
+                            const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
+                            console.log(`%c[GRUPO FETCH] ❌ ${epShort} status=${r.status}`, 'color:#ef4444;font-size:10px;');
+                        }
+                    } catch (e) {
+                        const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
+                        console.log(`%c[GRUPO FETCH] ❌ ${epShort} erro=${e.message}`, 'color:#ef4444;font-size:10px;');
+                    }
+                }, 2000);
+            });
         }
 
         if (items.length > 0 && roomCode) {
