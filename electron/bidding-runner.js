@@ -600,17 +600,26 @@ class RoomRunner {
                     if (sessionConfig && sessionConfig.itemsConfig) {
                         if (!this.lastBidTimes) this.lastBidTimes = new Map();
 
+                        let itemsComEstrategia = 0;
+                        let itemsBloqueados = 0;
+                        let itemsAtivos = 0;
+
                         for (const mappedItem of mappedItems) {
                             const sId = String(mappedItem.itemId);
                             const strat = sessionConfig.itemsConfig[sId] || {};
 
-                            if (!strat.active) continue;
+                            if (!strat.active) { itemsBloqueados++; continue; }
 
                             const myMin = Number(strat.minPrice || 0);
                             if (myMin <= 0) {
-                                console.debug(`[BACKEND SNIPER] Item ${sId}: BLOQUEADO - Mínimo não configurado.`);
+                                itemsBloqueados++;
+                                if (!this.webContents.isDestroyed()) {
+                                    this.webContents.send('bidding-update-log', `⏸️ [MOTOR] Item ${sId}: BLOQUEADO - Mínimo não configurado.`);
+                                }
                                 continue;
                             }
+
+                            itemsAtivos++;
 
                             const tSeconds = Number(mappedItem.timerSeconds);
                             const isKamikaze = strat.kamikazeMode || false;
@@ -803,9 +812,19 @@ class RoomRunner {
                                 purchaseId: mappedItem.purchaseId,
                                 itemId: sId,
                                 value: nextBid
-                            }).catch(err => console.error(`[BACKEND SNIPER] Falha no disparo do Item ${sId}:`, err.message));
+                            }).catch(err => {
+                                console.error(`[BACKEND SNIPER] Falha no disparo do Item ${sId}:`, err.message);
+                                if (!this.webContents.isDestroyed()) {
+                                    this.webContents.send('bidding-update-log', `❌ [MOTOR] Falha ao enviar lance do Item ${sId}: ${err.message}`);
+                                }
+                            });
+                        }
+                        if (!this.webContents.isDestroyed() && itemsAtivos > 0 && Math.random() < 0.05) {
+                            this.webContents.send('bidding-update-log', `📊 [MOTOR] Scan: ${itemsAtivos} ativos, ${itemsBloqueados} bloqueados de ${mappedItems.length} itens`);
                         }
                     }
+                } else if (!this.webContents.isDestroyed() && Math.random() < 0.02) {
+                    this.webContents.send('bidding-update-log', `⏳ [MOTOR] Aguardando configuração de estratégia...`);
                 }
             }
 
