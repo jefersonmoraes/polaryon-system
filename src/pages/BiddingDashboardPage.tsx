@@ -2058,7 +2058,7 @@ export default function BiddingDashboardPage() {
 
                       <div className="space-y-6">
                 {Object.entries(sessions).map(([sid, session]: [string, any]) => (
-                    <Accordion type="single" collapsible key={sid} defaultValue="items">
+                    <Accordion type="single" collapsible key={sid}>
                         <AccordionItem value="items" className="border rounded-xl bg-white shadow-sm overflow-hidden">
                             <AccordionTrigger className="px-6 py-4 hover:bg-slate-50 transition-all border-b">
                                 <div className="flex items-center gap-4 w-full text-left">
@@ -2093,7 +2093,11 @@ export default function BiddingDashboardPage() {
                                             const childItems = session.items.filter((i: any) => !i.isGroup && !i.isGroupItem);
                                             if (groupItems.length > 0) {
                                                 const renderedGroups = groupItems.flatMap((grp: any) => {
-                                                    const mySubItems = subItems; // todos sub-itens, independente do parentGroupId
+                                                    const grpId = String(grp.itemId || grp.numero || '');
+                                                    const mySubItems = subItems.filter((s: any) => {
+                                                        const spg = String(s.parentGroupId || '');
+                                                        return spg === grpId || spg === String(grp.numero) || spg === String(grp.identificador);
+                                                    });
                                                     const subCount = mySubItems.length || grp.qtdeItensDoGrupo || '?';
                                                     return [
                                                         <div key={grp.itemId || 'grupo'} className="bg-amber-50 border border-amber-200 rounded-lg mb-3 p-3">

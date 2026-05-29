@@ -445,12 +445,13 @@
     }
 
     // 🔄 LOOP DE RANKING COM FILA INTELIGENTE:
-    //   - Fila FIFO com rate-limit de 1 req/2s → sem 429
+    //   - Fila ordenada por timer: item com menos tempo restante é processado primeiro
+    //   - Rate-limit de 1 req/2s → sem 429
     //   - Item novo → inserido no INÍCIO da fila (prioridade, carga instantânea)
     //   - 429 → backoff de 15s automático antes de continuar
     //   - Refresh periódico de todos os itens a cada 45s (re-enfileira no final)
-    const activeRankingItems = []; // { purchaseId, itemId }
-    const _rankingQueue = [];      // fila FIFO
+    const activeRankingItems = []; // { purchaseId, itemId, timerSeconds }
+    const _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
     const RANKING_RATE_MS = 2000;  // 1 requisição a cada 2s (30 req/min)
@@ -459,10 +460,11 @@
     function enqueueRankingFetch(target, priority = false) {
         const alreadyQueued = _rankingQueue.some(q => q.purchaseId === target.purchaseId && q.itemId === target.itemId);
         if (alreadyQueued) return;
+        const entry = { purchaseId: target.purchaseId, itemId: target.itemId, timerSeconds: target.timerSeconds ?? -1, priority };
         if (priority) {
-            _rankingQueue.unshift({ purchaseId: target.purchaseId, itemId: target.itemId });
+            _rankingQueue.unshift(entry);
         } else {
-            _rankingQueue.push({ purchaseId: target.purchaseId, itemId: target.itemId });
+            _rankingQueue.push(entry);
         }
     }
 
@@ -484,9 +486,17 @@
         const now = Date.now();
         if (now < _rankingBackoffUntil) return;           // 429 backoff ativo
         if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit
+        // Ordena a fila: priority items primeiro, depois por timer ASC (mais urgente primeiro)
+        _rankingQueue.sort((a, b) => {
+            if (a.priority && !b.priority) return -1;
+            if (!a.priority && b.priority) return 1;
+            const aTimer = a.timerSeconds >= 0 ? a.timerSeconds : Infinity;
+            const bTimer = b.timerSeconds >= 0 ? b.timerSeconds : Infinity;
+            return aTimer - bTimer;
+        });
         const target = _rankingQueue.shift();
         _lastRankingFetchTs = now;
-        console.log(`%c[POLARYON RANKING QUEUE] ▶️ Processando item ${target.itemId} (Compra: ${target.purchaseId}) | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
+        console.log(`%c[POLARYON RANKING QUEUE] ▶️ Processando item ${target.itemId} (Compra: ${target.purchaseId}) timer=${target.timerSeconds}s | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
         triggerRankingFetch(target);
     }, 500);
 
@@ -714,13 +724,24 @@
                 // ⛔ Pula itens de grupo (numero -1) — ranking API não funciona pra eles
                 if (isGroup) return;
                 if (!isEncerrado && itemIdStr) {
+                    // Calcula timerSeconds do item para ordenação prioritária
+                    const segRaw = it.segundosParaEncerramento;
+                    const timerSeconds = segRaw !== undefined && segRaw !== null && segRaw >= 0
+                        ? segRaw
+                        : (it.dataHoraFimContagem
+                            ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
+                            : -1);
                     const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
                     if (!alreadyTracked) {
-                        const newTarget = { purchaseId: roomCode, itemId: itemIdStr };
+                        const newTarget = { purchaseId: roomCode, itemId: itemIdStr, timerSeconds };
                         activeRankingItems.push(newTarget);
-                        console.log(`%c[POLARYON RANKING QUEUE] ➕ Item ${itemIdStr} (compra: ${roomCode}) enfileirado com prioridade. Fila: ${_rankingQueue.length + 1}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
+                        console.log(`%c[POLARYON RANKING QUEUE] ➕ Item ${itemIdStr} (compra: ${roomCode}) timer=${timerSeconds}s enfileirado com prioridade. Fila: ${_rankingQueue.length + 1}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
                         // 🚀 Prioridade: coloca na FRENTE da fila → será o próximo processado (sem burst)
                         enqueueRankingFetch(newTarget, true);
+                    } else {
+                        // Atualiza timerSeconds no activeRankingItems para o refresh periódico
+                        const existing = activeRankingItems.find(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
+                        if (existing) existing.timerSeconds = timerSeconds;
                     }
                 }
             });
@@ -762,11 +783,11 @@
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao,
                         tipo: it.tipo,
-                        isGroup: it.tipo === 'G' || it.numero === -1,
+                        isGroup: it.tipo === 'G' || it.numero === -1 || String(it.identificador || it.numero) === 'G1',
                         isGroupItem: !!subItemCacheEntry,
                         parentGroupId: subItemCacheEntry?.parentGroupId,
                         qtdeItensDoGrupo: it.qtdeItensDoGrupo || 0,
-                        subItens: (it.tipo === 'G' || it.numero === -1) ? (shared.subItemsCache?.[roomCode] || []) : undefined
+                        subItens: (it.tipo === 'G' || it.numero === -1 || String(it.identificador || it.numero) === 'G1') ? (shared.subItemsCache?.[roomCode] || []) : undefined
                     };
                 });
                 let serverOffset = undefined;

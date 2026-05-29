@@ -252,6 +252,56 @@ class RoomRunner {
                     };
                 });
 
+                // 🎯 SUB-ITENS DE GRUPO: busca itens internos via /itens-grupo
+                const hasGroup = itemsList.some(i => i.tipo === 'G' || i.numero === -1 || String(i.identificador || i.numero) === 'G1');
+                if (hasGroup) {
+                    try {
+                        const subUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa/-1/itens-grupo?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
+                        const subRes = await axios.get(subUrl, {
+                            httpsAgent: this.agent,
+                            headers: {
+                                'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                                'x-device-platform': 'web',
+                                'x-version-number': '6.0.2'
+                            }
+                        });
+                        const subList = Array.isArray(subRes.data) ? subRes.data : (subRes.data.itens || []);
+                        if (subList.length > 0) {
+                            const subMapped = subList.map(si => {
+                                const itemIdStr = String(si.identificador || si.numero);
+                                const secondsLeft = si.segundosParaEncerramento !== undefined && si.segundosParaEncerramento !== null && si.segundosParaEncerramento >= 0
+                                    ? si.segundosParaEncerramento
+                                    : (si.dataHoraFimContagem ? Math.max(0, (new Date(si.dataHoraFimContagem).getTime() - Date.now()) / 1000) : -1);
+                                // Só adiciona se ainda não estiver em mappedItems
+                                if (!mappedItems.some(m => m.itemId === itemIdStr)) {
+                                    return {
+                                        itemId: itemIdStr,
+                                        purchaseId: this.idCompra,
+                                        valorAtual: 0,
+                                        meuValor: 999999999,
+                                        ganhador: 'Outro',
+                                        status: 'Em Disputa',
+                                        posicao: '?',
+                                        timerSeconds: secondsLeft,
+                                        segundosParaEncerramento: si.segundosParaEncerramento,
+                                        dataHoraFimContagem: si.dataHoraFimContagem,
+                                        officialMargin: si.variacaoMinimaEntreLances || 1,
+                                        officialMarginType: si.tipoVariacaoMinimaEntreLances || 'V',
+                                        desc: si.descricao,
+                                        rankingLances: []
+                                    };
+                                }
+                                return null;
+                            }).filter(Boolean);
+                            mappedItems.push(...subMapped);
+                            console.log(`[BACKEND GRUPO] ➕ ${subMapped.length} sub-itens adicionados ao motor (grupo detectado)`);
+                        }
+                    } catch(e) {
+                        console.log(`[BACKEND GRUPO] ⚠️ Erro ao buscar sub-itens: ${e.message}`);
+                    }
+                }
+
                 // Envia a sala COMPLETA para o dashboard
                 this.webContents.send('bidding-update', {
                     sessionId: this.sessionId,
