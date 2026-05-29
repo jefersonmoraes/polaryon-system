@@ -615,7 +615,7 @@ class RoomRunner {
                             const tSeconds = Number(mappedItem.timerSeconds);
                             const isKamikaze = strat.kamikazeMode || false;
                             const isTimerActive = (tSeconds >= 0);
-                            const snipeDelaySeconds = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 30);
+                            const snipeDelaySeconds = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 0);
 
                             // ⏳ SNIPER COM RETARDO: espera até o timer chegar no limite configurado
                             // snipeDelaySeconds = 30 → espera faltar 30s para começar (estilo concorrente)

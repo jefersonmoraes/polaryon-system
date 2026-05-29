@@ -2518,7 +2518,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         currentStrat.kamikazeMode !== undefined ? currentStrat.kamikazeMode : (item.kamikazeMode || false)
     );
     const [snipeDelaySeconds, setSnipeDelaySeconds] = useState<number>(
-        currentStrat.snipeDelaySeconds !== undefined ? currentStrat.snipeDelaySeconds : 30
+        currentStrat.snipeDelaySeconds !== undefined ? currentStrat.snipeDelaySeconds : 0
     );
     const [directBidValue, setDirectBidValue] = useState<string>('');
     const [showRankingModal, setShowRankingModal] = useState(false);
