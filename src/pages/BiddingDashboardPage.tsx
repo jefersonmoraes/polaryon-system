@@ -909,12 +909,14 @@ export default function BiddingDashboardPage() {
                         sessionTitle: data.sessionTitle || sessionData.sessionTitle || ''
                     };
 
-                    // 🔥 FUSÃO AGRESSIVA (v3.6.15)
-                    // Se temos uma sala com UASG real, matamos qualquer outra que seja genérica ou duplicada
+                    // 🔥 FUSÃO AGRESSIVA (v3.6.15) — só apaga salas vazias/duplicadas
                     if (data.uasg && data.uasg !== 'LOGIN') {
                         Object.keys(updated).forEach(k => {
                             if (k !== sid && (updated[k].uasg === 'LOGIN' || updated[k].uasg === data.uasg)) {
-                                delete updated[k];
+                                // Só deleta se a sala estiver sem itens (evita loop criar/deletar com virtual_)
+                                if (!updated[k].items?.length) {
+                                    delete updated[k];
+                                }
                             }
                         });
                     }
