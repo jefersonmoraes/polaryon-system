@@ -660,7 +660,7 @@
         if (groupItem && roomCode && shared.sessionToken && !(shared.subItemsCache && shared.subItemsCache[roomCode])) {
             setTimeout(async () => {
                 try {
-                    const epUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/-1/itens-grupo`;
+                    const epUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa/-1/itens-grupo`;
                     const r = await fetch(epUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
                     if (r.ok) {
                         const d = await r.json();
