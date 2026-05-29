@@ -587,15 +587,18 @@
         const urlShort = url.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
         console.log(`%c[API] 📡 ${urlShort} | items=${items.length} | isArray=${Array.isArray(data)} | hasItens=${!!data.itens}`, 'color:#6366f1;font-size:10px;');
         // 🎯 SUB-ITENS via /itens-grupo: quando Angular expande o grupo
+        // Cada sub-item tem LANCE INDIVIDUAL — o grupo só agrega no final
         const isSubItemsEndpoint = url.includes('/itens/-1/itens-grupo') || url.includes('/itens-grupo');
         if (isSubItemsEndpoint && items.length > 0 && roomCode) {
+            const groupIdMatch = url.match(/\/itens\/(?:em-disputa\/)?(-?\d+)\/itens-grupo/);
+            const parentId = groupIdMatch ? groupIdMatch[1] : '-1';
             shared.subItemsCache = shared.subItemsCache || {};
             shared.subItemsCache[roomCode] = items.map(si => ({
                 ...si,
                 isGroupItem: true,
-                parentGroupId: 'G1'
+                parentGroupId: parentId
             }));
-            console.log(`%c[GRUPO] 📦 Sub-itens recebidos (${urlShort}): ${items.length} itens`, 'color:#f59e0b;font-weight:bold;font-size:12px;');
+            console.log(`%c[GRUPO] 📦 Sub-itens recebidos (${urlShort}): ${items.length} itens — serão processados individualmente (ranking + lances)`, 'color:#f59e0b;font-weight:bold;font-size:12px;');
             items.forEach((si, idx) => {
                 console.log(`%c[GRUPO]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}"`, 'color:#f59e0b;');
             });
@@ -603,19 +606,8 @@
                 console.log(`%c[GRUPO] FULL 1o sub-item keys=${Object.keys(items[0]).filter(k => !k.startsWith('_') && !k.startsWith('$')).join(',')}`, 'color:#f59e0b;font-size:9px;');
                 console.log(`%c[GRUPO] FULL 1o sub-item: ${JSON.stringify(items[0])}`, 'color:#f59e0b;font-size:9px;');
             }
-            // 🔄 Re-fetch em-disputa para atualizar dashboard com os sub-itens no grupo
-            setTimeout(async () => {
-                try {
-                    const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
-                    const r = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
-                    if (r.ok) {
-                        const d = await r.json();
-                        const dh = r.headers.get('Date') || r.headers.get('date') || '';
-                        processSerproData(d, roomUrl, r.status, r.ok, dh, Date.now() - 100, Date.now());
-                    }
-                } catch(e) { console.error('[GRUPO] Erro re-fetch em-disputa:', e); }
-            }, 500);
-            return;
+            // ❌ Não retorna early — sub-itens passam pelo fluxo normal (ranking queue + mapper)
+            // para terem lances individuais como qualquer outro item
         }
         // Procura sub-itens (tipo "S") em qualquer resposta (debug)
         const subItemsFound = items.filter(it => it.tipo === 'S' || it.tipo === 's');
@@ -726,6 +718,9 @@
                             ? Math.max(0, (new Date(it.dataHoraFimContagem).getTime() - Date.now()) / 1000)
                             : -1);
                     var nowTs = tEnd || Date.now();
+                    const subItemCacheEntry = shared.subItemsCache?.[roomCode]?.find(
+                        si => String(si.identificador || si.numero) === String(it.identificador || it.numero)
+                    );
                     return {
                         itemId: String(it.identificador || it.numero),
                         purchaseId: roomCode,
@@ -743,6 +738,8 @@
                         desc: it.descricao,
                         tipo: it.tipo,
                         isGroup: it.tipo === 'G' || it.numero === -1,
+                        isGroupItem: !!subItemCacheEntry,
+                        parentGroupId: subItemCacheEntry?.parentGroupId,
                         qtdeItensDoGrupo: it.qtdeItensDoGrupo || 0,
                         subItens: (it.tipo === 'G' || it.numero === -1) ? (shared.subItemsCache?.[roomCode] || []) : undefined
                     };
