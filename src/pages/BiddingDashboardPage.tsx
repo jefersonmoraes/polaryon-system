@@ -438,15 +438,17 @@ export default function BiddingDashboardPage() {
                                         console.log(`[SNIPER POSITIONING] Mirando no concorrente de R$ ${targetCompetitorBid}. Enviando R$ ${nextBid} para garantir a melhor posição possível economizando margem.`);
                                     }
                                 } else {
-                                    // Se não conseguimos bater nenhum concorrente (todos abaixo do nosso mínimo):
-                                    // Mantemos o nosso lance atual se ele já for válido, em vez de queimar margem até o mínimo.
+                                    // 🔧 FIX v3.8.127: Mesmo sem concorrente batível, reduz agressivamente em direção ao mínimo
                                     if (myCurrentBid > myMin && myCurrentBid !== 999999999) {
+                                        // Reduz pelo menos pela margem, ou metade do gap até o mínimo (o que for maior)
+                                        const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
+                                        nextBid = Math.max(myMin, myCurrentBid - gapReduction);
                                         const lastNobeatLog = lastLogRef.current[`nobeat_${sId}`] || 0;
                                         if (Date.now() - lastNobeatLog >= 2000) {
-                                            console.log(`[SNIPER] Nenhum concorrente batível acima do mínimo R$ ${myMin}. Mantendo lance atual de R$ ${myCurrentBid} para economizar margem.`);
+                                            console.log(`[SNIPER] Reduzindo lance de R$ ${myCurrentBid} → R$ ${nextBid} (mínimo R$ ${myMin}). Nenhum concorrente batível, mas reduzindo agressivamente.`);
                                             lastLogRef.current[`nobeat_${sId}`] = Date.now();
                                         }
-                                        return; // Pula este ciclo para não queimar margem!
+                                        // Não dá return - segue para validação e disparo
                                     } else {
                                         nextBid = myMin;
                                     }

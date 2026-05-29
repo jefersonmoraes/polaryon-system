@@ -643,10 +643,10 @@ class RoomRunner {
                             // 🔧 FIX: verifica se GANHANDO explicitamente; 'PERDENDO' confirma que deve disparar
                             const isGanhando = (posicao === '1' || posicao === '1º' || posicao === '1°' || posicao === 'G' || posicao === 'V' || posicao === 'GANHANDO' || posicao === 'VENCEDOR');
                             const isPerdendo = (posicao === 'PERDENDO' || posicao === 'P' || posicao === 'L' || posicao === 'LOSING');
-                            // Se explicitamente ganhando, para. Se posicao é desconhecida E não temos meuValor comparável, continua para avaliar
+                            // 🔧 FIX v3.8.127: GANHANDO mas com lance acima do mínimo → reduz gradualmente
+                            // Antes: dava continue e congelava o lance. Agora: reduz toward minPrice.
                             if (isGanhando) {
-                                console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO (pos=${posicao}), protegendo.`);
-                                continue;
+                                console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO (pos=${posicao}), mas continuando para avaliar redução.`);
                             }
                             if (!isPerdendo && posicao !== '' && isNaN(Number(posicao))) {
                                 // Posição desconhecida (ex: 'Em Disputa'), mas não confirmada como perdendo
@@ -758,24 +758,30 @@ class RoomRunner {
                                                 console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder → disparando mínimo R$ ${nextBid}`);
                                             }
                                         } else {
-                                            const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
-                                            if (isSecondPlace) {
-                                                shouldBid = false; // Já estamos em 2º lugar
-                                            } else {
-                                                if (myCurrentBid !== 999999999) {
-                                                    let decrementToUse = margin;
-                                                    if (officialMarginVal > 0) {
-                                                        const requiredDecrement = officialMarginType === 'P' 
-                                                            ? currentBest * (officialMarginVal / 100) 
-                                                            : officialMarginVal;
-                                                        decrementToUse = Math.max(margin, requiredDecrement);
-                                                    }
-                                                    nextBid = myCurrentBid - decrementToUse;
+                                                const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
+                                                if (isSecondPlace) {
+                                                    shouldBid = false; // Já estamos em 2º lugar
                                                 } else {
-                                                    nextBid = myMin;
+                                                    if (myCurrentBid !== 999999999) {
+                                                        // 🔧 FIX v3.8.127: Se está ganhando mas com lance acima do mínimo, reduz direto para o mínimo
+                                                        if (isGanhando) {
+                                                            nextBid = myMin;
+                                                            console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo de R$ ${myCurrentBid} para o mínimo R$ ${myMin}.`);
+                                                        } else {
+                                                            let decrementToUse = margin;
+                                                            if (officialMarginVal > 0) {
+                                                                const requiredDecrement = officialMarginType === 'P' 
+                                                                    ? currentBest * (officialMarginVal / 100) 
+                                                                    : officialMarginVal;
+                                                                decrementToUse = Math.max(margin, requiredDecrement);
+                                                            }
+                                                            nextBid = myCurrentBid - decrementToUse;
+                                                        }
+                                                    } else {
+                                                        nextBid = myMin;
+                                                    }
                                                 }
-                                            }
-                                        } // fim else currentBest > 0
+                                            } // fim else currentBest > 0
                                     } // fim else !isLeaderBeatable
                                 } // fim else fallback
                             }
