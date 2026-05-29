@@ -615,11 +615,19 @@ class RoomRunner {
                             const tSeconds = Number(mappedItem.timerSeconds);
                             const isKamikaze = strat.kamikazeMode || false;
                             const isTimerActive = (tSeconds >= 0);
+                            const snipeDelaySeconds = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 30);
 
-                            // 🔥 SNIPER ATIVO IMEDIATAMENTE (sem trava de 30s): dispara assim que strat.active = true
-                            // isKamikaze ainda mantém comportamento especial (mira direto no mínimo)
-                            const timerFiring = true;
-                            if (!timerFiring && !isKamikaze) continue;
+                            // ⏳ SNIPER COM RETARDO: espera até o timer chegar no limite configurado
+                            // snipeDelaySeconds = 30 → espera faltar 30s para começar (estilo concorrente)
+                            // snipeDelaySeconds = 0 → dispara imediatamente (comportamento antigo)
+                            if (snipeDelaySeconds > 0 && isTimerActive && tSeconds > snipeDelaySeconds) {
+                                if (this._snipeLogTimers && (this._snipeLogTimers.get(sId) || 0) < Date.now() - 5000) {
+                                    console.log(`[BACKEND SNIPER] Item ${sId}: AGUARDANDO (timer=${tSeconds}s > snipeDelay=${snipeDelaySeconds}s).`);
+                                    if (!this._snipeLogTimers) this._snipeLogTimers = new Map();
+                                    this._snipeLogTimers.set(sId, Date.now());
+                                }
+                                continue;
+                            }
 
                             // Verifica se está perdendo
                             const posicao = String(mappedItem.posicao || '').toUpperCase().trim();
@@ -642,12 +650,14 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown adaptativo: Guerra de lances (300ms) > Kamikaze (500ms) > Reta final 30s (800ms) > Normal (2000ms)
+                            // Cooldown adaptativo: Guerra (300ms) > SniperWindow (300ms) > Kamikaze (500ms) > Final30s (800ms) > Normal (2000ms)
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 2;
-                            const cooldown = isInWarMode ? 300 : (isKamikaze ? 500 : (tSeconds <= 30 ? 800 : 2000));
+                            const isInSnipeWindow = (isTimerActive && tSeconds <= snipeDelaySeconds && snipeDelaySeconds > 0);
+                            const cooldown = isInWarMode ? 300 : (isKamikaze ? 500 : (isInSnipeWindow ? 300 : (tSeconds <= 30 ? 800 : 2000)));
                             if (isInWarMode) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA ATIVO (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
+                            if (isInSnipeWindow && !isInWarMode) console.log(`[BACKEND SNIPER] 🎯 Item ${sId}: MODO SNIPER (timer=${tSeconds}s ≤ snipeDelay=${snipeDelaySeconds}s) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 

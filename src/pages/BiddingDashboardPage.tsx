@@ -80,6 +80,7 @@ interface ItemStrategy {
     minPrice: number;
     decrementValue: number;
     decrementType: 'fixed' | 'percent';
+    snipeDelaySeconds?: number;
 }
 
 export function safeParseNumber(val: any): number {
@@ -2516,6 +2517,9 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     const [kamikazeMode, setKamikazeMode] = useState(
         currentStrat.kamikazeMode !== undefined ? currentStrat.kamikazeMode : (item.kamikazeMode || false)
     );
+    const [snipeDelaySeconds, setSnipeDelaySeconds] = useState<number>(
+        currentStrat.snipeDelaySeconds !== undefined ? currentStrat.snipeDelaySeconds : 30
+    );
     const [directBidValue, setDirectBidValue] = useState<string>('');
     const [showRankingModal, setShowRankingModal] = useState(false);
 
@@ -2536,6 +2540,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             if (strategyConfig.active !== undefined) setActive(strategyConfig.active);
             if (strategyConfig.useFourDecimals !== undefined) setUseFourDecimals(strategyConfig.useFourDecimals);
             if (strategyConfig.kamikazeMode !== undefined) setKamikazeMode(strategyConfig.kamikazeMode);
+            if (strategyConfig.snipeDelaySeconds !== undefined) setSnipeDelaySeconds(strategyConfig.snipeDelaySeconds);
         }
     }, [strategyConfig]);
 
@@ -2608,6 +2613,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             active: nextActive,
             useFourDecimals,
             kamikazeMode,
+            snipeDelaySeconds,
             ...extraParams
         });
     };
@@ -2917,6 +2923,23 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             onCheckedChange={(val) => { setKamikazeMode(!!val); handleSave({ kamikazeMode: !!val }); }}
                         />
                         <label htmlFor={`kamikaze-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Modo Kamikaze (Sem Espera)</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <label htmlFor={`snipeDelay-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">Iniciar em</label>
+                        <select
+                            id={`snipeDelay-${item.itemId}`}
+                            value={snipeDelaySeconds}
+                            onChange={(e) => { const val = Number(e.target.value); setSnipeDelaySeconds(val); handleSave({ snipeDelaySeconds: val }); }}
+                            className="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        >
+                            <option value={0}>0s (imediato)</option>
+                            <option value={15}>15s</option>
+                            <option value={30}>30s</option>
+                            <option value={45}>45s</option>
+                            <option value={60}>60s</option>
+                            <option value={90}>90s</option>
+                            <option value={120}>120s</option>
+                        </select>
                     </div>
                 </div>
             </div>
