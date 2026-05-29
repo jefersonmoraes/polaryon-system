@@ -583,12 +583,21 @@
         const match = url.match(/\/compras\/(\d+)\//);
         const roomCode = match ? match[1] : null;
 
+        // 🔍 Detecta item grupo (tipo "G", numero -1) para debug
+        const groupItem = items.find(it => it.tipo === 'G' || it.numero === -1);
+        if (groupItem) {
+            console.log(`%c[GRUPO] Item grupo detectado em ${url}: numero=${groupItem.numero} identificador=${groupItem.identificador} desc="${(groupItem.descricao || '').substring(0, 40)}"`, 'color:#f59e0b;font-weight:bold;');
+        }
+
         if (items.length > 0 && roomCode) {
             // 🏆 Registra itens ativos para o loop de ranking
             items.forEach(it => {
                 const itemIdStr = String(it.identificador || it.numero);
+                const isGroup = it.tipo === 'G' || it.numero === -1 || itemIdStr === 'G1';
                 const faseItem = (it.faseTraduzido || it.fase || '').toUpperCase();
                 const isEncerrado = faseItem.includes('ENCERRAD') || faseItem.includes('FINALIZ') || faseItem.includes('CANCEL');
+                // ⛔ Pula itens de grupo (numero -1) — ranking API não funciona pra eles
+                if (isGroup) return;
                 if (!isEncerrado && itemIdStr) {
                     const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
                     if (!alreadyTracked) {
@@ -633,7 +642,9 @@
                         updatedAt: nowTs,
                         officialMargin: it.variacaoMinimaEntreLances || 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
-                        desc: it.descricao
+                        desc: it.descricao,
+                        tipo: it.tipo,
+                        isGroup: it.tipo === 'G' || it.numero === -1
                     };
                 });
                 let serverOffset = undefined;
@@ -677,13 +688,69 @@
                         sigaSecs = first.timerSeconds;
                     }
                 }
+
+                // 🕒 ClockSkew: diferença entre relógio do servidor e local
+                // Estratégia 1: savedSegundos (mais preciso, via segundosParaEncerramento do ranking)
+                // Estratégia 2: stabilizedOffset (sempre disponível, via Date header)
+                // Estratégia 3: sigaTimerSeconds do injector (DOM/WebSocket do Siga)
+                let clockSkew = shared.clockSkew || 0;
+                var rawSkew = null;
+                var skewSource = 'none';
+                // Estratégia 1: savedSegundos por sala
+                var savedSegundos = shared.savedSegundos;
+                var savedTimestamp = shared.savedTimestamp;
+                if (shared.savedSegundosByRoom && shared.savedSegundosByRoom[roomCode] !== undefined) {
+                    savedSegundos = shared.savedSegundosByRoom[roomCode];
+                    savedTimestamp = shared.savedTimestampByRoom?.[roomCode] || 0;
+                }
+                if (savedSegundos !== undefined && savedSegundos >= 0 && savedTimestamp > 0 && mappedItems.length > 0 && mappedItems[0].dataHoraFimContagem) {
+                    var endTime = new Date(mappedItems[0].dataHoraFimContagem).getTime();
+                    if (!isNaN(endTime)) {
+                        var localPrediction = (endTime - savedTimestamp) / 1000;
+                        rawSkew = savedSegundos - localPrediction;
+                        skewSource = 'segundos';
+                    }
+                }
+                // Estratégia 2: stabilizedOffset do Date header (ms → segundos, invertido)
+                if (rawSkew === null && stabilizedOffset !== undefined) {
+                    rawSkew = -(stabilizedOffset / 1000);
+                    skewSource = 'DateHeader';
+                }
+                // Estratégia 3: sigaTimerSeconds do injector (leitura contínua do DOM/rede do Siga)
+                if (rawSkew === null && sigaSecs !== undefined && sigaSecs >= 0 && mappedItems.length > 0 && mappedItems[0].dataHoraFimContagem) {
+                    var endTime3 = new Date(mappedItems[0].dataHoraFimContagem).getTime();
+                    if (!isNaN(endTime3)) {
+                        var now3 = tEnd || Date.now();
+                        var elapsed3 = 0;
+                        if (shared.sigaTimerReceivedAt) {
+                            elapsed3 = Math.max(0, (now3 - shared.sigaTimerReceivedAt) / 1000);
+                        }
+                        var adjustedSiga = sigaSecs - elapsed3;
+                        var localPrediction3 = (endTime3 - now3) / 1000;
+                        rawSkew = adjustedSiga - localPrediction3;
+                        skewSource = 'sigaTimer';
+                    }
+                }
+                if (rawSkew !== null && rawSkew !== undefined) {
+                    if (shared.clockSkew === undefined || shared.clockSkew === 0) {
+                        shared.clockSkew = rawSkew;
+                    } else {
+                        shared.clockSkew = shared.clockSkew * 0.85 + rawSkew * 0.15;
+                    }
+                    clockSkew = shared.clockSkew;
+                    if (Math.abs(rawSkew) > 0.1) {
+                        console.log(`%c[CLOCK SKEW] ${rawSkew > 0 ? 'server ahead' : 'local ahead'}=${Math.abs(rawSkew).toFixed(2)}s raw=${rawSkew.toFixed(3)}s smoothed=${clockSkew.toFixed(3)}s via=${skewSource}`, 'color:#22c55e;font-weight:bold;');
+                    }
+                }
+
                 ipcRenderer.send('send-portal-data', {
                     type: 'portal-sync',
                     roomCode: roomCode,
                     timestamp: tEnd || Date.now(),
                     serverOffset: stabilizedOffset,
                     items: mappedItems,
-                    sigaTimerSeconds: sigaSecs
+                    sigaTimerSeconds: sigaSecs,
+                    clockSkew: clockSkew
                 });
             }
         }
@@ -702,6 +769,17 @@
                     console.log('%c[POLARYON] 🔓 Captcha P1_... interceptado!', 'color:#10b981;font-weight:bold;font-size:11px;');
                 }
             } else if (type === 'serpro-data') {
+                var roomMatch = url.match(/\/compras\/(\d+)\//);
+                // Só sobrescreve savedSegundos se o payload tiver valor válido
+                // (evita que mensagens sem savedSegundos — ex: ranking loop — destruam o valor bom)
+                if (event.data.savedSegundos !== undefined && event.data.savedSegundos >= 0) {
+                    if (roomMatch) {
+                        shared.savedSegundosByRoom[roomMatch[1]] = event.data.savedSegundos;
+                        shared.savedTimestampByRoom[roomMatch[1]] = event.data.savedTimestamp;
+                    }
+                    shared.savedSegundos = event.data.savedSegundos;
+                    shared.savedTimestamp = event.data.savedTimestamp;
+                }
                 processSerproData(data, url, status, ok, event.data.dateHeader, event.data.tStart, event.data.tEnd);
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
@@ -712,6 +790,11 @@
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
+                shared.sigaTimerReceivedAt = Date.now();
+                if (event.data.savedSegundos !== undefined && event.data.savedSegundos >= 0 && event.data.savedTimestamp) {
+                    shared.savedSegundos = event.data.savedSegundos;
+                    shared.savedTimestamp = event.data.savedTimestamp;
+                }
                 ipcRenderer.send('send-portal-data', {
                     type: 'siga-timer',
                     sigaTimerSeconds: event.data.remainingSec,
@@ -720,12 +803,22 @@
             } else if (type === 'server-time') {
                 shared.serverTimeMs = event.data.serverTimeMs;
                 shared.serverTimeReceivedAt = event.data.timestamp;
+                // 🎯 ClockSkew preciso via WebSocket Server Time (sub-ms, muito melhor que Date header 1s)
+                var wsOffset = shared.serverTimeMs - shared.serverTimeReceivedAt;
+                var wsSkew = -(wsOffset / 1000);
+                if (shared.clockSkew === undefined || shared.clockSkew === 0) {
+                    shared.clockSkew = wsSkew;
+                } else {
+                    shared.clockSkew = shared.clockSkew * 0.85 + wsSkew * 0.15;
+                }
+                console.log('%c[CLOCK SKEW WS] ' + (wsSkew > 0 ? 'server ahead' : 'local ahead') + '=' + Math.abs(wsSkew).toFixed(3) + 's smoothed=' + shared.clockSkew.toFixed(3) + 's', 'color:#f59e0b;font-weight:bold;');
                 ipcRenderer.send('send-portal-data', {
                     type: 'server-time',
-                    serverTimeMs: event.data.serverTimeMs,
-                    serverTimeReceivedAt: event.data.timestamp
+                    serverTimeMs: shared.serverTimeMs,
+                    serverTimeReceivedAt: shared.serverTimeReceivedAt,
+                    clockSkew: shared.clockSkew
                 });
-            } else if (type === 'fresh-captcha') {
+                } else if (type === 'fresh-captcha') {
                 // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
                     console.log('%c[POLARYON] 🔑 Token FRESCO recebido!', 'color:#10b981;font-weight:bold;font-size:11px;');
@@ -746,6 +839,34 @@
                         shared.captchaToken = token;
                     }
                 }
+            } else if (type === 'ws-item-update') {
+                // ⚡ WebSocket do Siga avisou que algo mudou — dispara fetch imediato na API oficial
+                var wsCodigo = event.data.codigo;
+                var wsData = event.data.data;
+                if (wsCodigo && Array.isArray(wsData) && wsData.length > 0 && shared.sessionToken) {
+                    var firstItem = wsData[0];
+                    console.log('%c[WS TRIGGER] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — fetch imediato...', 'color:#22c55e;font-weight:bold;font-size:10px;');
+                    // Log amostra do primeiro item para debug
+                    try { console.log('%c[WS TRIGGER] sample: ' + JSON.stringify(firstItem).substring(0, 200), 'color:#888;font-size:9px;'); } catch(e) {}
+                    // Dispara fetch prioritário na API oficial do Serpro (sem esperar o próximo ciclo do adaptiveLoop)
+                    var fetchUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/' + wsCodigo + '/itens/em-disputa';
+                    fetch(fetchUrl, {
+                        headers: {
+                            'Authorization': shared.sessionToken,
+                            'Accept': 'application/json',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        }
+                    }).then(function(res) {
+                        if (res.ok) {
+                            var tEnd = Date.now();
+                            return res.json().then(function(data) {
+                                var dateHeader = res.headers.get('Date') || '';
+                                processSerproData(data, fetchUrl, res.status, true, dateHeader, tEnd - 50, tEnd);
+                            });
+                        }
+                    }).catch(function() {});
+                }
             }
         }
     });
@@ -756,6 +877,19 @@
     try {
         const scriptContent = `
         (function() {
+            // 🕒 Intercepta console.log do Siga para capturar server time (/topic/dataHoraBrasilia)
+            var __origLog = console.log;
+            console.log = function() {
+                var msg = '';
+                for (var i = 0; i < arguments.length; i++) { msg += (i > 0 ? ' ' : '') + String(arguments[i]); }
+                if (msg.indexOf('Hora:') !== -1) {
+                    var m = msg.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})/);
+                    if (m) {
+                        window.postMessage({ source: 'polaryon-injector', type: 'server-time', serverTimeMs: new Date(m[1]).getTime(), timestamp: Date.now() }, '*');
+                    }
+                }
+                return __origLog.apply(console, arguments);
+            };
             let sessionToken = '';
             let polaryonEndTime = 0;
             var savedSegundos = -1;
@@ -800,23 +934,73 @@
 
                 function tryParseServerTime(data) {
                     try {
-                        if (typeof data === 'string') {
-                            if (data.indexOf('/topic/dataHoraBrasilia') !== -1) {
-                                console.log('%c[WS RAW] STOMP frame with dataHoraBrasilia detected', 'color:#f59e0b');
-                                var match = data.match(/"([^"]+)"/);
-                                if (match && match[1]) {
-                                    var serverTimeMs = new Date(match[1]).getTime();
-                                    if (!isNaN(serverTimeMs)) {
-                                        console.log('%c[WS PARSED] Server time: ' + match[1] + ' -> ' + serverTimeMs + 'ms', 'color:#10b981;font-weight:bold');
-                                        window.postMessage({
-                                            source: 'polaryon-injector',
-                                            type: 'server-time',
-                                            serverTimeMs: serverTimeMs,
-                                            timestamp: Date.now()
-                                        }, '*');
-                                    }
-                                } else {
-                                    console.log('%c[WS PARTIAL] STOMP frame with dataHoraBrasilia but no quoted timestamp yet', 'color:#f59e0b');
+                        if (typeof data !== 'string') return;
+                        // STOMP frame: tenta extrair corpo JSON (após cabeçalhos)
+                        var body = data;
+                        if (data.indexOf('\\n\\n') !== -1 || data.indexOf('\\r\\n\\r\\n') !== -1) {
+                            var sep = data.indexOf('\\r\\n\\r\\n') !== -1 ? '\\r\\n\\r\\n' : '\\n\\n';
+                            var parts = data.split(sep);
+                            body = parts[parts.length - 1];
+                        }
+                        // Tenta parsear como JSON
+                        var parsed = null;
+                        try { parsed = JSON.parse(body); } catch(e) {}
+                        if (parsed && typeof parsed === 'object') {
+                            // 🎯 Atualização de itens em tempo real via WebSocket do Siga
+                            if (parsed.tipo === 'att_itens_ws' && parsed.codigo && Array.isArray(parsed.data)) {
+                                console.log('%c[WS ITENS] ' + parsed.codigo + ' (' + parsed.data.length + ' itens, ws=' + parsed.websocket + ')', 'color:#22c55e;font-weight:bold;font-size:10px;');
+                                window.postMessage({
+                                    source: 'polaryon-injector',
+                                    type: 'ws-item-update',
+                                    codigo: parsed.codigo,
+                                    data: parsed.data,
+                                    timestamp: Date.now()
+                                }, '*');
+                                return;
+                            }
+                            // 🕒 Server time via /topic/dataHoraBrasilia
+                            if (parsed.tipo === 'serverTime' || (typeof parsed.serverTimeMs === 'number') || data.indexOf('/topic/dataHoraBrasilia') !== -1) {
+                                var timeVal = parsed.serverTimeMs || (parsed.data && parsed.data.serverTimeMs) || 0;
+                                if (!timeVal && parsed.body) {
+                                    try {
+                                        var bodyObj = JSON.parse(parsed.body);
+                                        timeVal = bodyObj.serverTimeMs || 0;
+                                    } catch(e) {}
+                                }
+                                if (timeVal > 0) {
+                                    console.log('%c[WS TIME] Server time: ' + new Date(timeVal).toISOString(), 'color:#10b981');
+                                    window.postMessage({
+                                        source: 'polaryon-injector',
+                                        type: 'server-time',
+                                        serverTimeMs: timeVal,
+                                        timestamp: Date.now()
+                                    }, '*');
+                                    return;
+                                }
+                            }
+                        } else if (data.indexOf('/topic/dataHoraBrasilia') !== -1) {
+                            // STOMP frame sem JSON parseável — fallback regex
+                            var tsStr = null;
+                            var qMatch = data.match(/"([^"]+)"/);
+                            if (qMatch && qMatch[1]) {
+                                tsStr = qMatch[1];
+                            } else {
+                                // Plain text ISO timestamp (ex: 2026-05-28T14:26:11-03:00)
+                                var isoMatch = data.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})/);
+                                if (isoMatch && isoMatch[1]) {
+                                    tsStr = isoMatch[1];
+                                }
+                            }
+                            if (tsStr) {
+                                var serverTimeMs = new Date(tsStr).getTime();
+                                if (!isNaN(serverTimeMs)) {
+                                    console.log('%c[WS TIME] STOMP fallback: ' + tsStr, 'color:#10b981');
+                                    window.postMessage({
+                                        source: 'polaryon-injector',
+                                        type: 'server-time',
+                                        serverTimeMs: serverTimeMs,
+                                        timestamp: Date.now()
+                                    }, '*');
                                 }
                             }
                         }
@@ -836,7 +1020,9 @@
                     ok,
                     dateHeader: dateHeader || '',
                     tStart: tStart || 0,
-                    tEnd: tEnd || 0
+                    tEnd: tEnd || 0,
+                    savedSegundos: savedSegundos,
+                    savedTimestamp: savedTimestamp
                 }, '*');
             }
 
@@ -864,22 +1050,37 @@
             var savedDomTimerAt = 0;
             function readDomTimer() {
                 try {
-                    var allEls = document.querySelectorAll('span, div, p, strong, b, label, td');
+                    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
                     var best = -1;
-                    for (var i = 0; i < allEls.length; i++) {
-                        var txt = (allEls[i].textContent || '').trim();
-                        // Formato HH:MM:SS (ex: "05:08:35")
-                        var hmsMatch = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})$/);
-                        if (hmsMatch) {
-                            var val = parseInt(hmsMatch[1]) * 3600 + parseInt(hmsMatch[2]) * 60 + parseInt(hmsMatch[3]);
-                            if (val > best) best = val;
+                    while (walker.nextNode()) {
+                        var txt = (walker.currentNode.textContent || '').trim();
+                        if (!txt) continue;
+                        // HH:MM:SS (ex: "05:08:35")
+                        var hms = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})$/);
+                        if (hms) {
+                            var val = parseInt(hms[1]) * 3600 + parseInt(hms[2]) * 60 + parseInt(hms[3]);
+                            if (val > best && val < 172800) best = val;
                             continue;
                         }
-                        // Formato decimal (ex: "5893.39")
-                        var decMatch = txt.match(/^(\d{2,})\.(\d{2,3})$/);
-                        if (decMatch) {
+                        // HH:MM:SS.mmm (com milissegundos)
+                        var hmsm = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})\.(\d{1,3})$/);
+                        if (hmsm) {
+                            var val = parseInt(hmsm[1]) * 3600 + parseInt(hmsm[2]) * 60 + parseInt(hmsm[3]) + parseInt(hmsm[4]) / 1000;
+                            if (val > best && val < 172800) best = val;
+                            continue;
+                        }
+                        // Apenas H:MM:SS (ex: "5:08:35")
+                        var hmsShort = txt.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+                        if (hmsShort) {
+                            var val = parseInt(hmsShort[1]) * 3600 + parseInt(hmsShort[2]) * 60 + parseInt(hmsShort[3]);
+                            if (val > best && val < 172800) best = val;
+                            continue;
+                        }
+                        // Decimal (ex: "5893.39" ou "424.023")
+                        var dec = txt.match(/^(\d{2,})\.(\d{2,3})$/);
+                        if (dec) {
                             var val = parseFloat(txt);
-                            if (val > best) best = val;
+                            if (val > best && val < 172800) best = val;
                         }
                     }
                     if (best > 0) {
@@ -899,7 +1100,9 @@
                         type: 'siga-timer',
                         remainingMs: remainingSec * 1000,
                         remainingSec: remainingSec,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        savedSegundos: savedSegundos,
+                        savedTimestamp: savedTimestamp
                     }, '*');
                 } else if (savedSegundos >= 0 && savedTimestamp > 0) {
                     var remainingSec = Math.max(0, savedSegundos - (Date.now() - savedTimestamp) / 1000);
@@ -908,7 +1111,9 @@
                         type: 'siga-timer',
                         remainingMs: remainingSec * 1000,
                         remainingSec: remainingSec,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        savedSegundos: savedSegundos,
+                        savedTimestamp: savedTimestamp
                     }, '*');
                 }
             }, 100);
@@ -1154,7 +1359,11 @@
 
                 let data;
                 try { data = JSON.parse(body); } catch(err) { data = body; }
-                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url, status: res.status, ok: res.ok }, '*');
+                // Extrai segundosParaEncerramento antes de postar (ranking loop não passa pelo fetch override)
+                if (typeof data === 'object' && data !== null) {
+                    extractEndTime(data);
+                }
+                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url, status: res.status, ok: res.ok, savedSegundos: savedSegundos, savedTimestamp: savedTimestamp }, '*');
             } catch(err) {
                 console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
                 window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
@@ -1385,9 +1594,9 @@
             }
         } // fim do batch
 
-        // ⚡ Intervalo adaptativo
+        // ⚡ Intervalo adaptativo — modo guerra acelera para 50ms (vs WebSocket do Siga)
         const warLevel = Math.max(...Array.from(_loopWarCycles.values()), 0);
-        const nextMs = warLevel >= 2 ? 150 : (warLevel >= 1 ? 500 : 3000);
+        const nextMs = warLevel >= 3 ? 50 : (warLevel >= 2 ? 100 : (warLevel >= 1 ? 300 : 3000));
         if (warLevel >= 2) console.log(`%c[POLARYON LOOP] ⚔️ GUERRA DE LANCES! Polling=${nextMs}ms (war=${warLevel})`, 'color:#f59e0b;font-weight:bold;');
         setTimeout(_adaptiveLoop, nextMs);
     }

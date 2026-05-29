@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronUp, Clock, XCircle, LogOut, Search, StopCircle, Briefcase, MessageSquare } from 'lucide-react';
+import { ShieldAlert, Activity, RefreshCw, Play, Square, Settings2, Target, Zap, Shield, Key, History, AlertTriangle, CheckCircle2, Plus as PlusIcon, Check, Trophy, ChevronDown, ChevronRight, Clock, XCircle, LogOut, Search, StopCircle, Briefcase, MessageSquare } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
     AlertDialog,
@@ -71,6 +71,8 @@ interface BiddingItem {
     desc?: string;
     descricao?: string; // Fallback
     rankingLances?: any[];
+    tipo?: string;
+    isGroup?: boolean;
 }
 
 interface ItemStrategy {
@@ -148,6 +150,7 @@ export default function BiddingDashboardPage() {
     const [uasgFilter, setUasgFilter] = useState('');
     const [lastAutoBidTimes, setLastAutoBidTimes] = useState<Record<string, number>>({});
     const [appVersion, setAppVersion] = useState('...');
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [serverTime, setServerTime] = useState<number>(Date.now());
 
     useEffect(() => {
@@ -934,6 +937,10 @@ export default function BiddingDashboardPage() {
                     console.log(`[SERVER TIME] WebSocket dataHoraBrasilia=${new Date(data.serverTimeMs).toISOString()}`);
                     serverTimeMsRef.current = data.serverTimeMs;
                     serverTimeReceivedAtRef.current = data.serverTimeReceivedAt;
+                    if (data.clockSkew !== undefined && Math.abs(data.clockSkew) > 0.1) {
+                        clockSkewRef.current = data.clockSkew;
+                        console.log(`[CLOCK SKEW WS] set=${data.clockSkew.toFixed(3)}s`);
+                    }
                     return;
                 }
                 // 🕒 Timer em tempo real vindo do DOM (injetor lê a cada 100ms)
@@ -947,9 +954,14 @@ export default function BiddingDashboardPage() {
                 }
                 const { roomCode, items: newItems, timestamp, sigaTimerSeconds } = data;
                 
-                console.log(`[PORTAL SYNC] room=${roomCode} items=${newItems?.length} sigaTimer=${sigaTimerSeconds} serverOffset=${data.serverOffset}`);
+                console.log(`[PORTAL SYNC] room=${roomCode} items=${newItems?.length} sigaTimer=${sigaTimerSeconds} serverOffset=${data.serverOffset} clockSkew=${data.clockSkew?.toFixed(2) || 'N/A'}`);
                 if (newItems?.length > 0) {
                     console.log(`[PORTAL SYNC] first item: id=${newItems[0].itemId} dhfc=${newItems[0].dataHoraFimContagem} timer=${newItems[0].timerSeconds}`);
+                }
+                // 🕒 ClockSkew do preload (já suavizado com EMA 0.85/0.15 lá) — usa direto, sem suavização extra
+                if (data.clockSkew !== undefined && Math.abs(data.clockSkew) > 0.1) {
+                    clockSkewRef.current = data.clockSkew;
+                    console.log(`[CLOCK SKEW] set=${data.clockSkew.toFixed(3)}s`);
                 }
                 if (sigaTimerSeconds !== undefined) {
                     setSigaTimerSeconds(sigaTimerSeconds);
@@ -957,22 +969,6 @@ export default function BiddingDashboardPage() {
                     setSigaTimerReceivedAt(now);
                     sigaTimerSecondsRef.current = sigaTimerSeconds;
                     sigaTimerReceivedAtRef.current = now;
-                    // Calibrar clock skew: diferença entre o timer preciso (sigaTimerSeconds) e o calculado localmente (dataHoraFimContagem - Date.now())
-                    if (newItems?.length > 0 && newItems[0].dataHoraFimContagem) {
-                        const endTime = new Date(newItems[0].dataHoraFimContagem).getTime();
-                        if (!isNaN(endTime)) {
-                            const localPrediction = (endTime - now) / 1000;
-                            const rawSkew = sigaTimerSeconds - localPrediction;
-                            if (clockSkewRef.current === 0) {
-                                clockSkewRef.current = rawSkew;
-                            } else {
-                                clockSkewRef.current = clockSkewRef.current * 0.9 + rawSkew * 0.1;
-                            }
-                            if (Math.abs(rawSkew) > 0.5) {
-                                console.log(`[CLOCK SKEW] raw=${rawSkew.toFixed(2)}s smoothed=${clockSkewRef.current.toFixed(2)}s sigaTimer=${sigaTimerSeconds} localPred=${localPrediction.toFixed(2)}`);
-                            }
-                        }
-                    }
                 }
                 setIsAuthenticated(true);
                 
@@ -2081,20 +2077,65 @@ export default function BiddingDashboardPage() {
                             <AccordionContent className="p-4 bg-slate-50/30">
                                 <div className="space-y-3">
                                     {session.items?.length > 0 ? (
-                                        session.items.map((item: any) => (
-                                            <SigaItemRow 
-                                                key={item.itemId || item.numero} 
-                                                item={item} 
-                                                sid={sid} 
-                                                onSaveStrategy={onSaveStrategy}
-                                                onManualBid={handleManualBid}
-                                                serverTime={serverTime}
-                                                strategyConfig={getStrategy(sid, item.itemId || item.numero)}
-                                                onStartSniperTest={startSniperTest}
-                                                simulationMode={session.simulationMode}
-                                                clockSkew={clockSkewRef.current}
-                                            />
-                                        ))
+                                        (() => {
+                                            const groupItems = session.items.filter((i: any) => i.isGroup);
+                                            const childItems = session.items.filter((i: any) => !i.isGroup);
+                                            if (groupItems.length > 0) {
+                                                return groupItems.flatMap((grp: any) => {
+                                                    const grpKey = grp.itemId || 'grupo';
+                                                    const isCollapsed = expandedGroups.has(grpKey);
+                                                    return [
+                                                        <div key={grpKey} className="bg-amber-50 border border-amber-200 rounded-lg mb-2">
+                                                            <button
+                                                                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-amber-100/50 transition-colors rounded-lg"
+                                                                onClick={() => {
+                                                                    const next = new Set(expandedGroups);
+                                                                    if (isCollapsed) next.delete(grpKey);
+                                                                    else next.add(grpKey);
+                                                                    setExpandedGroups(next);
+                                                                }}
+                                                            >
+                                                                {isCollapsed ? <ChevronRight className="w-4 h-4 text-amber-600" /> : <ChevronDown className="w-4 h-4 text-amber-600" />}
+                                                                <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
+                                                                <span className="text-xs text-amber-600 ml-auto">{childItems.length} {childItems.length === 1 ? 'item' : 'itens'}</span>
+                                                            </button>
+                                                            {!isCollapsed && (
+                                                                <div className="px-2 pb-2 space-y-2">
+                                                                    {childItems.map((item: any) => (
+                                                                        <SigaItemRow 
+                                                                            key={item.itemId || item.numero} 
+                                                                            item={item} 
+                                                                            sid={sid} 
+                                                                            onSaveStrategy={onSaveStrategy}
+                                                                            onManualBid={handleManualBid}
+                                                                            serverTime={serverTime}
+                                                                            strategyConfig={getStrategy(sid, item.itemId || item.numero)}
+                                                                            onStartSniperTest={startSniperTest}
+                                                                            simulationMode={session.simulationMode}
+                                                                            clockSkew={clockSkewRef.current}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ];
+                                                });
+                                            }
+                                            return childItems.map((item: any) => (
+                                                <SigaItemRow 
+                                                    key={item.itemId || item.numero} 
+                                                    item={item} 
+                                                    sid={sid} 
+                                                    onSaveStrategy={onSaveStrategy}
+                                                    onManualBid={handleManualBid}
+                                                    serverTime={serverTime}
+                                                    strategyConfig={getStrategy(sid, item.itemId || item.numero)}
+                                                    onStartSniperTest={startSniperTest}
+                                                    simulationMode={session.simulationMode}
+                                                    clockSkew={clockSkewRef.current}
+                                                />
+                                            ));
+                                        })()
                                     ) : (
                                         <div className="p-12 text-center">
                                             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2609,15 +2650,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.floor(seconds % 60);
-        const ds = Math.floor((seconds % 1) * 10);
         
         if (h > 0) {
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
-        if (m > 0 || s >= 10) {
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ds}`;
-        }
-        return `${s}:${ds}`;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
     return (
