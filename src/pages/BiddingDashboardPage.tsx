@@ -2102,16 +2102,30 @@ export default function BiddingDashboardPage() {
                                                                 clockSkew={clockSkewRef.current}
                                                             />
                                                             {subItens.length > 0 && (
-                                                                <div className="mt-2 space-y-1 pl-4 border-l-2 border-amber-300">
-                                                                    {subItens.map((sub: any, idx: number) => (
-                                                                        <div key={sub.itemId || sub.identificador || sub.numero || idx} className="flex items-center gap-2 py-1.5 px-2 bg-white/60 rounded text-xs">
-                                                                            <span className="text-amber-700 font-mono font-semibold">#{sub.identificador || sub.numero || sub.itemId}</span>
-                                                                            <span className="text-slate-600">{sub.descricao || sub.desc || '?'}</span>
-                                                                            {sub.quantidade != null && <span className="ml-auto text-slate-400">qtd: {sub.quantidade}</span>}
-                                                                            {sub.unidadeMedida && <span className="text-slate-400">{sub.unidadeMedida}</span>}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
+                                                                <>
+                                                                    <div className="mt-4 pt-3 border-t-2 border-amber-300/60">
+                                                                        <span className="text-[10px] font-bold uppercase text-amber-700 tracking-wider flex items-center gap-1.5">
+                                                                            <ChevronRight className="w-3 h-3" />
+                                                                            Itens do grupo ({subItens.length})
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="mt-2 space-y-1 pl-4 border-l-2 border-amber-300">
+                                                                        {subItens.map((sub: any, idx: number) => (
+                                                                            <div key={sub.itemId || sub.identificador || sub.numero || idx} className="grid grid-cols-12 gap-2 py-1.5 px-2 bg-white/60 rounded text-xs items-center">
+                                                                                <span className="col-span-1 text-amber-700 font-mono font-semibold">#{sub.identificador || sub.numero || sub.itemId}</span>
+                                                                                <span className="col-span-4 text-slate-600 font-medium truncate">{sub.descricao || sub.desc || '?'}</span>
+                                                                                {sub.quantidade != null && <span className="col-span-2 text-slate-500 text-right">qtd: {sub.quantidade}</span>}
+                                                                                {sub.unidadeMedida && <span className="col-span-2 text-slate-400">{sub.unidadeMedida}</span>}
+                                                                                {sub.valorEstimado != null && (
+                                                                                    <span className="col-span-3 text-slate-500 text-right font-mono">R$ {Number(sub.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="mt-2 text-[9px] text-amber-600/60 italic pl-4">
+                                                                        Os lances são feitos no grupo como um todo (acima). Os itens internos são meramente informativos.
+                                                                    </div>
+                                                                </>
                                                             )}
                                                         </div>
                                                     ];

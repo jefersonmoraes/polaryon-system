@@ -599,6 +599,10 @@
             items.forEach((si, idx) => {
                 console.log(`%c[GRUPO]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}"`, 'color:#f59e0b;');
             });
+            if (items.length > 0) {
+                console.log(`%c[GRUPO] FULL 1o sub-item keys=${Object.keys(items[0]).filter(k => !k.startsWith('_') && !k.startsWith('$')).join(',')}`, 'color:#f59e0b;font-size:9px;');
+                console.log(`%c[GRUPO] FULL 1o sub-item: ${JSON.stringify(items[0])}`, 'color:#f59e0b;font-size:9px;');
+            }
             // 🔄 Re-fetch em-disputa para atualizar dashboard com os sub-itens no grupo
             setTimeout(async () => {
                 try {
