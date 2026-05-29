@@ -2081,49 +2081,41 @@ export default function BiddingDashboardPage() {
                                             const groupItems = session.items.filter((i: any) => i.isGroup);
                                             const childItems = session.items.filter((i: any) => !i.isGroup);
                                             if (groupItems.length > 0) {
-                                                return groupItems.flatMap((grp: any) => {
-                                                    const grpKey = grp.itemId || 'grupo';
-                                                    const isCollapsed = expandedGroups.has(grpKey);
-                                                    const grpSubItens = grp.subItens || [];
+                                                const renderedGroups = groupItems.flatMap((grp: any) => {
                                                     return [
-                                                        <div key={grpKey} className="bg-amber-50 border border-amber-200 rounded-lg mb-2">
-                                                            <button
-                                                                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-amber-100/50 transition-colors rounded-lg"
-                                                                onClick={() => {
-                                                                    const next = new Set(expandedGroups);
-                                                                    if (isCollapsed) next.delete(grpKey);
-                                                                    else next.add(grpKey);
-                                                                    setExpandedGroups(next);
-                                                                }}
-                                                            >
-                                                                {isCollapsed ? <ChevronRight className="w-4 h-4 text-amber-600" /> : <ChevronDown className="w-4 h-4 text-amber-600" />}
-                                                                <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
-                                                                <span className="text-xs text-amber-600 ml-auto">{grpSubItens.length > 0 ? `${grpSubItens.length} itens` : 'carregando...'}</span>
-                                                            </button>
-                                                            {!isCollapsed && grpSubItens.length > 0 && (
-                                                                <div className="px-2 pb-2 space-y-2">
-                                                                    {grpSubItens.map((sub: any, idx: number) => (
-                                                                        <SigaItemRow 
-                                                                            key={sub.itemId || sub.numero || `sub_${idx}`} 
-                                                                            item={sub} 
-                                                                            sid={sid} 
-                                                                            onSaveStrategy={onSaveStrategy}
-                                                                            onManualBid={handleManualBid}
-                                                                            serverTime={serverTime}
-                                                                            strategyConfig={getStrategy(sid, sub.itemId || sub.numero || `sub_${idx}`)}
-                                                                            onStartSniperTest={startSniperTest}
-                                                                            simulationMode={session.simulationMode}
-                                                                            clockSkew={clockSkewRef.current}
-                                                                        />
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                            {!isCollapsed && grpSubItens.length === 0 && (
-                                                                <div className="px-4 pb-3 text-xs text-amber-600 italic">Itens do grupo não disponíveis</div>
-                                                            )}
+                                                        <div key={grp.itemId || 'grupo'} className="bg-amber-50 border border-amber-200 rounded-lg mb-3 p-3">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="font-bold text-amber-900 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
+                                                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">{grp.qtdeItensDoGrupo || '?'} itens internos</span>
+                                                            </div>
+                                                            <SigaItemRow 
+                                                                item={grp} 
+                                                                sid={sid} 
+                                                                onSaveStrategy={onSaveStrategy}
+                                                                onManualBid={handleManualBid}
+                                                                serverTime={serverTime}
+                                                                strategyConfig={getStrategy(sid, grp.itemId || grp.numero)}
+                                                                onStartSniperTest={startSniperTest}
+                                                                simulationMode={session.simulationMode}
+                                                                clockSkew={clockSkewRef.current}
+                                                            />
                                                         </div>
                                                     ];
                                                 });
+                                                return [...renderedGroups, ...childItems.map((item: any) => (
+                                                    <SigaItemRow 
+                                                        key={item.itemId || item.numero} 
+                                                        item={item} 
+                                                        sid={sid} 
+                                                        onSaveStrategy={onSaveStrategy}
+                                                        onManualBid={handleManualBid}
+                                                        serverTime={serverTime}
+                                                        strategyConfig={getStrategy(sid, item.itemId || item.numero)}
+                                                        onStartSniperTest={startSniperTest}
+                                                        simulationMode={session.simulationMode}
+                                                        clockSkew={clockSkewRef.current}
+                                                    />
+                                                ))];
                                             }
                                             return childItems.map((item: any) => (
                                                 <SigaItemRow 
