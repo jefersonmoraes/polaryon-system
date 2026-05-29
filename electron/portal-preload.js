@@ -586,10 +586,37 @@
         // Log EVERY URL que chega no processSerproData
         const urlShort = url.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
         console.log(`%c[API] 📡 ${urlShort} | items=${items.length} | isArray=${Array.isArray(data)} | hasItens=${!!data.itens}`, 'color:#6366f1;font-size:10px;');
-        // Procura sub-itens (tipo "S") em qualquer resposta
+        // 🎯 SUB-ITENS via /itens-grupo: quando Angular expande o grupo
+        const isSubItemsEndpoint = url.includes('/itens/-1/itens-grupo') || url.includes('/itens-grupo');
+        if (isSubItemsEndpoint && items.length > 0 && roomCode) {
+            shared.subItemsCache = shared.subItemsCache || {};
+            shared.subItemsCache[roomCode] = items.map(si => ({
+                ...si,
+                isGroupItem: true,
+                parentGroupId: 'G1'
+            }));
+            console.log(`%c[GRUPO] 📦 Sub-itens recebidos (${urlShort}): ${items.length} itens`, 'color:#f59e0b;font-weight:bold;font-size:12px;');
+            items.forEach((si, idx) => {
+                console.log(`%c[GRUPO]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}"`, 'color:#f59e0b;');
+            });
+            // 🔄 Re-fetch em-disputa para atualizar dashboard com os sub-itens no grupo
+            setTimeout(async () => {
+                try {
+                    const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
+                    const r = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                    if (r.ok) {
+                        const d = await r.json();
+                        const dh = r.headers.get('Date') || r.headers.get('date') || '';
+                        processSerproData(d, roomUrl, r.status, r.ok, dh, Date.now() - 100, Date.now());
+                    }
+                } catch(e) { console.error('[GRUPO] Erro re-fetch em-disputa:', e); }
+            }, 500);
+            return;
+        }
+        // Procura sub-itens (tipo "S") em qualquer resposta (debug)
         const subItemsFound = items.filter(it => it.tipo === 'S' || it.tipo === 's');
         if (subItemsFound.length > 0) {
-            console.log(`%c[API] 🎯 SUB-ITENS encontrados! ${subItemsFound.length} em ${urlShort}`, 'color:#22c55e;font-weight:bold;font-size:12px;');
+            console.log(`%c[API] 🎯 SUB-ITENS (tipo S) encontrados! ${subItemsFound.length} em ${urlShort}`, 'color:#22c55e;font-weight:bold;font-size:12px;');
             subItemsFound.forEach((si, idx) => {
                 console.log(`%c[API]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}" parentGrupo=${si.grupo || si.grupoIdentificador || si.grupoId || '?'}`, 'color:#22c55e;');
             });
@@ -629,37 +656,31 @@
             }
         }
 
-        // 🔄 Se detectou grupo, tenta buscar sub-itens de endpoints alternativos
-        if (groupItem && roomCode && shared.sessionToken) {
-            const groupId = groupItem.identificador || 'G1';
-            const groupNum = groupItem.numero; // -1
-            const altEndpoints = [
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?grupo=${groupId}`,
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?identificador=${groupId}`,
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens?grupo=${groupId}`,
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/grupos/${groupId}`,
-                // Tenta endpoint de lances do grupo (pode retornar sub-itens no lance)
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/-1/lances/por-participante?tamanhoPagina=50&pagina=0`
-            ];
-            altEndpoints.forEach(epUrl => {
-                setTimeout(async () => {
-                    try {
-                        const r = await fetch(epUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
-                        if (r.ok) {
-                            const d = await r.json();
-                            const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
-                            const dItems = Array.isArray(d) ? d : (d.itens || []);
-                            console.log(`%c[GRUPO FETCH] ✅ ${epShort} retornou ${dItems.length} itens ${JSON.stringify(d).substring(0, 200)}`, 'color:#22c55e;font-weight:bold;font-size:10px;');
-                        } else {
-                            const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
-                            console.log(`%c[GRUPO FETCH] ❌ ${epShort} status=${r.status}`, 'color:#ef4444;font-size:10px;');
+        // 🔄 Proactive fetch: busca sub-itens do grupo (caso Angular não expanda automaticamente)
+        if (groupItem && roomCode && shared.sessionToken && !(shared.subItemsCache && shared.subItemsCache[roomCode])) {
+            setTimeout(async () => {
+                try {
+                    const epUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/-1/itens-grupo`;
+                    const r = await fetch(epUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                    if (r.ok) {
+                        const d = await r.json();
+                        const dItems = Array.isArray(d) ? d : (d.itens || []);
+                        if (dItems.length > 0) {
+                            console.log(`%c[GRUPO FETCH] ✅ Sub-itens encontrados (auto): ${dItems.length}`, 'color:#22c55e;font-weight:bold;font-size:11px;');
+                            shared.subItemsCache = shared.subItemsCache || {};
+                            shared.subItemsCache[roomCode] = dItems.map(si => ({ ...si, isGroupItem: true, parentGroupId: 'G1' }));
+                            // Re-fetch em-disputa para mostrar sub-itens
+                            const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
+                            const rr = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                            if (rr.ok) {
+                                const dd = await rr.json();
+                                const dh = rr.headers.get('Date') || rr.headers.get('date') || '';
+                                processSerproData(dd, roomUrl, rr.status, rr.ok, dh, Date.now() - 100, Date.now());
+                            }
                         }
-                    } catch (e) {
-                        const epShort = epUrl.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
-                        console.log(`%c[GRUPO FETCH] ❌ ${epShort} erro=${e.message}`, 'color:#ef4444;font-size:10px;');
                     }
-                }, 2000);
-            });
+                } catch(e) { /* silently ignore */ }
+            }, 3000);
         }
 
         if (items.length > 0 && roomCode) {
@@ -717,7 +738,9 @@
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao,
                         tipo: it.tipo,
-                        isGroup: it.tipo === 'G' || it.numero === -1
+                        isGroup: it.tipo === 'G' || it.numero === -1,
+                        qtdeItensDoGrupo: it.qtdeItensDoGrupo || 0,
+                        subItens: (it.tipo === 'G' || it.numero === -1) ? (shared.subItemsCache?.[roomCode] || []) : undefined
                     };
                 });
                 let serverOffset = undefined;

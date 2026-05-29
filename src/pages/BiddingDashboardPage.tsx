@@ -2079,14 +2079,16 @@ export default function BiddingDashboardPage() {
                                     {session.items?.length > 0 ? (
                                         (() => {
                                             const groupItems = session.items.filter((i: any) => i.isGroup);
-                                            const childItems = session.items.filter((i: any) => !i.isGroup);
+                                            const childItems = session.items.filter((i: any) => !i.isGroup && !i.isGroupItem);
                                             if (groupItems.length > 0) {
                                                 const renderedGroups = groupItems.flatMap((grp: any) => {
+                                                    const subItens = grp.subItens || [];
+                                                    const subCount = subItens.length || grp.qtdeItensDoGrupo || '?';
                                                     return [
                                                         <div key={grp.itemId || 'grupo'} className="bg-amber-50 border border-amber-200 rounded-lg mb-3 p-3">
                                                             <div className="flex items-center gap-2 mb-1">
                                                                 <span className="font-bold text-amber-900 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
-                                                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">{grp.qtdeItensDoGrupo || '?'} itens internos</span>
+                                                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">{subCount} itens internos</span>
                                                             </div>
                                                             <SigaItemRow 
                                                                 item={grp} 
@@ -2099,6 +2101,18 @@ export default function BiddingDashboardPage() {
                                                                 simulationMode={session.simulationMode}
                                                                 clockSkew={clockSkewRef.current}
                                                             />
+                                                            {subItens.length > 0 && (
+                                                                <div className="mt-2 space-y-1 pl-4 border-l-2 border-amber-300">
+                                                                    {subItens.map((sub: any, idx: number) => (
+                                                                        <div key={sub.itemId || sub.identificador || sub.numero || idx} className="flex items-center gap-2 py-1.5 px-2 bg-white/60 rounded text-xs">
+                                                                            <span className="text-amber-700 font-mono font-semibold">#{sub.identificador || sub.numero || sub.itemId}</span>
+                                                                            <span className="text-slate-600">{sub.descricao || sub.desc || '?'}</span>
+                                                                            {sub.quantidade != null && <span className="ml-auto text-slate-400">qtd: {sub.quantidade}</span>}
+                                                                            {sub.unidadeMedida && <span className="text-slate-400">{sub.unidadeMedida}</span>}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ];
                                                 });
