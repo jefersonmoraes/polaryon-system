@@ -1068,9 +1068,19 @@ export default function BiddingDashboardPage() {
                             });
                         });
 
+                        const allItems = Array.from(itemMap.values());
+                        // Propagar timer do grupo para sub-itens (se não tiverem próprio)
+                        const grpTimer = allItems.find((i: any) => i.isGroup)?.dataHoraFimContagem;
+                        if (grpTimer) {
+                            allItems.forEach((i: any) => {
+                                if (i.isGroupItem && !i.dataHoraFimContagem) {
+                                    i.dataHoraFimContagem = grpTimer;
+                                }
+                            });
+                        }
                         updated[sid] = {
                             ...sessionData,
-                            items: Array.from(itemMap.values()),
+                            items: allItems,
                             lastUpdate: timestamp,
                             syncStatus: 'PORTAL_DIRECT'
                         };
