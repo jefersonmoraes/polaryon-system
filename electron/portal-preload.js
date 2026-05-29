@@ -606,6 +606,28 @@
                 console.log(`%c[GRUPO] FULL 1o sub-item keys=${Object.keys(items[0]).filter(k => !k.startsWith('_') && !k.startsWith('$')).join(',')}`, 'color:#f59e0b;font-size:9px;');
                 console.log(`%c[GRUPO] FULL 1o sub-item: ${JSON.stringify(items[0])}`, 'color:#f59e0b;font-size:9px;');
             }
+            // ✈️ Envio direto via IPC (garantia, independente do ranking queue + mapper)
+            if (typeof ipcRenderer !== 'undefined' && roomCode) {
+                const subMapped = items.map(si => ({
+                    itemId: String(si.identificador || si.numero),
+                    purchaseId: roomCode,
+                    valorAtual: 0, meuValor: 0, ganhador: 'Outro',
+                    status: '', posicao: '?',
+                    timerSeconds: -1, segundosParaEncerramento: undefined,
+                    dataHoraFimContagem: undefined,
+                    updatedAt: Date.now(),
+                    officialMargin: 1, officialMarginType: 'V',
+                    desc: si.descricao, tipo: si.tipo,
+                    isGroup: false, isGroupItem: true, parentGroupId: parentId,
+                    qtdeItensDoGrupo: 0, subItens: undefined
+                }));
+                console.log(`%c[GRUPO] ✈️ Enviando ${subMapped.length} sub-itens via IPC direto`, 'color:#f59e0b;font-weight:bold;font-size:12px;');
+                ipcRenderer.send('send-portal-data', {
+                    type: 'portal-sync', roomCode, timestamp: Date.now(),
+                    items: subMapped, serverOffset: undefined,
+                    sigaTimerSeconds: undefined, clockSkew: 0
+                });
+            }
             // ❌ Não retorna early — sub-itens passam pelo fluxo normal (ranking queue + mapper)
             // para terem lances individuais como qualquer outro item
         }
