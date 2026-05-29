@@ -586,6 +586,14 @@
         // Log EVERY URL que chega no processSerproData
         const urlShort = url.replace(/https:\/\/cnetmobile\.estaleiro\.serpro\.gov\.br\/comprasnet-disputa\/v1\/compras\/\d+\//, '.../');
         console.log(`%c[API] 📡 ${urlShort} | items=${items.length} | isArray=${Array.isArray(data)} | hasItens=${!!data.itens}`, 'color:#6366f1;font-size:10px;');
+        // Procura sub-itens (tipo "S") em qualquer resposta
+        const subItemsFound = items.filter((it: any) => it.tipo === 'S' || it.tipo === 's');
+        if (subItemsFound.length > 0) {
+            console.log(`%c[API] 🎯 SUB-ITENS encontrados! ${subItemsFound.length} em ${urlShort}`, 'color:#22c55e;font-weight:bold;font-size:12px;');
+            subItemsFound.forEach((si: any, idx: number) => {
+                console.log(`%c[API]   Sub #${idx}: numero=${si.numero} identificador=${si.identificador} desc="${(si.descricao || '').substring(0, 30)}" parentGrupo=${si.grupo || si.grupoIdentificador || si.grupoId || '?'}`, 'color:#22c55e;');
+            });
+        }
 
         // 🔍 Detecta item grupo (tipo "G", numero -1) para debug
         const groupItem = items.find(it => it.tipo === 'G' || it.numero === -1);
@@ -624,11 +632,14 @@
         // 🔄 Se detectou grupo, tenta buscar sub-itens de endpoints alternativos
         if (groupItem && roomCode && shared.sessionToken) {
             const groupId = groupItem.identificador || 'G1';
+            const groupNum = groupItem.numero; // -1
             const altEndpoints = [
                 `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?grupo=${groupId}`,
                 `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa?identificador=${groupId}`,
                 `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens?grupo=${groupId}`,
-                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/grupos/${groupId}`
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/grupos/${groupId}`,
+                // Tenta endpoint de lances do grupo (pode retornar sub-itens no lance)
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/-1/lances/por-participante?tamanhoPagina=50&pagina=0`
             ];
             altEndpoints.forEach(epUrl => {
                 setTimeout(async () => {
