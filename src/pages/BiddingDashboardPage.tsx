@@ -152,6 +152,12 @@ export default function BiddingDashboardPage() {
     const [appVersion, setAppVersion] = useState('...');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [serverTime, setServerTime] = useState<number>(Date.now());
+    const [now, setNow] = useState<number>(Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         if (isDesktop && (window as any).electronAPI) {
@@ -2065,16 +2071,43 @@ export default function BiddingDashboardPage() {
                                     <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
                                         <Briefcase className="w-5 h-5" />
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="text-sm font-black text-slate-900 uppercase">
-                                                {session.sessionTitle || `UASG ${session.uasg} - ${session.numero}/${session.ano}`}
+                                            <h3 className="text-sm font-black text-slate-900 uppercase truncate">
+                                                {session.sessionTitle || `UASG ${session.uasg || '?'} - ${session.numero || '?'}/${session.ano || '?'}`}
                                             </h3>
-                                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-emerald-600 border-emerald-200 bg-emerald-50">Sessão Ativa</Badge>
+                                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-emerald-600 border-emerald-200 bg-emerald-50 shrink-0">Sessão Ativa</Badge>
                                         </div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
-                                            {session.items?.length || 0} Itens Detectados • Sincronização Estável
-                                        </p>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <span className="text-[10px] text-slate-500 font-semibold">
+                                                UASG {session.uasg || '?'} • {session.numero || '?'}/{session.ano || '?'}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 font-bold">
+                                                {session.items?.length || 0} itens
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            {(() => {
+                                                let minEnd = Infinity;
+                                                for (const item of (session.items || [])) {
+                                                    if (item.dataHoraFimContagem) {
+                                                        const end = new Date(item.dataHoraFimContagem).getTime();
+                                                        if (end < minEnd) minEnd = end;
+                                                    }
+                                                }
+                                                if (minEnd === Infinity) return null;
+                                                const remaining = Math.max(0, Math.floor((minEnd - now) / 1000));
+                                                const h = Math.floor(remaining / 3600);
+                                                const m = Math.floor((remaining % 3600) / 60);
+                                                const s = remaining % 60;
+                                                return (
+                                                    <span className={`text-[11px] font-black font-mono ${remaining <= 60 ? 'text-red-500' : remaining <= 300 ? 'text-amber-500' : 'text-slate-700'}`}>
+                                                        <Clock className="w-3 h-3 inline mr-1 -mt-0.5" />
+                                                        {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-6 mr-4">
                                         <div className="flex flex-col items-end">
