@@ -360,10 +360,16 @@ export default function BiddingDashboardPage() {
                             const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;
                             
                             let nextBid = 0;
-                            const isLeaderBeatable = (currentBest > 0 && currentBest - margin >= myMin);
-                            
+                            // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance, não desconta do concorrente
+                            const beatingAmount = allow4 ? 0.0001 : 0.01;
+                            const maxDecrement = Math.max(margin, mandatorySerproMargin);
+                            const lowestAllowed = myCurrentBid - maxDecrement;
+                            const beatingBid = currentBest > 0 ? currentBest - beatingAmount : 0;
+                            const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestAllowed));
+                            const isLeaderBeatable = currentBest > 0 && candidateBid < currentBest && candidateBid < myCurrentBid;
+
                             if (isLeaderBeatable) {
-                                nextBid = Math.min(currentBest - margin, maxAllowedBidBySerpro);
+                                nextBid = candidateBid;
                             } else {
                                 // 📊 ESTRATÉGIA DE BRIGA POR POSIÇÃO INTERMEDIÁRIA INTELIGENTE (v4.0.0)
                                 // Se o líder não é batível, procuramos no ranking o melhor concorrente (menor valor)
@@ -411,31 +417,33 @@ export default function BiddingDashboardPage() {
                                         })
                                         .sort((a, b) => a - b); // Ordena do menor (melhor posição) para o maior
 
-                                    // Procura a melhor posição (menor lance) que podemos cobrir
+                                    // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance, não desconta do concorrente
+                                    // Antes: competidor batível se cBid - margin >= myMin
+                                    // Agora: se lowestAllowed < cBid (consigo ir abaixo dele) E beatingBid >= myMin
                                     for (const cBid of competitorBids) {
-                                        if (cBid - margin >= myMin) {
+                                        const beatingBid = cBid - beatingAmount;
+                                        const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestAllowed));
+                                        if (candidateBid < cBid && candidateBid < myCurrentBid) {
                                             targetCompetitorBid = cBid;
-                                            break; // Encontrou a melhor posição alcançável!
+                                            break;
                                         }
                                     }
                                 }
 
                                 if (targetCompetitorBid !== null) {
-                                    const idealBid = targetCompetitorBid - margin;
+                                    const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestAllowed));
                                     
                                     // Se o nosso lance atual já é menor ou igual ao lance ideal, já garantimos essa posição!
-                                    // Não precisamos queimar margem dando um lance menor à toa.
                                     if (myCurrentBid <= idealBid) {
-                                        // 🔇 Throttle de log: só loga 1x por segundo por item para evitar spam no console
                                         const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
                                         if (Date.now() - lastLogTime >= 1000) {
-                                            console.log(`[SNIPER] Posição ideal já garantida para o orçamento. Mantendo R$ ${myCurrentBid} (Lance ideal seria R$ ${idealBid} para bater concorrente de R$ ${targetCompetitorBid}).`);
+                                            console.log(`[SNIPER] Posição ideal já garantida. Mantendo R$ ${myCurrentBid} (Ideal seria R$ ${idealBid} p/ concorrente R$ ${targetCompetitorBid}).`);
                                             lastLogRef.current[`pos_${sId}`] = Date.now();
                                         }
-                                        return; // Pula este ciclo para economizar margem e CPU!
+                                        return;
                                     } else {
-                                        nextBid = Math.min(idealBid, maxAllowedBidBySerpro);
-                                        console.log(`[SNIPER POSITIONING] Mirando no concorrente de R$ ${targetCompetitorBid}. Enviando R$ ${nextBid} para garantir a melhor posição possível economizando margem.`);
+                                        nextBid = idealBid;
+                                        console.log(`[SNIPER POSITIONING] Mirando concorrente R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowestAllowed=R$ ${lowestAllowed})`);
                                     }
                                 } else {
                                     // 🔧 FIX v3.8.127: Mesmo sem concorrente batível, reduz agressivamente em direção ao mínimo

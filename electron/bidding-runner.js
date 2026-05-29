@@ -701,35 +701,28 @@ class RoomRunner {
                                         .map(r => r.valor)
                                         .sort((a, b) => a - b); // Crescente
 
-                                    // Calcular decrementToUse
-                                    let decrementToUse = margin;
-                                    if (officialMarginVal > 0) {
-                                        const requiredDecrement = officialMarginType === 'P' 
-                                            ? currentBest * (officialMarginVal / 100) 
-                                            : officialMarginVal;
-                                        decrementToUse = Math.max(margin, requiredDecrement);
-                                    }
+                                    // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance anterior, não desconta do concorrente
+                                    // Antes: nextBid = competitorBid - margin (desperdiçava margem)
+                                    // Agora: nextBid = max(myMin, min(competitorBid - beatingAmount, myCurrentBid - maxDecrement))
+                                    const maxDecrement = Math.max(margin, officialMarginVal > 0
+                                        ? (officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal)
+                                        : 0);
+                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : myMin;
+                                    const beatingAmount = allow4 ? 0.0001 : 0.01;
 
-                                    // Encontrar o primeiro concorrente que conseguimos bater (c - decrementToUse >= myMin)
                                     let targetCompetitorBid = null;
                                     for (const c of competitorBids) {
-                                        if (c - decrementToUse >= myMin) {
+                                        const beatingBid = c - beatingAmount;
+                                        const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestPossibleBid));
+                                        if (candidateBid < c && candidateBid < myCurrentBid) {
                                             targetCompetitorBid = c;
                                             break;
                                         }
                                     }
 
                                     if (targetCompetitorBid !== null) {
-                                        const targetBid = targetCompetitorBid - decrementToUse;
-
-                                        // Se nosso lance atual já é menor ou igual ao targetBid,
-                                        // já ocupamos essa posição (ou melhor) e economizamos margem!
-                                        if (myCurrentBid !== 999999999 && myCurrentBid <= targetBid) {
-                                            shouldBid = false;
-                                            console.log(`[BACKEND SNIPER] Item ${sId}: Já estamos na posição ideal (meuLance: ${myCurrentBid} <= target: ${targetBid} p/ concorrente ${targetCompetitorBid}). Protegendo margem.`);
-                                        } else {
-                                            nextBid = targetBid;
-                                        }
+                                        nextBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
+                                        console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Mirando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`);
                                     } else {
                                         // Nenhum concorrente é batível acima de myMin.
                                         // A melhor posição que podemos conseguir é o nosso próprio mínimo
@@ -741,11 +734,16 @@ class RoomRunner {
                                     }
                                 } else {
                                     // Fallback: Lógica padrão sem rankings detalhados
-                                    const isLeaderBeatable = (currentBest > 0 && (currentBest - margin) >= myMin && maxAllowedToTakeLead >= myMin);
+                                    const beatingAmount = allow4 ? 0.0001 : 0.01;
+                                    const maxDecrement = Math.max(margin, mandatorySerproMargin);
+                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : myMin;
+                                    const beatingBid = currentBest > 0 ? currentBest - beatingAmount : 0;
+                                    const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestPossibleBid));
+                                    const isLeaderBeatable = currentBest > 0 && candidateBid < currentBest && candidateBid < myCurrentBid;
 
                                     if (isLeaderBeatable) {
-                                        nextBid = Math.min(currentBest - margin, maxAllowedToTakeLead);
-                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder batível. nextBid=${nextBid} (lider=${currentBest} - margem=${margin})`);
+                                        nextBid = candidateBid;
+                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder batível. nextBid=${nextBid} (lider=${currentBest}, beatingAmount=${beatingAmount})`);
                                     } else {
                                         // 🔧 FIX: Sem ranking E líder não batível → dispara no mínimo do usuário
                                         // Isso garante que o robô sempre tente participar nos 30s finais
