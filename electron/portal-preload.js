@@ -586,7 +586,18 @@
         // 🔍 Detecta item grupo (tipo "G", numero -1) para debug
         const groupItem = items.find(it => it.tipo === 'G' || it.numero === -1);
         if (groupItem) {
-            console.log(`%c[GRUPO] Item grupo detectado em ${url}: numero=${groupItem.numero} identificador=${groupItem.identificador} desc="${(groupItem.descricao || '').substring(0, 40)}"`, 'color:#f59e0b;font-weight:bold;');
+            const subItens = groupItem.itens || [];
+            console.log(`%c[GRUPO] Item grupo detectado em ${url}: numero=${groupItem.numero} identificador=${groupItem.identificador} desc="${(groupItem.descricao || '').substring(0, 40)}" subItens=${subItens.length} keys=${Object.keys(groupItem).join(',')}`, 'color:#f59e0b;font-weight:bold;');
+            if (subItens.length > 0) {
+                console.log(`%c[GRUPO] 1o sub-item:`, 'color:#f59e0b;', JSON.stringify(subItens[0]).substring(0, 300));
+            }
+            if (items.filter(i => i.tipo === 'G' || i.numero === -1).length > 0) {
+                const nonGroup = items.filter(i => !(i.tipo === 'G' || i.numero === -1));
+                console.log(`%c[GRUPO] Itens avulsos (fora do grupo): ${nonGroup.length}`, 'color:#f59e0b;font-weight:bold;');
+                nonGroup.forEach((ig, idx) => {
+                    console.log(`%c[GRUPO]   Avulso #${idx}: numero=${ig.numero} identificador=${ig.identificador} desc="${(ig.descricao || '').substring(0, 30)}"`, 'color:#f59e0b;');
+                });
+            }
         }
 
         if (items.length > 0 && roomCode) {
