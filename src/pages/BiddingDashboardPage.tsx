@@ -2087,21 +2087,10 @@ export default function BiddingDashboardPage() {
                                                     const subCount = mySubItems.length || grp.qtdeItensDoGrupo || '?';
                                                     return [
                                                         <div key={grp.itemId || 'grupo'} className="bg-amber-50 border border-amber-200 rounded-lg mb-3 p-3">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-200/60">
                                                                 <span className="font-bold text-amber-900 uppercase text-xs tracking-wider">{grp.desc || 'GRUPO'}</span>
                                                                 <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">{subCount} itens internos</span>
                                                             </div>
-                                                            <SigaItemRow 
-                                                                item={grp} 
-                                                                sid={sid} 
-                                                                onSaveStrategy={onSaveStrategy}
-                                                                onManualBid={handleManualBid}
-                                                                serverTime={serverTime}
-                                                                strategyConfig={getStrategy(sid, grp.itemId || grp.numero)}
-                                                                onStartSniperTest={startSniperTest}
-                                                                simulationMode={session.simulationMode}
-                                                                clockSkew={clockSkewRef.current}
-                                                            />
                                                             {mySubItems.length > 0 && (
                                                                 <div className="mt-4 pt-3 border-t-2 border-amber-300/60">
                                                                     <span className="text-[10px] font-bold uppercase text-amber-700 tracking-wider flex items-center gap-1.5 mb-3">
