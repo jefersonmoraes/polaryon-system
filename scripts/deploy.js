@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-const vpsIp = "204.168.151.231";
+const vpsIp = "191.252.93.79";
 const remotePath = "/var/www/polaryon/storage/download/";
 
 function deploy() {

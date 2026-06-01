@@ -1047,11 +1047,8 @@
                     var now = Date.now();
                     console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
                     processSerproData(wsData, fakeUrl, 200, true, '', now, now);
-                    // 🔄 Debounce: só repassa ao backend se passou pelo menos 200ms desde o último envio (reduz IPC traffic)
-                    if (!window._lastWsForward || (now - window._lastWsForward) > 200) {
-                        window._lastWsForward = now;
-                        ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
-                    }
+                    // 🔄 Repassa ao backend imediatamente (sem debounce) — cada ms conta em modo guerra
+                    ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
                 }
             }
         }
@@ -1700,121 +1697,9 @@
         }
     }, 2000);
 
-    // ⚡ LOOP DE FUNDO ADAPTATIVO — MODO GUERRA DE LANCES (v3.8.70)
-    // Detecta rajadas de lances (valorAtual mudando a cada ciclo) e acelera para 150ms.
-    // Volta ao ritmo normal (800ms) quando o mercado estabiliza. Anti-429 em modo passivo (3000ms).
-    let currentIndex = 0;
-    let consecutiveLoopFailures = 0;
-    let _loop429count = 0;               // 🚦 Contagem de 429 na janela
-    let _loop429windowStart = Date.now(); // 🚦 Início da janela
-    const _loopLastBestValues = new Map();  // purchaseId → valorAtual anterior
-    const _loopWarCycles = new Map();       // purchaseId → contador de ciclos em guerra
-
-    async function _adaptiveLoop() {
-        if (!shared.sessionToken || shared.synchronizedPurchases.size === 0) {
-            setTimeout(_adaptiveLoop, 3000);
-            return;
-        }
-
-        const purchaseIds = Array.from(shared.synchronizedPurchases);
-        const batchSize = Math.min(3, purchaseIds.length);
-        let anyWar = false;
-
-        // 🚦 Reseta janela 429 a cada 30s
-        const now = Date.now();
-        if (now - _loop429windowStart > 30000) {
-            _loop429count = 0;
-            _loop429windowStart = now;
-        }
-
-        for (let b = 0; b < batchSize; b++) {
-            const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
-            currentIndex++;
-
-            try {
-                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/em-disputa`;
-                const tStart = Date.now();
-                const res = await fetch(url, {
-                    headers: {
-                        'Authorization': shared.sessionToken,
-                        'Accept': 'application/json',
-                        'x-device-platform': 'web',
-                        'x-version-number': '6.0.2'
-                    }
-                });
-                const tEnd = Date.now();
-
-                if (res.ok) {
-                    consecutiveLoopFailures = 0;
-                    const data = await res.json();
-                    const dateHeader = res.headers.get('Date') || res.headers.get('date') || '';
-
-                    // ⚡ Detecta guerra de lances: valorAtual mudou desde o ciclo anterior?
-                    const items = Array.isArray(data) ? data : (data.itens || []);
-                    for (const it of items) {
-                        const best = it.melhorValorGeral ? (it.melhorValorGeral.valorCalculado ?? 0) : 0;
-                        const prev = _loopLastBestValues.get(purchaseId + '_' + (it.identificador || it.numero));
-                        if (prev !== undefined && prev !== best && best > 0) {
-                            _loopWarCycles.set(purchaseId, (_loopWarCycles.get(purchaseId) || 0) + 1);
-                            anyWar = true;
-                        } else if (prev === best) {
-                            const w = _loopWarCycles.get(purchaseId) || 0;
-                            if (w > 0) _loopWarCycles.set(purchaseId, w - 1);
-                        }
-                        _loopLastBestValues.set(purchaseId + '_' + (it.identificador || it.numero), best);
-                    }
-
-                    processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
-                } else if (res.status === 429) {
-                    _loop429count++;
-                    consecutiveLoopFailures++;
-                    console.warn(`[POLARYON LOOP] 🚦 429 Rate-Limit na sala ${purchaseId}! count=${_loop429count}`);
-                    if (consecutiveLoopFailures >= 5) {
-                        setTimeout(_adaptiveLoop, 10000); // Backoff 10s após 5 falhas consecutivas
-                        return;
-                    }
-                } else if (res.status === 401 || res.status === 403) {
-                    consecutiveLoopFailures++;
-                    console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
-                    if (consecutiveLoopFailures >= 3) {
-                        consecutiveLoopFailures = 0;
-                        shared.sessionToken = '';
-                        ipcRenderer.send('portal-error', {
-                            sessionId: 'GLOBAL',
-                            error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
-                            code: res.status,
-                            action: 'REQUIRE_REAUTH'
-                        });
-                    }
-                } else if (res.status === 422) {
-                    console.log(`[POLARYON LOOP] ⏳ Sala aguardando início ou pausada (422): ${purchaseId}. Mantendo no radar...`);
-                } else if (res.status === 404) {
-                    shared.synchronizedPurchases.delete(purchaseId);
-                    console.warn(`[POLARYON LOOP] 🛡️ Sala auto-removida por não existir (${res.status}): ${purchaseId}`);
-                }
-            } catch (e) {
-                console.error(`[POLARYON LOOP] Falha ao atualizar sala ${purchaseId}:`, e);
-            }
-        } // fim do batch
-
-        // ⚡ Intervalo adaptativo Anti-429 — guerra no mínimo 300ms
-        const warLevel = Math.max(...Array.from(_loopWarCycles.values()), 0);
-        let nextMs;
-        if (_loop429count >= 3) {
-            nextMs = 3000; // 🚦 Muitos 429: desacelera para 3s
-        } else if (_loop429count >= 1) {
-            nextMs = 1000; // 🚦 429 detectado: 1s
-        } else if (warLevel >= 2) {
-            nextMs = 300;  // ⚔️ Guerra intensa: 300ms
-        } else if (warLevel >= 1) {
-            nextMs = 500;  // ⚔️ Guerra leve: 500ms
-        } else {
-            nextMs = 3000; // Normal: 3s
-        }
-        if (warLevel >= 1) console.log(`%c[POLARYON LOOP] ⚔️ GUERRA DE LANCES! Polling=${nextMs}ms (war=${warLevel} 429=${_loop429count})`, 'color:#f59e0b;font-weight:bold;');
-        setTimeout(_adaptiveLoop, nextMs);
-    }
-    _adaptiveLoop();
+    // ⚡ LOOP DE FUNDO ADAPTATIVO — REMOVIDO v3.8.141
+    // Redundante: dados chegam via WebSocket em tempo real + XHR interceptor.
+    // Backend (bidding-runner.js) já faz polling adaptativo com detecção de guerra.
 
     // =========================================================================
     // 🔍 SCANNER PROATIVO DE PARTICIPAÇÕES (v3.7.4)

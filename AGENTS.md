@@ -166,9 +166,27 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** Adicionado `_latencySamples[]` + `setInterval(30s)` no escopo do `portal-preload.js`. Cada chamada de `processSerproData()` registra `tEnd - tStart` no array. A cada 30s o console VM15 exibe: `[LATÊNCIA 📊] avg ms (min=x max=y, N amostras — 30s)`.
 
+## Estado Atual (v3.8.140)
+- Polling adaptativo: Guerra 250ms (antes 80ms) | Reta 30s 150ms | Reta 60s 300ms | Ativo 500ms (backend)
+- Frontend adaptive loop: guerra 300ms (antes 50ms) com detecção de 429 e backoff automático
+- Anti-429 completo: sliding window + backoff automático global (bidding-runner.js)
+- Rate limiter global de requisições por segundo (bidding-runner.js)
+- Visual bug corrigido: override otimista TTL 15s→3s (BiddingDashboardPage.tsx)
+- RANKING_RATE_MS 2000ms + batch por purchaseId (portal-preload.js)
+- Filas de ranking processadas em paralelo por compra (antes serial por item)
+- Latência VPS Finlândia→Serpro: ~1000ms (HTTPS)
+- Latência frontend (portal-preload.js): ~50ms (HTTP)
+- Latência de processamento interno: ~1ms
+- 18+ salas monitoradas simultaneamente
+- Ranking queue: batches paralelos por purchaseId reduzem ciclo total de 26s para ~6s
+
 ## Próximos Passos Possíveis
-- [ ] Verificar se `[LATÊNCIA 📊]` aparece no console VM15 após atualizar para v3.8.137
-- [ ] Avaliar se campos ausentes no WebSocket afetam o mapeamento de itens
+- [ ] Migrar VPS da Finlândia para Locaweb SP (Brasil) para reduzir latência de 1000ms para ~10-50ms
+- [ ] Contratar Locaweb VPS 2GB (2 vCPUs, 60GB SSD, R$47,90/mês) ou VPS 4GB (R$115,90/mês)
+- [ ] Backup completo da VPS atual antes da migração
+- [ ] Após migração: reduzir war polling de 250ms para 80-100ms (sem risco de 429 no Brasil)
+- [ ] Remover redundant `_adaptiveLoop` do frontend portal-preload.js
+- [ ] Avaliar se 2GB RAM é suficiente para PostgreSQL + backend antes de migrar
 
 ## Bugs de `posicao` Corrigidos (v3.8.129)
 ### 1. `isLosingPos` no sniper frontend (`BiddingDashboardPage.tsx:330`)
@@ -197,3 +215,75 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 **Problema:** O sniper queimava R$0,10 a cada 30s desnecessariamente. Após disparar um lance intermediário (ex: R$ 45.309,9999), o freeze de 30s expirava e o código comparava `myCurrentBid <= idealBid`. Como `idealBid` é limitado por `lowestAllowed = myCurrentBid - maxDecrement`, essa condição era **sempre falsa** (ex: 45309.9999 <= 45309.8999 = false), fazendo o robô disparar outro lance R$0,10 abaixo.
 
 **Solução:** `myCurrentBid <= beatingThreshold` (onde `beatingThreshold = targetCompetitorBid - beatingAmount`). Agora o sniper verifica se o lance já vence o concorrente alvo diretamente, parando de reduzir assim que a posição está garantida. Se o concorrente reduzir, o sniper reage corretamente.
+
+## Implementado (v3.8.140)
+
+### 1. Ranking queue em BATCH por purchaseId (`portal-preload.js`)
+**Antes:** `_rankingQueue` processava 1 item a cada 2000ms. Com 13 itens em 18 salas, um ciclo completo levava ~26s. Cada item disparava captcha + API call sequencialmente.
+
+**Arquivo:** `electron/portal-preload.js:514-543`
+
+**Solução:** 
+- `pendingRankingTarget` (single) → `pendingRankingTargets[]` (array) — suporta múltiplos targets simultâneos
+- Queue processor agora agrupa TODOS os itens da mesma compra e processa o lote em paralelo
+- `triggerRankingFetch()` faz `push` ao array; fresh-captcha handler consome via `.shift()`
+- Um captcha por item, todos disparados simultaneamente
+- Rate limit de 2000ms é **entre lotes** (compras diferentes), não entre itens
+- Limpeza automática de targets órfãos se captcha falhar
+
+**Impacto:** 13 itens em 3 compras → ~6s (antes 26s). 4x mais rápido.
+
+### 2. Limpeza de versões antigas na VPS (v3.8.140)
+**Antes:** 1.6GB de versões acumuladas (v3.8.126 a v3.8.139) em `/var/www/polaryon/storage/download/`.
+
+**Solução:** Mantido apenas v3.8.139 (fallback) + v3.8.140 (atual). 1.36GB liberados.
+
+### 3. VPS Finlândia → Locaweb SP (CONCLUÍDO v3.8.140-141)
+- Nova VPS Locaweb SP (191.252.93.79) ativa com Node.js 20.20.2, PostgreSQL 16, Nginx 1.24, PM2, HTTPS (Let's Encrypt)
+- DNS polaryon.com.br atualizado e propagado
+- Google OAuth corrigido (clientId real no .env)
+- VPS Finlândia (204.168.151.231) offline/inatingível
+
+**Latência medida (Locaweb SP → Serpro HTTS):**
+- Média: **78ms** (min 69ms, max 89ms, 5 amostras)
+- Antiga Finlândia: ~1000ms
+- **Melhoria: ~13x mais rápido**
+
+## Implementado (v3.8.141)
+
+### 1. `_adaptiveLoop` redundante removido (`portal-preload.js`)
+**Antes:** Loop de polling adaptativo no frontend (guerra 300ms, normal 3s) fazia HTTP direto ao Serpro, duplicando o trabalho do backend.
+
+**Arquivo:** `electron/portal-preload.js:1703-1817`
+
+**Solução:** Removido. Dados chegam via WebSocket em tempo real + XHR interceptor. Backend (bidding-runner.js) já faz polling adaptativo completo com detecção de guerra.
+
+### 2. War polling reduzido: 250ms → 80ms (`bidding-runner.js`)
+**Antes:** `nextInterval = 250` (Anti-429 conservador para Finlândia com ~1000ms de latência).
+
+**Arquivo:** `electron/bidding-runner.js:977`
+
+**Solução:** `nextInterval = 80` — Agora que a VPS está no Brasil (Locaweb SP, ~78ms de latência), o risco de 429 é muito menor. Polling mais agressivo = reação mais rápida a lances concorrentes.
+
+### 3. War polling agressivo: 80ms → 50ms (`bidding-runner.js:977`)
+**Solução:** Reduzido para 50ms em modo guerra. Locaweb SP + ~78ms latência → risco 429 baixo.
+
+### 4. Debounce WS removido (`portal-preload.js:1051`)
+**Antes:** Debounce de 200ms no repasse de dados WebSocket para o backend (para reduzir IPC traffic).
+
+**Solução:** Removido completamente. Cada mensagem WS é repassada instantaneamente. IPC é rápido (<1ms), 200ms de latência não se justifica.
+
+### 5. bidAgent turbinado (`bidding-runner.js:1189-1206`)
+**Antes:** `maxSockets=4, keepAliveMsecs=60000` — socket esfriava após 60s sem lance.
+
+**Solução:** `maxSockets=6, keepAliveMsecs=600000` + ping periódico GET a cada 30s no host Serpro para manter socket aquecido. Elimina ~90ms de handshake TCP+TLS em lances esporádicos.
+
+### 6. Captcha refresh mais frequente (`bidding-runner.js:18`)
+**Antes:** Renovava captchas a cada 30s.
+
+**Solução:** Reduzido para 15s — menos chance de captcha expirado em modo guerra.
+
+### 7. Frontend loop 50ms → 20ms (`BiddingDashboardPage.tsx:533`)
+**Antes:** Loop de decisão do sniper frontend a cada 50ms.
+
+**Solução:** Reduzido para 20ms — decisões mais rápidas, ~25ms a menos de latência por ciclo.

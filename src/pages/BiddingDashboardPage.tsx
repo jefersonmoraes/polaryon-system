@@ -526,7 +526,7 @@ export default function BiddingDashboardPage() {
                     }
                 }
             });
-        }, 50); // ⚡ Loop ultra-rápido de 50ms (v4.2.0)
+        }, 20); // ⚡ Loop ultra-rápido de 20ms (v3.8.141 — cenário agressivo)
 
         return () => clearInterval(autoBidInterval);
     }, [isListening]);
