@@ -53,8 +53,8 @@
     }, 150);
 
     async function getNextCaptcha() {
-        // Descarta captchas com mais de 20s (expiram no Serpro)
-        while (captchaPool.length > 0 && Date.now() - captchaPool[0].ts > 20000) {
+        // Descarta captchas com mais de 10s (expiram no Serpro — segurança maior)
+        while (captchaPool.length > 0 && Date.now() - captchaPool[0].ts > 10000) {
             captchaPool.shift();
         }
         if (captchaPool.length > 0) {
@@ -213,40 +213,55 @@
             return;
         }
 
-        try {
-            // 1. Captcha do Pool Rotativo (⚡ instantâneo) com fallback ao vivo
-            const { c1, c2 } = await getNextCaptcha();
+        // 🔄 Tenta até 2x com captcha fresco em caso de 400 (captcha expirado)
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const { c1, c2 } = attempt === 1
+                    ? await getNextCaptcha()
+                    // Na 2ª tentativa, busca captchas ao vivo (ignora pool — pode ter servido captcha velho)
+                    : await (async () => {
+                        const [live1, live2] = await Promise.all([
+                            fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
+                            fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+                        ]);
+                        return { c1: live1, c2: live2 };
+                    })();
 
-            // 2. Monta URL de ataque direto ao Serpro (sem passar pela VPS)
-            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
-            const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
+                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
+                const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
 
-            console.log(`%c[POLARYON] 🚀 Disparando lance de R$ ${value} no Item ${itemId} direto do BrowserView...`, "color: #a855f7; font-weight: bold;");
+                console.log(`%c[POLARYON] 🚀 [Tentativa ${attempt}] Disparando lance de R$ ${value} no Item ${itemId}...`, "color: #a855f7; font-weight: bold;");
 
-            // 3. Disparo direto do BrowserView (elimina latência do proxy VPS)
-            const response = await fetch(targetUrl, {
-                method: 'POST',
-                keepalive: true,
-                headers: {
-                    'Authorization': shared.sessionToken,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json, text/plain, */*',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
-                },
-                body: JSON.stringify(payload)
-            });
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {
+                        'Authorization': shared.sessionToken,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json, text/plain, */*',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
+                    },
+                    body: JSON.stringify(payload)
+                });
 
-            if (response.ok) {
-                console.log(`%c[POLARYON] ✅ Lance de R$ ${value} enviado com sucesso!`, "color: #10b981; font-weight: bold;");
-                // 🎯 Notifica o backend para atualizar cooldown (evita lance duplicado)
-                ipcRenderer.send('bid-sent', { purchaseId, itemId, value });
-            } else {
-                const errText = await response.text();
-                console.error(`%c[POLARYON] ❌ Lance rejeitado (${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
+                if (response.ok) {
+                    console.log(`%c[POLARYON] ✅ Lance de R$ ${value} enviado com sucesso!`, "color: #10b981; font-weight: bold;");
+                    ipcRenderer.send('bid-sent', { purchaseId, itemId, value });
+                    break; // Sucesso — sai do loop
+                } else {
+                    const errText = await response.text();
+                    if (response.status === 400 && attempt === 1) {
+                        console.warn(`%c[POLARYON] ⚠️ Lance rejeitado (400) na tentativa ${attempt}. Captcha possivelmente expirado — buscando captcha fresco e tentando novamente...`, "color: #f59e0b; font-weight: bold;");
+                        continue; // 🔄 Retry com captcha fresco
+                    }
+                    console.error(`%c[POLARYON] ❌ Lance rejeitado (${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
+                    break; // Erro não-recuperável — aborta
+                }
+            } catch (e) {
+                console.error(`[POLARYON] Exceção crítica na tentativa ${attempt}:`, e);
+                break;
             }
-        } catch (e) {
-            console.error('[POLARYON] Exceção crítica durante o disparo direto:', e);
         }
     });
 
@@ -994,8 +1009,11 @@
                     var now = Date.now();
                     console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
                     processSerproData(wsData, fakeUrl, 200, true, '', now, now);
-                    // 🎯 Forward direto para o motor de lances (backend) — elimina polling do bidding-runner
-                    ipcRenderer.send('ws-item-data', wsData);
+                    // 🔄 Debounce: só repassa ao backend se passou pelo menos 200ms desde o último envio (reduz IPC traffic)
+                    if (!window._lastWsForward || (now - window._lastWsForward) > 200) {
+                        window._lastWsForward = now;
+                        ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
+                    }
                 }
             }
         }

@@ -15,7 +15,7 @@ class CaptchaManager {
 
     async getTokens() {
         const now = Date.now();
-        if (now - this.lastFetch > 180000) { // Renova a cada 3 minutos
+        if (now - this.lastFetch > 30000) { // Renova a cada 30s (captchas expiram rápido no Serpro)
             if (!this.fetchPromise) {
                 this.fetchPromise = this._fetchTokens().finally(() => {
                     this.fetchPromise = null;
@@ -1183,9 +1183,9 @@ class BiddingRunner {
     /**
      * 🎯 Injeta dados de itens em tempo real (WebSocket) em TODOS os RoomRunners ativos
      */
-    injectRealtimeItems(items) {
+    injectRealtimeItems(codigo, items) {
         for (const [sessionId, runner] of this.activeRunners) {
-            if (runner.active) {
+            if (runner.active && runner.idCompra === String(codigo)) {
                 runner.injectRealtimeItems(items);
             }
         }
@@ -1248,47 +1248,86 @@ class BiddingRunner {
         }
         this.recentBids.set(dedupKey, { value, timestamp: Date.now() });
 
-        const bidStart = Date.now();
-        try {
-            console.log(`[KAMIKAZE SNIPER] Engatilhando Lance HTTP Invisível: Item ${itemId} | Valor: ${value}`);
-            const captchas = await captchaManager.getTokens();
-            
-            let token = global.serproToken;
+        // 🔄 Tenta até 2x com captcha fresco em caso de 400 (captcha expirado)
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const bidStart = Date.now();
+            try {
+                console.log(`[KAMIKAZE SNIPER] [Tentativa ${attempt}] Engatilhando Lance HTTP Invisível: Item ${itemId} | Valor: ${value}`);
+                const captchas = await captchaManager.getTokens();
+                
+                let token = global.serproToken;
 
-            if (!token) {
-                throw new Error("Token de Sessão não capturado. Disparo Abortado.");
-            }
-
-            const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
-
-            const payload = {
-                valorInformado: parseFloat(value),
-                faseItem: "LA"
-            };
-
-             const response = await axios.post(targetUrl, payload, {
-                httpsAgent: this.bidAgent || this.agent,
-                headers: {
-                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
+                if (!token) {
+                    throw new Error("Token de Sessão não capturado. Disparo Abortado.");
                 }
-            });
 
-            const bidLatency = Date.now() - bidStart;
-            console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency}ms)`);
-            
-            if (this.webContents && !this.webContents.isDestroyed()) {
-                this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency}ms)`);
-            }
-        } catch (e) {
-            const bidLatency = Date.now() - bidStart;
-            console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, e.response ? e.response.data : e.message);
-            if (this.webContents && !this.webContents.isDestroyed()) {
-                this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId} (${bidLatency}ms). Erro: ${e.message}`);
+                // Na 2ª tentativa, força captchaManager a renovar os tokens (ignora cache)
+                if (attempt === 2) {
+                    captchaManager.lastFetch = 0;
+                    captchaManager.token1 = '';
+                    captchaManager.token2 = '';
+                    const fresh = await captchaManager.getTokens();
+                    fresh.captcha1 = fresh.captcha1 || captchas.captcha1;
+                    fresh.captcha2 = fresh.captcha2 || captchas.captcha2;
+                    const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${fresh.captcha1}&captcha2=${fresh.captcha2}&captcha3=${fresh.captcha1}`;
+                    const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
+                    const response = await axios.post(targetUrl, payload, {
+                        httpsAgent: this.bidAgent || this.agent,
+                        headers: {
+                            'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        }
+                    });
+                    const bidLatency2 = Date.now() - bidStart;
+                    console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency2}ms)`);
+                    if (this.webContents && !this.webContents.isDestroyed()) {
+                        this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency2}ms)`);
+                    }
+                    return; // Sucesso
+                }
+
+                const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
+
+                const payload = {
+                    valorInformado: parseFloat(value),
+                    faseItem: "LA"
+                };
+
+                const response = await axios.post(targetUrl, payload, {
+                    httpsAgent: this.bidAgent || this.agent,
+                    headers: {
+                        'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
+                    }
+                });
+
+                const bidLatency = Date.now() - bidStart;
+                console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency}ms)`);
+                
+                if (this.webContents && !this.webContents.isDestroyed()) {
+                    this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency}ms)`);
+                }
+                return; // Sucesso — sai do loop
+            } catch (e) {
+                const bidLatency = Date.now() - bidStart;
+                const statusCode = e.response ? e.response.status : 0;
+                if (statusCode === 400 && attempt === 1) {
+                    console.warn(`[KAMIKAZE SNIPER] ⚠️ 400 na tentativa ${attempt}. Captcha possivelmente expirado — forçando renovação e tentando novamente...`);
+                    continue; // 🔄 Retry com captcha fresco
+                }
+                console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, e.response ? e.response.data : e.message);
+                if (this.webContents && !this.webContents.isDestroyed()) {
+                    this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId} (${bidLatency}ms). Erro: ${e.message}`);
+                }
+                return; // Erro não-recuperável — aborta
             }
         }
     }

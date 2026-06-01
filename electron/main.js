@@ -296,10 +296,10 @@ ipcMain.on('send-portal-data', (event, data) => {
 });
 
 // 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
-ipcMain.on('ws-item-data', (event, items) => {
+ipcMain.on('ws-item-data', (event, { codigo, items }) => {
     const runner = biddingRunner || global.biddingRunner;
-    if (runner && typeof runner.injectRealtimeItems === 'function') {
-        runner.injectRealtimeItems(items);
+    if (runner && typeof runner.injectRealtimeItems === 'function' && codigo) {
+        runner.injectRealtimeItems(codigo, items);
     }
 });
 

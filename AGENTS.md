@@ -122,8 +122,44 @@ Adicionada verificação runtime em `injectRealtimeItems()`: confere 8 campos cr
 ### 3. Monitor de latência WebSocket vs HTTP fetch (`bidding-runner.js`)
 Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo registra latência (WS=0ms, HTTP=real). A cada 30s loga min/avg/max/count de cada tipo: `[LATÊNCIA 📊] WS: 0.0ms (0-0, 45 amostras) | HTTP: 127.3ms (45-892, 12 amostras)`.
 
+## Implementado (v3.8.133)
+
+### 1. Retry automático com captcha fresco em caso de HTTP 400 (`portal-preload.js`, `bidding-runner.js`)
+**Antes:** Lance rejeitado com 400 (captcha expirado) era logado e abortado. Sem retry.
+
+**Arquivo:** `electron/portal-preload.js:216-251` (frontend), `electron/bidding-runner.js:1241-1294` (backend)
+
+**Solução:**
+- **Frontend:** Loop de até 2 tentativas. Na 1ª usa captcha do pool. Na 2ª (se 400), busca captchas ao vivo (ignora pool) e retenta.
+- **Backend:** Loop de até 2 tentativas. Na 1ª usa captcha do `captchaManager`. Na 2ª (se 400), força `lastFetch=0` + limpa tokens para renovação forçada e retenta.
+- Pool de captcha do frontend reduziu TTL de 20s→10s para diminuir chance de usar captcha expirado.
+- `captchaManager` do backend renovava a cada 3 minutos — agora renova a cada 30 segundos.
+
+### 2. Pool de captcha mais conservador (`portal-preload.js`)
+**Antes:** TTL de 20s no pool — captchas podiam expirar no Serpro antes de serem usados.
+**Solução:** TTL reduzido para 10s.
+
+### 3. Refresh de captcha do backend mais frequente (`bidding-runner.js`)
+**Antes:** `captchaManager` renovava tokens a cada 180s (3 min) — muito tempo para captchas que expiram rápido.
+**Solução:** Renova a cada 30s, reduzindo drasticamente a janela de captcha expirado.
+
+## Implementado (v3.8.134)
+
+### 1. Filtro de `codigo` no WebSocket (bidding-runner.js:1186-1192)
+**Antes:** `BiddingRunner.injectRealtimeItems(items)` injetava dados do WS em **todos** os RoomRunners ativos, independente do `codigo` (purchase ID). Se o usuário tivesse 2 compras abertas, dados da compra A contaminavam a compra B.
+
+**Solução:** Agora aceita `(codigo, items)` e só entrega para runners cujo `idCompra === String(codigo)`.
+
+### 2. IPC relay com `codigo` (main.js:299-304)
+**Antes:** `ipcMain.on('ws-item-data')` passava `items` sem `codigo`.
+**Solução:** O handler agora destrutura `{ codigo, items }` e repassa ambos.
+
+### 3. Debounce de WebSocket no portal-preload (portal-preload.js:1015-1020)
+**Antes:** Cada mensagem WS gerava um `ipcRenderer.send('ws-item-data')` — até 10+ msg/s em modo guerra.
+**Solução:** Só repassa ao backend se passou ≥200ms desde o último envio, reduzindo drasticamente o tráfego IPC.
+
 ## Próximos Passos Possíveis
-- [ ] Monitorar se o WebSocket do Siga tem latência menor que o HTTP fetch em produção
+- [ ] Monitorar logs de `[LATÊNCIA 📊]` em produção
 - [ ] Avaliar se campos ausentes no WebSocket afetam o mapeamento de itens
 
 ## Bugs de `posicao` Corrigidos (v3.8.129)
