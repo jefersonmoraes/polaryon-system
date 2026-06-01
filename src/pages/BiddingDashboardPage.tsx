@@ -444,11 +444,13 @@ export default function BiddingDashboardPage() {
                                 if (targetCompetitorBid !== null) {
                                     const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestAllowed));
                                     
-                                    // Se o nosso lance atual já é menor ou igual ao lance ideal, já garantimos essa posição!
-                                    if (myCurrentBid <= idealBid) {
+                                    // 🔧 FIX v3.8.131: Compara diretamente contra o limiar de batida do concorrente, não contra idealBid
+                                    // (idealBid é limitado por lowestAllowed = myCurrentBid - maxDecrement, então myCurrentBid <= idealBid é quase sempre falso)
+                                    const beatingThreshold = targetCompetitorBid - beatingAmount;
+                                    if (myCurrentBid <= beatingThreshold) {
                                         const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
                                         if (Date.now() - lastLogTime >= 1000) {
-                                            console.log(`[SNIPER] Posição ideal já garantida. Mantendo R$ ${myCurrentBid} (Ideal seria R$ ${idealBid} p/ concorrente R$ ${targetCompetitorBid}).`);
+                                            console.log(`[SNIPER] Posição ideal já garantida. Mantendo R$ ${myCurrentBid} (Concorrente R$ ${targetCompetitorBid}).`);
                                             lastLogRef.current[`pos_${sId}`] = Date.now();
                                         }
                                         return;
