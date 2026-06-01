@@ -167,6 +167,9 @@ class RoomRunner {
         this.lastBidTimes = new Map();    // ⏱️ Timestamp do último lance por item
         this._wsFieldsLogged = false;     // 🔍 WebSocket field validation já foi logada?
         this._latencySamples = { ws: [], http: [] }; // 📊 Amostras de latência para o tracker
+        this._429count = 0;              // 🚦 Contagem de 429 na janela atual
+        this._429windowStart = Date.now(); // 🚦 Início da janela de contagem de 429
+        this._429backoffMs = 0;          // 🚦 Backoff preventivo extra por excesso de 429
     }
 
     injectRealtimeItems(items) {
@@ -949,10 +952,19 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO MULTI-MODO (v3.8.129)
-            // Guerra de lances → 80ms | Reta final 30s → 150ms | Reta final 60s → 300ms | Ativo normal → 500ms | Passivo → 10s
+            // ⚡ POLLING ADAPTATIVO MULTI-MODO (v3.8.139 - Anti-429)
+            // Guerra de lances → 250ms | Reta final 30s → 300ms | Reta final 60s → 500ms | Ativo normal → 800ms | Passivo → 10s
             let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
+
+            // 🚦 ANTI-429: Se recebemos 429 recentemente, aumenta intervalo preventivamente
+            if (this._429count > 0 && Date.now() - this._429windowStart < 30000) {
+                const penalty = Math.min(this._429count * 500, 5000);
+                this._429backoffMs = Math.max(this._429backoffMs, penalty);
+            } else {
+                this._429count = 0;
+                this._429backoffMs = 0;
+            }
 
             // Verifica se há algum item em modo de guerra (≥1 ciclo para reagir mais rápido)
             let anyItemInWar = false;
@@ -962,16 +974,19 @@ class RoomRunner {
 
             if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 80; // ⚔️ GUERRA DE LANCES: reage em 80ms!
-                    console.log(`[POLARYON MOTOR] ⚔️ GUERRA DE LANCES (${this.sessionId}): Rajada detectada! Polling=${nextInterval}ms`);
+                    nextInterval = 250; // ⚔️ GUERRA DE LANCES: Anti-429, 250ms
+                    if (this._429backoffMs > 0) {
+                        nextInterval += this._429backoffMs;
+                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) com backoff 429: ${nextInterval}ms`);
+                    }
                 } else if (minTimer <= 30) {
-                    nextInterval = 150; // 🔥 Reta final <30s
-                    console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
+                    nextInterval = 300; // 🔥 Reta final <30s
+                    if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = 300; // ⚡ Reta final <60s
-                    console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
+                    nextInterval = 500; // ⚡ Reta final <60s
+                    if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = 500; // Ativo estável
+                    nextInterval = 800; // Ativo estável
                 }
             } else {
                 if (Math.random() < 0.1) {
@@ -990,8 +1005,16 @@ class RoomRunner {
             if (statusError === 429) {
                 // 🛑 RATE-LIMIT DETECTADO: Backoff Exponencial Anti-429
                 this.backoffCount = (this.backoffCount || 0) + 1;
+                // 🚦 Atualiza janela deslizante de 429
+                const now = Date.now();
+                if (now - this._429windowStart > 30000) {
+                    this._429count = 0;
+                    this._429windowStart = now;
+                }
+                this._429count++;
+                this._429backoffMs = Math.min(this._429count * 500, 5000);
                 const backoffMs = Math.min(15000 * this.backoffCount, 60000);
-                console.warn(`[POLARYON MOTOR] 🚦 429 Rate-Limit na sala ${this.sessionId}! Backoff: ${backoffMs/1000}s`);
+                console.warn(`[POLARYON MOTOR] 🚦 429 Rate-Limit na sala ${this.sessionId}! count=${this._429count} Backoff: ${backoffMs/1000}s`);
                 captchaManager.lastFetch = 0;
                 captchaManager.token1 = '';
                 captchaManager.token2 = '';

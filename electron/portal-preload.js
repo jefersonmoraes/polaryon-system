@@ -490,7 +490,7 @@
     const _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
-    const RANKING_RATE_MS = 800;   // 1 item a cada 800ms (~75 req/min) — só faz 1 requisição verdadeira por item
+    const RANKING_RATE_MS = 2000;  // 1 item a cada 2000ms (~30 req/min) — Anti-429
 
     // Enfileira item de ranking. priority=true coloca na frente da fila.
     function enqueueRankingFetch(target, priority = false) {
@@ -1690,6 +1690,8 @@
     // Volta ao ritmo normal (800ms) quando o mercado estabiliza. Anti-429 em modo passivo (3000ms).
     let currentIndex = 0;
     let consecutiveLoopFailures = 0;
+    let _loop429count = 0;               // 🚦 Contagem de 429 na janela
+    let _loop429windowStart = Date.now(); // 🚦 Início da janela
     const _loopLastBestValues = new Map();  // purchaseId → valorAtual anterior
     const _loopWarCycles = new Map();       // purchaseId → contador de ciclos em guerra
 
@@ -1702,6 +1704,13 @@
         const purchaseIds = Array.from(shared.synchronizedPurchases);
         const batchSize = Math.min(3, purchaseIds.length);
         let anyWar = false;
+
+        // 🚦 Reseta janela 429 a cada 30s
+        const now = Date.now();
+        if (now - _loop429windowStart > 30000) {
+            _loop429count = 0;
+            _loop429windowStart = now;
+        }
 
         for (let b = 0; b < batchSize; b++) {
             const purchaseId = purchaseIds[currentIndex % purchaseIds.length];
@@ -1741,6 +1750,14 @@
                     }
 
                     processSerproData(data, url, res.status, res.ok, dateHeader, tStart, tEnd);
+                } else if (res.status === 429) {
+                    _loop429count++;
+                    consecutiveLoopFailures++;
+                    console.warn(`[POLARYON LOOP] 🚦 429 Rate-Limit na sala ${purchaseId}! count=${_loop429count}`);
+                    if (consecutiveLoopFailures >= 5) {
+                        setTimeout(_adaptiveLoop, 10000); // Backoff 10s após 5 falhas consecutivas
+                        return;
+                    }
                 } else if (res.status === 401 || res.status === 403) {
                     consecutiveLoopFailures++;
                     console.warn(`[POLARYON LOOP] ⚠️ Erro de autenticação (${res.status}) na sala ${purchaseId}. Falha ${consecutiveLoopFailures}/3.`);
@@ -1765,10 +1782,21 @@
             }
         } // fim do batch
 
-        // ⚡ Intervalo adaptativo — modo guerra acelera para 50ms (vs WebSocket do Siga)
+        // ⚡ Intervalo adaptativo Anti-429 — guerra no mínimo 300ms
         const warLevel = Math.max(...Array.from(_loopWarCycles.values()), 0);
-        const nextMs = warLevel >= 3 ? 50 : (warLevel >= 2 ? 100 : (warLevel >= 1 ? 300 : 3000));
-        if (warLevel >= 2) console.log(`%c[POLARYON LOOP] ⚔️ GUERRA DE LANCES! Polling=${nextMs}ms (war=${warLevel})`, 'color:#f59e0b;font-weight:bold;');
+        let nextMs;
+        if (_loop429count >= 3) {
+            nextMs = 3000; // 🚦 Muitos 429: desacelera para 3s
+        } else if (_loop429count >= 1) {
+            nextMs = 1000; // 🚦 429 detectado: 1s
+        } else if (warLevel >= 2) {
+            nextMs = 300;  // ⚔️ Guerra intensa: 300ms
+        } else if (warLevel >= 1) {
+            nextMs = 500;  // ⚔️ Guerra leve: 500ms
+        } else {
+            nextMs = 3000; // Normal: 3s
+        }
+        if (warLevel >= 1) console.log(`%c[POLARYON LOOP] ⚔️ GUERRA DE LANCES! Polling=${nextMs}ms (war=${warLevel} 429=${_loop429count})`, 'color:#f59e0b;font-weight:bold;');
         setTimeout(_adaptiveLoop, nextMs);
     }
     _adaptiveLoop();

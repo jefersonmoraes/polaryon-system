@@ -880,7 +880,8 @@ export default function BiddingDashboardPage() {
                         let mergedGanhador = it.ganhador;
 
                         const lastFired = getRecentFiredBid(it.itemId);
-                        if (lastFired) {
+                        if (lastFired && (Date.now() - lastFired.timestamp) < 3000) {
+                            // 🛡️ Override otimista só nos primeiros 3s (se >3s, API já respondeu → lance falhou)
                             if (!it.meuValor || it.meuValor > lastFired.value) {
                                 mergedMeuValor = lastFired.value;
                             }
