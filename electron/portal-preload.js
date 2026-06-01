@@ -7,6 +7,19 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
+    // 📊 Coleta de latência para exibição no console
+    const _latencySamples = [];
+    const _maxLatencySamples = 500;
+    setInterval(() => {
+        if (_latencySamples.length === 0) return;
+        const avg = (_latencySamples.reduce((a, b) => a + b, 0) / _latencySamples.length).toFixed(1);
+        const min = Math.min(..._latencySamples).toFixed(1);
+        const max = Math.max(..._latencySamples).toFixed(1);
+        const count = _latencySamples.length;
+        console.log(`%c[LATÊNCIA 📊] ${avg}ms (min=${min} max=${max}, ${count} amostras — 30s)`, 'color:#fbbf24;font-weight:bold;font-size:12px;');
+        _latencySamples.length = 0;
+    }, 30000);
+
     // Compartilhamento de Estado CORS-Safe entre Frames (v3.6.90)
     let shared = {
         sessionToken: '',
@@ -539,6 +552,15 @@
             }
         }
         console.log(`%c[POLARYON] Radar: ${url.split('?')[0]}`, "color: #888; font-size: 10px;");
+
+        // 📊 Registra latência para exibição no console
+        let tS = tStart, tE = tEnd;
+        if (!tStart || !tEnd) {
+            tS = Date.now() - 100;
+            tE = Date.now();
+        }
+        _latencySamples.push(tE - tS);
+        if (_latencySamples.length > _maxLatencySamples) _latencySamples.shift();
 
         // 🏆 RANKING: intercepta respostas de /lances/por-participante ou classificação local
         if (url.includes('/lances/por-participante') || url.includes('/lances/compra/') || url.includes('/classificacao') || url.includes('comprasnet/classificacao')) {
