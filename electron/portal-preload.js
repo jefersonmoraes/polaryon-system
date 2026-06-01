@@ -26,7 +26,7 @@
         captchaToken: '',
         synchronizedPurchases: new Set(),
         lastClassificacaoClickTs: 0,
-        pendingRankingTarget: null
+        pendingRankingTargets: []
     };
 
     // Estabiliza serverOffset com média dos últimos N valores (Date header tem precisão de 1s)
@@ -93,7 +93,7 @@
                     captchaToken: '',
                     synchronizedPurchases: new Set(),
                     lastClassificacaoClickTs: 0,
-                    pendingRankingTarget: null
+                    pendingRankingTargets: []
                 };
             }
             shared = window.top._polaryonSharedState;
@@ -507,17 +507,26 @@
     // Dispara o fetch de um item: só aciona o captcha — o fetch REAL é feito pelo handler fresh-captcha
     // (a requisição sem captcha SEMPRE retorna 204, então eliminamos o desperdício)
     function triggerRankingFetch(target) {
-        shared.pendingRankingTarget = target;
+        shared.pendingRankingTargets.push(target);
         document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
     }
 
-    // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo item
+    // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo BATCH
+    // Os itens são agrupados por purchaseId e processados EM PARALELO (um captcha por item).
+    // Ciclo de exemplo: 13 itens em 3 compras → 3 batches × 2000ms = ~6s (antes 26s)
     setInterval(() => {
         if (!shared.sessionToken) return;
+        // 🧹 Limpa targets órfãos do batch anterior (captcha falhou)
+        if (shared.pendingRankingTargets.length > 0) {
+            console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ Re-enfileirando ${shared.pendingRankingTargets.length} targets órfãos do batch anterior`, 'color:#f59e0b;font-size:9px;');
+            shared.pendingRankingTargets.forEach(t => enqueueRankingFetch(t, true));
+            shared.pendingRankingTargets.length = 0;
+        }
         if (_rankingQueue.length === 0) return;
         const now = Date.now();
         if (now < _rankingBackoffUntil) return;           // 429 backoff ativo
-        if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit
+        if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit entre batches
+        
         // Ordena a fila: priority items primeiro, depois por timer ASC (mais urgente primeiro)
         _rankingQueue.sort((a, b) => {
             if (a.priority && !b.priority) return -1;
@@ -526,10 +535,17 @@
             const bTimer = b.timerSeconds >= 0 ? b.timerSeconds : Infinity;
             return aTimer - bTimer;
         });
-        const target = _rankingQueue.shift();
+        
+        // ⚡ BATCH: agrupa todos os itens da MESMA compra e processa em paralelo
+        const firstPurchaseId = _rankingQueue[0].purchaseId;
+        const batch = _rankingQueue.filter(item => item.purchaseId === firstPurchaseId);
+        _rankingQueue = _rankingQueue.filter(item => item.purchaseId !== firstPurchaseId);
+        
         _lastRankingFetchTs = now;
-        console.log(`%c[POLARYON RANKING QUEUE] ▶️ Processando item ${target.itemId} (Compra: ${target.purchaseId}) timer=${target.timerSeconds}s | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
-        triggerRankingFetch(target);
+        console.log(`%c[POLARYON RANKING QUEUE] ▶️ BATCH de ${batch.length} itens (Compra: ${firstPurchaseId}) timer=${batch[0].timerSeconds}s | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
+        
+        // 🔥 Dispara TODOS os captchas do batch em paralelo (um por item)
+        batch.forEach(target => triggerRankingFetch(target));
     }, 500);
 
     // 🔁 REFRESH PERIÓDICO: a cada 45s re-enfileira todos os itens ativos (no final da fila)
@@ -1007,13 +1023,12 @@
                 if (token && token.startsWith('P1_')) {
                     console.log('%c[POLARYON] 🔑 Token FRESCO recebido!', 'color:#10b981;font-weight:bold;font-size:11px;');
                     
-                    if (shared.pendingRankingTarget) {
-                        const target = shared.pendingRankingTarget;
-                        shared.pendingRankingTarget = null; // consome target
+                    if (shared.pendingRankingTargets.length > 0) {
+                        const target = shared.pendingRankingTargets.shift(); // consome um target do batch
                         
                         const encoded = encodeURIComponent(token);
                         const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
-                        console.log(`%c[POLARYON RANKING LOOP] 🚀 Executando fetch em background com token fresco gerado para item ${target.itemId}...`, 'color:#a855f7;font-weight:bold;font-size:11px;');
+                        console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch com token fresco para item ${target.itemId} (batch restante: ${shared.pendingRankingTargets.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
                         
                         document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
                             detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
