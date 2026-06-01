@@ -109,10 +109,22 @@ Mesmo com as melhorias acima, o Siga tem vantagens estruturais:
 
 A única garantia de vencer é ter **preço menor** — velocidade ajuda, mas não vence quem tem mínimo mais alto.
 
+## Implementado (v3.8.132)
+
+### 1. Pool de conexões HTTP para endpoint de lance (`bidding-runner.js`)
+**Antes:** `sendBid()` usava o mesmo `this.agent` do polling (maxSockets=8, compartilhado). Conexões de polling podiam ocupar todos os sockets, atrasando o envio de lances.
+
+**Solução:** Criado `this.bidAgent` dedicado com `maxSockets: 4, keepAliveMsecs: 60000`. `sendBid()` usa `this.bidAgent || this.agent`. Frontend `fetch()` em `portal-preload.js` ganhou `keepalive: true`.
+
+### 2. Validação de campos WebSocket vs REST API (`bidding-runner.js`)
+Adicionada verificação runtime em `injectRealtimeItems()`: confere 8 campos críticos (`identificador`, `situacaoParticipanteDisputa`, `melhorValorGeral`, `melhorValorFornecedor`, `segundosParaEncerramento`, `dataHoraFimContagem`, `fase`, `variacaoMinimaEntreLances`). Se algum faltar, loga warning + lista completa de campos presentes no WebSocket para comparação.
+
+### 3. Monitor de latência WebSocket vs HTTP fetch (`bidding-runner.js`)
+Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo registra latência (WS=0ms, HTTP=real). A cada 30s loga min/avg/max/count de cada tipo: `[LATÊNCIA 📊] WS: 0.0ms (0-0, 45 amostras) | HTTP: 127.3ms (45-892, 12 amostras)`.
+
 ## Próximos Passos Possíveis
-- [ ] Pool de conexões HTTP para endpoint de lance (enviar lance via keep-alive)
-- [ ] Testar se WebSocket data tem mesmos campos da REST API em produção
-- [ ] Monitorar latência real do pipeline WebSocket vs HTTP fetch
+- [ ] Monitorar se o WebSocket do Siga tem latência menor que o HTTP fetch em produção
+- [ ] Avaliar se campos ausentes no WebSocket afetam o mapeamento de itens
 
 ## Bugs de `posicao` Corrigidos (v3.8.129)
 ### 1. `isLosingPos` no sniper frontend (`BiddingDashboardPage.tsx:330`)

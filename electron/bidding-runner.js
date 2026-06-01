@@ -165,18 +165,89 @@ class RoomRunner {
         this.realtimeItemsAt = 0;         // Timestamp da última injeção
         this.lastBidValues = new Map();   // 🛡️ Último valor enviado por item (dedup frontend+backend)
         this.lastBidTimes = new Map();    // ⏱️ Timestamp do último lance por item
+        this._wsFieldsLogged = false;     // 🔍 WebSocket field validation já foi logada?
+        this._latencySamples = { ws: [], http: [] }; // 📊 Amostras de latência para o tracker
     }
 
     injectRealtimeItems(items) {
         if (Array.isArray(items) && items.length > 0) {
             this.realtimeItems = items;
             this.realtimeItemsAt = Date.now();
+
+            // 🔍 VALIDAÇÃO DE CAMPOS WEBSOCKET (v3.8.131): verifica se todos os campos críticos existem
+            const requiredFields = [
+                'identificador', 'situacaoParticipanteDisputa',
+                'melhorValorGeral', 'melhorValorFornecedor',
+                'segundosParaEncerramento', 'dataHoraFimContagem',
+                'fase', 'variacaoMinimaEntreLances'
+            ];
+            if (!this._wsFieldsLogged) {
+                let allPresent = true;
+                const sample = items[0] || {};
+                for (const field of requiredFields) {
+                    if (sample[field] === undefined) {
+                        console.warn(`[WS FIELD CHECK] ⚠️ Campo ausente no WebSocket: "${field}" — motor usará fallback/undefined`);
+                        allPresent = false;
+                    }
+                }
+                if (allPresent) {
+                    console.log(`[WS FIELD CHECK] ✅ WebSocket contém todos os ${requiredFields.length} campos críticos!`);
+                } else {
+                    // Lista todos os campos presentes no WebSocket para comparação
+                    const presentFields = Object.keys(sample).sort();
+                    console.log(`[WS FIELD CHECK] 📋 Campos presentes no WebSocket (${presentFields.length}): ${presentFields.join(', ')}`);
+                }
+                this._wsFieldsLogged = true;
+            }
+
             // Se o runner está dormindo, acorda imediatamente
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
                 this.timeoutId = null;
                 setImmediate(() => this.run());
             }
+        }
+    }
+
+    // 📊 LATÊNCIA TRACKER (v3.8.131): amostra latência por ciclo
+    _trackLatency(type, ms) {
+        if (!this._latencySamples) return;
+        const samples = this._latencySamples[type];
+        if (!samples) return;
+        samples.push(ms);
+        // Mantém no máximo 100 amostras por tipo
+        if (samples.length > 100) samples.shift();
+    }
+
+    // 📊 LOG PERIÓDICO DE LATÊNCIA (v3.8.131): imprime stats a cada 30s
+    _logLatencyStats() {
+        const bb = this.biddingRunner;
+        if (!bb || !bb.latencyStats) return;
+        const now = Date.now();
+        if (now - bb.lastLatencyLog < 30000) return;
+        bb.lastLatencyLog = now;
+
+        const report = {};
+        for (const type of ['ws', 'http']) {
+            const samples = this._latencySamples[type] || [];
+            if (samples.length === 0) continue;
+            const sum = samples.reduce((a, b) => a + b, 0);
+            const avg = (sum / samples.length).toFixed(1);
+            const min = Math.min(...samples);
+            const max = Math.max(...samples);
+            const stats = bb.latencyStats[type];
+            stats.count += samples.length;
+            stats.totalMs += sum;
+            stats.min = Math.min(stats.min, min);
+            stats.max = Math.max(stats.max, max);
+            report[type] = { samples: samples.length, avg: avg + 'ms', min: min + 'ms', max: max + 'ms' };
+            // Limpa amostras após log
+            this._latencySamples[type] = [];
+        }
+        if (Object.keys(report).length > 0) {
+            const wsStr = report.ws ? `WS: ${report.ws.avg} (${report.ws.min}-${report.ws.max}, ${report.ws.samples} amostras)` : 'WS: sem dados';
+            const httpStr = report.http ? `HTTP: ${report.http.avg} (${report.http.min}-${report.http.max}, ${report.http.samples} amostras)` : 'HTTP: sem dados';
+            console.log(`[LATÊNCIA 📊] ${wsStr} | ${httpStr}`);
         }
     }
 
@@ -203,7 +274,10 @@ class RoomRunner {
                 tEnd = tStart;
                 this.clockSync.update(null, itemsList, tStart, tEnd);
                 console.log(`[POLARYON MOTOR] 🎯 Usando dados do WebSocket (${itemsList.length} itens) — sem HTTP fetch!`);
+                // 📊 Registra latência zero (WebSocket é instantâneo no backend)
+                this._trackLatency('ws', 0);
             } else {
+                const startFetch = Date.now();
                 const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
                 tStart = Date.now();
                 const res = await axios.get(url, {
@@ -218,6 +292,9 @@ class RoomRunner {
                 tEnd = Date.now();
                 itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
                 this.clockSync.update(res.headers.date, itemsList, tStart, tEnd);
+                const httpLatency = tEnd - startFetch;
+                // 📊 Registra latência HTTP
+                this._trackLatency('http', httpLatency);
             }
             
             let minTimer = Infinity;
@@ -897,6 +974,9 @@ class RoomRunner {
                 }
             }
 
+            // 📊 Log periódico de latência (a cada 30s)
+            this._logLatencyStats();
+
             this.timeoutId = setTimeout(() => this.run(), nextInterval);
 
         } catch (e) {
@@ -1048,7 +1128,14 @@ class BiddingRunner {
         this.configs = new Map(); // Configurações de estratégias por sessão (v3.8.2)
         this.focusedSessionId = null; // ID da sessão focada na tela do usuário
         this.agent = null;
+        this.bidAgent = null;       // 🔌 Pool dedicado para envio de lances (não compete com polling)
         this.recentBids = new Map();   // 🛡️ Global dedup: { 'itemId': { value, timestamp } } (v3.8.130)
+        // 📊 LATÊNCIA TRACKER (v3.8.131): monitora WebSocket vs HTTP fetch
+        this.latencyStats = {
+            ws: { count: 0, totalMs: 0, min: Infinity, max: 0 },
+            http: { count: 0, totalMs: 0, min: Infinity, max: 0 }
+        };
+        this.lastLatencyLog = 0;
         
         // Inicializa Varredura Global Automática no boot
         this.globalScanner = new GlobalScanner(this.webContents, this.clockSync, this);
@@ -1068,6 +1155,16 @@ class BiddingRunner {
             keepAlive: true,
             maxSockets: 8,
             keepAliveMsecs: 30000
+        });
+
+        // 🔌 Pool DEDICADO para envio de lances (maxSockets=4, não compete com polling)
+        this.bidAgent = new https.Agent({
+            pfx: vault && vault.pfxBase64 ? Buffer.from(vault.pfxBase64, 'base64') : null,
+            passphrase: vault && vault.password ? vault.password : null,
+            rejectUnauthorized: false,
+            keepAlive: true,
+            maxSockets: 4,
+            keepAliveMsecs: 60000
         });
 
         // Repassa this (BiddingRunner) para o RoomRunner conseguir ler as configs de lances ativos
@@ -1151,6 +1248,7 @@ class BiddingRunner {
         }
         this.recentBids.set(dedupKey, { value, timestamp: Date.now() });
 
+        const bidStart = Date.now();
         try {
             console.log(`[KAMIKAZE SNIPER] Engatilhando Lance HTTP Invisível: Item ${itemId} | Valor: ${value}`);
             const captchas = await captchaManager.getTokens();
@@ -1169,7 +1267,7 @@ class BiddingRunner {
             };
 
              const response = await axios.post(targetUrl, payload, {
-                httpsAgent: this.agent,
+                httpsAgent: this.bidAgent || this.agent,
                 headers: {
                     'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
                     'Content-Type': 'application/json',
@@ -1180,15 +1278,17 @@ class BiddingRunner {
                 }
             });
 
-            console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro:`, response.status);
+            const bidLatency = Date.now() - bidStart;
+            console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency}ms)`);
             
             if (this.webContents && !this.webContents.isDestroyed()) {
-                this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO!`);
+                this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency}ms)`);
             }
         } catch (e) {
-            console.error('[KAMIKAZE SNIPER] ❌ O disparo travou:', e.response ? e.response.data : e.message);
+            const bidLatency = Date.now() - bidStart;
+            console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, e.response ? e.response.data : e.message);
             if (this.webContents && !this.webContents.isDestroyed()) {
-                this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId}. Erro: ${e.message}`);
+                this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId} (${bidLatency}ms). Erro: ${e.message}`);
             }
         }
     }

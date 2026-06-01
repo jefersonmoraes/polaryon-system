@@ -226,6 +226,7 @@
             // 3. Disparo direto do BrowserView (elimina latência do proxy VPS)
             const response = await fetch(targetUrl, {
                 method: 'POST',
+                keepalive: true,
                 headers: {
                     'Authorization': shared.sessionToken,
                     'Content-Type': 'application/json',
