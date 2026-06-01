@@ -238,6 +238,8 @@
 
             if (response.ok) {
                 console.log(`%c[POLARYON] ✅ Lance de R$ ${value} enviado com sucesso!`, "color: #10b981; font-weight: bold;");
+                // 🎯 Notifica o backend para atualizar cooldown (evita lance duplicado)
+                ipcRenderer.send('bid-sent', { purchaseId, itemId, value });
             } else {
                 const errText = await response.text();
                 console.error(`%c[POLARYON] ❌ Lance rejeitado (${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
@@ -983,32 +985,16 @@
                     }
                 }
             } else if (type === 'ws-item-update') {
-                // ⚡ WebSocket do Siga avisou que algo mudou — dispara fetch imediato na API oficial
+                // ⚡ WebSocket do Siga entregou dados em TEMPO REAL — usa direto, sem HTTP fetch!
                 var wsCodigo = event.data.codigo;
                 var wsData = event.data.data;
-                if (wsCodigo && Array.isArray(wsData) && wsData.length > 0 && shared.sessionToken) {
-                    var firstItem = wsData[0];
-                    console.log('%c[WS TRIGGER] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — fetch imediato...', 'color:#22c55e;font-weight:bold;font-size:10px;');
-                    // Log amostra do primeiro item para debug
-                    try { console.log('%c[WS TRIGGER] sample: ' + JSON.stringify(firstItem).substring(0, 200), 'color:#888;font-size:9px;'); } catch(e) {}
-                    // Dispara fetch prioritário na API oficial do Serpro (sem esperar o próximo ciclo do adaptiveLoop)
-                    var fetchUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/' + wsCodigo + '/itens/em-disputa';
-                    fetch(fetchUrl, {
-                        headers: {
-                            'Authorization': shared.sessionToken,
-                            'Accept': 'application/json',
-                            'x-device-platform': 'web',
-                            'x-version-number': '6.0.2'
-                        }
-                    }).then(function(res) {
-                        if (res.ok) {
-                            var tEnd = Date.now();
-                            return res.json().then(function(data) {
-                                var dateHeader = res.headers.get('Date') || '';
-                                processSerproData(data, fetchUrl, res.status, true, dateHeader, tEnd - 50, tEnd);
-                            });
-                        }
-                    }).catch(function() {});
+                if (wsCodigo && Array.isArray(wsData) && wsData.length > 0) {
+                    var fakeUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/' + wsCodigo + '/itens/em-disputa';
+                    var now = Date.now();
+                    console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
+                    processSerproData(wsData, fakeUrl, 200, true, '', now, now);
+                    // 🎯 Forward direto para o motor de lances (backend) — elimina polling do bidding-runner
+                    ipcRenderer.send('ws-item-data', wsData);
                 }
             }
         }

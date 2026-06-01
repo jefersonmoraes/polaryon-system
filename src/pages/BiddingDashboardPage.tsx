@@ -306,12 +306,22 @@ export default function BiddingDashboardPage() {
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
+                // ⏳ SNIPER COM RETARDO: espera o timer chegar no limite (v3.8.130)
+                const snipeDelay = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 0);
+                if (snipeDelay > 0 && currentTimeLeft >= 0 && currentTimeLeft > snipeDelay) {
+                    if ((lastLogRef.current[`delay_${sId}`] || 0) < Date.now() - 5000) {
+                        console.log(`[SNIPER] ⏳ Item ${sId}: Aguardando snipeDelay (timer=${currentTimeLeft}s > snipeDelay=${snipeDelay}s).`);
+                        lastLogRef.current[`delay_${sId}`] = Date.now();
+                    }
+                    return;
+                }
+
                 // 🔍 LOG DE DIAGNÓSTICO ATIVO (v3.5.89)
                 if (currentTimeLeft <= 40 && currentTimeLeft > 0) {
                     // 🔇 Throttle: só loga 1x por segundo por item
                     const lastBrainLog = lastLogRef.current[`brain_${sId}`] || 0;
                     if (Date.now() - lastBrainLog >= 1000) {
-                        console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${currentTimeLeft}s | Perdedor: ${item.posicao !== '1'}`);
+                        console.debug(`[SNIPER BRAIN] Item ${sId}: Tempo ${currentTimeLeft}s | Perdedor: ${String(item.posicao) !== '1'}`);
                         lastLogRef.current[`brain_${sId}`] = Date.now();
                     }
                 }
@@ -327,7 +337,8 @@ export default function BiddingDashboardPage() {
                     const activeMyBid = lastFired ? Math.min(myBid, lastFired.value) : myBid;
 
                     const isWinningByValue = (activeMyBid > 0 && bestBid > 0 && activeMyBid <= bestBid);
-                    const isLosingPos = (item.posicao !== '1' && item.posicao !== '1º' && item.posicao !== 'V' && item.posicao !== 'VENCEDOR' && item.posicao !== '1°');
+                    const pos = String(item.posicao || '').toUpperCase().trim();
+                    const isLosingPos = !(pos === '1' || pos === '1º' || pos === '1°' || pos === 'G' || pos === 'V' || pos === 'GANHANDO' || pos === 'VENCEDOR');
                     
                     // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição ou o valor indica perda, atira! Evita congelamento por falso positivo na posição)
                     const isLosing = isLosingPos || (bestBid > 0 && activeMyBid > bestBid) || (!isWinningByValue && item.posicao === '?');
@@ -345,8 +356,8 @@ export default function BiddingDashboardPage() {
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
-                        // ⚡ Cooldown adaptativo: 0ms nos 30s finais ou se Kamikaze ativado, senão 250ms
-                        const cooldown = (isKamikaze || isRetaFinal) ? 0 : 250;
+                        // ⚡ Cooldown adaptativo: 0ms nos 30s finais ou se Kamikaze ativado, senão 100ms (v3.8.129)
+                        const cooldown = (isKamikaze || isRetaFinal) ? 0 : 100;
                         if (now - lastBid > cooldown) {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
@@ -743,14 +754,16 @@ export default function BiddingDashboardPage() {
         return list.sort((a, b) => {
             const aMeuValor = safeParseNumber(a.meuValor);
             const aValorAtual = safeParseNumber(a.valorAtual);
+            const aPos = String(a.posicao || '').toUpperCase().trim();
             const aIsWinning = !(aMeuValor > 0 && aValorAtual > 0 && aMeuValor > aValorAtual) && (
-                a.ganhador === 'Você' || String(a.posicao) === '1' || String(a.posicao) === '1º' || String(a.posicao) === '1°'
+                a.ganhador === 'Você' || aPos === '1' || aPos === '1º' || aPos === '1°' || aPos === 'G' || aPos === 'V' || aPos === 'GANHANDO' || aPos === 'VENCEDOR'
             );
             
             const bMeuValor = safeParseNumber(b.meuValor);
             const bValorAtual = safeParseNumber(b.valorAtual);
+            const bPos = String(b.posicao || '').toUpperCase().trim();
             const bIsWinning = !(bMeuValor > 0 && bValorAtual > 0 && bMeuValor > bValorAtual) && (
-                b.ganhador === 'Você' || String(b.posicao) === '1' || String(b.posicao) === '1º' || String(b.posicao) === '1°'
+                b.ganhador === 'Você' || bPos === '1' || bPos === '1º' || bPos === '1°' || bPos === 'G' || bPos === 'V' || bPos === 'GANHANDO' || bPos === 'VENCEDOR'
             );
             
             if (!aIsWinning && bIsWinning) return -1;
@@ -884,15 +897,16 @@ export default function BiddingDashboardPage() {
 
                         // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
                         if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
-                            if (mergedPosicao === "1" || mergedPosicao === "1º" || mergedPosicao === "1°" || mergedGanhador === "Você") {
-                                const portalPos = String(it.posicao || "");
-                                const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
-                                mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : "2";
-                                mergedGanhador = "Outro";
+                            const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
+                            if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
+                                const portalPos = String(it.posicao || '').toUpperCase().trim();
+                                const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
+                                mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
+                                mergedGanhador = 'Outro';
                             }
                         } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
-                            mergedPosicao = "1";
-                            mergedGanhador = "Você";
+                            mergedPosicao = '1';
+                            mergedGanhador = 'Você';
                         }
 
                         itemMap.set(it.itemId, { 
@@ -1055,15 +1069,16 @@ export default function BiddingDashboardPage() {
 
                             // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
                             if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
-                                if (mergedPosicao === "1" || mergedPosicao === "1º" || mergedPosicao === "1°" || mergedGanhador === "Você") {
-                                    const portalPos = String(it.posicao || "");
-                                    const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
-                                    mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : "2";
-                                    mergedGanhador = "Outro";
+                                const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
+                                if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
+                                    const portalPos = String(it.posicao || '').toUpperCase().trim();
+                                    const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
+                                    mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
+                                    mergedGanhador = 'Outro';
                                 }
                             } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
-                                mergedPosicao = "1";
-                                mergedGanhador = "Você";
+                                mergedPosicao = '1';
+                                mergedGanhador = 'Você';
                             }
 
                             // 🕒 Preserva timer do portal-preload e timestamp de quando foi recebido
@@ -2487,6 +2502,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             String(item.posicao) === '1º' ||
             String(item.posicao) === '1°' ||
             String(item.posicao).toUpperCase() === 'G' ||
+            String(item.posicao).toUpperCase() === 'V' ||
             String(item.posicao).toUpperCase() === 'GANHANDO' ||
             String(item.posicao).toUpperCase() === 'VENCEDOR'
         );
@@ -2755,6 +2771,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             }`}>
                                 {isWinning ? 'LIDERANDO' : 'PERDENDO'}
                             </Badge>
+                            
+                            {item.inWarMode && (
+                                <Badge className="text-[10px] font-bold uppercase px-2 py-1 bg-orange-500 text-white animate-pulse">
+                                    ⚔️ GUERRA
+                                </Badge>
+                            )}
                             
                             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-all ${
                                 timeLeft < 30 && timeLeft > 0 && !isWinning 

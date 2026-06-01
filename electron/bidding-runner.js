@@ -161,6 +161,23 @@ class RoomRunner {
         this.itemRankingsMap = new Map(); // Persist real-time competitor rankings
         this.lastBestValues = new Map();  // ⚡ Guerra: rastrea valorAtual por item para detectar mudança
         this.warModeCycles = new Map();   // ⚡ Guerra: conta ciclos consecutivos com mudança de valor
+        this.realtimeItems = null;        // 🎯 Dados injetados via WebSocket (elimina polling)
+        this.realtimeItemsAt = 0;         // Timestamp da última injeção
+        this.lastBidValues = new Map();   // 🛡️ Último valor enviado por item (dedup frontend+backend)
+        this.lastBidTimes = new Map();    // ⏱️ Timestamp do último lance por item
+    }
+
+    injectRealtimeItems(items) {
+        if (Array.isArray(items) && items.length > 0) {
+            this.realtimeItems = items;
+            this.realtimeItemsAt = Date.now();
+            // Se o runner está dormindo, acorda imediatamente
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+                setImmediate(() => this.run());
+            }
+        }
     }
 
     async run() {
@@ -176,22 +193,32 @@ class RoomRunner {
                 return;
             }
 
-            const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
-            
-            const tStart = Date.now();
-            const res = await axios.get(url, {
-                httpsAgent: this.agent,
-                headers: { 
-                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'x-device-platform': 'web',
-                    'x-version-number': '6.0.2'
-                }
-            });
-            const tEnd = Date.now();
+            let itemsList, tStart, tEnd;
 
-            const itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
-            this.clockSync.update(res.headers.date, itemsList, tStart, tEnd);
+            // 🎯 Se temos dados frescos do WebSocket (< 2s), usa direto sem HTTP fetch
+            if (this.realtimeItems && (Date.now() - this.realtimeItemsAt < 2000)) {
+                itemsList = this.realtimeItems;
+                this.realtimeItems = null;
+                tStart = Date.now();
+                tEnd = tStart;
+                this.clockSync.update(null, itemsList, tStart, tEnd);
+                console.log(`[POLARYON MOTOR] 🎯 Usando dados do WebSocket (${itemsList.length} itens) — sem HTTP fetch!`);
+            } else {
+                const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
+                tStart = Date.now();
+                const res = await axios.get(url, {
+                    httpsAgent: this.agent,
+                    headers: { 
+                        'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
+                    }
+                });
+                tEnd = Date.now();
+                itemsList = Array.isArray(res.data) ? res.data : (res.data.itens || []);
+                this.clockSync.update(res.headers.date, itemsList, tStart, tEnd);
+            }
             
             let minTimer = Infinity;
 
@@ -239,7 +266,7 @@ class RoomRunner {
                         purchaseId: this.idCompra,
                         valorAtual,
                         meuValor,
-                        ganhador: posicaoTxt === '1' || posicaoTxt === 'GANHANDO' ? 'Você' : 'Outro',
+                        ganhador: posicaoTxt === '1' || posicaoTxt === '1º' || posicaoTxt === '1°' || posicaoTxt === 'G' || posicaoTxt === 'V' || posicaoTxt === 'GANHANDO' || posicaoTxt === 'VENCEDOR' ? 'Você' : 'Outro',
                         status: item.faseTraduzido || item.fase || 'Em Disputa',
                         posicao: posicaoTxt,
                         timerSeconds: secondsLeft,
@@ -302,6 +329,22 @@ class RoomRunner {
                     }
                 }
 
+                // ⚡ GUERRA DE LANCES: detecta rajada de lances por mudança rápida de valorAtual
+                for (const mappedItem of mappedItems) {
+                    const sId = String(mappedItem.itemId);
+                    const prevBest = this.lastBestValues.get(sId);
+                    const currBest = mappedItem.valorAtual;
+                    if (prevBest !== undefined && prevBest !== currBest && currBest > 0) {
+                        this.warModeCycles.set(sId, (this.warModeCycles.get(sId) || 0) + 1);
+                    } else if (prevBest === currBest) {
+                        const w = this.warModeCycles.get(sId) || 0;
+                        if (w > 0) this.warModeCycles.set(sId, w - 1);
+                    }
+                    this.lastBestValues.set(sId, currBest);
+                    // 🏴‍☠️ Sinaliza guerra para o frontend
+                    mappedItem.inWarMode = (this.warModeCycles.get(sId) || 0) >= 1;
+                }
+
                 // Envia a sala COMPLETA para o dashboard
                 this.webContents.send('bidding-update', {
                     sessionId: this.sessionId,
@@ -312,22 +355,6 @@ class RoomRunner {
                     serverOffset: this.clockSync.getServerTime() - Date.now()
                 });
 
-                // ⚡ GUERRA DE LANCES: detecta rajada de lances por mudança rápida de valorAtual
-                for (const mappedItem of mappedItems) {
-                    const sId = String(mappedItem.itemId);
-                    const prevBest = this.lastBestValues.get(sId);
-                    const currBest = mappedItem.valorAtual;
-                    if (prevBest !== undefined && prevBest !== currBest && currBest > 0) {
-                        // Valor mudou: incrementa contador de guerra
-                        this.warModeCycles.set(sId, (this.warModeCycles.get(sId) || 0) + 1);
-                    } else if (prevBest === currBest) {
-                        // Valor estável: decai gradualmente (1 ciclo de graça)
-                        const w = this.warModeCycles.get(sId) || 0;
-                        if (w > 0) this.warModeCycles.set(sId, w - 1);
-                    }
-                    this.lastBestValues.set(sId, currBest);
-                }
-
                 // 🏆 RANKING REAL via /lances/por-participante — busca assíncrona sem bloquear o polling
                 // Em modo de guerra: atualiza em TODOS os ciclos. Normal: 1 item a cada 5s.
                 const activeItems = mappedItems.filter(it => {
@@ -336,7 +363,7 @@ class RoomRunner {
                     return !isClosed;
                 });
                 // Verifica se QUALQUER item ativo está em guerra
-                const itemsInWar = activeItems.filter(it => (this.warModeCycles.get(String(it.itemId)) || 0) >= 2);
+                const itemsInWar = activeItems.filter(it => (this.warModeCycles.get(String(it.itemId)) || 0) >= 1);
                 const inWarMode = itemsInWar.length > 0;
 
                 if (activeItems.length > 0 && token) {
@@ -598,7 +625,6 @@ class RoomRunner {
                 if (this.biddingRunner && this.biddingRunner.configs.has(this.sessionId)) {
                     const sessionConfig = this.biddingRunner.configs.get(this.sessionId);
                     if (sessionConfig && sessionConfig.itemsConfig) {
-                        if (!this.lastBidTimes) this.lastBidTimes = new Map();
 
                         let itemsComEstrategia = 0;
                         let itemsBloqueados = 0;
@@ -659,12 +685,12 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown adaptativo: Guerra (300ms) > SniperWindow (300ms) > Kamikaze (500ms) > Final30s (800ms) > Normal (2000ms)
+                            // Cooldown adaptativo (v3.8.129): Guerra (100ms) > SniperWindow (100ms) > Kamikaze (200ms) > Final30s (300ms) > Normal (1000ms)
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
-                            const isInWarMode = itemWarCycles >= 2;
+                            const isInWarMode = itemWarCycles >= 1;
                             const isInSnipeWindow = (isTimerActive && tSeconds <= snipeDelaySeconds && snipeDelaySeconds > 0);
-                            const cooldown = isInWarMode ? 300 : (isKamikaze ? 500 : (isInSnipeWindow ? 300 : (tSeconds <= 30 ? 800 : 2000)));
+                            const cooldown = isInWarMode ? 100 : (isKamikaze ? 200 : (isInSnipeWindow ? 100 : (tSeconds <= 30 ? 300 : 1000)));
                             if (isInWarMode) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA ATIVO (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             if (isInSnipeWindow && !isInWarMode) console.log(`[BACKEND SNIPER] 🎯 Item ${sId}: MODO SNIPER (timer=${tSeconds}s ≤ snipeDelay=${snipeDelaySeconds}s) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
@@ -803,8 +829,17 @@ class RoomRunner {
                                 continue;
                             }
 
+                            // 🛡️ DEDUP: mesmo valor enviado nos últimos 5s? (v3.8.130 — frontend pode ter disparado antes)
+                            const lastSentValue = this.lastBidValues.get(sId);
+                            const lastSentAt = this.lastBidTimes.get(sId) || 0;
+                            if (lastSentValue !== undefined && lastSentValue === nextBid && (now - lastSentAt) < 5000) {
+                                console.log(`[BACKEND SNIPER] 🛡️ Item ${sId}: Valor R$ ${nextBid} já enviado há ${(now-lastSentAt)/1000}s. Pulando (dedup).`);
+                                continue;
+                            }
+
                             // 🔥 DISPARO BACKEND DIRETO!
                             this.lastBidTimes.set(sId, now);
+                            this.lastBidValues.set(sId, nextBid);
                             console.log(`%c🎯 [BACKEND SNIPER] DISPARANDO: R$ ${nextBid} → Item ${sId} | Timer: ${tSeconds}s | Lider: R$ ${currentBest}`, 'color: #10b981; font-weight: bold;');
 
                             if (!this.webContents.isDestroyed()) {
@@ -832,29 +867,29 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO MULTI-MODO
-            // Guerra de lances → 150ms | Reta final 30s → 300ms | Reta final 60s → 500ms | Ativo normal → 800ms | Passivo → 10s
+            // ⚡ POLLING ADAPTATIVO MULTI-MODO (v3.8.129)
+            // Guerra de lances → 80ms | Reta final 30s → 150ms | Reta final 60s → 300ms | Ativo normal → 500ms | Passivo → 10s
             let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
-            // Verifica se há algum item em modo de guerra
+            // Verifica se há algum item em modo de guerra (≥1 ciclo para reagir mais rápido)
             let anyItemInWar = false;
             for (const [, cycles] of this.warModeCycles) {
-                if (cycles >= 2) { anyItemInWar = true; break; }
+                if (cycles >= 1) { anyItemInWar = true; break; }
             }
 
             if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 150; // ⚔️ GUERRA DE LANCES: reage em 150ms!
+                    nextInterval = 80; // ⚔️ GUERRA DE LANCES: reage em 80ms!
                     console.log(`[POLARYON MOTOR] ⚔️ GUERRA DE LANCES (${this.sessionId}): Rajada detectada! Polling=${nextInterval}ms`);
                 } else if (minTimer <= 30) {
-                    nextInterval = 300; // 🔥 Reta final <30s
+                    nextInterval = 150; // 🔥 Reta final <30s
                     console.log(`[POLARYON MOTOR] 🚀 ACELERAÇÃO MÁXIMA (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
                 } else if (minTimer <= 60) {
-                    nextInterval = 500; // ⚡ Reta final <60s
+                    nextInterval = 300; // ⚡ Reta final <60s
                     console.log(`[POLARYON MOTOR] ⚡ Ritmo Elevado (${this.sessionId}): ${minTimer.toFixed(1)}s restantes. Polling=${nextInterval}ms`);
                 } else {
-                    nextInterval = 800; // Ativo estável
+                    nextInterval = 500; // Ativo estável
                 }
             } else {
                 if (Math.random() < 0.1) {
@@ -1013,6 +1048,7 @@ class BiddingRunner {
         this.configs = new Map(); // Configurações de estratégias por sessão (v3.8.2)
         this.focusedSessionId = null; // ID da sessão focada na tela do usuário
         this.agent = null;
+        this.recentBids = new Map();   // 🛡️ Global dedup: { 'itemId': { value, timestamp } } (v3.8.130)
         
         // Inicializa Varredura Global Automática no boot
         this.globalScanner = new GlobalScanner(this.webContents, this.clockSync, this);
@@ -1028,7 +1064,10 @@ class BiddingRunner {
         this.agent = new https.Agent({
             pfx: vault && vault.pfxBase64 ? Buffer.from(vault.pfxBase64, 'base64') : null,
             passphrase: vault && vault.password ? vault.password : null,
-            rejectUnauthorized: false
+            rejectUnauthorized: false,
+            keepAlive: true,
+            maxSockets: 8,
+            keepAliveMsecs: 30000
         });
 
         // Repassa this (BiddingRunner) para o RoomRunner conseguir ler as configs de lances ativos
@@ -1041,6 +1080,34 @@ class BiddingRunner {
         if (this.activeRunners.has(sessionId)) {
             this.activeRunners.get(sessionId).stop();
             this.activeRunners.delete(sessionId);
+        }
+    }
+
+    /**
+     * 🎯 Injeta dados de itens em tempo real (WebSocket) em TODOS os RoomRunners ativos
+     */
+    injectRealtimeItems(items) {
+        for (const [sessionId, runner] of this.activeRunners) {
+            if (runner.active) {
+                runner.injectRealtimeItems(items);
+            }
+        }
+    }
+
+    /**
+     * 🛡️ Notifica que um lance foi enviado (pelo frontend ou outro processo)
+     * Atualiza cooldown + último valor do RoomRunner para evitar duplicação
+     */
+    notifyBidSent(purchaseId, itemId, value) {
+        const dedupKey = `${purchaseId}_${itemId}`;
+        this.recentBids.set(dedupKey, { value, timestamp: Date.now() });
+        for (const [sessionId, runner] of this.activeRunners) {
+            if (runner.active && runner.idCompra === purchaseId) {
+                const now = Date.now();
+                runner.lastBidTimes.set(String(itemId), now);
+                runner.lastBidValues.set(String(itemId), value);
+                console.log(`[BACKEND SNIPER] 🛡️ Cooldown sincronizado: Item ${itemId} (R$ ${value}) — notificado pelo frontend.`);
+            }
         }
     }
 
@@ -1075,6 +1142,15 @@ class BiddingRunner {
      * 🔫 Disparo Rest Direto! Sem Depender de Janela Visual!
      */
     async sendBid({ purchaseId, itemId, value }) {
+        // 🛡️ DEDUP GLOBAL: mesmo valor p/ mesmo item nos últimos 2s? (v3.8.130)
+        const dedupKey = `${purchaseId}_${itemId}`;
+        const recent = this.recentBids.get(dedupKey);
+        if (recent && recent.value === value && (Date.now() - recent.timestamp) < 2000) {
+            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup global: R$ ${value} já enviado para Item ${itemId} há ${(Date.now()-recent.timestamp)/1000}s. Ignorando.`);
+            return;
+        }
+        this.recentBids.set(dedupKey, { value, timestamp: Date.now() });
+
         try {
             console.log(`[KAMIKAZE SNIPER] Engatilhando Lance HTTP Invisível: Item ${itemId} | Valor: ${value}`);
             const captchas = await captchaManager.getTokens();

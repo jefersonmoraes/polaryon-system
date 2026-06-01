@@ -295,6 +295,22 @@ ipcMain.on('send-portal-data', (event, data) => {
     }
 });
 
+// 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
+ipcMain.on('ws-item-data', (event, items) => {
+    const runner = biddingRunner || global.biddingRunner;
+    if (runner && typeof runner.injectRealtimeItems === 'function') {
+        runner.injectRealtimeItems(items);
+    }
+});
+
+// 🎯 NOTIFICAÇÃO DE LANCE ENVIADO PELO FRONTEND → atualiza cooldown do backend (v3.8.130)
+ipcMain.on('bid-sent', (event, { purchaseId, itemId, value }) => {
+    const runner = biddingRunner || global.biddingRunner;
+    if (runner && typeof runner.notifyBidSent === 'function') {
+        runner.notifyBidSent(purchaseId, itemId, value);
+    }
+});
+
 // [GATILHO MANUAL] RELAY: Prioriza Visual Runner (BrowserView), fallback bidding-runner
 ipcMain.on('manual-bid', (event, data) => {
     if (visualRunner) {
