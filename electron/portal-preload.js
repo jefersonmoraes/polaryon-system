@@ -490,7 +490,7 @@
     const _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
-    const RANKING_RATE_MS = 2000;  // 1 requisição a cada 2s (30 req/min)
+    const RANKING_RATE_MS = 800;   // 1 item a cada 800ms (~75 req/min) — só faz 1 requisição verdadeira por item
 
     // Enfileira item de ranking. priority=true coloca na frente da fila.
     function enqueueRankingFetch(target, priority = false) {
@@ -504,15 +504,11 @@
         }
     }
 
-    // Dispara o fetch de um item: hCaptcha (P1_ token) + fetch direto concorrente
+    // Dispara o fetch de um item: só aciona o captcha — o fetch REAL é feito pelo handler fresh-captcha
+    // (a requisição sem captcha SEMPRE retorna 204, então eliminamos o desperdício)
     function triggerRankingFetch(target) {
         shared.pendingRankingTarget = target;
         document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
-
-        const urlDirect = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
-        document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-            detail: { url: urlDirect, purchaseId: target.purchaseId, itemId: target.itemId }
-        }));
     }
 
     // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo item

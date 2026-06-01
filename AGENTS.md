@@ -82,7 +82,7 @@ A margem valida o degrau entre o MEU lance anterior e o novo lance. Do concorren
 
 **Solução:** Backend adiciona `inWarMode` aos itens do `bidding-update`. Frontend exibe badge laranja pulsante nos itens em guerra.
 
-## Estado Atual (v3.8.130)
+## Estado Atual (v3.8.137)
 - `snipeDelaySeconds` respeitado por frontend e backend
 - `isGanhando` não trava mais o leilão
 - Margem é calculada corretamente (valida degrau próprio, não desconta do concorrente)
@@ -96,6 +96,7 @@ A margem valida o degrau entre o MEU lance anterior e o novo lance. Do concorren
 - Backend consome dados do WebSocket em tempo real (sem HTTP fetch)
 - Lances frontend+backend coordenados (3 camadas de dedup)
 - Frontend respeita `snipeDelaySeconds` (igual ao backend)
+- Latência medida e exibida no console VM15 (`[LATÊNCIA 📊]` a cada 30s no portal-preload.js)
 
 ## Para Vencer o Item
 O **Valor Mínimo** (myMin) precisa ser **menor que o líder atual**. Se o líder está R$22.400 e o mínimo é R$27.300, o robô não consegue vencer — precisa abaixar o mínimo para < R$22.400.
@@ -158,8 +159,15 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 **Antes:** Cada mensagem WS gerava um `ipcRenderer.send('ws-item-data')` — até 10+ msg/s em modo guerra.
 **Solução:** Só repassa ao backend se passou ≥200ms desde o último envio, reduzindo drasticamente o tráfego IPC.
 
+## Implementado (v3.8.137)
+
+### 1. Latência no console VM15 (portal-preload.js)
+**Antes:** `[LATÊNCIA 📊]` só existia no backend (`_logLatencyStats()`), que nunca gerava relatório porque `_latencySamples` ficava vazio (timer global `bb.lastLatencyLog` era resetado pelo primeiro RoomRunner antes de acumular amostras).
+
+**Solução:** Adicionado `_latencySamples[]` + `setInterval(30s)` no escopo do `portal-preload.js`. Cada chamada de `processSerproData()` registra `tEnd - tStart` no array. A cada 30s o console VM15 exibe: `[LATÊNCIA 📊] avg ms (min=x max=y, N amostras — 30s)`.
+
 ## Próximos Passos Possíveis
-- [ ] Monitorar logs de `[LATÊNCIA 📊]` em produção
+- [ ] Verificar se `[LATÊNCIA 📊]` aparece no console VM15 após atualizar para v3.8.137
 - [ ] Avaliar se campos ausentes no WebSocket afetam o mapeamento de itens
 
 ## Bugs de `posicao` Corrigidos (v3.8.129)
