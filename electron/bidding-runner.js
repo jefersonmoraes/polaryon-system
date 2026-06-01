@@ -247,7 +247,12 @@ class RoomRunner {
         if (Object.keys(report).length > 0) {
             const wsStr = report.ws ? `WS: ${report.ws.avg} (${report.ws.min}-${report.ws.max}, ${report.ws.samples} amostras)` : 'WS: sem dados';
             const httpStr = report.http ? `HTTP: ${report.http.avg} (${report.http.min}-${report.http.max}, ${report.http.samples} amostras)` : 'HTTP: sem dados';
-            console.log(`[LATÊNCIA 📊] ${wsStr} | ${httpStr}`);
+            const logMsg = `[LATÊNCIA 📊] ${wsStr} | ${httpStr}`;
+            console.log(logMsg);
+            // Envia para o frontend dashboard também
+            if (this.webContents && !this.webContents.isDestroyed()) {
+                this.webContents.send('bidding-update-log', logMsg);
+            }
         }
     }
 
