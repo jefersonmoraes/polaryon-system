@@ -198,6 +198,11 @@
         }
     });
 
+    // 📊 Latência WebSocket vs HTTP (v3.8.135): loga no console do frontend
+    ipcRenderer.on('bidding-update-log', (event, logMsg) => {
+        console.log(`%c${logMsg}`, 'color: #00ffff; font-weight: bold;');
+    });
+
     // 🎯 O GATILHO KAMIKAZE: Envia o lance direto do BrowserView (sem proxy VPS, v3.8.85)
     ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
         const currentUrl = window.location.href;
