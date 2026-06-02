@@ -66,34 +66,34 @@ function createWindow() {
       'Expires': '0'
     };
     
-    // Aguarda 3s para garantir que app/BiddingRunner estejam prontos, depois verifica
+    // Verificação instantânea: 1º check em 1s, depois a cada 8s
     function doCheck() {
       console.log('[POLARYON-UPDATE] Verificando em ' + autoUpdater.getFeedURL?.() || 'feed configurado');
       autoUpdater.checkForUpdatesAndNotify();
     }
     
-    // 1ª verificação: após 3s (app pronto)
-    setTimeout(doCheck, 3000);
+    // 1ª verificação: após 1s (app pronto)
+    setTimeout(doCheck, 1000);
     
-    // Retry automático se erro na última verificação (a cada 15s até 5 tentativas)
+    // Retry automático se erro na última verificação (a cada 8s até 10 tentativas)
     let retryCount = 0;
-    const maxRetries = 5;
+    const maxRetries = 10;
     autoUpdater.on('error', function retryHandler(err) {
       if (retryCount < maxRetries) {
         retryCount++;
-        console.log(`[POLARYON-UPDATE] Retry ${retryCount}/${maxRetries} em 15s...`);
-        setTimeout(doCheck, 15000);
+        console.log(`[POLARYON-UPDATE] Retry ${retryCount}/${maxRetries} em 8s...`);
+        setTimeout(doCheck, 8000);
       } else {
         console.log('[POLARYON-UPDATE] Máximo de retries atingido. Aguardando próximo ciclo.');
         retryCount = 0;
       }
     });
     
-    // A cada 30s verifica novamente (antes 5min) — atualização mais rápida
+    // A cada 8s verifica novamente — atualização quase instantânea
     setInterval(() => {
         retryCount = 0;
         doCheck();
-    }, 30 * 1000);
+    }, 8 * 1000);
   }
 }
 
