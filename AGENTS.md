@@ -373,6 +373,16 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** Adicionado `[BACKEND MARGEM]` log em cada ciclo mostrando: `officialMarginVal`, `officialMarginType`, `mandatorySerproMargin`, `marginUser`, `maxDecrement`, `lowestPossibleBid`, `currentBest`, `myCurrentBid`. Permite identificar se o `variacaoMinimaEntreLances` da API está sendo lido corretamente.
 
+## Implementado (v3.8.172)
+
+### 1. Frontend margin logging (`[FRONTEND MARGEM]`)
+**Adicionado** log no ciclo sniper do frontend (`BiddingDashboardPage.tsx:387`) mostrando: `officialMarginVal`, `officialMarginType`, `mandatorySerproMargin`, `marginUser`, `maxDecrement`, `lowestAllowed`, `serproLowestAllowed`, `beatingBid`, `candidateBid`, `isLeaderBeatable`, `currentBest`, `myCurrentBid`, `myMin`. Permite comparar com o backend e identificar divergências.
+
+### 2. Penalidade de 3s após 422 (`last422PenaltyRef`)
+**Antes:** Após um 422 (Intervalo Mínimo Entre Lances violado), o sniper frontend retentava imediatamente no próximo ciclo de 20ms com os mesmos dados stale, causando loop de 422.
+
+**Solução:** Quando `bid-failed` chega com `status=422` ou `reason='min_interval'`, o `last422PenaltyRef` marca um timestamp. O sniper checa esse timestamp antes de cada bid — se <3s desde o 422, pula o item. Dá tempo do WebSocket/polling trazer dados frescos antes de retentar.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
