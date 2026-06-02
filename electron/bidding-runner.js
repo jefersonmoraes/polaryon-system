@@ -491,8 +491,6 @@ class RoomRunner {
                             (freshToken && freshToken !== poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${freshToken}&tamanhoPagina=50&pagina=0` : null),
                             // Variante 3: sem parâmetro captcha (alguns endpoints aceitam)
                             `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`,
-                            // Variante 4: /propostas-iniciais (não precisa de captcha!) — ÚLTIMO recurso
-                            `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/propostas-iniciais?tamanhoPagina=50&pagina=0`,
                         ].filter(Boolean);
 
                         let lancesRes = null;
@@ -909,6 +907,12 @@ class RoomRunner {
                             // Validações de segurança
                             if (nextBid < myMin) {
                                 console.log(`[BACKEND SNIPER] Item ${sId}: Lance R$ ${nextBid} abaixo do mínimo R$ ${myMin}. Bloqueado.`);
+                                continue;
+                            }
+
+                            // 🛡️ NUNCA bidar acima do líder atual (previne bugs de cálculo como R$5125 com líder a R$250)
+                            if (currentBest > 0 && nextBid > currentBest) {
+                                console.log(`[BACKEND SNIPER] 🛡️ Item ${sId}: Lance R$ ${nextBid} ACIMA do líder R$ ${currentBest}. Bloqueado (safety).`);
                                 continue;
                             }
                             

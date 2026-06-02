@@ -879,9 +879,7 @@ export default function BiddingDashboardPage() {
                         // 🛡️ Proteção contra regressão do lance otimista devido ao lag de rede do portal
                         let mergedMeuValor = it.meuValor;
                         let mergedValorAtual = it.valorAtual;
-                        let mergedPosicao = (it.rankingLances && it.rankingLances.length > 0)
-                            ? it.posicao
-                            : (existing.posicao || it.posicao);
+                        let mergedPosicao = it.posicao || existing.posicao;
                         let mergedGanhador = it.ganhador;
 
                         const lastFired = getRecentFiredBid(it.itemId);
