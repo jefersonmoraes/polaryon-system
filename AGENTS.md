@@ -249,6 +249,43 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - Antiga Finlândia: ~1000ms
 - **Melhoria: ~13x mais rápido**
 
+## Implementado (v3.8.153)
+
+### 1. Ranking fetch usa sessionToken mais recente (fix 401)
+**Antes:** O ranking fetch no page context usava `sessionToken` capturado localmente, que nunca era atualizado pelo `force-token-injection` do main process. Quando o token expirava, TODOS os ranking fetches retornavam 401 e não havia recuperação.
+
+**Arquivo:** `electron/portal-preload.js:1044-1046`
+
+**Solução:** O evento `polaryon-fetch-ranking` agora inclui `sessionToken: shared.sessionToken` (token mais recente do preload). O handler usa `sessionToken || tokenFromPreload` como fallback.
+
+### 2. Detecção imediata de sessão expirada (session-expired)
+**Antes:** 401 no ranking fetch era ignorado — o heartbeat só detectava sessão expirada após 5 falhas consecutivas (150s).
+
+**Arquivo:** `electron/portal-preload.js:1554-1556, 998-1001`
+
+**Solução:** Ranking fetch com status 401 posta `session-expired` → handler no preload limpa `pendingRankingTargets` e `_rankingQueue` e reseta heartbeat failures — evita loop infinito de 401 e acelera recuperação.
+
+### 3. Dedup de captcha (widget próprio vs wrapped execute)
+**Antes:** `polaryon-trigger-hcaptcha` postava `fresh-captcha` DUAS VEZES — uma pelo callback do widget invisível e outra pelo `.then()` do `hcaptcha.execute()` interceptado. Isso consumia dois targets do `pendingRankingTargets` para um único captcha.
+
+**Arquivo:** `electron/portal-preload.js:1354-1361`
+
+**Solução:** O `.then()` do `hcaptcha.execute()` só posta `fresh-captcha` se NÃO for nosso widget (`polaryonWidgetId === null || widgetId !== polaryonWidgetId`). O callback do widget próprio já posta, eliminando a duplicação.
+
+### 4. Stale targets descartados em vez de re-enfileirados
+**Antes:** Targets estagnados (>15s sem captcha) eram re-enfileirados com prioridade, criando loop infinito se o captcha nunca resolvesse.
+
+**Arquivo:** `electron/portal-preload.js:524-531`
+
+**Solução:** Stale targets são DESCARTADOS (removidos da fila) em vez de re-enfileirados. Evita loop e consumo desnecessário de captcha.
+
+### 5. Nginx root atualizado (deploy fix)
+**Antes:** Nginx servia `dist_electron/` mas deploy buildava para `dist/` — arquivos nunca eram atualizados.
+
+**Arquivo:** `vps-deploy.sh:24`
+
+**Solução:** `vps-deploy.sh` agora cria symlink `dist_electron -> dist` após cada build. Futuros GH Actions deploys funcionam automaticamente.
+
 ## Implementado (v3.8.141)
 
 ### 1. `_adaptiveLoop` redundante removido (`portal-preload.js`)
