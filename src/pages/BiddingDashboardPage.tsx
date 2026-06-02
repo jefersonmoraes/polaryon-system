@@ -1437,9 +1437,8 @@ export default function BiddingDashboardPage() {
                                 // Verifica se o purchaseId da sessão contém o compraId
                                 if (compraIdFromSid) {
                                     const pid = String(it.purchaseId || '');
-                                    if (pid.includes(compraIdFromSid) || compraIdFromSid.includes(pid.substring(0, 17))) return true;
-                                    // Também aceita se o sid da sessão contém partes do compraId
-                                    if (existingSid.includes(compraIdFromSid) || compraIdFromSid.startsWith(existingSid.replace(/\D/g, '').substring(0, 6))) return true;
+                                    // Match exato: compraId deve ser igual ao purchaseId OU o sid da sessão deve conter o compraId completo
+                                    if (pid === compraIdFromSid || existingSid.includes(compraIdFromSid)) return true;
                                 }
                                 // Fallback: se só tem 1 sessão ativa, é ela
                                 return Object.keys(updated).length === 1;
@@ -1562,8 +1561,7 @@ export default function BiddingDashboardPage() {
                         if (itItemId !== String(itemId)) return false;
                         if (compraIdFromSid) {
                             const pid = String(it.purchaseId || '');
-                            if (pid.includes(compraIdFromSid) || compraIdFromSid.includes(pid.substring(0, 17))) return true;
-                            if (existingSid.includes(compraIdFromSid) || compraIdFromSid.startsWith(existingSid.replace(/\D/g, '').substring(0, 6))) return true;
+                            if (pid === compraIdFromSid || existingSid.includes(compraIdFromSid)) return true;
                         }
                         return Object.keys(updated).length === 1;
                     });
