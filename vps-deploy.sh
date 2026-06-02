@@ -22,6 +22,9 @@ if [ -d "dist_new" ]; then
     ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
     
     rm -rf dist_old
+    # Sincroniza symlink para Nginx (root aponta para dist_electron)
+    rm -rf dist_electron
+    ln -s dist dist_electron
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
     echo "❌ FALHA CRÍTICA: dist_new não encontrada."
