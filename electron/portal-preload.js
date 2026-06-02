@@ -848,7 +848,7 @@
                         segundosParaEncerramento: segundosRaw,
                         dataHoraFimContagem: it.dataHoraFimContagem,
                         updatedAt: nowTs,
-                        officialMargin: it.variacaoMinimaEntreLances || 1,
+                        officialMargin: it.variacaoMinimaEntreLances != null ? it.variacaoMinimaEntreLances : 1,
                         officialMarginType: it.tipoVariacaoMinimaEntreLances || 'V',
                         desc: it.descricao,
                         tipo: it.tipo,

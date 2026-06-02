@@ -357,7 +357,7 @@ class RoomRunner {
                         timerSeconds: secondsLeft,
                         segundosParaEncerramento: item.segundosParaEncerramento,
                         dataHoraFimContagem: item.dataHoraFimContagem,
-                        officialMargin: item.variacaoMinimaEntreLances || 1,
+                        officialMargin: item.variacaoMinimaEntreLances != null ? item.variacaoMinimaEntreLances : 1,
                         officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V',
                         desc: item.descricao,
                         rankingLances: cachedRanking ? cachedRanking.rankingLances : []
@@ -398,7 +398,7 @@ class RoomRunner {
                                         timerSeconds: secondsLeft,
                                         segundosParaEncerramento: si.segundosParaEncerramento,
                                         dataHoraFimContagem: si.dataHoraFimContagem,
-                                        officialMargin: si.variacaoMinimaEntreLances || 1,
+                                        officialMargin: si.variacaoMinimaEntreLances != null ? si.variacaoMinimaEntreLances : 1,
                                         officialMarginType: si.tipoVariacaoMinimaEntreLances || 'V',
                                         desc: si.descricao,
                                         isGroup: false,

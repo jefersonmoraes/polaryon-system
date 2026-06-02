@@ -1303,7 +1303,7 @@ export default function BiddingDashboardPage() {
                                      position: pos, 
                                      timerSeconds: item.segundosParaEncerramento || -1, 
                                      desc: item.descricao || `Item ${item.numero}`,
-                                     officialMargin: item.variacaoMinimaEntreLances || 1,
+                                     officialMargin: item.variacaoMinimaEntreLances != null ? item.variacaoMinimaEntreLances : 1,
                                      officialMarginType: item.tipoVariacaoMinimaEntreLances || 'V'
                                  });
                              });
