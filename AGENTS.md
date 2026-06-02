@@ -355,6 +355,24 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** Condição alterada para `if ((kamikazeMode || snipeDelaySeconds === 0) && !isWinning)`. Agora configurar "0s (imediato)" no dropdown dispara o lance imediatamente ao ligar o robô, sem precisar ativar o Modo Kamikaze.
 
+## Implementado (v3.8.171)
+
+### 1. 422 handler com revert do optimistic update
+**Problema:** Quando o Serpro rejeitava um lance com 422 (Intervalo Mínimo Entre Lances violado), o `handleSendBid()` no React mantinha o valor otimista (`meuValor: value`) permanentemente. O merge de dados só revertia após 3-15s, mostrando um lance falso como vencedor.
+
+**Arquivos:** `electron/bidding-runner.js:1388-1401`, `electron/portal-preload.js:276-282`, `electron/preload.js:105-110`, `src/pages/BiddingDashboardPage.tsx:1216-1255`
+
+**Solução:**
+- `sendBid()` (backend): no catch com 422, envia `bid-failed` IPC com `{ purchaseId, itemId, value, reason }`
+- `manual-bid` (portal-preload.js): no 422, envia `bid-failed` IPC
+- `preload.js`: bridge `onBidFailed` para o canal `bid-failed`
+- `BiddingDashboardPage.tsx`: listener `onBidFailed` limpa `lastFiredBidRef` e reverte `meuValor`/`posicao`/`ganhador` para null
+
+### 2. Logging de margem para debug
+**Arquivo:** `electron/bidding-runner.js:792-793`
+
+**Solução:** Adicionado `[BACKEND MARGEM]` log em cada ciclo mostrando: `officialMarginVal`, `officialMarginType`, `mandatorySerproMargin`, `marginUser`, `maxDecrement`, `lowestPossibleBid`, `currentBest`, `myCurrentBid`. Permite identificar se o `variacaoMinimaEntreLances` da API está sendo lido corretamente.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
