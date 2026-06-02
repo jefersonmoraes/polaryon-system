@@ -345,3 +345,24 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - Frontend desktop modificado para chamar `api.post('/auth/desktop-login', { email })` em vez do `login()` local
 - Usa o token real do backend em todas as chamadas API subsequentes
 - Efetivo quando novo EXE for buildado (auto-updater)
+
+## Implementado (v3.8.164)
+
+### 1. `handleToggle` dispara lance imediato com `snipeDelaySeconds: 0` mesmo sem Kamikaze
+**Antes:** `handleToggle` só disparava lance imediato se `kamikazeMode` estivesse ativo (`if (kamikazeMode && !isWinning)`). Usuário configurava "Iniciar em 0s (imediato)" mas o robô não dava lance porque o dropdown controlava `snipeDelaySeconds`, não o kamikaze.
+
+**Arquivo:** `src/pages/BiddingDashboardPage.tsx:2726`
+
+**Solução:** Condição alterada para `if ((kamikazeMode || snipeDelaySeconds === 0) && !isWinning)`. Agora configurar "0s (imediato)" no dropdown dispara o lance imediatamente ao ligar o robô, sem precisar ativar o Modo Kamikaze.
+
+## Política de Deploy Automático (v3.8.164+)
+**Toda melhoria de código DEVE seguir este fluxo automaticamente:**
+1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
+2. Commit + push para `main` no GitHub
+3. GitHub Actions (`.github/workflows/deploy.yml`) executa automaticamente:
+   - `build-and-deploy`: Atualiza backend/frontend na VPS
+   - `build-desktop`: Compila EXE do Electron no Windows
+   - `upload-desktop`: Envia EXE + `latest.yml` para `https://polaryon.com.br/download/`
+4. Auto-updater do desktop detecta nova versão em até 8s
+
+**Script local:** `node scripts/full-deploy.js` faz tudo localmente (bump + build + commit + deploy)

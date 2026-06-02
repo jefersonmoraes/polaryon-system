@@ -2723,7 +2723,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         if (newState) {
             toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
             // Se kamikaze ativado e bot ligado, dispara imediatamente no mínimo
-            if (kamikazeMode && !isWinning) {
+            if ((kamikazeMode || snipeDelaySeconds === 0) && !isWinning) {
                 const currentBest = valorAtualDisplay;
                 const numMin = numMinPrice;
                 let fireVal = currentBest > 0 ? currentBest - safeParseNumber(margin) : numMin;
@@ -2732,7 +2732,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 if (myBid <= 0 || fireVal < myBid) {
                     setTimeout(() => {
                         onManualBid(item.purchaseId, item.itemId, item.bidId, fireVal);
-                        toast.info(`💥 [KAMIKAZE IMEDIATO] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.numero || item.itemId}!`);
+                        const mode = kamikazeMode ? 'KAMIKAZE' : 'SNIPER 0s';
+                        toast.info(`💥 [${mode}] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.numero || item.itemId}!`);
                     }, 500);
                 }
             }
