@@ -513,8 +513,9 @@
     }
 
     // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo BATCH
-    // Os itens são agrupados por purchaseId e processados EM PARALELO (um captcha por item).
-    // Ciclo de exemplo: 13 itens em 3 compras → 3 batches × 2000ms = ~6s (antes 26s)
+    // Os itens são agrupados por purchaseId e cada item do batch processa SEQUENCIALMENTE:
+    //   1 captcha próprio → 800ms delay → fetch ranking → próximo captcha → ...
+    // Um item por vez evita 429 do Serpro e desperdício de captcha.
     const RANKING_CAPTCHA_TIMEOUT = 15000; // 15s p/ captcha resolver antes de considerar órfão
     setInterval(() => {
         if (!shared.sessionToken) return;
@@ -550,7 +551,8 @@
         _lastRankingFetchTs = now;
         console.log(`%c[POLARYON RANKING QUEUE] ▶️ BATCH de ${batch.length} itens (Compra: ${firstPurchaseId}) timer=${batch[0].timerSeconds}s | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
         
-        // 🔥 Dispara TODOS os captchas do batch em paralelo (um por item)
+        // 🔥 Dispara captchas do batch em SEQUÊNCIA: 1 captcha → 1 fetch → próximo captcha → ...
+        // (o encadeamento é feito no handler fresh-captcha com delay de 800ms entre fetches)
         batch.forEach(target => triggerRankingFetch(target));
     }, 500);
 
@@ -992,7 +994,7 @@
                 shared.captchaToken = null;
             } else if (type === '429-error') {
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 15 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
-                _rankingBackoffUntil = Date.now() + 15000;
+                _rankingBackoffUntil = Date.now() + 60000;
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -1036,14 +1038,17 @@
                         const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
                         console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch com token fresco para item ${target.itemId} (batch restante: ${shared.pendingRankingTargets.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
                         
-                        document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                            detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
-                        }));
-                        
-                        // 🔁 Se ainda há mais targets, encadeia outro captcha para o próximo item
-                        if (shared.pendingRankingTargets.length > 0) {
-                            document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
-                        }
+                        // ⏳ Delay de 800ms entre items do mesmo batch para evitar 429
+                        const delay = shared.pendingRankingTargets.length > 0 ? 800 : 0;
+                        setTimeout(() => {
+                            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
+                            }));
+                            // 🔁 Se ainda há mais targets, encadeia outro captcha para o próximo item
+                            if (shared.pendingRankingTargets.length > 0) {
+                                document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
+                            }
+                        }, delay);
                     } else {
                         // Fallback: armazena
                         shared.captchaToken = token;
@@ -1575,25 +1580,8 @@
                 const widgetId = polaryonWidgetId !== null ? polaryonWidgetId : (lastWidgetId !== null ? lastWidgetId : 0);
                 console.log('%c[POLARYON INJECTED] ⚡ hcaptcha.execute disparado para widgetId = ' + widgetId, 'color:#a855f7;font-weight:bold;font-size:10px;');
                 
-                const result = window.hcaptcha.execute(widgetId, { async: true });
-                if (result && typeof result.then === 'function') {
-                    const tokenObj = await result;
-                    let token = '';
-                    if (typeof tokenObj === 'string') {
-                        token = tokenObj;
-                    } else if (tokenObj && typeof tokenObj === 'object') {
-                        token = tokenObj.response || tokenObj.token || '';
-                    }
-
-                    if (token && token.startsWith('P1_')) {
-                        console.log('%c[POLARYON INJECTED] 🎉 Token programático gerado: ' + token.substring(0, 30) + '...', 'color:#10b981;font-weight:bold;font-size:10px;');
-                        window.postMessage({
-                            source: 'polaryon-injector',
-                            type: 'fresh-captcha',
-                            token
-                        }, '*');
-                    }
-                }
+                // wrapHcaptcha já posta 'fresh-captcha' na resolução — não postar de novo
+                window.hcaptcha.execute(widgetId, { async: true }).catch(() => {});
             } catch (err) {
                 console.error('[POLARYON INJECTED] ❌ Falha ao disparar hcaptcha programático:', err.message || err);
             }
