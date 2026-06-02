@@ -507,6 +507,7 @@
     // Dispara o fetch de um item: só aciona o captcha — o fetch REAL é feito pelo handler fresh-captcha
     // (a requisição sem captcha SEMPRE retorna 204, então eliminamos o desperdício)
     function triggerRankingFetch(target) {
+        target._addedAt = Date.now();
         shared.pendingRankingTargets.push(target);
         document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
     }
@@ -514,16 +515,21 @@
     // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo BATCH
     // Os itens são agrupados por purchaseId e processados EM PARALELO (um captcha por item).
     // Ciclo de exemplo: 13 itens em 3 compras → 3 batches × 2000ms = ~6s (antes 26s)
+    const RANKING_CAPTCHA_TIMEOUT = 15000; // 15s p/ captcha resolver antes de considerar órfão
     setInterval(() => {
         if (!shared.sessionToken) return;
-        // 🧹 Limpa targets órfãos do batch anterior (captcha falhou)
+        const now = Date.now();
+        
+        // 🧹 Limpa targets órfãos (captcha não resolveu em 15s) e re-enfileira
         if (shared.pendingRankingTargets.length > 0) {
-            console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ Re-enfileirando ${shared.pendingRankingTargets.length} targets órfãos do batch anterior`, 'color:#f59e0b;font-size:9px;');
-            shared.pendingRankingTargets.forEach(t => enqueueRankingFetch(t, true));
-            shared.pendingRankingTargets.length = 0;
+            const stale = shared.pendingRankingTargets.filter(t => (now - t._addedAt) >= RANKING_CAPTCHA_TIMEOUT);
+            if (stale.length > 0) {
+                console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ ${stale.length} targets estagnados (>15s sem captcha). Re-enfileirando.`, 'color:#f59e0b;font-size:9px;');
+                stale.forEach(t => { enqueueRankingFetch(t, true); delete t._addedAt; });
+                shared.pendingRankingTargets = shared.pendingRankingTargets.filter(t => (now - t._addedAt) < RANKING_CAPTCHA_TIMEOUT);
+            }
         }
         if (_rankingQueue.length === 0) return;
-        const now = Date.now();
         if (now < _rankingBackoffUntil) return;           // 429 backoff ativo
         if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit entre batches
         
@@ -1033,6 +1039,11 @@
                         document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
                             detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
                         }));
+                        
+                        // 🔁 Se ainda há mais targets, encadeia outro captcha para o próximo item
+                        if (shared.pendingRankingTargets.length > 0) {
+                            document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
+                        }
                     } else {
                         // Fallback: armazena
                         shared.captchaToken = token;
