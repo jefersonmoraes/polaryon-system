@@ -976,7 +976,7 @@ class RoomRunner {
 
             if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 50; // ⚔️ GUERRA DE LANCES: Anti-429, 50ms (Locaweb SP — cenário agressivo)
+                    nextInterval = 30; // ⚔️ GUERRA DE LANCES: 30ms (Locaweb SP — cenário agressivo, com backoff anti-429)
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
                         console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) com backoff 429: ${nextInterval}ms`);
@@ -1187,25 +1187,41 @@ class BiddingRunner {
             keepAliveMsecs: 30000
         });
 
-        // 🔌 Pool DEDICADO para envio de lances (maxSockets=6, não compete com polling)
+        // 🔌 Pool DEDICADO para envio de lances (maxSockets=8, não compete com polling)
         this.bidAgent = new https.Agent({
             pfx: vault && vault.pfxBase64 ? Buffer.from(vault.pfxBase64, 'base64') : null,
             passphrase: vault && vault.password ? vault.password : null,
             rejectUnauthorized: false,
             keepAlive: true,
-            maxSockets: 6,
-            keepAliveMsecs: 600000 // 10min — evita que socket esfrie entre lances
+            maxSockets: 8,
+            keepAliveMsecs: 600000, // 10min — evita que socket esfrie entre lances
+            scheduling: 'lifo'      // FIFO distribui, LIFO reusa socket quente com mais frequência
         });
-        // 🔥 Mantém socket do bidAgent aquecido — ping a cada 30s no host Serpro
+        // 🔥 Mantém socket do bidAgent aquecido — ping a cada 15s no REAL endpoint de lances
+        // Usa /participacoes (endpoint confirmado) + /compras/{id}/itens/{id}/lances (socket do mesmo server)
         if (!this._bidKeepaliveTimers) this._bidKeepaliveTimers = [];
         this._bidKeepaliveTimers.push(setInterval(() => {
-            const req = https.get('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/', {
-                agent: this.bidAgent,
-                timeout: 5000
-            });
-            req.on('error', () => {}); // Silêncio — só mantém o pool aquecido
-            req.end();
-        }, 30000));
+            const paths = [
+                '/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=1',
+                '/comprasnet-disputa/v1/compras/participacoes?tamanhoPagina=1'
+            ];
+            for (const path of paths) {
+                const req = https.get('https://cnetmobile.estaleiro.serpro.gov.br' + path, {
+                    agent: this.bidAgent,
+                    timeout: 5000,
+                    headers: { 'Accept': 'application/json' }
+                });
+                req.on('error', () => {});
+                req.end();
+            }
+        }, 15000));
+
+        // 🔄 Pre-fetch de captcha contínuo: mantém tokens SEMPRE frescos (refresca a cada 12s, antes do TTL de 15s)
+        if (!this._captchaPrefetchTimer) {
+            this._captchaPrefetchTimer = setInterval(() => {
+                captchaManager.getTokens().catch(() => {});
+            }, 12000);
+        }
 
         // Repassa this (BiddingRunner) para o RoomRunner conseguir ler as configs de lances ativos
         const runner = new RoomRunner(idCompra, sessionId, this.agent, this.webContents, this.clockSync, this);
