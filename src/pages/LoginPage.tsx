@@ -280,19 +280,41 @@ export default function LoginPage() {
                                             placeholder="seu@email.com"
                                             className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white font-anton tracking-widest outline-none focus:border-blue-600 transition-all placeholder:text-white/5"
                                             autoComplete="email"
-                                            onKeyDown={(e) => {
+                                            onKeyDown={async (e) => {
                                                 if (e.key === 'Enter') {
                                                     const email = (e.target as HTMLInputElement).value;
-                                                    if (email && isCaptchaValid) {
-                                                        const success = useAuthStore.getState().login(email, rememberMe);
-                                                        if (success) {
-                                                            toast.success("Acesso Terminal Autorizado!");
-                                                            navigate(from, { replace: true });
-                                                        } else {
-                                                            toast.error("Acesso não autorizado para este terminal.");
-                                                        }
-                                                    } else if (!isCaptchaValid) {
+                                                    if (!email) return;
+                                                    if (!isCaptchaValid && window.location.hostname !== 'localhost') {
                                                         toast.error("Resolva o desafio de segurança.");
+                                                        return;
+                                                    }
+                                                    setIsLoading(true);
+                                                    try {
+                                                        const res = await api.post('/auth/desktop-login', { email });
+                                                        const { token, user } = res.data;
+                                                        const existingSystemUser = useAuthStore.getState().systemUsers.find(u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
+                                                        const systemUser = {
+                                                            id: user.id || existingSystemUser?.id || crypto.randomUUID(),
+                                                            email: user.email,
+                                                            name: user.name || existingSystemUser?.name,
+                                                            photoURL: user.picture || existingSystemUser?.photoURL,
+                                                            role: user.role.toUpperCase(),
+                                                            permissions: user.permissions || (user.role.toUpperCase() === 'ADMIN'
+                                                                ? { canView: true, canEdit: true, canDownload: true, allowedScreens: ['ALL'] }
+                                                                : { canView: true, canEdit: false, canDownload: false, allowedScreens: ['DASHBOARD', 'KANBAN', 'OPORTUNIDADES', 'CALENDAR', 'TEAM', 'SUPPLIERS', 'DOCUMENTATION', 'ACCOUNTING', 'BUDGETS'] }),
+                                                            status: 'active',
+                                                            createdAt: existingSystemUser?.createdAt || new Date().toISOString()
+                                                        };
+                                                        loginWithGoogle(systemUser as any, token, rememberMe);
+                                                        useUserPrefsStore.getState().loadPreferences(systemUser.id);
+                                                        toast.success("Acesso Autorizado!");
+                                                        navigate(from, { replace: true });
+                                                    } catch (error: any) {
+                                                        console.error('Desktop Login error:', error);
+                                                        toast.error(error.response?.data?.error || "Falha na autenticação.");
+                                                        generateCaptcha();
+                                                    } finally {
+                                                        setIsLoading(false);
                                                     }
                                                 }
                                             }}

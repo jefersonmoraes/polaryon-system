@@ -127,6 +127,67 @@ router.post('/google', async (req: Request, res: Response) => {
     }
 });
 
+// POST /api/auth/desktop-login - Desktop app email-based login (issues real JWT)
+router.post('/desktop-login', async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    try {
+        const normalizedEmail = email.toLowerCase().trim();
+        if (!normalizedEmail) {
+            return res.status(400).json({ error: 'Invalid email' });
+        }
+
+        const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+        if (!user) {
+            return res.status(403).json({
+                error: 'Você não possui cadastro no sistema. Solicite acesso ao administrador.'
+            });
+        }
+
+        if (user.role === 'disabled') {
+            return res.status(403).json({ error: 'Sua conta foi desativada pelo administrador.' });
+        }
+
+        if (user.role === 'pending' || user.role === 'invited') {
+            return res.status(403).json({
+                error: 'Seu cadastro está pendente de aprovação. Aguarde o administrador liberar seu acesso.'
+            });
+        }
+
+        const sessionToken = jwt.sign(
+            {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                name: user.name
+            },
+            JWT_SECRET,
+            { expiresIn: '90d' }
+        );
+
+        res.status(200).json({
+            token: sessionToken,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                picture: user.picture || '',
+                role: user.role,
+                // @ts-ignore
+                permissions: user.permissions || null
+            }
+        });
+    } catch (error) {
+        console.error('Desktop Login Error:', error);
+        res.status(500).json({ error: 'Erro interno do servidor.' });
+    }
+});
+
 // GET /api/auth/verify - Quick check if session is valid
 router.get('/verify', async (req: Request, res: Response) => {
     const authHeader = req.headers.authorization;

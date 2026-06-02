@@ -487,7 +487,7 @@
     //   - 429 → backoff de 15s automático antes de continuar
     //   - Refresh periódico de todos os itens a cada 45s (re-enfileira no final)
     const activeRankingItems = []; // { purchaseId, itemId, timerSeconds }
-    const _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
+    let _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
     const RANKING_RATE_MS = 2000;  // 1 item a cada 2000ms (~30 req/min) — Anti-429

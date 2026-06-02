@@ -65,12 +65,35 @@ function createWindow() {
       'Pragma': 'no-cache',
       'Expires': '0'
     };
-    autoUpdater.checkForUpdatesAndNotify();
     
-    // Check every 15 mins (Tactical Interval)
+    // Aguarda 10s para garantir que app/BiddingRunner estejam prontos, depois verifica
+    function doCheck() {
+      console.log('[POLARYON-UPDATE] Verificando em ' + autoUpdater.getFeedURL?.() || 'feed configurado');
+      autoUpdater.checkForUpdatesAndNotify();
+    }
+    
+    // 1ª verificação: após 10s (app pronto)
+    setTimeout(doCheck, 10000);
+    
+    // Retry automático se erro na última verificação (a cada 60s até 3 tentativas)
+    let retryCount = 0;
+    const maxRetries = 3;
+    autoUpdater.on('error', function retryHandler(err) {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`[POLARYON-UPDATE] Retry ${retryCount}/${maxRetries} em 60s...`);
+        setTimeout(doCheck, 60000);
+      } else {
+        console.log('[POLARYON-UPDATE] Máximo de retries atingido. Aguardando próximo ciclo.');
+        retryCount = 0;
+      }
+    });
+    
+    // A cada 5 min verifica novamente
     setInterval(() => {
-        autoUpdater.checkForUpdatesAndNotify();
-    }, 15 * 60 * 1000);
+        retryCount = 0;
+        doCheck();
+    }, 5 * 60 * 1000);
   }
 }
 

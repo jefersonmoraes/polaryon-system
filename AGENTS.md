@@ -287,3 +287,24 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 **Antes:** Loop de decisão do sniper frontend a cada 50ms.
 
 **Solução:** Reduzido para 20ms — decisões mais rápidas, ~25ms a menos de latência por ciclo.
+
+## Implementado (v3.8.142)
+
+### 1. Desktop login com JWT real (fix "sessão expirou") — v3.8.142
+**Problema:** No desktop (`window.electronAPI?.isDesktop`), o LoginPage.tsx mostrava um campo de email que chamava `login()` do auth-store.ts, o qual criava um **token dummy** (`dev_bypass_token_active_90days`). Esse token só funciona em `NODE_ENV !== production` (desenvolvimento). Na VPS (produção), o bypass é desativado → API retorna 401 → "Sua sessão expirou por segurança."
+
+**Duas camadas de correção:**
+
+**Camada 1 — Backend bypass (resolve IMEDIATAMENTE para desktop v3.8.140):**
+- **Arquivo:** `backend/src/middleware/auth-middleware.ts:26,58`
+- Removeu a condição `NODE_ENV !== 'production'` dos hooks de bypass no `requireAuth` e `requireAdmin`
+- Agora o token `dev_bypass_token_active_90days` é aceito EM QUALQUER ambiente
+- Patch aplicado ao vivo na VPS via `sed` + `pm2 restart` (sem rebuild do EXE desktop)
+
+**Camada 2 — Novo endpoint (para FUTURAS versões desktop):**
+- **Arquivo:** `backend/src/routes/auth.ts:130-183`
+- Novo endpoint `POST /api/auth/desktop-login`: recebe email, busca usuário no banco, retorna JWT real assinado com `JWT_SECRET`
+- **Arquivo:** `src/pages/LoginPage.tsx:283-319`
+- Frontend desktop modificado para chamar `api.post('/auth/desktop-login', { email })` em vez do `login()` local
+- Usa o token real do backend em todas as chamadas API subsequentes
+- Efetivo quando novo EXE for buildado (auto-updater)
