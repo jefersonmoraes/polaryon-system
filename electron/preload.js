@@ -96,5 +96,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const fn = (event, data) => callback(data);
     ipcRenderer.on('execute-proxy-bid', fn);
     return () => { ipcRenderer.off('execute-proxy-bid', fn); };
+  },
+  onWsFastBid: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('ws-fast-bid', fn);
+    return () => { ipcRenderer.off('ws-fast-bid', fn); };
   }
 });

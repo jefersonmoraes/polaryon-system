@@ -1069,6 +1069,26 @@
                     processSerproData(wsData, fakeUrl, 200, true, '', now, now);
                     // 🔄 Repassa ao backend imediatamente (sem debounce) — cada ms conta em modo guerra
                     ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
+                    // ⚡ RAIO DIRETO: envia APENAS meuValor, valorAtual, posicao para display instantâneo no frontend
+                    // Bypassa todo o pipeline pesado (processSerproData, clock sync, handlePortalSync, etc.)
+                    var fastItems = [];
+                    for (var fi = 0; fi < wsData.length; fi++) {
+                        var it = wsData[fi];
+                        var spd = it.situacaoParticipanteDisputa;
+                        var rawPos = it.classificacao || it.posicao || (it.melhorValorFornecedor && (it.melhorValorFornecedor.classificacao || it.melhorValorFornecedor.posicao)) || it.situacaoParticipanteDisputaTraduzido || (spd === 'G' ? 'GANHANDO' : (spd === 'P' || spd === 'E' ? 'PERDENDO' : '?'));
+                        var numPos = parseInt(rawPos, 10);
+                        var posFinal = !isNaN(numPos) ? String(numPos) : rawPos;
+                        fastItems.push({
+                            itemId: String(it.identificador || it.numero),
+                            meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0),
+                            valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0),
+                            posicao: posFinal,
+                            ganhador: posFinal === '1' || posFinal === 'GANHANDO' ? 'Você' : 'Outro'
+                        });
+                    }
+                    if (fastItems.length > 0 && typeof ipcRenderer !== 'undefined') {
+                        ipcRenderer.send('ws-fast-bid', { codigo: wsCodigo, items: fastItems });
+                    }
                 }
             }
         }

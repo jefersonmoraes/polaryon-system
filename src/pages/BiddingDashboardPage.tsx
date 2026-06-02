@@ -185,6 +185,10 @@ export default function BiddingDashboardPage() {
     const lastLogRef = useRef<Record<string, number>>({});
     // 🔗 REFERÊNCIA DE SESSÃO ATIVA (v4.4.0): Fornece acesso síncrono ao sessionId nos callbacks assíncronos do IPC/Socket
     const sessionIdRef = useRef<string | null>(null);
+    // ⚡ REFERÊNCIA DE DISPLAY INSTANTÂNEO (RAIO DIRETO): recebe meuValor, valorAtual, posicao diretamente do WebSocket
+    // sem passar pelo pipeline pesado de processSerproData/clockSync/handlePortalSync.
+    // Chave: `${codigo}_${itemId}`, Valor: { meuValor, valorAtual, posicao, ganhador }
+    const wsFastBidsRef = useRef<Record<string, { meuValor: number; valorAtual: number; posicao: string; ganhador: string }>>({});
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -1182,6 +1186,25 @@ export default function BiddingDashboardPage() {
             if ((window as any).electronAPI.onBiddingNetworkTraffic) {
                 unsubs.push((window as any).electronAPI.onBiddingNetworkTraffic((data: any) => {
                     setNetworkTraffic(prev => [data, ...(prev || [])].slice(0, 50));
+                }));
+            }
+
+            // ⚡ RAIO DIRETO: atualiza display instantâneo sem React state batching
+            if ((window as any).electronAPI.onWsFastBid) {
+                unsubs.push((window as any).electronAPI.onWsFastBid((data: any) => {
+                    if (!data || !data.codigo || !Array.isArray(data.items)) return;
+                    const { codigo, items } = data;
+                    const updated = { ...wsFastBidsRef.current };
+                    for (const item of items) {
+                        const key = `${codigo}_${item.itemId}`;
+                        updated[key] = {
+                            meuValor: item.meuValor,
+                            valorAtual: item.valorAtual,
+                            posicao: item.posicao,
+                            ganhador: item.ganhador
+                        };
+                    }
+                    wsFastBidsRef.current = updated;
                 }));
             }
 
@@ -2201,20 +2224,21 @@ export default function BiddingDashboardPage() {
                                                                         Itens do grupo — lance individual em cada um
                                                                     </span>
                                                                     <div className="space-y-2">
-                                                                        {mySubItems.map((sub: any) => (
-                                                                            <SigaItemRow 
-                                                                                key={sub.itemId || sub.numero} 
-                                                                                item={sub} 
-                                                                                sid={sid} 
-                                                                                onSaveStrategy={onSaveStrategy}
-                                                                                onManualBid={handleManualBid}
-                                                                                serverTime={serverTime}
-                                                                                strategyConfig={getStrategy(sid, sub.itemId || sub.numero)}
-                                                                                onStartSniperTest={startSniperTest}
-                                                                                simulationMode={session.simulationMode}
-                                                                                clockSkew={clockSkewRef.current}
-                                                                            />
-                                                                        ))}
+                                            {mySubItems.map((sub: any) => (
+                                                <SigaItemRow 
+                                                    key={sub.itemId || sub.numero} 
+                                                    item={sub} 
+                                                    sid={sid} 
+                                                    onSaveStrategy={onSaveStrategy}
+                                                    onManualBid={handleManualBid}
+                                                    serverTime={serverTime}
+                                                    strategyConfig={getStrategy(sid, sub.itemId || sub.numero)}
+                                                    onStartSniperTest={startSniperTest}
+                                                    simulationMode={session.simulationMode}
+                                                    clockSkew={clockSkewRef.current}
+                                                    wsFastBidsRef={wsFastBidsRef}
+                                                />
+                                            ))}
                                                                     </div>
                                                                 </div>
                                                             )}
@@ -2233,6 +2257,7 @@ export default function BiddingDashboardPage() {
                                                         onStartSniperTest={startSniperTest}
                                                         simulationMode={session.simulationMode}
                                                         clockSkew={clockSkewRef.current}
+                                                        wsFastBidsRef={wsFastBidsRef}
                                                     />
                                                 ))];
                                             }
@@ -2248,6 +2273,7 @@ export default function BiddingDashboardPage() {
                                                     onStartSniperTest={startSniperTest}
                                                     simulationMode={session.simulationMode}
                                                     clockSkew={clockSkewRef.current}
+                                                    wsFastBidsRef={wsFastBidsRef}
                                                 />
                                             ));
                                         })()
@@ -2415,7 +2441,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} />
                         ))}
                     </div>
                 </CardContent>
@@ -2510,29 +2536,41 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef }: any) {
+    // ⚡ SOBRESCRITA INSTANTÂNEA VIA WEBSOCKET DIRETO (RAIO DIRETO): usa dados do wsFastBidsRef
+    // para meuValor, valorAtual, posicao SEMPRE que disponíveis (mais recentes que o item prop)
+    const wsFastKey = sid ? `${sid}_${item.itemId || item.numero}` : `${item.itemId || item.numero}`;
+    const wsFastData = wsFastBidsRef?.current?.[wsFastKey];
+    
     // RANKING CORRETO: monta por participante (melhor lance de cada um)
     const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
         return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
     }, [item.rankingLances, item.meuValor]);
 
-    // Posição real: usa a computada se > 0, senão usa a que veio da API
-    const posicaoReal = posicaoComputada > 0 ? String(posicaoComputada) : (item.posicao || '?');
+    // Posição real: usa wsFastData se disponível, senão computada, senão item.posicao
+    const posicaoReal = wsFastData?.posicao 
+        ? wsFastData.posicao 
+        : (posicaoComputada > 0 ? String(posicaoComputada) : (item.posicao || '?'));
 
-    const myBidVal = safeParseNumber(item.meuValor);
-    const bestBidVal = safeParseNumber(item.valorAtual);
+    // ⚡ Usa wsFastData quando disponível (frescor do WebSocket em tempo real)
+    const meuValorDisplay = wsFastData?.meuValor ?? safeParseNumber(item.meuValor);
+    const valorAtualDisplay = wsFastData?.valorAtual ?? safeParseNumber(item.valorAtual);
+    const ganhadorDisplay = wsFastData?.ganhador || item.ganhador || 'Outro';
+
+    const myBidVal = meuValorDisplay;
+    const bestBidVal = valorAtualDisplay;
     const isWinning = 
         !(myBidVal > 0 && bestBidVal > 0 && myBidVal > bestBidVal) && (
-            item.ganhador === 'Você' || 
+            ganhadorDisplay === 'Você' || 
             item.position === 1 ||
             posicaoReal === '1' ||
-            String(item.posicao) === '1' || 
-            String(item.posicao) === '1º' ||
-            String(item.posicao) === '1°' ||
-            String(item.posicao).toUpperCase() === 'G' ||
-            String(item.posicao).toUpperCase() === 'V' ||
-            String(item.posicao).toUpperCase() === 'GANHANDO' ||
-            String(item.posicao).toUpperCase() === 'VENCEDOR'
+            String(posicaoReal) === '1' || 
+            String(posicaoReal) === '1º' ||
+            String(posicaoReal) === '1°' ||
+            String(posicaoReal).toUpperCase() === 'G' ||
+            String(posicaoReal).toUpperCase() === 'V' ||
+            String(posicaoReal).toUpperCase() === 'GANHANDO' ||
+            String(posicaoReal).toUpperCase() === 'VENCEDOR'
         );
     
     const defaultMargin = item.officialMargin || 1.00;
@@ -2686,11 +2724,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
             // Se kamikaze ativado e bot ligado, dispara imediatamente no mínimo
             if (kamikazeMode && !isWinning) {
-                const currentBest = safeParseNumber(item.valorAtual);
+                const currentBest = valorAtualDisplay;
                 const numMin = numMinPrice;
                 let fireVal = currentBest > 0 ? currentBest - safeParseNumber(margin) : numMin;
                 if (fireVal < numMin) fireVal = numMin;
-                const myBid = safeParseNumber(item.meuValor);
+                const myBid = meuValorDisplay;
                 if (myBid <= 0 || fireVal < myBid) {
                     setTimeout(() => {
                         onManualBid(item.purchaseId, item.itemId, item.bidId, fireVal);
@@ -2710,7 +2748,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             return;
         }
 
-        const currentBest = safeParseNumber(item.valorAtual);
+        const currentBest = valorAtualDisplay;
         let val;
 
         const numDirectBid = safeParseNumber(directBidValue);
@@ -2736,7 +2774,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             return;
         }
         
-        const myCurrentBid = safeParseNumber(item.meuValor);
+        const myCurrentBid = meuValorDisplay;
 
         // Anti-Burrice: Se o usuário já tem um lance, não permitir mandar um lance PIOR ou IGUAL ao próprio lance
         if (!simulationMode && myCurrentBid > 0 && val >= myCurrentBid) {
@@ -2925,15 +2963,15 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             Melhor {isWinning && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
                         </span>
                         <span className={`text-lg font-bold tracking-tight ${isWinning ? 'text-emerald-500' : 'text-red-500'}`}>
-                            R$ {item.valorAtual?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
+                            R$ {valorAtualDisplay?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
                         </span>
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            Meu Lance {item.meuValor !== undefined && item.meuValor > 0 && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
+                            Meu Lance {meuValorDisplay !== undefined && meuValorDisplay > 0 && <span className="text-blue-600 font-bold ml-1">(Você)</span>}
                         </span>
                         <span className="text-lg font-bold tracking-tight text-slate-800">
-                            R$ {item.meuValor?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
+                            R$ {meuValorDisplay?.toLocaleString('pt-BR', { minimumFractionDigits: useFourDecimals ? 4 : 2 })}
                         </span>
                     </div>
                 </div>

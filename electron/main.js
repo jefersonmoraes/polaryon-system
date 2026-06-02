@@ -326,6 +326,13 @@ ipcMain.on('ws-item-data', (event, { codigo, items }) => {
     }
 });
 
+// ⚡ RAIO DIRETO: dados mínimos do WebSocket para display instantâneo no frontend
+ipcMain.on('ws-fast-bid', (event, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ws-fast-bid', data);
+    }
+});
+
 // 🎯 NOTIFICAÇÃO DE LANCE ENVIADO PELO FRONTEND → atualiza cooldown do backend (v3.8.130)
 ipcMain.on('bid-sent', (event, { purchaseId, itemId, value }) => {
     const runner = biddingRunner || global.biddingRunner;
