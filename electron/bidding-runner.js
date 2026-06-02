@@ -791,6 +791,8 @@ class RoomRunner {
                                 : officialMarginVal;
                             const maxAllowedToTakeLead = currentBest - mandatorySerproMargin;
 
+                            console.log(`[BACKEND MARGEM] Item ${sId}: officialMarginVal=${officialMarginVal} type=${officialMarginType} mandatorySerproMargin=${mandatorySerproMargin} marginUser=${margin} maxDecrement=${Math.max(margin, mandatorySerproMargin)} lowestPossibleBid=${myCurrentBid !== 999999999 ? (myCurrentBid - Math.max(margin, mandatorySerproMargin)).toFixed(4) : 'N/A'} currentBest=${currentBest} myCurrentBid=${myCurrentBid}`);
+
                             // Calcular próximo lance
                             let nextBid = 0;
                             let shouldBid = true;
@@ -1385,9 +1387,21 @@ class BiddingRunner {
                     console.warn(`[KAMIKAZE SNIPER] ⚠️ 400 na tentativa ${attempt}. Captcha possivelmente expirado — forçando renovação e tentando novamente...`);
                     continue; // 🔄 Retry com captcha fresco
                 }
-                console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, e.response ? e.response.data : e.message);
+                const errData = e.response ? e.response.data : null;
+                const errMsg = typeof errData === 'object' ? (errData.message || JSON.stringify(errData)) : (errData || e.message);
+                console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, errMsg);
+
+                if (statusCode === 422) {
+                    console.warn(`[KAMIKAZE SNIPER] ⚠️ 422 — Intervalo Mínimo Entre Lances violado. Revertendo optimistic update.`);
+                    if (this.webContents && !this.webContents.isDestroyed()) {
+                        this.webContents.send('bidding-update-log', `❌ [422] Lance R$ ${value} no Item ${itemId} violou intervalo mínimo entre lances. Revertendo...`);
+                        this.webContents.send('bid-failed', { purchaseId, itemId, value, reason: 'min_interval', status: 422 });
+                    }
+                    return;
+                }
+
                 if (this.webContents && !this.webContents.isDestroyed()) {
-                    this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId} (${bidLatency}ms). Erro: ${e.message}`);
+                    this.webContents.send('bidding-update-log', `❌ Falha ao tentar atirar no Item ${itemId} (${bidLatency}ms). Erro: ${errMsg}`);
                 }
                 return; // Erro não-recuperável — aborta
             }

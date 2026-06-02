@@ -274,6 +274,10 @@
                         continue; // 🔄 Retry com captcha fresco
                     }
                     console.error(`%c[POLARYON] ❌ Lance rejeitado (${response.status}): ${errText}`, "color: #ef4444; font-weight: bold;");
+                    if (response.status === 422) {
+                        console.warn(`%c[POLARYON] ⚠️ 422 — Intervalo Mínimo Entre Lances violado. Revertendo optimistic no frontend.`, "color: #f59e0b; font-weight: bold;");
+                        ipcRenderer.send('bid-failed', { purchaseId, itemId, value, reason: 'min_interval', status: 422 });
+                    }
                     break; // Erro não-recuperável — aborta
                 }
             } catch (e) {

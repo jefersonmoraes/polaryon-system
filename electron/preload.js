@@ -101,5 +101,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const fn = (event, data) => callback(data);
     ipcRenderer.on('ws-fast-bid', fn);
     return () => { ipcRenderer.off('ws-fast-bid', fn); };
+  },
+  onBidFailed: (callback) => {
+    const fn = (event, data) => callback(data);
+    ipcRenderer.on('bid-failed', fn);
+    return () => { ipcRenderer.off('bid-failed', fn); };
   }
 });

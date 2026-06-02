@@ -1213,6 +1213,44 @@ export default function BiddingDashboardPage() {
                 }));
             }
 
+            if ((window as any).electronAPI.onBidFailed) {
+                unsubs.push((window as any).electronAPI.onBidFailed((data: any) => {
+                    if (!data || !data.itemId) return;
+                    const { itemId, value, reason } = data;
+                    console.warn(`[BID FAILED] 🚫 Lance R$ ${value} do Item ${itemId} rejeitado (${reason || 422}). Revertendo optimistic update.`);
+                    const activeSid = sessionIdRef.current;
+                    if (activeSid) {
+                        const now = Date.now();
+                        const firedKey1 = `${activeSid}_${itemId}`;
+                        const firedKey2 = itemId;
+                        if (lastFiredBidRef.current[firedKey1]?.value === value) {
+                            delete lastFiredBidRef.current[firedKey1];
+                        }
+                        if (lastFiredBidRef.current[firedKey2]?.value === value) {
+                            delete lastFiredBidRef.current[firedKey2];
+                        }
+                        setSessions(prev => {
+                            const updated = { ...prev };
+                            if (updated[activeSid]) {
+                                updated[activeSid].items = updated[activeSid].items.map((it: any) => {
+                                    if (String(it.itemId) === String(itemId) && it.meuValor === value) {
+                                        return { ...it, meuValor: null, posicao: null, ganhador: null };
+                                    }
+                                    return it;
+                                });
+                            }
+                            return updated;
+                        });
+                        setItems(prev => prev.map(it => {
+                            if (String(it.itemId) === String(itemId) && it.meuValor === value) {
+                                return { ...it, meuValor: null, posicao: null, ganhador: null };
+                            }
+                            return it;
+                        }));
+                    }
+                }));
+            }
+
             if ((window as any).electronAPI.onBiddingDetectedRoom) {
                 unsubs.push((window as any).electronAPI.onBiddingDetectedRoom((data: any) => {
                     const { url } = data;
