@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+echo "=== [0/5] Limpando versões antigas de instaladores ==="
+CURRENT_VERSION=$(node -e "console.log(require('./package.json').version)")
+echo "Versão atual: $CURRENT_VERSION"
+# Mantém apenas o instalador da versão atual e o anterior como fallback
+if [ -d "/var/www/polaryon/storage/download" ]; then
+    ls -1 /var/www/polaryon/storage/download/Polaryon-*.exe 2>/dev/null | sort -V | head -n -2 | while read f; do
+        rm -f "$f" "${f}.blockmap"
+        echo "🗑️ Removido: $(basename "$f")"
+    done
+fi
+
 echo "=== [1/5] Atualizando Código (Git) ==="
 cd /var/www/polaryon
 git fetch origin main
