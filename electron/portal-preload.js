@@ -521,12 +521,11 @@
         if (!shared.sessionToken) return;
         const now = Date.now();
         
-        // 🧹 Limpa targets órfãos (captcha não resolveu em 15s) e re-enfileira
+        // 🧹 Limpa targets órfãos (captcha não resolveu em 15s) — descarta em vez de re-enfileirar (evita loop eterno)
         if (shared.pendingRankingTargets.length > 0) {
             const stale = shared.pendingRankingTargets.filter(t => (now - t._addedAt) >= RANKING_CAPTCHA_TIMEOUT);
             if (stale.length > 0) {
-                console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ ${stale.length} targets estagnados (>15s sem captcha). Re-enfileirando.`, 'color:#f59e0b;font-size:9px;');
-                stale.forEach(t => { enqueueRankingFetch(t, true); delete t._addedAt; });
+                console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ ${stale.length} targets estagnados (>15s sem captcha). DESCATANDO para evitar loop.`, 'color:#f59e0b;font-size:9px;');
                 shared.pendingRankingTargets = shared.pendingRankingTargets.filter(t => (now - t._addedAt) < RANKING_CAPTCHA_TIMEOUT);
             }
         }
@@ -993,8 +992,13 @@
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
             } else if (type === '429-error') {
-                console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 15 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 60 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + 60000;
+            } else if (type === 'session-expired') {
+                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Limpando fila de ranking e resetando heartbeat.', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                shared.pendingRankingTargets = [];
+                _rankingQueue = [];
+                keepAliveConsecutiveFailures = 0;
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -1042,7 +1046,7 @@
                         const delay = shared.pendingRankingTargets.length > 0 ? 800 : 0;
                         setTimeout(() => {
                             document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId }
+                                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
                             }));
                             // 🔁 Se ainda há mais targets, encadeia outro captcha para o próximo item
                             if (shared.pendingRankingTargets.length > 0) {
@@ -1352,12 +1356,14 @@
                                     token = tokenObj.response || tokenObj.token || '';
                                 }
                                 if (token && token.startsWith('P1_')) {
-                                    // Envia como 'fresh-captcha' - token ainda não consumido
-                                    window.postMessage({
-                                        source: 'polaryon-injector',
-                                        type: 'fresh-captcha',
-                                        token
-                                    }, '*');
+                                    // Só posta se NÃO for nosso widget (nosso widget já posta via callback)
+                                    if (polaryonWidgetId === null || widgetId !== polaryonWidgetId) {
+                                        window.postMessage({
+                                            source: 'polaryon-injector',
+                                            type: 'fresh-captcha',
+                                            token
+                                        }, '*');
+                                    }
                                 }
                             }).catch(() => {});
                         }
@@ -1528,7 +1534,7 @@
         // 🏆 Ranking fetch handler: triggered by preload via DOM event.
         // Uses the page's originalFetch (with credentials/cookies) instead of preload's isolated fetch.
         document.addEventListener('polaryon-fetch-ranking', async (e) => {
-            const { url } = e.detail || {};
+            const { url, sessionToken: tokenFromPreload } = e.detail || {};
             if (!url) return;
             try {
                 const xsrfCookie = document.cookie.split('; ').find(c => c.startsWith('XSRF-TOKEN='));
@@ -1541,7 +1547,7 @@
                         'X-Requested-With': 'XMLHttpRequest',
                         'x-device-platform': 'web',
                         'x-version-number': '6.0.2',
-                        ...(sessionToken ? { 'Authorization': sessionToken } : {}),
+                        ...(sessionToken || tokenFromPreload ? { 'Authorization': sessionToken || tokenFromPreload } : {}),
                         ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {})
                     }
                 });
@@ -1553,6 +1559,8 @@
                         window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: res.status }, '*');
                     } else if (res.status === 429) {
                         window.postMessage({ source: 'polaryon-injector', type: '429-error', status: res.status }, '*');
+                    } else if (res.status === 401) {
+                        window.postMessage({ source: 'polaryon-injector', type: 'session-expired', status: res.status }, '*');
                     }
                 }
 
