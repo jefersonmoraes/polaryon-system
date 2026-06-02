@@ -1050,7 +1050,7 @@ export default function BiddingDashboardPage() {
                                 numero: parseInt(roomCode.substring(8, 13)),
                                 ano: roomCode.substring(13, 17),
                                 items: [],
-                                sessionTitle: `SALA DETECTADA: ${roomCode.substring(0, 6)}`,
+                                sessionTitle: `SALA DETECTADA: ${parseInt(roomCode.substring(8, 13))}/${roomCode.substring(13, 17)}`,
                                 lastUpdate: timestamp
                             };
                         }
