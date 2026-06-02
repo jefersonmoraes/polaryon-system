@@ -431,10 +431,12 @@ class RoomRunner {
                 }
 
                 // Envia a sala COMPLETA para o dashboard
+                const dispNum = parseInt(this.idCompra.substring(8, 13), 10);
+                const dispAno = this.idCompra.substring(13, 17);
                 this.webContents.send('bidding-update', {
                     sessionId: this.sessionId,
                     uasg: this.idCompra.substring(0, 6),
-                    sessionTitle: `Disputa Oficial - ${this.idCompra}`,
+                    sessionTitle: `Disputa Oficial - ${dispNum}/${dispAno}`,
                     log: `[MOTOR KAMIKAZE] Escaneamento Limpo: ${mappedItems.length} itens detectados.`,
                     items: mappedItems,
                     serverOffset: this.clockSync.getServerTime() - Date.now()
