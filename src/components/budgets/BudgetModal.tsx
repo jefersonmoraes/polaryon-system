@@ -339,13 +339,13 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         if (adminCompany) {
             // --- DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
-            // Baseado no valor CIF (Produtos + Frete)
+            // Baseado SOMENTE no valor dos produtos (frete não incrementa a base do DIFAL)
             if (supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
                 const entryDifalDetails = calculateDifalDetailed(supplierCompany.uf, adminCompany.state);
                 if (entryDifalDetails && entryDifalDetails.percent > 0) {
                     entryDifalPercent = entryDifalDetails.percent;
-                    // A antecipação é sobre o valor total da nota de entrada (Produtos + Frete)
-                    entryDifalValue = (discountedProducts + freight) * (entryDifalPercent / 100);
+                    // A antecipação é SOMENTE sobre o valor dos produtos, sem frete
+                    entryDifalValue = discountedProducts * (entryDifalPercent / 100);
                 }
             }
 
@@ -385,9 +385,9 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         const salesTaxRate = taxRate + difalPercent;
         const fixedRate = 0; // Custos Fixos
         
-        // Base Proporcional de DIFAL de Entrada
+        // Base Proporcional de DIFAL de Entrada (só produtos, frete não gera antecipação)
         const productsEntryTax = discountedProducts * (entryDifalPercent / 100);
-        const freightEntryTax = freight * (entryDifalPercent / 100);
+        const freightEntryTax = 0;
 
         // Preço Produtos = (Custo + I.Entrada) / (1 - (I.Venda + Margem))
         let finalPriceProducts = (discountedProducts + productsEntryTax);
