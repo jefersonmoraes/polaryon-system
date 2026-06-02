@@ -379,8 +379,9 @@ export default function BiddingDashboardPage() {
                             const beatingAmount = allow4 ? 0.0001 : 0.01;
                             const maxDecrement = Math.max(margin, mandatorySerproMargin);
                             const lowestAllowed = myCurrentBid - maxDecrement;
+                            const serproLowestAllowed = myCurrentBid - mandatorySerproMargin; // Só margem Serpro (sem preferência do usuário)
                             const beatingBid = currentBest > 0 ? currentBest - beatingAmount : 0;
-                            const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestAllowed));
+                            const candidateBid = Math.max(myMin, Math.min(beatingBid, serproLowestAllowed));
                             const isLeaderBeatable = currentBest > 0 && candidateBid < currentBest && candidateBid < myCurrentBid;
 
                             if (isLeaderBeatable) {
@@ -437,7 +438,7 @@ export default function BiddingDashboardPage() {
                                     // Agora: se lowestAllowed < cBid (consigo ir abaixo dele) E beatingBid >= myMin
                                     for (const cBid of competitorBids) {
                                         const beatingBid = cBid - beatingAmount;
-                                        const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestAllowed));
+                                        const candidateBid = Math.max(myMin, Math.min(beatingBid, serproLowestAllowed));
                                         if (candidateBid < cBid && candidateBid < myCurrentBid) {
                                             targetCompetitorBid = cBid;
                                             break;
@@ -446,7 +447,7 @@ export default function BiddingDashboardPage() {
                                 }
 
                                 if (targetCompetitorBid !== null) {
-                                    const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestAllowed));
+                                    const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, serproLowestAllowed));
                                     
                                     // 🔧 FIX v3.8.131: Compara diretamente contra o limiar de batida do concorrente, não contra idealBid
                                     // (idealBid é limitado por lowestAllowed = myCurrentBid - maxDecrement, então myCurrentBid <= idealBid é quase sempre falso)
@@ -919,6 +920,9 @@ export default function BiddingDashboardPage() {
                         itemMap.set(it.itemId, { 
                             ...existing, 
                             ...it, 
+                            isGroup: it.isGroup !== undefined ? it.isGroup : existing.isGroup,
+                            isGroupItem: it.isGroupItem !== undefined ? it.isGroupItem : existing.isGroupItem,
+                            parentGroupId: it.parentGroupId !== undefined ? it.parentGroupId : existing.parentGroupId,
                             portalTimer: existing.portalTimer,
                             portalDataHoraFimContagem: existing.portalDataHoraFimContagem,
                             updatedAt: existing.updatedAt,
@@ -1121,6 +1125,9 @@ export default function BiddingDashboardPage() {
                             itemMap.set(key, { 
                                 ...existing, 
                                 ...it, 
+                                isGroup: it.isGroup !== undefined ? it.isGroup : existing.isGroup,
+                                isGroupItem: it.isGroupItem !== undefined ? it.isGroupItem : existing.isGroupItem,
+                                parentGroupId: it.parentGroupId !== undefined ? it.parentGroupId : existing.parentGroupId,
                                 portalTimer,
                                 portalDataHoraFimContagem,
                                 updatedAt,

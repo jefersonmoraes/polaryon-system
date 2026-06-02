@@ -749,11 +749,14 @@
         }
 
         // 🔄 Proactive fetch: busca sub-itens do grupo (caso Angular não expanda automaticamente)
-        if (groupItem && roomCode && shared.sessionToken && !(shared.subItemsCache && shared.subItemsCache[roomCode])) {
+        // Se não houver sessionToken, tenta sem Authorization (usa cookies da página)
+        if (groupItem && roomCode && !(shared.subItemsCache && shared.subItemsCache[roomCode])) {
             setTimeout(async () => {
                 try {
                     const epUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa/-1/itens-grupo`;
-                    const r = await fetch(epUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                    const headers = { 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' };
+                    if (shared.sessionToken) headers['Authorization'] = shared.sessionToken;
+                    const r = await fetch(epUrl, { headers });
                     if (r.ok) {
                         const d = await r.json();
                         const dItems = Array.isArray(d) ? d : (d.itens || []);
@@ -766,7 +769,9 @@
                             processSerproData(d, epUrl, 200, true, '', Date.now(), Date.now());
                             // Re-fetch em-disputa para mostrar sub-itens (em-disputa vai pelo interceptor normal, sem race)
                             const roomUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${roomCode}/itens/em-disputa`;
-                            const rr = await fetch(roomUrl, { headers: { 'Authorization': shared.sessionToken, 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' } });
+                            const rrHeaders = { 'Accept': 'application/json', 'x-device-platform': 'web', 'x-version-number': '6.0.2' };
+                            if (shared.sessionToken) rrHeaders['Authorization'] = shared.sessionToken;
+                            const rr = await fetch(roomUrl, { headers: rrHeaders });
                             if (rr.ok) {
                                 const dd = await rr.json();
                                 const dh = rr.headers.get('Date') || rr.headers.get('date') || '';

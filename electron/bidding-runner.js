@@ -401,6 +401,8 @@ class RoomRunner {
                                         officialMargin: si.variacaoMinimaEntreLances || 1,
                                         officialMarginType: si.tipoVariacaoMinimaEntreLances || 'V',
                                         desc: si.descricao,
+                                        isGroup: false,
+                                        isGroupItem: true,
                                         rankingLances: []
                                     };
                                 }
