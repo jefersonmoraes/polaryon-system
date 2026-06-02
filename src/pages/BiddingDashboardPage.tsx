@@ -170,6 +170,7 @@ export default function BiddingDashboardPage() {
     const itemsRef = useRef(items);
     const configsRef = useRef<any>({});
     const lastBidTimesRef = useRef<Record<string, number>>({});
+    const last422PenaltyRef = useRef<Record<string, number>>({}); // ⏳ Penalidade de 3s após 422
     const serverOffsetRef = useRef<number>(serverOffset);
     const clockSkewRef = useRef<number>(0); // Clock skew: sigaTimerSeconds - (endTime - Date.now())/1000
     const sigaTimerSecondsRef = useRef<number | undefined>(undefined);
@@ -357,6 +358,16 @@ export default function BiddingDashboardPage() {
                         const now = Date.now();
                         const lastBid = lastAutoBidTimesLocal[sId] || lastAutoBidTimesLocal[item.itemId] || 0;
                         
+                        // ⏳ Penalidade de 3s após 422 (evita retentar com dados stale)
+                        const last422 = last422PenaltyRef.current[sId] || 0;
+                        if (last422 > 0 && now - last422 < 3000) {
+                            if ((lastLogRef.current[`422_${sId}`] || 0) < Date.now() - 2000) {
+                                console.log(`[SNIPER] ⏳ Item ${sId}: Aguardando 3s após 422 (penalidade).`);
+                                lastLogRef.current[`422_${sId}`] = Date.now();
+                            }
+                            return;
+                        }
+
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
@@ -383,6 +394,8 @@ export default function BiddingDashboardPage() {
                             const beatingBid = currentBest > 0 ? currentBest - beatingAmount : 0;
                             const candidateBid = Math.max(myMin, Math.min(beatingBid, serproLowestAllowed));
                             const isLeaderBeatable = currentBest > 0 && candidateBid < currentBest && candidateBid < myCurrentBid;
+
+                            console.log(`[FRONTEND MARGEM] Item ${sId}: officialMarginVal=${officialMarginVal} type=${officialMarginType} mandatorySerproMargin=${mandatorySerproMargin.toFixed(4)} marginUser=${margin} maxDecrement=${maxDecrement} lowestAllowed=${lowestAllowed.toFixed(4)} serproLowestAllowed=${serproLowestAllowed.toFixed(4)} beatingBid=${beatingBid.toFixed(4)} candidateBid=${candidateBid.toFixed(4)} isLeaderBeatable=${isLeaderBeatable} currentBest=${currentBest} myCurrentBid=${myCurrentBid} myMin=${myMin}`);
 
                             if (isLeaderBeatable) {
                                 nextBid = candidateBid;
@@ -1216,8 +1229,12 @@ export default function BiddingDashboardPage() {
             if ((window as any).electronAPI.onBidFailed) {
                 unsubs.push((window as any).electronAPI.onBidFailed((data: any) => {
                     if (!data || !data.itemId) return;
-                    const { itemId, value, reason } = data;
-                    console.warn(`[BID FAILED] 🚫 Lance R$ ${value} do Item ${itemId} rejeitado (${reason || 422}). Revertendo optimistic update.`);
+                    const { itemId, value, reason, status } = data;
+                    console.warn(`[BID FAILED] 🚫 Lance R$ ${value} do Item ${itemId} rejeitado (${reason || status || 422}). Revertendo optimistic update.`);
+                    if (status === 422 || reason === 'min_interval') {
+                        last422PenaltyRef.current[String(itemId)] = Date.now();
+                        console.warn(`[BID FAILED] ⏳ Penalidade de 3s ativada para Item ${itemId} (422).`);
+                    }
                     const activeSid = sessionIdRef.current;
                     if (activeSid) {
                         const now = Date.now();
