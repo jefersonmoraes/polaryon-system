@@ -467,10 +467,10 @@ export default function BiddingDashboardPage() {
                                     if (myCurrentBid > myMin && myCurrentBid !== 999999999) {
                                         // Reduz pelo menos pela margem, ou metade do gap até o mínimo (o que for maior)
                                         const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
-                                        nextBid = Math.max(myMin, myCurrentBid - gapReduction);
+                                        nextBid = Math.max(myMin, Math.min(myCurrentBid - gapReduction, lowestAllowed));
                                         const lastNobeatLog = lastLogRef.current[`nobeat_${sId}`] || 0;
                                         if (Date.now() - lastNobeatLog >= 2000) {
-                                            console.log(`[SNIPER] Reduzindo lance de R$ ${myCurrentBid} → R$ ${nextBid} (mínimo R$ ${myMin}). Nenhum concorrente batível, mas reduzindo agressivamente.`);
+                                            console.log(`[SNIPER] Reduzindo lance de R$ ${myCurrentBid} → R$ ${nextBid} (mínimo R$ ${myMin}, margem Serpro R$ ${mandatorySerproMargin}). Nenhum concorrente batível, mas reduzindo agressivamente.`);
                                             lastLogRef.current[`nobeat_${sId}`] = Date.now();
                                         }
                                         // Não dá return - segue para validação e disparo

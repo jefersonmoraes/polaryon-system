@@ -995,10 +995,11 @@
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 60 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + 60000;
             } else if (type === 'session-expired') {
-                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Limpando fila de ranking e resetando heartbeat.', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Limpando fila de ranking, token e resetando heartbeat.', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
                 keepAliveConsecutiveFailures = 0;
+                shared.sessionToken = ''; // Limpa token obsoleto para evitar 401 em cascata
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
