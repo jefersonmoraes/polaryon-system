@@ -948,6 +948,25 @@ export default function BiddingDashboardPage() {
                             }
                         });
                     }
+                    
+                    // 🧹 DEDUP virtual → GLOBAL: se backend criou sessão real, funde virtual nela e deleta
+                    if (sid && sid.startsWith('GLOBAL_')) {
+                        const compraId = sid.replace('GLOBAL_', '');
+                        const virtualSid = `virtual_${compraId}`;
+                        if (updated[virtualSid] && updated[virtualSid].items?.length > 0) {
+                            const virtualItems = updated[virtualSid].items || [];
+                            const realItems = updated[sid].items || [];
+                            const realItemMap = new Map(realItems.map((it: any) => [it.itemId, it]));
+                            virtualItems.forEach((vit: any) => {
+                                if (!realItemMap.has(vit.itemId)) {
+                                    realItemMap.set(vit.itemId, vit);
+                                }
+                            });
+                            updated[sid].items = Array.from(realItemMap.values());
+                            delete updated[virtualSid];
+                            console.log(`[DEDUP VIRTUAL] Fundido virtual_${compraId} → ${sid} (${virtualItems.length} itens)`);
+                        }
+                    }
 
                     return updated;
                 });
@@ -1019,16 +1038,22 @@ export default function BiddingDashboardPage() {
                     });
 
                     // 🛠️ CRIAÇÃO VIRTUAL: Se a sala não existe, cria ela na hora!
+                    // Mas primeiro verifica se já existe sessão GLOBAL_ com mesmo compraId (evita duplicatas)
                     if (!sid) {
-                        sid = `virtual_${roomCode}`;
-                        updated[sid] = {
-                            uasg: roomCode.substring(0, 6),
-                            numero: parseInt(roomCode.substring(8, 13)),
-                            ano: roomCode.substring(13, 17),
-                            items: [],
-                            sessionTitle: `SALA DETECTADA: ${roomCode.substring(0, 6)}`,
-                            lastUpdate: timestamp
-                        };
+                        const globalSid = `GLOBAL_${roomCode}`;
+                        if (updated[globalSid]) {
+                            sid = globalSid;
+                        } else {
+                            sid = `virtual_${roomCode}`;
+                            updated[sid] = {
+                                uasg: roomCode.substring(0, 6),
+                                numero: parseInt(roomCode.substring(8, 13)),
+                                ano: roomCode.substring(13, 17),
+                                items: [],
+                                sessionTitle: `SALA DETECTADA: ${roomCode.substring(0, 6)}`,
+                                lastUpdate: timestamp
+                            };
+                        }
                     }
 
                     if (sid) {
