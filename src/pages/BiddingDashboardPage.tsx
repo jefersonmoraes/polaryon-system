@@ -2812,11 +2812,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         
         if (newState) {
             toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
-            // Se kamikaze ativado e bot ligado, dispara imediatamente no mínimo
+            // Se kamikaze ativado e bot ligado, dispara imediatamente
             if ((kamikazeMode || snipeDelaySeconds === 0) && !isWinning) {
                 const currentBest = valorAtualDisplay;
                 const numMin = numMinPrice;
-                let fireVal = currentBest > 0 ? currentBest - safeParseNumber(margin) : numMin;
+                const beatingAmt = useFourDecimals ? 0.0001 : 0.01;
+                let fireVal = currentBest > 0 ? currentBest - beatingAmt : numMin;
                 if (fireVal < numMin) fireVal = numMin;
                 const myBid = meuValorDisplay;
                 if (myBid <= 0 || fireVal < myBid) {
@@ -2846,13 +2847,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         if (numDirectBid > 0) {
             val = numDirectBid;
         } else {
-            let marginVal = safeParseNumber(margin);
-            if (marginType === 'percentage') {
-                marginVal = currentBest * (marginVal / 100);
-            }
-            
-            // Subtrai do MELHOR lance atual
-            val = currentBest - marginVal;
+            // Subtrai APENAS o mínimo para vencer (R$0,01 ou R$0,0001), não a margem configurada
+            // A margem valida o degrau entre MEU lance anterior e o novo, não desconta do concorrente
+            const beatingAmt = useFourDecimals ? 0.0001 : 0.01;
+            val = currentBest > 0 ? currentBest - beatingAmt : numMinPrice;
         }
 
         // A Trava Primordial (aplica-se a directBidValue e ao cálculo)
