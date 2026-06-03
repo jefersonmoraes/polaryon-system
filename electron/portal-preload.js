@@ -1133,6 +1133,8 @@
                 var OriginalWS = window.WebSocket;
                 window.WebSocket = function(url, protocols) {
                     var ws = new OriginalWS(url, protocols);
+                    // 🔍 DIAGNÓSTICO: loga TODOS os WebSockets, filtrados ou não
+                    console.log('%c[WS RAW] WebSocket: ' + url.substring(0, 120), 'color:' + (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1 ? '#6366f1' : '#ff6b6b'));
                     if (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1) {
                         console.log('%c[WS INTERCEPT] WebSocket criado: ' + url.substring(0, 80), 'color:#6366f1');
                         var origAddEventListener = ws.addEventListener.bind(ws);
@@ -1244,6 +1246,19 @@
                     } catch(e) {}
                 }
             })();
+
+            // 🔬 TEST MANUAL: Simula dados WebSocket para testar pipeline sem esperar disputa
+            // Uso no console: __polaryonTestWS('38947606000092026', [{identificador:1, situacaoParticipanteDisputa:'G', melhorValorGeral:{valorCalculado:500}, melhorValorFornecedor:{valorCalculado:529}, segundosParaEncerramento:600, dataHoraFimContagem:new Date(Date.now()+600000).toISOString(), fase:'LA', variacaoMinimaEntreLances:1}])
+            window.__polaryonTestWS = function(codigo, items) {
+                console.log('%c[WS TEST] 🧪 Injetando dados WS falsos para compra ' + codigo + ' (' + items.length + ' itens)', 'color:#ff9800;font-weight:bold');
+                window.postMessage({
+                    source: 'polaryon-injector',
+                    type: 'ws-item-update',
+                    codigo: codigo,
+                    data: items,
+                    timestamp: Date.now()
+                }, '*');
+            };
             
             function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
                 // 🎯 Extrai dataHoraFimContagem para o timer contínuo
