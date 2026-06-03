@@ -772,12 +772,12 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown adaptativo (v3.8.129): Guerra (100ms) > SniperWindow (100ms) > Kamikaze (200ms) > Final30s (300ms) > Normal (1000ms)
+                            // Cooldown adaptativo (v3.8.173): mínimo de 1000ms para evitar 422 de tempo entre lances
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 1;
                             const isInSnipeWindow = (isTimerActive && tSeconds <= snipeDelaySeconds && snipeDelaySeconds > 0);
-                            const cooldown = isInWarMode ? 100 : (isKamikaze ? 200 : (isInSnipeWindow ? 100 : (tSeconds <= 30 ? 300 : 1000)));
+                            const cooldown = Math.max(1000, (isInWarMode ? 100 : (isKamikaze ? 200 : (isInSnipeWindow ? 100 : (tSeconds <= 30 ? 300 : 1000)))));
                             if (isInWarMode) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA ATIVO (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             if (isInSnipeWindow && !isInWarMode) console.log(`[BACKEND SNIPER] 🎯 Item ${sId}: MODO SNIPER (timer=${tSeconds}s ≤ snipeDelay=${snipeDelaySeconds}s) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
@@ -1303,14 +1303,15 @@ class BiddingRunner {
      * 🔫 Disparo Rest Direto! Sem Depender de Janela Visual!
      */
     async sendBid({ purchaseId, itemId, value }) {
-        // 🛡️ DEDUP GLOBAL: mesmo valor p/ mesmo item nos últimos 2s? (v3.8.130)
+        const now = Date.now();
+        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 1000ms? (v3.8.173 — evita 422 de tempo)
         const dedupKey = `${purchaseId}_${itemId}`;
         const recent = this.recentBids.get(dedupKey);
-        if (recent && recent.value === value && (Date.now() - recent.timestamp) < 2000) {
-            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup global: R$ ${value} já enviado para Item ${itemId} há ${(Date.now()-recent.timestamp)/1000}s. Ignorando.`);
+        if (recent && (now - recent.timestamp) < 1000) {
+            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 1s para evitar 422).`);
             return;
         }
-        this.recentBids.set(dedupKey, { value, timestamp: Date.now() });
+        this.recentBids.set(dedupKey, { value, timestamp: now });
 
         // 🔄 Tenta até 2x com captcha fresco em caso de 400 (captcha expirado)
         for (let attempt = 1; attempt <= 2; attempt++) {

@@ -291,7 +291,18 @@ export default function BiddingDashboardPage() {
                 const strat = configs[`${itemSid}_${sId}`] || configs[sId] || configs[item.itemId] || {};
                 const isActive = strat.active || false;
                 
-                if (!isActive) return;
+                if (!isActive) {
+                    if ((lastLogRef.current[`inactive_${sId}`] || 0) < Date.now() - 10000) {
+                        console.log(`[SNIPER] ⏹️ Item ${sId}: sniper INATIVO (botão desligado).`);
+                        lastLogRef.current[`inactive_${sId}`] = Date.now();
+                    }
+                    return;
+                }
+
+                if ((lastLogRef.current[`loop_${sId}`] || 0) < Date.now() - 10000) {
+                    console.log(`[SNIPER] 🔄 Item ${sId}: sniper ATIVO — avaliando lance...`);
+                    lastLogRef.current[`loop_${sId}`] = Date.now();
+                }
 
                 // 🔥 Tempo restante: clockSkew ajusta dataHoraFimContagem para o relógio local
                 let currentTimeLeft: number;
@@ -371,8 +382,8 @@ export default function BiddingDashboardPage() {
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
-                        // ⚡ Cooldown adaptativo: 0ms nos 30s finais ou se Kamikaze ativado, senão 100ms (v3.8.129)
-                        const cooldown = (isKamikaze || isRetaFinal) ? 0 : 100;
+                        // ⚡ Cooldown adaptativo: mínimo entre lances para evitar 422 de tempo (v3.8.173)
+                        const cooldown = (isKamikaze || isRetaFinal) ? 1000 : 1500;
                         if (now - lastBid > cooldown) {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
@@ -380,7 +391,7 @@ export default function BiddingDashboardPage() {
                             // CALCULAR MARGEM OBRIGATÓRIA DO SERPRO
                             const officialMarginVal = Number(item.officialMargin || 0);
                             const officialMarginType = item.officialMarginType || 'V';
-                            const mandatorySerproMargin = officialMarginType === 'P' ? myCurrentBid * (officialMarginVal / 100) : officialMarginVal;
+                            const mandatorySerproMargin = officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal;
                             
                             // O limite máximo que o Serpro aceita
                             const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;

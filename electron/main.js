@@ -346,7 +346,12 @@ ipcMain.on('manual-bid', (event, data) => {
     if (visualRunner) {
         visualRunner.sendManualBid(data);
     } else if (global.biddingRunner) {
-        global.biddingRunner.sendBid(data);
+        // Notifica cooldown antes de enviar (evita duplicação se RoomRunner também estiver ativo)
+        const runner = global.biddingRunner;
+        if (data.purchaseId && data.itemId && data.value) {
+            runner.notifyBidSent(data.purchaseId, data.itemId, data.value);
+        }
+        runner.sendBid(data);
     }
 });
 
