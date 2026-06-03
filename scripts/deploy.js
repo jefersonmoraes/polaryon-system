@@ -55,14 +55,18 @@ async function deploy() {
 
     console.log(`\n🚀 DEPLOY v${version}\n`);
 
-    // 1. Git push
-    console.log('[1/4] Git push...');
+    // 1. Build desktop EXE
+    console.log('[1/5] Build desktop EXE...');
+    run('npm run electron:build', rootDir);
+
+    // 2. Git push
+    console.log('[2/5] Git push...');
     run('git add .');
     run(`git commit -m "deploy v${version}"`);
     run('git push origin main');
 
-    // 2. Conectar VPS
-    console.log('[2/4] Conectando VPS...');
+    // 3. Conectar VPS
+    console.log('[3/5] Conectando VPS...');
     const conn = new Client();
     await new Promise((resolve, reject) => {
         conn.on('ready', resolve);
@@ -74,13 +78,14 @@ async function deploy() {
     });
     console.log('  ✅ Conectado');
 
-    // 3. Upload artefatos (EXE opcional, latest.yml obrigatório)
+    // 4. Upload artefatos (EXE opcional, latest.yml obrigatório)
     console.log('[3/4] Upload artefatos...');
     const sftpUploads = [];
     if (fs.existsSync(localExe)) {
         sftpUploads.push({ local: localExe, remote: remotePath + exeName, label: exeName });
     } else {
-        console.log('  ⏭️ EXE não encontrado (GH Actions vai buildar)');
+        console.log('  ❌ EXE não foi gerado! Build falhou?');
+        process.exit(1);
     }
     if (fs.existsSync(localBlockmap)) {
         sftpUploads.push({ local: localBlockmap, remote: remotePath + `${exeName}.blockmap`, label: `${exeName}.blockmap` });
@@ -98,7 +103,7 @@ async function deploy() {
         }
     }
 
-    // 4. Atualizar backend/frontend na VPS
+    // 5. Atualizar backend/frontend na VPS
     console.log('[4/4] Atualizando VPS (git pull + build + restart)...');
     const cmds = [
         'cd /var/www/polaryon',
@@ -132,7 +137,7 @@ async function deploy() {
 
     conn.end();
     console.log(`\n✅ DEPLOY v${version} COMPLETO!`);
-    console.log(`📱 VPS atualizada | ${sftpUploads.length} artefatos enviados`);
+    console.log(`📱 VPS atualizada | EXE enviado: ${exeName}`);
 }
 
 deploy().catch(e => { console.error('\n❌', e.message); process.exit(1); });
