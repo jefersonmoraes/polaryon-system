@@ -471,6 +471,18 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - `body.charCodeAt(body.length - 1) === 0` → strip `\0` do final
 - Ambos os bugs resolvidos simultaneamente
 
+### 34. `\n` e `\0` em comentários quebravam template literal (v3.8.180)
+**Antes (v3.8.179):** Comentários dentro da template literal usavam `\n` e `\0` crus. Template literal interpreta `\n` como newline e `\0` como null byte → o script injetado virava código inválido.
+
+**Consequência em produção:** `SyntaxError: Failed to execute 'appendChild' on 'Node': Invalid or unexpected token` — script nunca era injetado.
+
+**Arquivo:** `electron/portal-preload.js:1172-1179`
+
+**Solução:**
+- `'\n\n'` → `'\\n\\n'` nos comentários
+- `\0` → `\\0` nos comentários
+- Template literal produz texto `\n` e `\0` como caracteres literais
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)

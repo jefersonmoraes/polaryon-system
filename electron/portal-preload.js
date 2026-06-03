@@ -1169,14 +1169,14 @@
                     try {
                         if (typeof data !== 'string') return;
                         // STOMP header/body separator: two real newlines (0x0A 0x0A).
-                        // In template literal we write \\n\\n so the injected script gets '\n\n' escape, NOT real newlines.
+                        // In template literal we write \\n\\n so the injected script gets '\\n\\n' escape correctly.
                         var body = data;
                         if (data.indexOf('\\n\\n') !== -1 || data.indexOf('\\r\\n\\r\\n') !== -1) {
                             var sep = data.indexOf('\\r\\n\\r\\n') !== -1 ? '\\r\\n\\r\\n' : '\\n\\n';
                             var parts = data.split(sep);
                             body = parts[parts.length - 1];
-                            // ⚠️ FIX v3.8.178: Remove terminador nulo do STOMP (\0) antes do parse
-                            // Antes: JSON.parse falhava silenciosamente com \0 no final → parsed = null → WS ignorado
+                            // ⚠️ FIX v3.8.178: Remove terminador nulo do STOMP (\\0) antes do parse
+                            // Antes: JSON.parse falhava silenciosamente com \\0 no final → parsed = null → WS ignorado
                             if (body.charCodeAt(body.length - 1) === 0) body = body.slice(0, -1);
                         }
                         // Tenta parsear como JSON
