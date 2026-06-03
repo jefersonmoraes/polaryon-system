@@ -483,6 +483,37 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - `\0` → `\\0` nos comentários
 - Template literal produz texto `\n` e `\0` como caracteres literais
 
+## Implementado (v3.8.181)
+
+### 1. WS priorizado sobre HTTP polling (backend)
+**Antes:** WS TTL de 5s — após 5s sem WS, voltava a HTTP polling agressivo (30ms em guerra). WS e HTTP concorriam igualmente.
+
+**Arquivo:** `electron/bidding-runner.js:280`
+
+**Solução:**
+- WS TTL estendido de 5s para **60s** — dados WS persistem muito mais tempo
+- `dataSource: 'ws'|'http'` adicionado aos `mappedItems` para logging
+- Polling adaptativo reduz quando WS está fresco (<3s):
+  - Guerra: 30ms → **500ms** (heartbeat, WS faz tempo real)
+  - Reta <30s: 300ms → **500ms**
+  - Reta <60s: 500ms → **1500ms**
+  - Ativo: 800ms → **3000ms**
+- Se WS ficar stale, polling volta aos intervalos originais
+
+### 2. IPC enviado antes do processSerproData (frontend)
+**Antes:** `processSerproData()` era chamado antes do IPC, atrasando a entrega dos dados WS ao backend.
+
+**Arquivo:** `electron/portal-preload.js:1079-1081`
+
+**Solução:** `ipcRenderer.send('ws-item-data')` agora executa ANTES de `processSerproData()`. Backend recebe dados WS com milissegundos a menos de latência.
+
+### 3. Regex `\d` corrompido por template literal (v3.8.181)
+**Antes:** `\d` em template literal vira `d` no código injetado. Duas regex de timestamp (`/(\d{4}-.../)`) só matchavam literal "d", nunca dígitos.
+
+**Arquivo:** `electron/portal-preload.js:1119,1226`
+
+**Solução:** `\d` → `\\d` nas duas ocorrências. Agora `\d` é preservado no injected code e matcha dígitos corretamente. Impacto baixo (fallback raro), mas bug eliminado.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
