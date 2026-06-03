@@ -383,6 +383,53 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** Quando `bid-failed` chega com `status=422` ou `reason='min_interval'`, o `last422PenaltyRef` marca um timestamp. O sniper checa esse timestamp antes de cada bid — se <3s desde o 422, pula o item. Dá tempo do WebSocket/polling trazer dados frescos antes de retentar.
 
+## Implementado (v3.8.173)
+
+### 1. Cooldown mínimo 1000ms entre lances (time-based 422 prevent)
+**Antes:** Cooldown de 0ms/100ms — frontend e backend disparavam lances quase simultâneos, causando 422 "Intervalo Mínimo Entre Lances".
+
+**Arquivo:** `electron/bidding-runner.js:1320-1327` (dedup temporal), `BiddingDashboardPage.tsx` (cooldown frontend)
+
+**Solução:** 
+- Frontend cooldown: 0/100ms → 1000/1500ms
+- Backend cooldown: `Math.max(1000, ...)` garante mínimo 1000ms
+- `sendBid()` dedup temporal: bloqueia QUALQUER lance no mesmo item em < 1000ms (não apenas mesmo valor)
+- `manual-bid` IPC: agora chama `notifyBidSent()` antes de `sendBid()`, sincronizando RoomRunner
+- Frontend percent margin: `myCurrentBid` → `currentBest` (alinhado com backend)
+- Logs diagnóstico: `[SNIPER] ⏹️ INATIVO` / `[SNIPER] 🔄 ATIVO` a cada 10s por item
+
+### 2. Descoberta da causa raiz do 422
+**Antes:** Acreditava-se que o 422 era por tempo mínimo insuficiente entre lances.
+
+**Descoberta:** Análise dos arquivos do Siga em `importar/Disputa/` revelou que o Siga usa **apenas WebSocket** (sem HTTP polling) com **motor único de bid**. Nós temos HTTP polling + WS + 2 snipers (frontend+backend) competindo → dois disparos simultâneos causam o 422, não o intervalo de tempo.
+
+## Implementado (v3.8.174)
+
+### 1. Bid-in-progress mutex (RoomRunner checa antes de disparar)
+**Antes:** RoomRunner e `manual-bid` IPC podiam chamar `sendBid()` para o mesmo item simultaneamente, causando 422.
+
+**Arquivo:** `electron/bidding-runner.js:1306-1309` (`isBidInProgress`), `:936-941` (check no RoomRunner), `:1328-1331` (mutex set), `:1428-1431` (try/finally cleanup)
+
+**Solução:** 
+- `bidsInProgress` Map: `sendBid()` marca o item antes de qualquer async operation
+- `isBidInProgress(itemId)`: RoomRunner verifica antes de chamar `sendBid()`
+- `try/finally`: mutex é SEMPRE limpo, mesmo em caso de erro
+- Dedup temporal (1000ms) é checado ANTES do mutex — se for duplicata, retorna sem travar
+
+### 2. Log da resposta real da Serpro no 422
+**Antes:** 422 logava apenas "Intervalo Mínimo Entre Lances violado", sem mostrar a resposta real da API.
+
+**Arquivo:** `electron/bidding-runner.js:1410-1418`
+
+**Solução:** Agora loga `[KAMIKAZE SNIPER] ⚠️ 422 — Resposta Serpro: ${serproResponse}` com o JSON completo da resposta. Também envia `serproResponse` no `bid-failed` IPC para o frontend.
+
+### 3. Deploy script não envia latest.yml sem EXE
+**Arquivo:** `scripts/deploy-174.js:66-76`
+
+**Antes:** Deploy enviava `latest.yml` mesmo sem o EXE, corrompendo o auto-updater (sha512 mismatch).
+
+**Solução:** `latest.yml` e blockmap só são enviados se o EXE local existe. Caso contrário, aguarda o GitHub Actions gerar e enviar.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
