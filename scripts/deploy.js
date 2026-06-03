@@ -110,34 +110,25 @@ async function deploy() {
     ];
     await sshExec(conn, cmds.join(' && '));
 
-    // 5. Gerar latest.yml dinâmico baseado no EXE real
+    // 5. Gerar latest.yml dinâmico baseado no EXE real (via base64 p/ evitar shell escaping)
     console.log('  📝 Gerando latest.yml do EXE mais recente na VPS...');
-    await sshExec(conn, [
-        'node -e "',
-        'var fs=require(\"fs\"),path=require(\"path\");',
-        'var dir=\"/var/www/polaryon/storage/download\";',
-        'var files=fs.readdirSync(dir).filter(f=>f.startsWith(\"Polaryon-v\")&&f.endsWith(\"-Setup.exe\")).sort().reverse();',
-        'if(files.length===0){console.log(\"⚠️ Nenhum EXE encontrado\");process.exit(0);}',
-        'var exe=files[0];',
-        'var v=exe.replace(/^Polaryon-v/,\"\").replace(/-Setup\\.exe$/,\"\");',
-        'var buf=fs.readFileSync(path.join(dir,exe));',
-        'var hash=require(\"crypto\").createHash(\"sha512\").update(buf).digest(\"base64\");',
-        'var size=buf.length;',
-        'var ts=new Date().toISOString();',
-        'var yml=[',
-        '\"version: \"+v,',
-        '\"releaseDate: \"+ts,',
-        '\"files:\",',
-        '\"  - url: \"+exe,',
-        '\"    sha512: \"+hash,',
-        '\"    size: \"+size,',
-        '\"path: \"+exe,',
-        '\"sha512: \"+hash',
-        '].join(\"\\n\");',
-        'fs.writeFileSync(path.join(dir,\"latest.yml\"),yml);',
-        'console.log(\"✅ latest.yml gerado: v\"+v+\" (\"+exe+\" | \"+Math.round(size/1024/1024)+\"MB)\");',
-        '"'
-    ].join(' '));
+    const genScript = [
+        'const fs=require("fs"),path=require("path");',
+        'const dir="/var/www/polaryon/storage/download";',
+        'const files=fs.readdirSync(dir).filter(f=>f.startsWith("Polaryon-v")&&f.endsWith("-Setup.exe")).sort().reverse();',
+        'if(files.length===0){console.log("no exe");process.exit(0);}',
+        'const exe=files[0];',
+        'const v=exe.replace(/^Polaryon-v/,"").replace(/-Setup\\.exe$/,"");',
+        'const buf=fs.readFileSync(path.join(dir,exe));',
+        'const hash=require("crypto").createHash("sha512").update(buf).digest("base64");',
+        'const size=buf.length;',
+        'const ts=new Date().toISOString();',
+        'const yml="version: "+v+"\\nreleaseDate: "+ts+"\\nfiles:\\n  - url: "+exe+"\\n    sha512: "+hash+"\\n    size: "+size+"\\npath: "+exe+"\\nsha512: "+hash+"\\n";',
+        'fs.writeFileSync(path.join(dir,"latest.yml"),yml);',
+        'console.log("latest.yml: v"+v+" ("+exe+" "+Math.round(size/1024/1024)+"MB)");'
+    ].join('');
+    const b64 = Buffer.from(genScript).toString('base64');
+    await sshExec(conn, `echo ${b64} | base64 -d | node`);
 
     conn.end();
     console.log(`\n✅ DEPLOY v${version} COMPLETO!`);
