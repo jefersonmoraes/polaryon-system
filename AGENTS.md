@@ -454,17 +454,22 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - Frontend cooldown: 1000/1500 → 500/1000ms
 - Lances até 2x mais rápidos sem risco de 422
 
-### 33. Pipeline WS quebrado: `\\n\\n` vs `\n` real no parser STOMP (v3.8.177)
-**Antes:** `tryParseServerTime()` em `portal-preload.js:1173` usava `data.indexOf('\\n\\n')` — barra invertida+ene como caracteres literais, não como newline real. STOMP frames usam `\n\n` (0x0A 0x0A) como separador header/body. Além disso, não removia o terminador nulo `\0` do STOMP antes do `JSON.parse`.
+### 33. Pipeline WS quebrado: `\0` no STOMP impedia parse (v3.8.177-179)
+**Antes:** `tryParseServerTime()` em `portal-preload.js:1173` não removia o terminador nulo `\0` do STOMP antes do `JSON.parse`. O STOMP envia frames com `\0` no final do body.
 
-**Consequência em produção:** WS dados NUNCA eram extraídos → `WS: sem dados` em 100% dos ciclos → sistema rodava exclusivamente em HTTP polling (~30-90ms).
+**Consequência em produção:** `JSON.parse` falhava com `\0` no final → `parsed = null` → WS dados NUNCA extraídos → `WS: sem dados` em 100% dos ciclos → sistema rodava exclusivamente em HTTP polling (~30-90ms).
 
-**Arquivo:** `electron/portal-preload.js:1172-1176`
+**Histórico da correção:**
+- **v3.8.177:** `'\\n\\n'` → `'\n\n'` na template literal. **PROBLEMA:** `\n` em template literal vira newline literal → `'` + newline + `'` no script injetado → **SyntaxError** (`appendChild fail`). WS completamente quebrado.
+- **v3.8.178:** Tentativa de reverter. A edição JSON não funcionou (escaping incorreto) — arquivo permaneceu com `'\n\n'`. `\0` strip adicionado mas nunca executado devido ao SyntaxError.
+- **v3.8.179:** Correção real: `'\\\\n\\\\n'` no JSON da ferramenta de edição → `'\\n\\n'` no arquivo → `'\n\n'` no template literal → no runtime, `'\n\n'` é o escape JS para newline (0x0A 0x0A). **STOMP parsers corretamente + sem SyntaxError.**
 
-**Solução:**
-- `'\\n\\n'` → `'\n\n'` (newline real 0x0A)
-- `'\\r\\n\\r\\n'` → `'\r\n\r\n'` (CRLF real)
-- Strip `\0` do final do body: `if (body.charCodeAt(body.length - 1) === 0) body = body.slice(0, -1)`
+**Arquivo:** `electron/portal-preload.js:1172-1183`
+
+**Solução final (v3.8.179):**
+- `data.indexOf('\\n\\n')` — `\\n` na template literal produz `\n` no código injetado, que o runtime interpreta como newline
+- `body.charCodeAt(body.length - 1) === 0` → strip `\0` do final
+- Ambos os bugs resolvidos simultaneamente
 
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
