@@ -7,12 +7,21 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
-    // 🔬 TESTE DE IPC: verifica se ipcRenderer.send chega no main process
+    // 🔬 TESTE DE IPC: verifica se ipcRenderer.send e invoke chegam no main process
     try {
         ipcRenderer.send('ws-ping', { test: true, timestamp: Date.now() });
-        console.log('%c[IPC TEST] ✅ ws-ping enviado para main process!', 'color:#a855f7;font-weight:bold;');
+        console.log('%c[IPC TEST] ✅ ws-ping enviado (send)!', 'color:#a855f7;font-weight:bold;');
     } catch (err) {
-        console.error('%c[IPC TEST] ❌ Falha ao enviar ws-ping:', 'color:#ef4444;font-weight:bold;', err);
+        console.error('%c[IPC TEST] ❌ Falha ws-ping send:', 'color:#ef4444;font-weight:bold;', err);
+    }
+    try {
+        ipcRenderer.invoke('ws-item-data-invoke', { codigo: 'test', items: [] }).then(function(r) {
+            console.log('%c[IPC TEST] ✅ ws-item-data-invoke funcionou!', 'color:#a855f7;font-weight:bold;');
+        }).catch(function(err) {
+            console.warn('%c[IPC TEST] ⚠️ ws-item-data-invoke falhou: ' + err.message, 'color:#f59e0b;font-size:10px;');
+        });
+    } catch (err) {
+        console.error('%c[IPC TEST] ❌ Falha ws-item-data-invoke:', 'color:#ef4444;font-weight:bold;', err);
     }
 
     // 📊 Coleta de latência para exibição no console
@@ -1089,10 +1098,17 @@
                     var now = Date.now();
                     console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
                     // 🔄 IPC PRIMEIRO: backend recebe antes do processamento pesado (menos latência no lance)
+                    // ⚠️ v3.8.196: ipcRenderer.send('ws-item-data') não chega no main.js.
+                    // Usamos send-portal-data (que funciona) + invoke (mecanismo diferente) como fallback.
                     try {
-                        console.log(`%c[WS IPC DIAG] ipcRenderer type=${typeof ipcRenderer}, calling send...`, 'color:#a855f7;font-weight:bold;font-size:10px;');
-                        ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
-                        console.log(`%c[WS IPC DIAG] send ok`, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                        console.log(`%c[WS IPC DIAG] sending via send-portal-data + invoke...`, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                        // 1. Roteia via send-portal-data (canal que comprovadamente funciona)
+                        ipcRenderer.send('send-portal-data', { type: 'ws-item-data', codigo: wsCodigo, items: wsData });
+                        // 2. Também tenta via invoke (mecanismo diferente de 'send')
+                        ipcRenderer.invoke('ws-item-data-invoke', { codigo: wsCodigo, items: wsData }).catch(function(err) {
+                            console.warn('%c[WS IPC] invoke fallback error: ' + err.message, 'color:#f59e0b;font-size:10px;');
+                        });
+                        console.log(`%c[WS IPC DIAG] sends ok`, 'color:#a855f7;font-weight:bold;font-size:10px;');
                     } catch (err) {
                         console.error(`%c[WS IPC ERROR] ${err.message}`, 'color:#ef4444;font-weight:bold;font-size:11px;');
                         console.error(err);

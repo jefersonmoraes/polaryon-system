@@ -313,9 +313,41 @@ ipcMain.on('portal-detected-room', (event, data) => {
 
 // [BRIDGE DIRETA] RELAY DE DADOS DO NAVEGADOR PARA O DASHBOARD (v3.6.27)
 ipcMain.on('send-portal-data', (event, data) => {
+    // ⚡ ROTEAMENTO WS: dados do WebSocket chegam via send-portal-data (canal que funciona)
+    if (data && data.type === 'ws-item-data' && data.codigo && Array.isArray(data.items)) {
+        console.log(`[WS DIAG] 🎯 send-portal-data roteou WS data: ${data.codigo} (${data.items.length} itens)`);
+        let routed = 0;
+        if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
+            biddingRunner.injectRealtimeItems(data.codigo, data.items);
+            routed++;
+        }
+        if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
+            global.biddingRunner.injectRealtimeItems(data.codigo, data.items);
+            routed++;
+        }
+        console.log(`[WS DIAG] ✅ Roteado para ${routed} BiddingRunner(s) via send-portal-data`);
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('portal-data-update', data);
     }
+});
+
+// 🔄 FALLBACK VIA INVOKE: ipcMain.handle usa mecanismo diferente de on (v3.8.197)
+ipcMain.handle('ws-item-data-invoke', (event, { codigo, items }) => {
+    console.log(`[WS DIAG] 🎯 Invoke recebeu WS data: ${codigo} (${items?.length} itens)`);
+    if (codigo && Array.isArray(items)) {
+        let routed = 0;
+        if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
+            biddingRunner.injectRealtimeItems(codigo, items);
+            routed++;
+        }
+        if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
+            global.biddingRunner.injectRealtimeItems(codigo, items);
+            routed++;
+        }
+        console.log(`[WS DIAG] ✅ Roteado para ${routed} BiddingRunner(s) via invoke`);
+    }
+    return { ok: true };
 });
 
 // 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
