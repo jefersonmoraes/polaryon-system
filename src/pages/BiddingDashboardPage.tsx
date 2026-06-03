@@ -2817,8 +2817,48 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 const currentBest = valorAtualDisplay;
                 const numMin = numMinPrice;
                 const beatingAmt = useFourDecimals ? 0.0001 : 0.01;
-                let fireVal = currentBest > 0 ? currentBest - beatingAmt : numMin;
-                if (fireVal < numMin) fireVal = numMin;
+                const myCurrentBid = Number(item.meuValor || 0);
+                
+                // Margem obrigatória do Serpro
+                const officialMarginVal = Number(item.officialMargin || 0);
+                const officialMarginType = item.officialMarginType || 'V';
+                const mandatorySerproMargin = officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal;
+                const serproLowestAllowed = myCurrentBid > 0 ? myCurrentBid - Math.max(mandatorySerproMargin, 0) : 999999999;
+                
+                let fireVal = 0;
+                
+                // 1) Tentar bater o líder
+                if (currentBest > 0) {
+                    const beatingBid = currentBest - beatingAmt;
+                    const candidateBid = Math.max(numMin, Math.min(beatingBid, serproLowestAllowed));
+                    if (candidateBid < currentBest && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
+                        fireVal = candidateBid;
+                    }
+                }
+                
+                // 2) Líder não batível (abaixo do mínimo) → procurar no ranking
+                if (fireVal <= 0 && item.rankingLances && item.rankingLances.length > 0) {
+                    const competitorBids = item.rankingLances
+                        .filter(r => !r.eMeuLance)
+                        .map(r => safeParseNumber(r.valor))
+                        .filter(val => val > 0)
+                        .sort((a, b) => a - b);
+                    
+                    for (const cBid of competitorBids) {
+                        const beatingBid = cBid - beatingAmt;
+                        const candidateBid = Math.max(numMin, Math.min(beatingBid, serproLowestAllowed));
+                        if (candidateBid < cBid && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
+                            fireVal = candidateBid;
+                            break;
+                        }
+                    }
+                }
+                
+                // 3) Nada batível → usa mínimo
+                if (fireVal <= 0) {
+                    fireVal = numMin;
+                }
+                
                 const myBid = meuValorDisplay;
                 if (myBid <= 0 || fireVal < myBid) {
                     setTimeout(() => {
