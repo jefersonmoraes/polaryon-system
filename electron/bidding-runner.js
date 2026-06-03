@@ -783,14 +783,13 @@ class RoomRunner {
                             const margin = Number(strat.decrementValue || 1);
                             const allow4 = strat.useFourDecimals || false;
 
-                            // Cooldown adaptativo (v3.8.173): mínimo de 1000ms para evitar 422 de tempo entre lances
+                            // Cooldown simplificado: mutex + dedup + HTTP/2 já protegem contra 422
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 1;
                             const isInSnipeWindow = (isTimerActive && tSeconds <= snipeDelaySeconds && snipeDelaySeconds > 0);
-                            const cooldown = Math.max(1000, (isInWarMode ? 100 : (isKamikaze ? 200 : (isInSnipeWindow ? 100 : (tSeconds <= 30 ? 300 : 1000)))));
-                            if (isInWarMode) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA ATIVO (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
-                            if (isInSnipeWindow && !isInWarMode) console.log(`[BACKEND SNIPER] 🎯 Item ${sId}: MODO SNIPER (timer=${tSeconds}s ≤ snipeDelay=${snipeDelaySeconds}s) | cooldown=${cooldown}ms`);
+                            const cooldown = isInWarMode ? 200 : 500;
+                            if (isInWarMode && Math.random() < 0.05) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 
@@ -863,12 +862,13 @@ class RoomRunner {
                                         nextBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
                                         console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Mirando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`);
                                     } else {
-                                        // Nenhum concorrente é batível acima de myMin.
-                                        // A melhor posição que podemos conseguir é o nosso próprio mínimo
+                                        // 🔧 Nenhum concorrente é batível acima de myMin.
+                                        // Manter posição atual — ir pro mínimo não adianta e queima margem
                                         if (myCurrentBid !== 999999999 && myCurrentBid <= myMin) {
                                             shouldBid = false;
                                         } else {
-                                            nextBid = myMin;
+                                            shouldBid = false;
+                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Mantendo R$ ${myCurrentBid}.`);
                                         }
                                     }
                                 } else {
@@ -884,15 +884,13 @@ class RoomRunner {
                                         nextBid = candidateBid;
                                         console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder batível. nextBid=${nextBid} (lider=${currentBest}, beatingAmount=${beatingAmount})`);
                                     } else {
-                                        // 🔧 FIX: Sem ranking E líder não batível → dispara no mínimo do usuário
-                                        // Isso garante que o robô sempre tente participar nos 30s finais
+                                        // 🔧 Sem ranking E líder não batível — manter posição
+                                        // Ir pro mínimo não adianta e queima margem
                                         if (currentBest <= 0) {
-                                            // Sem dados do líder da API, dispara no mínimo
-                                            if (myCurrentBid !== 999999999 && myCurrentBid <= myMin) {
-                                                shouldBid = false; // Já no mínimo
-                                            } else {
-                                                nextBid = myMin;
-                                                console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder → disparando mínimo R$ ${nextBid}`);
+                                            // Sem dados do líder — manter onde está
+                                            shouldBid = false;
+                                            if (!isGanhando) {
+                                                console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder — mantendo R$ ${myCurrentBid}.`);
                                             }
                                         } else {
                                                 const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
@@ -916,7 +914,9 @@ class RoomRunner {
                                                             nextBid = myCurrentBid - decrementToUse;
                                                         }
                                                     } else {
-                                                        nextBid = myMin;
+                                                        // Sem lance anterior e líder não batível — não disparar
+                                                        shouldBid = false;
+                                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder R$ ${currentBest} não batível. Aguardando...`);
                                                     }
                                                 }
                                             } // fim else currentBest > 0
