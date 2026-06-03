@@ -274,17 +274,23 @@ class RoomRunner {
 
             let itemsList, tStart, tEnd;
 
-            // 🎯 Se temos dados frescos do WebSocket (< 2s), usa direto sem HTTP fetch
-            if (this.realtimeItems && (Date.now() - this.realtimeItemsAt < 2000)) {
+            // 🎯 Se temos dados frescos do WebSocket (< 5s), usa direto sem HTTP fetch (v3.8.176)
+            // Dados WS NÃO são limpos após uso — persistem até expirar o TTL ou chegar novos dados WS
+            const wsAge = this.realtimeItems ? (Date.now() - this.realtimeItemsAt) : Infinity;
+            if (this.realtimeItems && wsAge < 5000) {
                 itemsList = this.realtimeItems;
-                this.realtimeItems = null;
                 tStart = Date.now();
                 tEnd = tStart;
                 this.clockSync.update(null, itemsList, tStart, tEnd);
-                console.log(`[POLARYON MOTOR] 🎯 Usando dados do WebSocket (${itemsList.length} itens) — sem HTTP fetch!`);
+                if (Math.random() < 0.05) {
+                    console.log(`[POLARYON MOTOR] 🎯 WS data (${Math.round(wsAge)}ms de idade, ${itemsList.length} itens) — sem HTTP!`);
+                }
                 // 📊 Registra latência zero (WebSocket é instantâneo no backend)
                 this._trackLatency('ws', 0);
             } else {
+                if (this.realtimeItems && Math.random() < 0.05) {
+                    console.log(`[POLARYON MOTOR] ⏳ WS data stale (${Math.round(wsAge/1000)}s) — fallback HTTP fetch (${this.idCompra})`);
+                }
                 const startFetch = Date.now();
                 const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
                 tStart = Date.now();
