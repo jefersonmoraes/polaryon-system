@@ -941,6 +941,12 @@ class RoomRunner {
                                 this.webContents.send('bidding-update-log', `🎯 [SNIPER BACKEND] Disparando R$ ${nextBid} → Item ${sId} (${tSeconds}s restantes)`);
                             }
 
+                            // 🔒 Verifica se já há um bid em andamento para este item (mutex v3.8.174)
+                            if (this.biddingRunner.isBidInProgress(sId)) {
+                                console.log(`[BACKEND SNIPER] ⏭️ Item ${sId} — bid em andamento, pulando.`);
+                                return;
+                            }
+
                             // Disparo assíncrono - não bloqueia o polling
                             this.biddingRunner.sendBid({
                                 purchaseId: mappedItem.purchaseId,
@@ -1168,6 +1174,8 @@ class BiddingRunner {
         this.agent = null;
         this.bidAgent = null;       // 🔌 Pool dedicado para envio de lances (não compete com polling)
         this.recentBids = new Map();   // 🛡️ Global dedup: { 'itemId': { value, timestamp } } (v3.8.130)
+        this.bidsInProgress = new Map(); // 🔒 Mutex bid em andamento: { itemKey: timestamp } (v3.8.174)
+        this.bidsInProgress = new Map(); // 🔒 Mutex: itemId → timestamp de bid em andamento (v3.8.174)
         // 📊 LATÊNCIA TRACKER (v3.8.131): monitora WebSocket vs HTTP fetch
         this.latencyStats = {
             ws: { count: 0, totalMs: 0, min: Infinity, max: 0 },
@@ -1300,18 +1308,32 @@ class BiddingRunner {
     }
 
     /**
+     * 🔒 Verifica se há um bid em andamento para este item (mutex frontend/backend)
+     */
+    isBidInProgress(itemId) {
+        const lock = this.bidsInProgress.get(String(itemId));
+        return lock && (Date.now() - lock) < 5000;
+    }
+
+    /**
      * 🔫 Disparo Rest Direto! Sem Depender de Janela Visual!
      */
     async sendBid({ purchaseId, itemId, value }) {
         const now = Date.now();
-        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 1000ms? (v3.8.173 — evita 422 de tempo)
+        const itemKey = String(itemId);
         const dedupKey = `${purchaseId}_${itemId}`;
+
+        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 1000ms? (v3.8.173)
         const recent = this.recentBids.get(dedupKey);
         if (recent && (now - recent.timestamp) < 1000) {
             console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 1s para evitar 422).`);
             return;
         }
         this.recentBids.set(dedupKey, { value, timestamp: now });
+
+        // 🔒 Mutex: marca item com bid em andamento (impede RoomRunner de disparar concorrente)
+        this.bidsInProgress.set(itemKey, now);
+        try {
 
         // 🔄 Tenta até 2x com captcha fresco em caso de 400 (captcha expirado)
         for (let attempt = 1; attempt <= 2; attempt++) {
@@ -1393,10 +1415,13 @@ class BiddingRunner {
                 console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, errMsg);
 
                 if (statusCode === 422) {
-                    console.warn(`[KAMIKAZE SNIPER] ⚠️ 422 — Intervalo Mínimo Entre Lances violado. Revertendo optimistic update.`);
+                    // 📋 Loga a RESPOSTA REAL DA SERPRO para debug (v3.8.174)
+                    const serproResponse = errData ? JSON.stringify(errData) : 'sem resposta';
+                    console.warn(`[KAMIKAZE SNIPER] ⚠️ 422 — Resposta Serpro: ${serproResponse}`);
+                    console.warn(`[KAMIKAZE SNIPER] ⚠️ 422 — Revertendo optimistic update. Item ${itemId}, valor R$ ${value}, latência ${bidLatency}ms.`);
                     if (this.webContents && !this.webContents.isDestroyed()) {
-                        this.webContents.send('bidding-update-log', `❌ [422] Lance R$ ${value} no Item ${itemId} violou intervalo mínimo entre lances. Revertendo...`);
-                        this.webContents.send('bid-failed', { purchaseId, itemId, value, reason: 'min_interval', status: 422 });
+                        this.webContents.send('bidding-update-log', `❌ [422] Serpro: ${serproResponse} | Lance R$ ${value} no Item ${itemId} rejeitado.`);
+                        this.webContents.send('bid-failed', { purchaseId, itemId, value, reason: 'min_interval', status: 422, serproResponse });
                     }
                     return;
                 }
@@ -1406,6 +1431,10 @@ class BiddingRunner {
                 }
                 return; // Erro não-recuperável — aborta
             }
+            }
+        } finally {
+            // 🔒 Limpa mutex de bid em andamento (sucesso ou falha)
+            this.bidsInProgress.delete(itemKey);
         }
     }
 }
