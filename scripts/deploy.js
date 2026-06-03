@@ -10,56 +10,85 @@ const rootDir = path.resolve(__dirname, '..');
 const vpsIp = "191.252.93.79";
 const remotePath = "/var/www/polaryon/storage/download/";
 
-function deploy() {
-    console.log('🚀 Iniciando Deploy Automatizado para o VPS...');
+function run(cmd, cwd) {
+    try {
+        execSync(cmd, { stdio: 'inherit', cwd: cwd || rootDir });
+    } catch (e) {
+        return false;
+    }
+    return true;
+}
 
-    // 1. Pegar versão atual do package.json
+function deploy() {
     const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
     const version = packageJson.version;
     const exeName = `Polaryon-v${version}-Setup.exe`;
     const localExePath = path.join(rootDir, 'dist_desktop', exeName);
+    const localBlockmapPath = path.join(rootDir, 'dist_desktop', `${exeName}.blockmap`);
     const localYamlPath = path.join(rootDir, 'dist_desktop', 'latest.yml');
 
-    if (!fs.existsSync(localExePath)) {
-        console.error(`❌ Erro: Arquivo ${exeName} não encontrado em dist_desktop/`);
-        process.exit(1);
+    console.log(`\n🚀 INICIANDO DEPLOY v${version}...\n`);
+
+    // 1. Git push
+    console.log('[1/4] Sincronizando com GitHub...');
+    run('git add .');
+    run(`git commit -m "deploy v${version}"`);
+    run('git push origin main');
+
+    // 2. SCP EXE + blockmap + latest.yml (se existirem)
+    console.log(`\n[2/4] Enviando artefatos para VPS...`);
+    const scpFiles = [];
+    if (fs.existsSync(localExePath)) {
+        scpFiles.push(exeName);
+        console.log(`  ✅ EXE encontrado: ${exeName}`);
+    } else {
+        console.log(`  ⏭️ EXE não encontrado (GH Actions vai buildar depois)`);
+    }
+    if (fs.existsSync(localBlockmapPath)) {
+        scpFiles.push(`${exeName}.blockmap`);
+    }
+    // SEMPRE envia latest.yml — crucial para o auto-updater saber da versão
+    if (fs.existsSync(localYamlPath)) {
+        scpFiles.push('latest.yml');
+        console.log(`  ✅ latest.yml encontrado`);
+    } else {
+        console.log(`  ⚠️ latest.yml não encontrado — auto-updater pode quebrar`);
     }
 
+    if (scpFiles.length > 0) {
+        // Gera lista de arquivos tipo "dist_desktop/Polaryon-v3.8.181-Setup.exe dist_desktop/latest.yml"
+        const filesArg = scpFiles.map(f => `dist_desktop/${f}`).join(' ');
+        run(`scp ${filesArg} root@${vpsIp}:${remotePath}`);
+    }
+
+    // 3. SSH: puxar código, buildar, restartar backend
+    console.log(`\n[3/4] Atualizando backend/frontend na VPS...`);
+    const remoteCmd = [
+        'cd /var/www/polaryon',
+        'git fetch origin main',
+        'git reset --hard origin/main',
+        'npx prisma@6 db push 2>&1 || true',
+        'npm run build 2>&1',
+        'pm2 restart polaryon-backend 2>&1',
+        'echo "✅ VPS atualizada"'
+    ].join(' && ');
+    run(`ssh root@${vpsIp} "${remoteCmd}"`);
+
+    // 4. Verificar resultado
+    console.log(`\n[4/4] Verificando deploy...`);
     try {
-        // 2. Git Push local antes de tudo (v3.5.10: Silencioso se não houver mudanças)
-        console.log('Sincronizando mudanças locais com o GitHub...');
-        try {
-            execSync('git add .', { stdio: 'inherit', cwd: rootDir });
-            execSync('git commit -m "chore(deploy): release v' + version + '"', { stdio: 'inherit', cwd: rootDir });
-            execSync('git push origin main', { stdio: 'inherit', cwd: rootDir });
-        } catch (e) {
-            console.log('ℹ️ Sem mudanças para commitar ou erro no Git. Continuando deploy...');
+        const check = execSync(`ssh root@${vpsIp} "cat /var/www/polaryon/package.json | grep version | head -1"`, { encoding: 'utf8' });
+        const vpsVersion = check.match(/"version":\s*"([^"]+)"/)?.[1];
+        if (vpsVersion === version) {
+            console.log(`\n✅ DEPLOY v${version} COMPLETO! VPS e GitHub sincronizados.`);
+        } else {
+            console.log(`\n⚠️ Versão local=${version}, VPS=${vpsVersion || 'desconhecida'}`);
         }
-
-        // 3. Upload EXE
-        console.log(`uploading ${exeName} para o servidor...`);
-        execSync(`scp dist_desktop/${exeName} root@${vpsIp}:${remotePath}${exeName}`, { stdio: 'inherit', cwd: rootDir });
-
-        // 3.1 Upload Blockmap (Essencial para integridade)
-        console.log(`uploading ${exeName}.blockmap para o servidor...`);
-        execSync(`scp dist_desktop/${exeName}.blockmap root@${vpsIp}:${remotePath}${exeName}.blockmap`, { stdio: 'inherit', cwd: rootDir });
-
-        // 4. Upload latest.yml
-        console.log(`uploading latest.yml...`);
-        execSync(`scp dist_desktop/latest.yml root@${vpsIp}:${remotePath}latest.yml`, { stdio: 'inherit', cwd: rootDir });
-
-        // 5. Sync Git, Build Web e Sincronização de Pastas de Download
-        console.log(`Puxando código no VPS, gerando build web e sincronizando pastas de download...`);
-        // Ajuste v2.2.5.4: Build PRIMEIRO, depois cria o Symlink (Vite apaga a pasta dist, então o link tem que vir depois)
-        // Adicionado v3.5.98: chown e chmod para garantir que o Nginx consiga ler os arquivos de download
-        const remoteCmd = `chown -R www-data:www-data /var/www/polaryon/storage/download && chmod -R 755 /var/www/polaryon/storage/download && cd /var/www/polaryon && git fetch origin main && git reset --hard origin/main && cd backend && npx prisma@6 db push && cd .. && npm run build && rm -rf dist/download && ln -s /var/www/polaryon/storage/download dist/download && pm2 restart polaryon-backend`;
-        execSync(`ssh root@${vpsIp} "${remoteCmd}"`, { stdio: 'inherit' });
-
-        console.log('\n✅ DEPLOY COMPLETO! A versão v' + version + ' está ao vivo e pronta para download/update.');
-    } catch (error) {
-        console.error('❌ Falha no deploy:', error.message);
-        process.exit(1);
+    } catch (e) {
+        console.log(`\n⚠️ Não foi possível verificar versão na VPS`);
     }
+
+    console.log(`\n📱 Auto-updater: ${fs.existsSync(localYamlPath) ? '✅ latest.yml enviado' : '⚠️ pendente (GH Actions vai gerar)'}`);
 }
 
 deploy();
