@@ -430,6 +430,30 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** `latest.yml` e blockmap só são enviados se o EXE local existe. Caso contrário, aguarda o GitHub Actions gerar e enviar.
 
+## Implementado (v3.8.175)
+
+### 1. Frontend sniper desligado quando backend RoomRunner está ativo
+**Antes:** Frontend sniper (20ms loop) e backend RoomRunner (polling 50ms) disparavam lances independentemente — mesmo convergindo para `sendBid()`, ambos avaliavam e consumiam CPU concorrentemente (dual-engine).
+
+**Arquivo:** `src/pages/BiddingDashboardPage.tsx:299-303` (check backendActiveRef), `electron/bidding-runner.js:439` (backendActive flag)
+
+**Solução:** 
+- Backend envia `backendActive: true` em cada `bidding-update` (linha 439)
+- Frontend detecta flag e seta `backendActiveRef.current = true`
+- Sniper loop frontend retorna imediatamente se `backendActiveRef.current` é true
+- Elimina o dual-engine — backend é o motor ÚNICO de bid
+- Lances manuais (botão) continuam funcionando via `handleSendBid`
+
+### 2. Cooldown reduzido: 1000/1500ms → 500/1000ms
+**Antes:** Cooldown mínimo de 1000ms (kamikaze/reta) e 1500ms (normal) — conservador para evitar 422, mas lento.
+
+**Arquivo:** `electron/bidding-runner.js:1319-1324` (dedup temporal), `src/pages/BiddingDashboardPage.tsx:386` (cooldown frontend)
+
+**Solução:** 
+- Backend dedup: 1000ms → 500ms (com mutex protegendo, pode ser mais agressivo)
+- Frontend cooldown: 1000/1500 → 500/1000ms
+- Lances até 2x mais rápidos sem risco de 422
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)

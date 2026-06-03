@@ -437,6 +437,7 @@ class RoomRunner {
                 const dispAno = this.idCompra.substring(13, 17);
                 this.webContents.send('bidding-update', {
                     sessionId: this.sessionId,
+                    backendActive: true, // 🏠 Backend RoomRunner está gerenciando esta sala (v3.8.175)
                     uasg: this.idCompra.substring(0, 6),
                     sessionTitle: `Disputa Oficial - ${dispNum}/${dispAno}`,
                     log: `[MOTOR KAMIKAZE] Escaneamento Limpo: ${mappedItems.length} itens detectados.`,
@@ -1323,10 +1324,10 @@ class BiddingRunner {
         const itemKey = String(itemId);
         const dedupKey = `${purchaseId}_${itemId}`;
 
-        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 1000ms? (v3.8.173)
+        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 500ms? (v3.8.175 — reduzido de 1000ms, mutex protege)
         const recent = this.recentBids.get(dedupKey);
-        if (recent && (now - recent.timestamp) < 1000) {
-            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 1s para evitar 422).`);
+        if (recent && (now - recent.timestamp) < 500) {
+            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 500ms, mutex ativo).`);
             return;
         }
         this.recentBids.set(dedupKey, { value, timestamp: now });

@@ -190,6 +190,8 @@ export default function BiddingDashboardPage() {
     // sem passar pelo pipeline pesado de processSerproData/clockSync/handlePortalSync.
     // Chave: `${codigo}_${itemId}`, Valor: { meuValor, valorAtual, posicao, ganhador }
     const wsFastBidsRef = useRef<Record<string, { meuValor: number; valorAtual: number; posicao: string; ganhador: string }>>({});
+    // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
+    const backendActiveRef = useRef(false);
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -299,6 +301,11 @@ export default function BiddingDashboardPage() {
                     return;
                 }
 
+                // 🏠 Se backend RoomRunner está ativo, frontend sniper não precisa disparar (v3.8.175)
+                if (backendActiveRef.current) {
+                    return;
+                }
+
                 if ((lastLogRef.current[`loop_${sId}`] || 0) < Date.now() - 10000) {
                     console.log(`[SNIPER] 🔄 Item ${sId}: sniper ATIVO — avaliando lance...`);
                     lastLogRef.current[`loop_${sId}`] = Date.now();
@@ -382,8 +389,8 @@ export default function BiddingDashboardPage() {
                         const margin = Number(strat.decrementValue || 1);
                         const allow4 = strat.useFourDecimals || false;
 
-                        // ⚡ Cooldown adaptativo: mínimo entre lances para evitar 422 de tempo (v3.8.173)
-                        const cooldown = (isKamikaze || isRetaFinal) ? 1000 : 1500;
+                        // ⚡ Cooldown adaptativo: mínimo entre lances (v3.8.175 — reduzido de 1000/1500 para 500/1000, mutex protege)
+                        const cooldown = (isKamikaze || isRetaFinal) ? 500 : 1000;
                         if (now - lastBid > cooldown) {
                             const currentBest = Number(item.valorAtual || 0);
                             const myCurrentBid = Number(item.meuValor || 999999999);
@@ -876,6 +883,10 @@ export default function BiddingDashboardPage() {
             const handleUpdate = (data: any) => {
                 const { sessionId: sid, items: newItems, timestamp } = data;
                 if (data.serverOffset !== undefined) setServerOffset(data.serverOffset);
+                // 🏠 Backend RoomRunner ativo? Se sim, frontend sniper não precisa disparar (v3.8.175)
+                if (data.backendActive) {
+                    backendActiveRef.current = true;
+                }
                 if (newItems?.length > 0) {
                     console.log(`[BIDDING UPDATE] sid=${sid} items=${newItems.length} serverOffset=${data.serverOffset}`);
                     console.log(`[BIDDING UPDATE] first item: id=${newItems[0].itemId} dhfc=${newItems[0].dataHoraFimContagem} timer=${newItems[0].timerSeconds}`);
