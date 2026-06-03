@@ -373,7 +373,8 @@ class RoomRunner {
                 });
 
                 // 🎯 SUB-ITENS DE GRUPO: busca itens internos via /itens-grupo
-                const hasGroup = itemsList.some(i => i.tipo === 'G' || i.numero === -1 || String(i.identificador || i.numero) === 'G1');
+                // Pula se WS está fresco — WS já entrega todos os itens
+                const hasGroup = !wsFresh && itemsList.some(i => i.tipo === 'G' || i.numero === -1 || String(i.identificador || i.numero) === 'G1');
                 if (hasGroup) {
                     try {
                         const subUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa/-1/itens-grupo?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
@@ -997,24 +998,30 @@ class RoomRunner {
                 if (cycles >= 1) { anyItemInWar = true; break; }
             }
 
-            // 🌐 Se WS está fresco (< 3s), HTTP polling vira heartbeat — dados reais vêm pelo WS
-            const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 3000;
+            // 🌐 Se WS está fresco (< 60s), POLLING ZERO — dados reais chegam via WebSocket
+            // O injectRealtimeItems() já acorda o runner quando dados WS chegam
+            const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
 
-            if (isBiddingActive) {
+            if (wsFresh) {
+                nextInterval = 5000; // Heartbeat 5s — só pra detectar se WS ficou stale
+                if (Math.random() < 0.1) {
+                    console.log(`[POLARYON MOTOR] 💚 WS Heartbeat (${this.sessionId}) — 5s, sem HTTP polling`);
+                }
+            } else if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = wsFresh ? 500 : 30; // WS fresco → heartbeat 500ms, senão 30ms agressivo
+                    nextInterval = 30; // 💢 30ms agressivo (sem WS, precisa de HTTP polling rápido)
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
-                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) WS=${wsFresh ? 'fresco' : 'stale'} backoff 429: ${nextInterval}ms`);
+                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) WS=stale backoff 429: ${nextInterval}ms`);
                     }
                 } else if (minTimer <= 30) {
-                    nextInterval = wsFresh ? 500 : 300; // 🔥 Reta final <30s
+                    nextInterval = 300; // 🔥 Reta final <30s
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = wsFresh ? 1500 : 500; // ⚡ Reta final <60s
+                    nextInterval = 500; // ⚡ Reta final <60s
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = wsFresh ? 3000 : 800; // Ativo estável
+                    nextInterval = 800; // Ativo estável
                 }
             } else {
                 if (Math.random() < 0.1) {
