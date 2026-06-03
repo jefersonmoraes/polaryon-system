@@ -1168,12 +1168,11 @@
                 function tryParseServerTime(data) {
                     try {
                         if (typeof data !== 'string') return;
-                        // STOMP frame: tenta extrair corpo JSON (após cabeçalhos)
-                        // O separador de headers/body é \n\n (0x0A 0x0A) no frame STOMP
-                        // Na template literal (crases), \\n vira \n → que é o escape JS para newline
+                        // STOMP header/body separator: two real newlines (0x0A 0x0A).
+                        // In template literal we write \\n\\n so the injected script gets '\n\n' escape, NOT real newlines.
                         var body = data;
-                        if (data.indexOf('\n\n') !== -1 || data.indexOf('\r\n\r\n') !== -1) {
-                            var sep = data.indexOf('\r\n\r\n') !== -1 ? '\r\n\r\n' : '\n\n';
+                        if (data.indexOf('\\n\\n') !== -1 || data.indexOf('\\r\\n\\r\\n') !== -1) {
+                            var sep = data.indexOf('\\r\\n\\r\\n') !== -1 ? '\\r\\n\\r\\n' : '\\n\\n';
                             var parts = data.split(sep);
                             body = parts[parts.length - 1];
                             // ⚠️ FIX v3.8.178: Remove terminador nulo do STOMP (\0) antes do parse
