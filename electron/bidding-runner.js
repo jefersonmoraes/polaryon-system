@@ -274,10 +274,10 @@ class RoomRunner {
 
             let itemsList, tStart, tEnd;
 
-            // 🎯 Se temos dados frescos do WebSocket (< 5s), usa direto sem HTTP fetch (v3.8.176)
+            // 🎯 Se temos dados frescos do WebSocket (< 60s), usa direto sem HTTP fetch (v3.8.181)
             // Dados WS NÃO são limpos após uso — persistem até expirar o TTL ou chegar novos dados WS
             const wsAge = this.realtimeItems ? (Date.now() - this.realtimeItemsAt) : Infinity;
-            if (this.realtimeItems && wsAge < 5000) {
+            if (this.realtimeItems && wsAge < 60000) {
                 itemsList = this.realtimeItems;
                 tStart = Date.now();
                 tEnd = tStart;
@@ -289,7 +289,7 @@ class RoomRunner {
                 this._trackLatency('ws', 0);
             } else {
                 if (this.realtimeItems && Math.random() < 0.05) {
-                    console.log(`[POLARYON MOTOR] ⏳ WS data stale (${Math.round(wsAge/1000)}s) — fallback HTTP fetch (${this.idCompra})`);
+                    console.log(`[POLARYON MOTOR] ⏳ WS data stale (${Math.round(wsAge/1000)}s > 60s TTL) — fallback HTTP fetch (${this.idCompra})`);
                 }
                 const startFetch = Date.now();
                 const url = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/em-disputa?configs=false&captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
@@ -352,9 +352,11 @@ class RoomRunner {
                         ? (melhorFornec.valorCalculado !== undefined && melhorFornec.valorCalculado !== null ? melhorFornec.valorCalculado : (melhorFornec.valorInformado || 0))
                         : 0;
 
+                    var ds = (this.realtimeItems && wsAge < 60000) ? 'ws' : 'http';
                     return {
                         itemId: itemIdStr,
                         purchaseId: this.idCompra,
+                        dataSource: ds,
                         valorAtual,
                         meuValor,
                         ganhador: posicaoTxt === '1' || posicaoTxt === '1º' || posicaoTxt === '1°' || posicaoTxt === 'G' || posicaoTxt === 'V' || posicaoTxt === 'GANHANDO' || posicaoTxt === 'VENCEDOR' ? 'Você' : 'Outro',
@@ -995,21 +997,24 @@ class RoomRunner {
                 if (cycles >= 1) { anyItemInWar = true; break; }
             }
 
+            // 🌐 Se WS está fresco (< 3s), HTTP polling vira heartbeat — dados reais vêm pelo WS
+            const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 3000;
+
             if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 30; // ⚔️ GUERRA DE LANCES: 30ms (Locaweb SP — cenário agressivo, com backoff anti-429)
+                    nextInterval = wsFresh ? 500 : 30; // WS fresco → heartbeat 500ms, senão 30ms agressivo
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
-                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) com backoff 429: ${nextInterval}ms`);
+                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) WS=${wsFresh ? 'fresco' : 'stale'} backoff 429: ${nextInterval}ms`);
                     }
                 } else if (minTimer <= 30) {
-                    nextInterval = 300; // 🔥 Reta final <30s
+                    nextInterval = wsFresh ? 500 : 300; // 🔥 Reta final <30s
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = 500; // ⚡ Reta final <60s
+                    nextInterval = wsFresh ? 1500 : 500; // ⚡ Reta final <60s
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = 800; // Ativo estável
+                    nextInterval = wsFresh ? 3000 : 800; // Ativo estável
                 }
             } else {
                 if (Math.random() < 0.1) {

@@ -1076,9 +1076,9 @@
                     var fakeUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/' + wsCodigo + '/itens/em-disputa';
                     var now = Date.now();
                     console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
-                    processSerproData(wsData, fakeUrl, 200, true, '', now, now);
-                    // 🔄 Repassa ao backend imediatamente (sem debounce) — cada ms conta em modo guerra
+                    // 🔄 IPC PRIMEIRO: backend recebe antes do processamento pesado (menos latência no lance)
                     ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
+                    processSerproData(wsData, fakeUrl, 200, true, '', now, now);
                     // ⚡ RAIO DIRETO: envia APENAS meuValor, valorAtual, posicao para display instantâneo no frontend
                     // Bypassa todo o pipeline pesado (processSerproData, clock sync, handlePortalSync, etc.)
                     var fastItems = [];
@@ -1116,7 +1116,7 @@
                 var msg = '';
                 for (var i = 0; i < arguments.length; i++) { msg += (i > 0 ? ' ' : '') + String(arguments[i]); }
                 if (msg.indexOf('Hora:') !== -1) {
-                    var m = msg.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})/);
+                    var m = msg.match(/(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2})/);
                     if (m) {
                         window.postMessage({ source: 'polaryon-injector', type: 'server-time', serverTimeMs: new Date(m[1]).getTime(), timestamp: Date.now() }, '*');
                     }
@@ -1223,7 +1223,7 @@
                                 tsStr = qMatch[1];
                             } else {
                                 // Plain text ISO timestamp (ex: 2026-05-28T14:26:11-03:00)
-                                var isoMatch = data.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})/);
+                                var isoMatch = data.match(/(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2})/);
                                 if (isoMatch && isoMatch[1]) {
                                     tsStr = isoMatch[1];
                                 }
