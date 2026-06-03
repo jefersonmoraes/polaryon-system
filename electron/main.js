@@ -320,9 +320,13 @@ ipcMain.on('send-portal-data', (event, data) => {
 
 // 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
 ipcMain.on('ws-item-data', (event, { codigo, items }) => {
-    const runner = biddingRunner || global.biddingRunner;
-    if (runner && typeof runner.injectRealtimeItems === 'function' && codigo) {
-        runner.injectRealtimeItems(codigo, items);
+    if (codigo && Array.isArray(items)) {
+        if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
+            biddingRunner.injectRealtimeItems(codigo, items);
+        }
+        if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
+            global.biddingRunner.injectRealtimeItems(codigo, items);
+        }
     }
 });
 
@@ -335,9 +339,11 @@ ipcMain.on('ws-fast-bid', (event, data) => {
 
 // 🎯 NOTIFICAÇÃO DE LANCE ENVIADO PELO FRONTEND → atualiza cooldown do backend (v3.8.130)
 ipcMain.on('bid-sent', (event, { purchaseId, itemId, value }) => {
-    const runner = biddingRunner || global.biddingRunner;
-    if (runner && typeof runner.notifyBidSent === 'function') {
-        runner.notifyBidSent(purchaseId, itemId, value);
+    if (biddingRunner && typeof biddingRunner.notifyBidSent === 'function') {
+        biddingRunner.notifyBidSent(purchaseId, itemId, value);
+    }
+    if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.notifyBidSent === 'function') {
+        global.biddingRunner.notifyBidSent(purchaseId, itemId, value);
     }
 });
 
