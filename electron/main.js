@@ -320,6 +320,7 @@ ipcMain.on('send-portal-data', (event, data) => {
 
 // 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
 ipcMain.on('ws-item-data', (event, { codigo, items }) => {
+    console.log(`[WS DIAG] 🎯 IPC recebeu WS data (raw): codigo=${typeof codigo} items=${typeof items} isArray=${Array.isArray(items)}`);
     if (codigo && Array.isArray(items)) {
         console.log(`[WS DIAG] 🎯 IPC recebeu WS data: ${codigo} (${items.length} itens)`);
         let routed = 0;
@@ -332,7 +333,14 @@ ipcMain.on('ws-item-data', (event, { codigo, items }) => {
             routed++;
         }
         console.log(`[WS DIAG] ✅ Roteado para ${routed} BiddingRunner(s)`);
+    } else {
+        console.warn(`[WS DIAG] ⚠️ Condição falhou: codigo=${!!codigo} isArray=${Array.isArray(items)} items.length=${items?.length}`);
     }
+});
+
+// 🔬 TESTE IPC: ping do portal-preload para verificar conectividade
+ipcMain.on('ws-ping', (event, data) => {
+    console.log(`[WS DIAG] 🏓 IPC PING recebido do portal-preload! data=${JSON.stringify(data)}`);
 });
 
 // ⚡ RAIO DIRETO: dados mínimos do WebSocket para display instantâneo no frontend

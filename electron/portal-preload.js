@@ -7,6 +7,14 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
+    // 🔬 TESTE DE IPC: verifica se ipcRenderer.send chega no main process
+    try {
+        ipcRenderer.send('ws-ping', { test: true, timestamp: Date.now() });
+        console.log('%c[IPC TEST] ✅ ws-ping enviado para main process!', 'color:#a855f7;font-weight:bold;');
+    } catch (err) {
+        console.error('%c[IPC TEST] ❌ Falha ao enviar ws-ping:', 'color:#ef4444;font-weight:bold;', err);
+    }
+
     // 📊 Coleta de latência para exibição no console
     const _latencySamples = [];
     const _maxLatencySamples = 500;
@@ -1081,7 +1089,14 @@
                     var now = Date.now();
                     console.log('%c[WS DIRECT] ⚡ ' + wsCodigo + ' (' + wsData.length + ' itens) — dados direto do WebSocket!', 'color:#22c55e;font-weight:bold;font-size:10px;');
                     // 🔄 IPC PRIMEIRO: backend recebe antes do processamento pesado (menos latência no lance)
-                    ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
+                    try {
+                        console.log(`%c[WS IPC DIAG] ipcRenderer type=${typeof ipcRenderer}, calling send...`, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                        ipcRenderer.send('ws-item-data', { codigo: wsCodigo, items: wsData });
+                        console.log(`%c[WS IPC DIAG] send ok`, 'color:#a855f7;font-weight:bold;font-size:10px;');
+                    } catch (err) {
+                        console.error(`%c[WS IPC ERROR] ${err.message}`, 'color:#ef4444;font-weight:bold;font-size:11px;');
+                        console.error(err);
+                    }
                     processSerproData(wsData, fakeUrl, 200, true, '', now, now);
                     // ⚡ RAIO DIRETO: envia APENAS meuValor, valorAtual, posicao para display instantâneo no frontend
                     // Bypassa todo o pipeline pesado (processSerproData, clock sync, handlePortalSync, etc.)
