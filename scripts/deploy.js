@@ -86,13 +86,16 @@ async function deploy() {
         sftpUploads.push({ local: localBlockmap, remote: remotePath + `${exeName}.blockmap`, label: `${exeName}.blockmap` });
     }
     if (fs.existsSync(localYaml)) {
-        sftpUploads.push({ local: localYaml, remote: remotePath + 'latest.yml', label: 'latest.yml' });
+        console.log('  📤 latest.yml (local, pode estar desatualizado)...');
+        await sftpPut(conn, localYaml, remotePath + 'latest.yml');
     } else {
-        console.log('  ⚠️ latest.yml não encontrado!');
+        console.log('  ⚠️ latest.yml não encontrado localmente!');
     }
     for (const f of sftpUploads) {
-        console.log(`  📤 ${f.label}...`);
-        await sftpPut(conn, f.local, f.remote);
+        if (f.label !== 'latest.yml') {
+            console.log(`  📤 ${f.label}...`);
+            await sftpPut(conn, f.local, f.remote);
+        }
     }
 
     // 4. Atualizar backend/frontend na VPS
@@ -106,6 +109,35 @@ async function deploy() {
         'pm2 restart polaryon-backend 2>&1'
     ];
     await sshExec(conn, cmds.join(' && '));
+
+    // 5. Gerar latest.yml dinâmico baseado no EXE real
+    console.log('  📝 Gerando latest.yml do EXE mais recente na VPS...');
+    await sshExec(conn, [
+        'node -e "',
+        'var fs=require(\"fs\"),path=require(\"path\");',
+        'var dir=\"/var/www/polaryon/storage/download\";',
+        'var files=fs.readdirSync(dir).filter(f=>f.startsWith(\"Polaryon-v\")&&f.endsWith(\"-Setup.exe\")).sort().reverse();',
+        'if(files.length===0){console.log(\"⚠️ Nenhum EXE encontrado\");process.exit(0);}',
+        'var exe=files[0];',
+        'var v=exe.replace(/^Polaryon-v/,\"\").replace(/-Setup\\.exe$/,\"\");',
+        'var buf=fs.readFileSync(path.join(dir,exe));',
+        'var hash=require(\"crypto\").createHash(\"sha512\").update(buf).digest(\"base64\");',
+        'var size=buf.length;',
+        'var ts=new Date().toISOString();',
+        'var yml=[',
+        '\"version: \"+v,',
+        '\"releaseDate: \"+ts,',
+        '\"files:\",',
+        '\"  - url: \"+exe,',
+        '\"    sha512: \"+hash,',
+        '\"    size: \"+size,',
+        '\"path: \"+exe,',
+        '\"sha512: \"+hash',
+        '].join(\"\\n\");',
+        'fs.writeFileSync(path.join(dir,\"latest.yml\"),yml);',
+        'console.log(\"✅ latest.yml gerado: v\"+v+\" (\"+exe+\" | \"+Math.round(size/1024/1024)+\"MB)\");',
+        '"'
+    ].join(' '));
 
     conn.end();
     console.log(`\n✅ DEPLOY v${version} COMPLETO!`);
