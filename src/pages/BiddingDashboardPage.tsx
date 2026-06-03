@@ -178,7 +178,7 @@ export default function BiddingDashboardPage() {
     const serverTimeMsRef = useRef<number>(0);
     const serverTimeReceivedAtRef = useRef<number>(0);
     // 🔒 DEDUPLICADOR COM TTL (v3.8.59): bloqueia redisparo do mesmo valor por 5s, independente do ciclo React
-    const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number }>>({});
+    const lastFiredBidRef = useRef<Record<string, { value: number; timestamp: number; previousValue?: any }>>({});
     // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): após disparar bid de posicionamento, congela o item por 30s
     // para aguardar a API propagar nosso lance antes de re-avaliar concorrentes.
     const lastIntermediateBidRef = useRef<Record<string, { value: number; timestamp: number; duration?: number }>>({});
@@ -361,7 +361,7 @@ export default function BiddingDashboardPage() {
 
                     const isWinningByValue = (activeMyBid > 0 && bestBid > 0 && activeMyBid <= bestBid);
                     const pos = String(item.posicao || '').toUpperCase().trim();
-                    const isLosingPos = !(pos === '1' || pos === '1º' || pos === '1°' || pos === 'G' || pos === 'V' || pos === 'GANHANDO' || pos === 'VENCEDOR');
+                    const isLosingPos = !(pos === '1' || pos === '1º' || pos === '1°' || pos === 'G' || pos === 'V' || pos === 'GANHANDO' || pos === 'VENCEDOR') && Number(item.position) !== 1;
                     
                     // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição ou o valor indica perda, atira! Evita congelamento por falso positivo na posição)
                     const isLosing = isLosingPos || (bestBid > 0 && activeMyBid > bestBid) || (!isWinningByValue && item.posicao === '?');
@@ -565,7 +565,7 @@ export default function BiddingDashboardPage() {
         }, 20); // ⚡ Loop ultra-rápido de 20ms (v3.8.141 — cenário agressivo)
 
         return () => clearInterval(autoBidInterval);
-    }, [isListening]);
+    }, [isListening, sessionId]);
 
 
 
@@ -632,10 +632,13 @@ export default function BiddingDashboardPage() {
 
         // 🔥 Grava o lock TTL do lance de forma global (evita múltiplos disparos manuais e automáticos)
         const activeSid = sid || sessionId;
+        // Salva o valor anterior antes do optimistic update para poder reverter em caso de falha
+        const prevItem = Array.isArray(itemsRef.current) ? itemsRef.current.find(it => String(it.itemId) === String(itemId)) : null;
+        const prevMeuValor = prevItem ? prevItem.meuValor : null;
         if (activeSid) {
-            lastFiredBidRef.current[`${activeSid}_${itemId}`] = { value, timestamp: Date.now() };
+            lastFiredBidRef.current[`${activeSid}_${itemId}`] = { value, timestamp: Date.now(), previousValue: prevMeuValor };
         } else {
-            lastFiredBidRef.current[itemId] = { value, timestamp: Date.now() };
+            lastFiredBidRef.current[itemId] = { value, timestamp: Date.now(), previousValue: prevMeuValor };
         }
 
         // 🔥 ATUALIZAÇÃO OTIMISTA IMEDIATA (v3.8.56): Evita múltiplos disparos do mesmo valor e erros 422 em tempo real
@@ -886,6 +889,8 @@ export default function BiddingDashboardPage() {
                 // 🏠 Backend RoomRunner ativo? Se sim, frontend sniper não precisa disparar (v3.8.175)
                 if (data.backendActive) {
                     backendActiveRef.current = true;
+                } else {
+                    backendActiveRef.current = false;
                 }
                 if (newItems?.length > 0) {
                     console.log(`[BIDDING UPDATE] sid=${sid} items=${newItems.length} serverOffset=${data.serverOffset}`);
@@ -1268,12 +1273,16 @@ export default function BiddingDashboardPage() {
                         if (lastFiredBidRef.current[firedKey2]?.value === value) {
                             delete lastFiredBidRef.current[firedKey2];
                         }
+                        // Restaura o valor anterior (ou null se não houver) para evitar que o sniper dispare myMin
+                        const prevVal = lastFiredBidRef.current[firedKey1]?.previousValue
+                            ?? lastFiredBidRef.current[firedKey2]?.previousValue
+                            ?? null;
                         setSessions(prev => {
                             const updated = { ...prev };
                             if (updated[activeSid]) {
                                 updated[activeSid].items = updated[activeSid].items.map((it: any) => {
                                     if (String(it.itemId) === String(itemId) && it.meuValor === value) {
-                                        return { ...it, meuValor: null, posicao: null, ganhador: null };
+                                        return { ...it, meuValor: prevVal, posicao: null, ganhador: null };
                                     }
                                     return it;
                                 });
@@ -1282,7 +1291,7 @@ export default function BiddingDashboardPage() {
                         });
                         setItems(prev => prev.map(it => {
                             if (String(it.itemId) === String(itemId) && it.meuValor === value) {
-                                return { ...it, meuValor: null, posicao: null, ganhador: null };
+                                return { ...it, meuValor: prevVal, posicao: null, ganhador: null };
                             }
                             return it;
                         }));
@@ -2030,6 +2039,7 @@ export default function BiddingDashboardPage() {
             return () => {
                 clearInterval(periodicCheck);
                 window.removeEventListener('focus', handleFocus);
+                unsubs.forEach(u => typeof u === 'function' && u());
             };
         }
     }, [isDesktop]);
@@ -2521,7 +2531,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={onQuickBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} />
                         ))}
                     </div>
                 </CardContent>

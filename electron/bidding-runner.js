@@ -353,7 +353,7 @@ class RoomRunner {
                         ? (melhorFornec.valorCalculado !== undefined && melhorFornec.valorCalculado !== null ? melhorFornec.valorCalculado : (melhorFornec.valorInformado || 0))
                         : 0;
 
-                    var ds = (this.realtimeItems && wsAge < 60000) ? 'ws' : 'http';
+                    const ds = (this.realtimeItems && wsAge < 60000) ? 'ws' : 'http';
                     return {
                         itemId: itemIdStr,
                         purchaseId: this.idCompra,
@@ -375,6 +375,7 @@ class RoomRunner {
 
                 // 🎯 SUB-ITENS DE GRUPO: busca itens internos via /itens-grupo
                 // Pula se WS está fresco — WS já entrega todos os itens
+                const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
                 const hasGroup = !wsFresh && itemsList.some(i => i.tipo === 'G' || i.numero === -1 || String(i.identificador || i.numero) === 'G1');
                 if (hasGroup) {
                     try {
@@ -431,12 +432,16 @@ class RoomRunner {
                     const sId = String(mappedItem.itemId);
                     const prevBest = this.lastBestValues.get(sId);
                     const currBest = mappedItem.valorAtual;
-                    if (prevBest !== undefined && prevBest !== currBest && currBest > 0) {
-                        this.warModeCycles.set(sId, (this.warModeCycles.get(sId) || 0) + 1);
-                    } else if (prevBest === currBest) {
-                        const w = this.warModeCycles.get(sId) || 0;
-                        if (w > 0) this.warModeCycles.set(sId, w - 1);
+                if (prevBest !== undefined && prevBest !== currBest && currBest > 0) {
+                    this.warModeCycles.set(sId, (this.warModeCycles.get(sId) || 0) + 1);
+                    this.warCountCache = (this.warCountCache || 0) + 1;
+                } else if (prevBest === currBest) {
+                    const w = this.warModeCycles.get(sId) || 0;
+                    if (w > 0) {
+                        this.warModeCycles.set(sId, w - 1);
+                        this.warCountCache = Math.max(0, (this.warCountCache || 0) - 1);
                     }
+                }
                     this.lastBestValues.set(sId, currBest);
                     // 🏴‍☠️ Sinaliza guerra para o frontend
                     mappedItem.inWarMode = (this.warModeCycles.get(sId) || 0) >= 1;
@@ -677,7 +682,7 @@ class RoomRunner {
                                     classificacao: valObj.classificacao || valObj.posicao || entry.classificacao || entry.posicao || null,
                                     participanteId: partId ? String(partId) : `__PARTICIPANTE__${idx}`
                                 };
-                            }).filter(Boolean).sort((a, b) => a.valor - b.valor);
+                            }).filter(r => r && isFinite(r.valor)).sort((a, b) => a.valor - b.valor);
 
                             if (rankingLances.length === 0) return;
 
@@ -772,7 +777,7 @@ class RoomRunner {
                             if (isGanhando) {
                                 console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO (pos=${posicao}), mas continuando para avaliar redução.`);
                             }
-                            if (!isPerdendo && posicao !== '' && isNaN(Number(posicao))) {
+                            if (!isPerdendo && !isGanhando && posicao !== '' && isNaN(Number(posicao))) {
                                 // Posição desconhecida (ex: 'Em Disputa'), mas não confirmada como perdendo
                                 // Deixa passar para avaliação pelo valor
                                 console.log(`[BACKEND SNIPER] Item ${sId}: Posição desconhecida='${posicao}', avaliando pelo valor...`);
@@ -787,7 +792,6 @@ class RoomRunner {
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 1;
-                            const isInSnipeWindow = (isTimerActive && tSeconds <= snipeDelaySeconds && snipeDelaySeconds > 0);
                             const cooldown = isInWarMode ? 200 : 500;
                             if (isInWarMode && Math.random() < 0.05) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
@@ -799,7 +803,6 @@ class RoomRunner {
                             const mandatorySerproMargin = officialMarginType === 'P'
                                 ? currentBest * (officialMarginVal / 100)
                                 : officialMarginVal;
-                            const maxAllowedToTakeLead = currentBest - mandatorySerproMargin;
 
                             console.log(`[BACKEND MARGEM] Item ${sId}: officialMarginVal=${officialMarginVal} type=${officialMarginType} mandatorySerproMargin=${mandatorySerproMargin} marginUser=${margin} maxDecrement=${Math.max(margin, mandatorySerproMargin)} lowestPossibleBid=${myCurrentBid !== 999999999 ? (myCurrentBid - Math.max(margin, mandatorySerproMargin)).toFixed(4) : 'N/A'} currentBest=${currentBest} myCurrentBid=${myCurrentBid}`);
 
@@ -842,9 +845,7 @@ class RoomRunner {
                                     // Se não há lance anterior (999999999), sem restrição de degrau — calcula beating bid limpo
                                     // Antes: nextBid = competitorBid - margin (desperdiçava margem)
                                     // Agora: nextBid = max(myMin, min(competitorBid - beatingAmount, myCurrentBid - maxDecrement))
-                                    const maxDecrement = Math.max(margin, officialMarginVal > 0
-                                        ? (officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal)
-                                        : 0);
+                                    const maxDecrement = Math.max(margin, mandatorySerproMargin);
                                     const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : 999999999;
                                     const beatingAmount = allow4 ? 0.0001 : 0.01;
 
@@ -864,10 +865,8 @@ class RoomRunner {
                                     } else {
                                         // 🔧 Nenhum concorrente é batível acima de myMin.
                                         // Manter posição atual — ir pro mínimo não adianta e queima margem
-                                        if (myCurrentBid !== 999999999 && myCurrentBid <= myMin) {
-                                            shouldBid = false;
-                                        } else {
-                                            shouldBid = false;
+                                        shouldBid = false;
+                                        if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
                                             console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Mantendo R$ ${myCurrentBid}.`);
                                         }
                                     }
@@ -896,28 +895,15 @@ class RoomRunner {
                                                 const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
                                                 if (isSecondPlace) {
                                                     shouldBid = false; // Já estamos em 2º lugar
+                                                } else if (isGanhando && myCurrentBid !== 999999999) {
+                                                    // 🔧 FIX v3.8.127: GANHANDO mas acima do mínimo → reduz gradualmente
+                                                    const decrementStep = Math.max(margin, mandatorySerproMargin);
+                                                    nextBid = myCurrentBid - decrementStep;
+                                                    console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
                                                 } else {
-                                                    if (myCurrentBid !== 999999999) {
-                                                        // 🔧 FIX v3.8.127: Se está ganhando mas com lance acima do mínimo, reduz pelo degrau, não direto ao mínimo
-                                                        if (isGanhando) {
-                                                            const decrementStep = Math.max(margin, mandatorySerproMargin);
-                                                            nextBid = myCurrentBid - decrementStep;
-                                                            console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
-                                                        } else {
-                                                            let decrementToUse = margin;
-                                                            if (officialMarginVal > 0) {
-                                                                const requiredDecrement = officialMarginType === 'P' 
-                                                                    ? currentBest * (officialMarginVal / 100) 
-                                                                    : officialMarginVal;
-                                                                decrementToUse = Math.max(margin, requiredDecrement);
-                                                            }
-                                                            nextBid = myCurrentBid - decrementToUse;
-                                                        }
-                                                    } else {
-                                                        // Sem lance anterior e líder não batível — não disparar
-                                                        shouldBid = false;
-                                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder R$ ${currentBest} não batível. Aguardando...`);
-                                                    }
+                                                    // Líder não batível e não estamos ganhando — reduzir não ajuda
+                                                    shouldBid = false;
+                                                    console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder R$ ${currentBest} não batível (${isGanhando ? 'ganhando' : 'perdendo'}). Mantendo R$ ${myCurrentBid}.`);
                                                 }
                                             } // fim else currentBest > 0
                                     } // fim else !isLeaderBeatable
@@ -957,6 +943,12 @@ class RoomRunner {
                                 continue;
                             }
 
+                            // 🔒 Verifica se já há um bid em andamento para este item (mutex v3.8.174)
+                            if (this.biddingRunner.isBidInProgress(sId)) {
+                                console.log(`[BACKEND SNIPER] ⏭️ Item ${sId} — bid em andamento, pulando.`);
+                                continue;
+                            }
+
                             // 🔥 DISPARO BACKEND DIRETO!
                             this.lastBidTimes.set(sId, now);
                             this.lastBidValues.set(sId, nextBid);
@@ -966,12 +958,6 @@ class RoomRunner {
                                 this.webContents.send('bidding-update-log', `🎯 [SNIPER BACKEND] Disparando R$ ${nextBid} → Item ${sId} (${tSeconds}s restantes)`);
                             }
 
-                            // 🔒 Verifica se já há um bid em andamento para este item (mutex v3.8.174)
-                            if (this.biddingRunner.isBidInProgress(sId)) {
-                                console.log(`[BACKEND SNIPER] ⏭️ Item ${sId} — bid em andamento, pulando.`);
-                                return;
-                            }
-
                             // Disparo assíncrono - não bloqueia o polling
                             this.biddingRunner.sendBid({
                                 purchaseId: mappedItem.purchaseId,
@@ -979,6 +965,9 @@ class RoomRunner {
                                 value: nextBid
                             }).catch(err => {
                                 console.error(`[BACKEND SNIPER] Falha no disparo do Item ${sId}:`, err.message);
+                                // Reseta timestamps pra permitir retry imediato sem phantom cooldown
+                                this.lastBidTimes.set(sId, 0);
+                                this.lastBidValues.set(sId, undefined);
                                 if (!this.webContents.isDestroyed()) {
                                     this.webContents.send('bidding-update-log', `❌ [MOTOR] Falha ao enviar lance do Item ${sId}: ${err.message}`);
                                 }
@@ -1003,8 +992,9 @@ class RoomRunner {
                 const penalty = Math.min(this._429count * 500, 5000);
                 this._429backoffMs = Math.max(this._429backoffMs, penalty);
             } else {
-                this._429count = 0;
-                this._429backoffMs = 0;
+                                this._429count = 0;
+                                this._429backoffMs = 0;
+                                this._429windowStart = Date.now();
             }
 
             // Verifica se há algum item em modo de guerra (≥1 ciclo para reagir mais rápido)
@@ -1012,6 +1002,9 @@ class RoomRunner {
             for (const [, cycles] of this.warModeCycles) {
                 if (cycles >= 1) { anyItemInWar = true; break; }
             }
+            // Cache de contagem de guerra para evitar O(n) scan em mappedItems (v3.8.190)
+            let warItemCount = 0;
+            if (this.warCountCache === undefined) this.warCountCache = 0;
 
             // 🌐 Se WS está fresco (< 60s), POLLING ZERO — dados reais chegam via WebSocket
             // O injectRealtimeItems() já acorda o runner quando dados WS chegam
@@ -1208,7 +1201,6 @@ class BiddingRunner {
         this.agent = null;
         this.bidAgent = null;       // 🔌 Pool dedicado para envio de lances (não compete com polling)
         this.recentBids = new Map();   // 🛡️ Global dedup: { 'itemId': { value, timestamp } } (v3.8.130)
-        this.bidsInProgress = new Map(); // 🔒 Mutex bid em andamento: { itemKey: timestamp } (v3.8.174)
         this.bidsInProgress = new Map(); // 🔒 Mutex: itemId → timestamp de bid em andamento (v3.8.174)
         this.http2Session = null;    // ⚡ Conexão HTTP/2 persistente para lances (v3.8.186)
         this.http2SessionUri = null; // URI da sessão HTTP/2 ativa
@@ -1289,6 +1281,30 @@ class BiddingRunner {
         if (this.activeRunners.has(sessionId)) {
             this.activeRunners.get(sessionId).stop();
             this.activeRunners.delete(sessionId);
+        }
+        if (this.activeRunners.size === 0) {
+            // 🧹 Última sala parou — limpa timers de keepalive e captcha
+            if (this._bidKeepaliveTimers) {
+                for (const t of this._bidKeepaliveTimers) clearInterval(t);
+                this._bidKeepaliveTimers = [];
+            }
+        }
+    }
+
+    destroy() {
+        // 🧹 Limpa TODOS os recursos do BiddingRunner (keepalive, captcha, sessões)
+        for (const [sid] of this.activeRunners) this.stop(sid);
+        if (this._bidKeepaliveTimers) {
+            for (const t of this._bidKeepaliveTimers) clearInterval(t);
+            this._bidKeepaliveTimers = [];
+        }
+        if (this._captchaPrefetchTimer) {
+            clearInterval(this._captchaPrefetchTimer);
+            this._captchaPrefetchTimer = null;
+        }
+        if (this.http2Session) {
+            try { this.http2Session.close(); } catch(e) {}
+            this.http2Session = null;
         }
     }
 
@@ -1428,15 +1444,20 @@ class BiddingRunner {
             req.on('data', (chunk) => { data += chunk; });
             req.on('end', () => {
                 if (statusCode === 0) return reject(new Error('HTTP/2 no status code'));
+                let parsedData = null;
+                if (data) {
+                    try { parsedData = JSON.parse(data); }
+                    catch (e) { parsedData = data; } // Fallback: texto bruto se não for JSON
+                }
                 // Match axios behavior: throw on error status codes
                 if (statusCode >= 400) {
                     const err = new Error(`HTTP ${statusCode}`);
-                    err.response = { status: statusCode, data: data ? JSON.parse(data) : null, headers: {} };
+                    err.response = { status: statusCode, data: parsedData, headers: {} };
                     return reject(err);
                 }
                 resolve({
                     status: statusCode,
-                    data: data ? JSON.parse(data) : null,
+                    data: parsedData,
                     headers: {}
                 });
             });
@@ -1564,6 +1585,9 @@ class BiddingRunner {
                 const errData = e.response ? e.response.data : null;
                 const errMsg = typeof errData === 'object' ? (errData.message || JSON.stringify(errData)) : (errData || e.message);
                 console.error(`[KAMIKAZE SNIPER] ❌ O disparo travou (${bidLatency}ms):`, errMsg);
+
+                // 🧹 Limpa dedup global para permitir retry imediato após falha
+                this.recentBids.delete(dedupKey);
 
                 if (statusCode === 422) {
                     // 📋 Loga a RESPOSTA REAL DA SERPRO para debug (v3.8.174)

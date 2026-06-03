@@ -26,7 +26,9 @@
         captchaToken: '',
         synchronizedPurchases: new Set(),
         lastClassificacaoClickTs: 0,
-        pendingRankingTargets: []
+        pendingRankingTargets: [],
+        savedSegundosByRoom: {},
+        savedTimestampByRoom: {}
     };
 
     // Estabiliza serverOffset com média dos últimos N valores (Date header tem precisão de 1s)
@@ -1093,7 +1095,7 @@
                             meuValor: it.melhorValorFornecedor ? it.melhorValorFornecedor.valorCalculado : (it.valorLanceProposta || 0),
                             valorAtual: it.melhorValorGeral ? it.melhorValorGeral.valorCalculado : (it.melhorLance || 0),
                             posicao: posFinal,
-                            ganhador: posFinal === '1' || posFinal === 'GANHANDO' ? 'Você' : 'Outro'
+                            ganhador: posFinal === '1' || posFinal === '1º' || posFinal === '1°' || posFinal === 'G' || posFinal === 'V' || posFinal === 'GANHANDO' || posFinal === 'VENCEDOR' ? 'Você' : 'Outro'
                         });
                     }
                     if (fastItems.length > 0 && typeof ipcRenderer !== 'undefined') {
@@ -1325,28 +1327,28 @@
                         var txt = (walker.currentNode.textContent || '').trim();
                         if (!txt) continue;
                         // HH:MM:SS (ex: "05:08:35")
-                        var hms = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})$/);
+                        var hms = txt.match(/^(\\d{1,3}):(\\d{2}):(\\d{2})$/);
                         if (hms) {
                             var val = parseInt(hms[1]) * 3600 + parseInt(hms[2]) * 60 + parseInt(hms[3]);
                             if (val > best && val < 172800) best = val;
                             continue;
                         }
                         // HH:MM:SS.mmm (com milissegundos)
-                        var hmsm = txt.match(/^(\d{1,3}):(\d{2}):(\d{2})\.(\d{1,3})$/);
+                        var hmsm = txt.match(/^(\\d{1,3}):(\\d{2}):(\\d{2})\\.(\\d{1,3})$/);
                         if (hmsm) {
                             var val = parseInt(hmsm[1]) * 3600 + parseInt(hmsm[2]) * 60 + parseInt(hmsm[3]) + parseInt(hmsm[4]) / 1000;
                             if (val > best && val < 172800) best = val;
                             continue;
                         }
                         // Apenas H:MM:SS (ex: "5:08:35")
-                        var hmsShort = txt.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+                        var hmsShort = txt.match(/^(\\d{1,2}):(\\d{2}):(\\d{2})$/);
                         if (hmsShort) {
                             var val = parseInt(hmsShort[1]) * 3600 + parseInt(hmsShort[2]) * 60 + parseInt(hmsShort[3]);
                             if (val > best && val < 172800) best = val;
                             continue;
                         }
                         // Decimal (ex: "5893.39" ou "424.023")
-                        var dec = txt.match(/^(\d{2,})\.(\d{2,3})$/);
+                        var dec = txt.match(/^(\\d{2,})\\.(\\d{2,3})$/);
                         if (dec) {
                             var val = parseFloat(txt);
                             if (val > best && val < 172800) best = val;
