@@ -1169,13 +1169,15 @@
                     try {
                         if (typeof data !== 'string') return;
                         // STOMP frame: tenta extrair corpo JSON (após cabeçalhos)
-                        // 🐛 FIX v3.8.177: usa newline REAL (\n = 0x0A) em vez de '\\n' (barra+ene)
+                        // O separador de headers/body é \n\n (0x0A 0x0A) no frame STOMP
+                        // Na template literal (crases), \\n vira \n → que é o escape JS para newline
                         var body = data;
                         if (data.indexOf('\n\n') !== -1 || data.indexOf('\r\n\r\n') !== -1) {
                             var sep = data.indexOf('\r\n\r\n') !== -1 ? '\r\n\r\n' : '\n\n';
                             var parts = data.split(sep);
                             body = parts[parts.length - 1];
-                            // Remove terminador nulo do STOMP (\0) antes do parse
+                            // ⚠️ FIX v3.8.178: Remove terminador nulo do STOMP (\0) antes do parse
+                            // Antes: JSON.parse falhava silenciosamente com \0 no final → parsed = null → WS ignorado
                             if (body.charCodeAt(body.length - 1) === 0) body = body.slice(0, -1);
                         }
                         // Tenta parsear como JSON

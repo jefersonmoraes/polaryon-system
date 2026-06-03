@@ -454,6 +454,18 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 - Frontend cooldown: 1000/1500 → 500/1000ms
 - Lances até 2x mais rápidos sem risco de 422
 
+### 33. Pipeline WS quebrado: `\\n\\n` vs `\n` real no parser STOMP (v3.8.177)
+**Antes:** `tryParseServerTime()` em `portal-preload.js:1173` usava `data.indexOf('\\n\\n')` — barra invertida+ene como caracteres literais, não como newline real. STOMP frames usam `\n\n` (0x0A 0x0A) como separador header/body. Além disso, não removia o terminador nulo `\0` do STOMP antes do `JSON.parse`.
+
+**Consequência em produção:** WS dados NUNCA eram extraídos → `WS: sem dados` em 100% dos ciclos → sistema rodava exclusivamente em HTTP polling (~30-90ms).
+
+**Arquivo:** `electron/portal-preload.js:1172-1176`
+
+**Solução:**
+- `'\\n\\n'` → `'\n\n'` (newline real 0x0A)
+- `'\\r\\n\\r\\n'` → `'\r\n\r\n'` (CRLF real)
+- Strip `\0` do final do body: `if (body.charCodeAt(body.length - 1) === 0) body = body.slice(0, -1)`
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
