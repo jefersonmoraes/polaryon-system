@@ -809,10 +809,22 @@ class RoomRunner {
                             let shouldBid = true;
 
                             if (isKamikaze) {
-                                // Modo Kamikaze: mira no meuMin diretamente e atira imediatamente se estiver perdendo
-                                nextBid = myMin;
-                                if (myCurrentBid !== 999999999 && Math.abs(myCurrentBid - myMin) < 0.001) {
-                                    shouldBid = false;
+                                // Modo Kamikaze: calcula beating bid primeiro, só vai a myMin se necessário
+                                // Antes: ia direto pra myMin queimando toda margem (v3.8.187 FIX)
+                                const beatingAmount = allow4 ? 0.0001 : 0.01;
+                                const maxDecrement = Math.max(margin, mandatorySerproMargin);
+                                const lowestAllowed = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : 999999999;
+                                const beatingTarget = currentBest > 0 ? currentBest - beatingAmount : 0;
+                                const competitiveBid = Math.max(myMin, Math.min(beatingTarget, lowestAllowed));
+
+                                if (currentBest > 0 && competitiveBid < currentBest && competitiveBid < myCurrentBid) {
+                                    nextBid = competitiveBid;
+                                    console.log(`[BACKEND SNIPER] Item ${sId}: KAMIKAZE competitivo — R$ ${competitiveBid} (líder R$ ${currentBest})`);
+                                } else {
+                                    nextBid = myMin;
+                                    if (myCurrentBid !== 999999999 && Math.abs(myCurrentBid - myMin) < 0.001) {
+                                        shouldBid = false;
+                                    }
                                 }
                             } else {
                                 // Modo Normal
@@ -828,12 +840,13 @@ class RoomRunner {
                                         .sort((a, b) => a - b); // Crescente
 
                                     // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance anterior, não desconta do concorrente
+                                    // Se não há lance anterior (999999999), sem restrição de degrau — calcula beating bid limpo
                                     // Antes: nextBid = competitorBid - margin (desperdiçava margem)
                                     // Agora: nextBid = max(myMin, min(competitorBid - beatingAmount, myCurrentBid - maxDecrement))
                                     const maxDecrement = Math.max(margin, officialMarginVal > 0
                                         ? (officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal)
                                         : 0);
-                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : myMin;
+                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : 999999999;
                                     const beatingAmount = allow4 ? 0.0001 : 0.01;
 
                                     let targetCompetitorBid = null;
@@ -862,7 +875,7 @@ class RoomRunner {
                                     // Fallback: Lógica padrão sem rankings detalhados
                                     const beatingAmount = allow4 ? 0.0001 : 0.01;
                                     const maxDecrement = Math.max(margin, mandatorySerproMargin);
-                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : myMin;
+                                    const lowestPossibleBid = myCurrentBid !== 999999999 ? myCurrentBid - maxDecrement : 999999999;
                                     const beatingBid = currentBest > 0 ? currentBest - beatingAmount : 0;
                                     const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestPossibleBid));
                                     const isLeaderBeatable = currentBest > 0 && candidateBid < currentBest && candidateBid < myCurrentBid;
@@ -887,10 +900,11 @@ class RoomRunner {
                                                     shouldBid = false; // Já estamos em 2º lugar
                                                 } else {
                                                     if (myCurrentBid !== 999999999) {
-                                                        // 🔧 FIX v3.8.127: Se está ganhando mas com lance acima do mínimo, reduz direto para o mínimo
+                                                        // 🔧 FIX v3.8.127: Se está ganhando mas com lance acima do mínimo, reduz pelo degrau, não direto ao mínimo
                                                         if (isGanhando) {
-                                                            nextBid = myMin;
-                                                            console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo de R$ ${myCurrentBid} para o mínimo R$ ${myMin}.`);
+                                                            const decrementStep = Math.max(margin, mandatorySerproMargin);
+                                                            nextBid = myCurrentBid - decrementStep;
+                                                            console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
                                                         } else {
                                                             let decrementToUse = margin;
                                                             if (officialMarginVal > 0) {
