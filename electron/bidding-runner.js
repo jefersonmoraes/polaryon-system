@@ -1,5 +1,6 @@
 const axios = require('axios');
 const https = require('https');
+const http2 = require('http2');
 const { ipcMain, session } = require('electron');
 
 /**
@@ -1195,6 +1196,8 @@ class BiddingRunner {
         this.recentBids = new Map();   // 🛡️ Global dedup: { 'itemId': { value, timestamp } } (v3.8.130)
         this.bidsInProgress = new Map(); // 🔒 Mutex bid em andamento: { itemKey: timestamp } (v3.8.174)
         this.bidsInProgress = new Map(); // 🔒 Mutex: itemId → timestamp de bid em andamento (v3.8.174)
+        this.http2Session = null;    // ⚡ Conexão HTTP/2 persistente para lances (v3.8.186)
+        this.http2SessionUri = null; // URI da sessão HTTP/2 ativa
         // 📊 LATÊNCIA TRACKER (v3.8.131): monitora WebSocket vs HTTP fetch
         this.latencyStats = {
             ws: { count: 0, totalMs: 0, min: Infinity, max: 0 },
@@ -1221,6 +1224,10 @@ class BiddingRunner {
             maxSockets: 8,
             keepAliveMsecs: 30000
         });
+
+        // 🔑 Guarda credenciais do certificado para conexão HTTP/2 persistente (v3.8.186)
+        this._pfx = vault && vault.pfxBase64 ? Buffer.from(vault.pfxBase64, 'base64') : null;
+        this._passphrase = vault && vault.password ? vault.password : null;
 
         // 🔌 Pool DEDICADO para envio de lances (maxSockets=8, não compete com polling)
         this.bidAgent = new https.Agent({
@@ -1335,6 +1342,121 @@ class BiddingRunner {
     }
 
     /**
+     * ⚡ Conexão HTTP/2 persistente para envio de lances (v3.8.186)
+     * Elimina handshake TLS por lance — conexão multiplexada permanente.
+     */
+    _getHttp2Session() {
+        const uri = 'https://cnetmobile.estaleiro.serpro.gov.br';
+        if (this.http2Session && !this.http2Session.closed && this.http2SessionUri === uri) {
+            return Promise.resolve(this.http2Session);
+        }
+        // Fecha sessão antiga se houver
+        if (this.http2Session && !this.http2Session.closed) {
+            try { this.http2Session.close(); } catch(e) {}
+        }
+        return new Promise((resolve) => {
+            const session = http2.connect(uri, {
+                pfx: this._pfx,
+                passphrase: this._passphrase,
+                rejectUnauthorized: false
+            });
+            session.on('error', (err) => {
+                console.log(`[HTTP2] ⚠️ Sessão erro: ${err.message}`);
+                this.http2Session = null;
+            });
+            session.on('close', () => {
+                this.http2Session = null;
+            });
+            session.on('connect', () => {
+                console.log('[HTTP2] ✅ Sessão persistente estabelecida');
+                this.http2Session = session;
+                this.http2SessionUri = uri;
+                resolve(session);
+            });
+            // Timeout de conexão
+            setTimeout(() => {
+                if (!this.http2Session || this.http2SessionUri !== uri) {
+                    resolve(null); // Fallback para HTTP/1.1
+                }
+            }, 5000);
+        });
+    }
+
+    /**
+     * ⚡ Faz requisição POST via HTTP/2 (fallback automático para axios HTTP/1.1)
+     */
+    async _http2Post(path, payload, headers) {
+        const session = await this._getHttp2Session();
+        if (!session) throw new Error('HTTP/2 session unavailable');
+
+        const body = JSON.stringify(payload);
+        const reqHeaders = {
+            ':method': 'POST',
+            ':path': path,
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(body),
+            ...headers
+        };
+        // Remove headers HTTP/1.1 que o HTTP/2 não aceita
+        delete reqHeaders['host'];
+        delete reqHeaders['connection'];
+        delete reqHeaders['transfer-encoding'];
+
+        return new Promise((resolve, reject) => {
+            const req = session.request(reqHeaders);
+            let data = '';
+            let statusCode = 0;
+
+            req.setEncoding('utf8');
+            req.on('response', (respHeaders) => {
+                statusCode = respHeaders[':status'];
+            });
+            req.on('data', (chunk) => { data += chunk; });
+            req.on('end', () => {
+                if (statusCode === 0) return reject(new Error('HTTP/2 no status code'));
+                // Match axios behavior: throw on error status codes
+                if (statusCode >= 400) {
+                    const err = new Error(`HTTP ${statusCode}`);
+                    err.response = { status: statusCode, data: data ? JSON.parse(data) : null, headers: {} };
+                    return reject(err);
+                }
+                resolve({
+                    status: statusCode,
+                    data: data ? JSON.parse(data) : null,
+                    headers: {}
+                });
+            });
+            req.on('error', (err) => {
+                console.log(`[HTTP2] ⚠️ Request error: ${err.message}`);
+                // Sessão morreu — reseta para reconexão
+                this.http2Session = null;
+                reject(err);
+            });
+            req.end(body);
+        });
+    }
+
+    /**
+     * ⚡ Tenta HTTP/2 primeiro, fallback automático para axios HTTP/1.1 (v3.8.186)
+     */
+    async _bidRequest(targetUrl, payload, headers) {
+        try {
+            const urlObj = new URL(targetUrl);
+            const path = urlObj.pathname + urlObj.search;
+            const resp = await this._http2Post(path, payload, headers);
+            resp._http2 = true;
+            return resp;
+        } catch (http2Err) {
+            if (http2Err.response) throw http2Err; // Erro HTTP (400/422) — repassa
+            console.log(`[HTTP2] ⚡ Fallback HTTP/1.1: ${http2Err.message}`);
+            return await axios.post(targetUrl, payload, {
+                httpsAgent: this.bidAgent || this.agent,
+                headers
+            });
+        }
+    }
+
+    /**
      * 🔫 Disparo Rest Direto! Sem Depender de Janela Visual!
      */
     async sendBid({ purchaseId, itemId, value }) {
@@ -1377,21 +1499,19 @@ class BiddingRunner {
                     fresh.captcha2 = fresh.captcha2 || captchas.captcha2;
                     const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${fresh.captcha1}&captcha2=${fresh.captcha2}&captcha3=${fresh.captcha1}`;
                     const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
-                    const response = await axios.post(targetUrl, payload, {
-                        httpsAgent: this.bidAgent || this.agent,
-                        headers: {
-                            'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                            'x-device-platform': 'web',
-                            'x-version-number': '6.0.2'
-                        }
+                    const response = await this._bidRequest(targetUrl, payload, {
+                        'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'x-device-platform': 'web',
+                        'x-version-number': '6.0.2'
                     });
                     const bidLatency2 = Date.now() - bidStart;
-                    console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency2}ms)`);
+                    const proto2 = response._http2 ? 'HTTP/2' : 'HTTP/1.1';
+                    console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency2}ms, ${proto2})`);
                     if (this.webContents && !this.webContents.isDestroyed()) {
-                        this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency2}ms)`);
+                        this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency2}ms, ${proto2})`);
                     }
                     return; // Sucesso
                 }
@@ -1403,23 +1523,21 @@ class BiddingRunner {
                     faseItem: "LA"
                 };
 
-                const response = await axios.post(targetUrl, payload, {
-                    httpsAgent: this.bidAgent || this.agent,
-                    headers: {
-                        'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                        'x-device-platform': 'web',
-                        'x-version-number': '6.0.2'
-                    }
+                const response = await this._bidRequest(targetUrl, payload, {
+                    'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'x-device-platform': 'web',
+                    'x-version-number': '6.0.2'
                 });
 
                 const bidLatency = Date.now() - bidStart;
-                console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency}ms)`);
+                const proto = response._http2 ? 'HTTP/2' : 'HTTP/1.1';
+                console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency}ms, ${proto})`);
                 
                 if (this.webContents && !this.webContents.isDestroyed()) {
-                    this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency}ms)`);
+                    this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency}ms, ${proto})`);
                 }
                 return; // Sucesso — sai do loop
             } catch (e) {
