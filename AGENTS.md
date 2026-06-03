@@ -514,6 +514,36 @@ Adicionado `_trackLatency()` + `_logLatencyStats()` no `RoomRunner`. Cada ciclo 
 
 **Solução:** `\d` → `\\d` nas duas ocorrências. Agora `\d` é preservado no injected code e matcha dígitos corretamente. Impacto baixo (fallback raro), mas bug eliminado.
 
+### 35. `handleToggle` com `snipeDelaySeconds: 0` ia direto ao mínimo (v3.8.192)
+**Antes:** `handleToggle` (linha 2816) só calculava `currentBest - beatingAmt`. Se o líder estava ABAIXO do mínimo (ex: líder R$659,98, mínimo R$717), `fireVal = max(717, min(659,97, ...)) = 717` — ia direto ao mínimo, queimando margem quando um concorrente no ranking era batível (ex: 6º colocado R$720 → dava R$717 em vez de R$719,99).
+
+**Arquivo:** `src/pages/BiddingDashboardPage.tsx:2803-2873`
+
+**Solução:** Três estágios:
+1. **Tenta bater o líder** — `currentBest - beatingAmt`, respeitando `serproLowestAllowed` e `myMin`
+2. **Se líder não batível, varre o ranking** — encontra o melhor concorrente que consegue bater (menor `cBid` onde `cBid - beatingAmt >= myMin`)
+3. **Se nada batível, usa mínimo** — fallback antigo
+
+Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Iniciar em 0s" ou kamikaze). O sniper loop automático (backend 50ms/frontend 20ms) já estava correto desde v3.8.128.
+
+### 36. Pipeline WS do backend sempre "sem dados" (v3.8.193)
+**Antes:** `[LATÊNCIA 📊] WS: sem dados` em todos os ciclos — backend rodava 100% em HTTP polling (80-90ms). Causa desconhecida, suspeita de frame binário (Blob) ou `codigo` numérico com perda de precisão (17 dígitos > `Number.MAX_SAFE_INTEGER`).
+
+**Arquivo:** `electron/portal-preload.js:1174,1196`
+
+**Solução:** Três camadas:
+1. **Diagnóstico `[WS DIAG]`** — script injetado posta `ws-diagnostic` no Electron console em cada etapa do pipeline (script loaded, WS intercept, STOMP detect, JSON parse, tipo match). Permite identificar exatamente onde quebra.
+2. **`codigo` como string** — `String(parsed.codigo)` no `postMessage` evita perda de precisão em IDs de 17 dígitos.
+3. **Diagnóstico de frame binário** — `typeof data !== 'string'` agora loga o tipo real para identificar se Serpro enviar Blob/ArrayBuffer.
+
+**Uso:** Rodar desktop, abrir console (main.js), procurar `[WS DIAG]`. Se aparecer:
+- `Injected script loaded` → OK, script injetou
+- `WS INTERCEPTED` → OK, WS foi interceptado
+- `STOMP frame detected` → OK, STOMP está chegando
+- `JSON parse failed` → body não é JSON (STOMP header issue)
+- `WS ITENS OK` → OK, dados de itens chegam!
+- Se nada aparecer → script injection é o problema
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)

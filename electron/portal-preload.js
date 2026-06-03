@@ -1070,6 +1070,8 @@
                         shared.captchaToken = token;
                     }
                 }
+            } else if (type === 'ws-diagnostic') {
+                console.log(`%c[WS DIAG] ${event.data.message}`, 'color:#f59e0b;font-weight:bold;font-size:10px;');
             } else if (type === 'ws-item-update') {
                 // ⚡ WebSocket do Siga entregou dados em TEMPO REAL — usa direto, sem HTTP fetch!
                 var wsCodigo = event.data.codigo;
@@ -1112,6 +1114,9 @@
     try {
         const scriptContent = `
         (function() {
+            // ⚠️ DIAGNÓSTICO: posta mensagens para o preload (aparecem no console main.js)
+            function postDiag(msg) { try { window.postMessage({ source: 'polaryon-injector', type: 'ws-diagnostic', message: msg }, '*'); } catch(e) {} }
+            postDiag('Injected script loaded at ' + new Date().toISOString());
             // 🕒 Intercepta console.log do Siga para capturar server time (/topic/dataHoraBrasilia)
             var __origLog = console.log;
             console.log = function() {
@@ -1138,6 +1143,7 @@
                     // 🔍 DIAGNÓSTICO: loga TODOS os WebSockets, filtrados ou não
                     console.log('%c[WS RAW] WebSocket: ' + url.substring(0, 120), 'color:' + (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1 ? '#6366f1' : '#ff6b6b'));
                     if (url.indexOf('estaleiro.serpro.gov.br') !== -1 || url.indexOf('sigapregao.com.br') !== -1) {
+                        postDiag('WS INTERCEPTED: ' + url.substring(0, 80));
                         console.log('%c[WS INTERCEPT] WebSocket criado: ' + url.substring(0, 80), 'color:#6366f1');
                         var origAddEventListener = ws.addEventListener.bind(ws);
                         ws.addEventListener = function(type, fn) {
@@ -1171,11 +1177,12 @@
 
                 function tryParseServerTime(data) {
                     try {
-                        if (typeof data !== 'string') return;
+                        if (typeof data !== 'string') { postDiag('WS data not string, type=' + (typeof data)); return; }
                         // STOMP header/body separator: two real newlines (0x0A 0x0A).
                         // In template literal we write \\n\\n so the injected script gets '\\n\\n' escape correctly.
                         var body = data;
                         if (data.indexOf('\\n\\n') !== -1 || data.indexOf('\\r\\n\\r\\n') !== -1) {
+                            postDiag('STOMP frame detected (len=' + data.length + ')');
                             var sep = data.indexOf('\\r\\n\\r\\n') !== -1 ? '\\r\\n\\r\\n' : '\\n\\n';
                             var parts = data.split(sep);
                             body = parts[parts.length - 1];
@@ -1186,18 +1193,25 @@
                         // Tenta parsear como JSON
                         var parsed = null;
                         try { parsed = JSON.parse(body); } catch(e) {}
+                        if (!parsed) {
+                            postDiag('JSON parse failed (body starts: "' + body.substring(0, 80) + '")');
+                        }
                         if (parsed && typeof parsed === 'object') {
                             // 🎯 Atualização de itens em tempo real via WebSocket do Siga
                             if (parsed.tipo === 'att_itens_ws' && parsed.codigo && Array.isArray(parsed.data)) {
+                                postDiag('WS ITENS OK: codigo=' + parsed.codigo + ' tipo=' + parsed.tipo + ' qtd=' + parsed.data.length + ' ws=' + parsed.websocket);
                                 console.log('%c[WS ITENS] ' + parsed.codigo + ' (' + parsed.data.length + ' itens, ws=' + parsed.websocket + ')', 'color:#22c55e;font-weight:bold;font-size:10px;');
                                 window.postMessage({
                                     source: 'polaryon-injector',
                                     type: 'ws-item-update',
-                                    codigo: parsed.codigo,
+                                    codigo: String(parsed.codigo),
                                     data: parsed.data,
                                     timestamp: Date.now()
                                 }, '*');
                                 return;
+                            }
+                            if (parsed.tipo && parsed.tipo !== 'att_itens_ws') {
+                                postDiag('WS JSON parsed but tipo="' + parsed.tipo + '" (not att_itens_ws). codigo=' + (parsed.codigo||'?') + ' keys=' + Object.keys(parsed).join(','));
                             }
                             // 🕒 Server time via /topic/dataHoraBrasilia
                             if (parsed.tipo === 'serverTime' || (typeof parsed.serverTimeMs === 'number') || data.indexOf('/topic/dataHoraBrasilia') !== -1) {
