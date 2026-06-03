@@ -177,6 +177,9 @@ class RoomRunner {
         if (Array.isArray(items) && items.length > 0) {
             this.realtimeItems = items;
             this.realtimeItemsAt = Date.now();
+            console.log(`[WS DIAG] 🏠 RoomRunner ${this.idCompra} recebeu ${items.length} itens do WebSocket!`);
+            // 📊 Pré-registra latência WS para acelerar a primeira aparição no relatório
+            this._trackLatency('ws', 0);
 
             // 🔍 VALIDAÇÃO DE CAMPOS WEBSOCKET (v3.8.131): verifica se todos os campos críticos existem
             const requiredFields = [

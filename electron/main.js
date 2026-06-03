@@ -321,12 +321,17 @@ ipcMain.on('send-portal-data', (event, data) => {
 // 🎯 RELAY DE DADOS DO WEBSOCKET PARA O MOTOR DE LANCES (v3.8.130)
 ipcMain.on('ws-item-data', (event, { codigo, items }) => {
     if (codigo && Array.isArray(items)) {
+        console.log(`[WS DIAG] 🎯 IPC recebeu WS data: ${codigo} (${items.length} itens)`);
+        let routed = 0;
         if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
             biddingRunner.injectRealtimeItems(codigo, items);
+            routed++;
         }
         if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
             global.biddingRunner.injectRealtimeItems(codigo, items);
+            routed++;
         }
+        console.log(`[WS DIAG] ✅ Roteado para ${routed} BiddingRunner(s)`);
     }
 });
 
