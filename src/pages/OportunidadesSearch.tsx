@@ -488,7 +488,7 @@ const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = 
 const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void; retries?: number }[] = [];
 let activePncpRequests = 0;
 const MAX_CONCURRENT_PNCP = 15;
-const MAX_RETRIES_PER_ITEM = 3;
+const MAX_RETRIES_PER_ITEM = 10;
 
 async function processPncpQueue() {
     if (activePncpRequests >= MAX_CONCURRENT_PNCP || pncpRequestQueue.length === 0) return;
@@ -534,7 +534,7 @@ async function processPncpQueue() {
             origResolve(result);
             return true;
         } catch (e: any) {
-            if (e.response?.status === 404) {
+            if (e.response?.status === 404 || e.message?.includes('Missing keys')) {
                 origResolve(null);
                 return true;
             }
@@ -644,13 +644,15 @@ const PortalBadge = memo(({ item }: { item: any }) => {
         return () => window.removeEventListener('pncp-cache-updated', handler);
     }, [cacheKey]);
 
+    const isFetching = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
+
     // Aplica mapeamento de nomes conhecidos
     const rawNome = usuarioNome || (item as any).fonte_dados || 'PNCP';
     const mappedNome = MAPA_USUARIO_PORTAL[rawNome.toLowerCase().trim()] || rawNome;
     const pair = getPortalStyle(mappedNome);
     return (
-        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
-            {pair.label}
+        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${isFetching ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' : pair.style}`}>
+            {isFetching ? '...' : pair.label}
         </span>
     );
 });
@@ -1774,7 +1776,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             for (const item of items) {
                 const parts = item.numero_controle_pncp?.split('-');
                 const cacheKey = `${item.orgao_cnpj || parts?.[0]}-${(item as any).ano_compra || (item as any).ano || parts?.[1]}-${(item as any).numero_compra || (item as any).numero_sequencial || parts?.[2]}`;
-                if (cacheKey && cacheKey.replace(/-/g, '').length > 5 && !pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+                if (cacheKey && !cacheKey.includes('undefined') && !pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
                     queuePncpFetch(item).catch(() => {});
                     preloadCount++;
                 }
