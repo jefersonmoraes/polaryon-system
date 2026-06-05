@@ -256,44 +256,19 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 };
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    // V1 detail endpoint redireciona (301), usar proxy backend
     const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`, { timeout: 8000 });
     const detailData: any = consultaRes.data || {};
-
-    const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
-    const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
-
-    const [countRes, itemsRes] = await Promise.allSettled([
-        axios.get(itemsCountUrl, { timeout: 5000 }),
-        axios.get(itemsListUrl, { timeout: 8000 })
-    ]);
-
-    const itemCount = countRes.status === 'fulfilled' ? countRes.value.data : 0;
-    const itemsResponse = itemsRes.status === 'fulfilled' ? itemsRes.value.data : [];
-    const items = Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse.data || []);
-
-    let hasMeEppBenefit = false;
-    let minItemValue = Infinity;
-    let maxItemValue = -Infinity;
-
-    if (Array.isArray(items)) {
-        items.forEach((item: any) => {
-            if ([1, 2, 3].includes(item.tipoBeneficio)) {
-                hasMeEppBenefit = true;
-            }
-            const val = item.valorUnitarioEstimado || (item.quantidade > 0 ? (item.valorTotalEstimado / item.quantidade) : 0) || 0;
-            if (val > 0) {
-                if (val < minItemValue) minItemValue = val;
-                if (val > maxItemValue) maxItemValue = val;
-            }
-        });
-    }
-
     return {
         data: {
             ...detailData,
-            itemCount: itemCount || detailData.quantidadeItens || 0,
-            hasMeEppBenefit,
+            itemCount: detailData.quantidadeItens || 0,
+            hasMeEppBenefit: false,
+            minItemValue: 0,
+            maxItemValue: 0,
+            items: []
+        }
+    };
+};
             minItemValue: minItemValue === Infinity ? 0 : minItemValue,
             maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue,
             items: items
