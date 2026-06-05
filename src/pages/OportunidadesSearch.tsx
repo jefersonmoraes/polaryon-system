@@ -1743,6 +1743,15 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (ordenacaoFilter === '-data_publicacao_pncp') items.sort((a, b) => new Date(b.data_publicacao_pncp || 0).getTime() - new Date(a.data_publicacao_pncp || 0).getTime());
             else if (ordenacaoFilter === 'data_publicacao_pncp') items.sort((a, b) => new Date(a.data_publicacao_pncp || 0).getTime() - new Date(b.data_publicacao_pncp || 0).getTime());
 
+            // Pré-carregar detalhes PNCP em lote (todos os itens, independente de scroll)
+            for (const item of items) {
+                const parts = item.numero_controle_pncp?.split('-');
+                const cacheKey = `${item.orgao_cnpj || parts?.[0]}-${(item as any).ano_compra || (item as any).ano || parts?.[1]}-${(item as any).numero_compra || (item as any).numero_sequencial || parts?.[2]}`;
+                if (cacheKey && !pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+                    queuePncpFetch(item).catch(() => {});
+                }
+            }
+
             setResults(items);
             setTotalResults(total || items.length);
             setPage(currentPage);
