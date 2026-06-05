@@ -257,15 +257,15 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
     // V1 detail endpoint redireciona (301), usar proxy backend
-    const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`);
+    const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`, { timeout: 8000 });
     const detailData: any = consultaRes.data || {};
 
     const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
     const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
 
     const [countRes, itemsRes] = await Promise.allSettled([
-        axios.get(itemsCountUrl),
-        axios.get(itemsListUrl)
+        axios.get(itemsCountUrl, { timeout: 5000 }),
+        axios.get(itemsListUrl, { timeout: 8000 })
     ]);
 
     const itemCount = countRes.status === 'fulfilled' ? countRes.value.data : 0;
@@ -512,7 +512,7 @@ async function processPncpQueue() {
                 res = await fetchPncpDetailDirect(orgaoCnpj, ano, seq);
             } catch (directErr) {
                 console.warn('[PNCP Direct] Falhou, tentando proxy backend:', directErr);
-                res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+                res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`, { timeout: 8000 });
             }
             const detail = res.data;
 
