@@ -85,23 +85,38 @@ const normalizeCnpjLocal = (val: string): string => {
     return val.replace(/\D/g, '').padStart(14, '0');
 };
 
-const executePncpSearchDirect = async (url: string, params: any) => {
+const executePncpSearchDirect = async (url: string, params: any, retries = 2) => {
     let directUrl = 'https://pncp.gov.br/api/search/';
     let directParams = { ...params };
     
-    if (url.includes('pcp-proxy') || params.q?.includes('[Portal de Compras Públicas]')) {
+    if (params.q?.includes('[Portal de Compras Públicas]')) {
         directParams.q = directParams.q ? `${directParams.q}` : '[Portal de Compras Públicas]';
     }
     
     const queryStr = serializePncpParams(directParams);
     const fullUrl = `${directUrl}?${queryStr}`;
     
-    const res = await axios.get(fullUrl, {
-        headers: {
-            'Accept': 'application/json, text/plain, */*'
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const res = await axios.get(fullUrl, {
+                headers: {
+                    'Accept': 'application/json, text/plain, */*'
+                },
+                timeout: 15000
+            });
+            return res;
+        } catch (err: any) {
+            const isCorsError = err.message?.includes('Network Error') || err.message?.includes('CORS') || err.code === 'ECONNABORTED';
+            const isRateLimit = err.response?.status === 429;
+            if (attempt < retries && (isCorsError || isRateLimit)) {
+                const delay = (isRateLimit ? 2000 : 1000) * Math.pow(2, attempt);
+                console.warn(`[PNCP Direct] Tentativa ${attempt + 1} falhou (${err.message}), re-tentando em ${delay}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+            }
+            throw err;
         }
-    });
-    return res;
+    }
 };
 
 const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
@@ -482,7 +497,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
         const hasInitialValue = (item.valorTotalEstimado || item.valor_global || 0) > 0;
         if (isVisible && !detail && !hasInitialValue) {
             queuePncpFetch(item).then(res => {
-                if (res) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(res));
+                if (res) safeSetPncpDetail(cacheKey, res);
             });
         }
 
@@ -490,7 +505,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
             if (e.detail.cacheKey === cacheKey) {
                 const newData = pncpDetailCache[cacheKey]?.data || null;
                 setDetail(newData);
-                if (newData) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(newData));
+                if (newData) safeSetPncpDetail(cacheKey, newData);
             }
         };
 
@@ -597,7 +612,7 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
         const hasInitialExtra = item.itemCount !== undefined || item.hasMeEppBenefit !== undefined;
         if (isVisible && !detail && !hasInitialExtra) {
             queuePncpFetch(item).then(res => {
-                if (res) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(res));
+                if (res) safeSetPncpDetail(cacheKey, res);
             });
         }
 
@@ -605,7 +620,7 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
             if (e.detail.cacheKey === cacheKey) {
                 const newData = pncpDetailCache[cacheKey]?.data || null;
                 setDetail(newData);
-                if (newData) localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(newData));
+                if (newData) safeSetPncpDetail(cacheKey, newData);
             }
         };
 
@@ -647,6 +662,40 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
         </div>
     );
 });
+
+// Helper: localStorage com proteção contra QuotaExceededError
+const safeSetPncpDetail = (cacheKey: string, data: any) => {
+    try {
+        localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(data));
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+            console.warn('[PNCP Cache] localStorage cheio, limpando entradas antigas...');
+            const keys: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k?.startsWith('pncp_detail_')) keys.push(k);
+            }
+            // Remove metade das entradas mais antigas
+            keys.sort((a, b) => {
+                const aData = localStorage.getItem(a);
+                const bData = localStorage.getItem(b);
+                const aTime = aData ? JSON.parse(aData).cachedAt || 0 : 0;
+                const bTime = bData ? JSON.parse(bData).cachedAt || 0 : 0;
+                return aTime - bTime;
+            });
+            const toRemove = Math.ceil(keys.length / 2);
+            for (let i = 0; i < toRemove && i < keys.length; i++) {
+                localStorage.removeItem(keys[i]);
+            }
+            // Salva com cachedAt para controle futuro
+            try {
+                localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify({ ...data, cachedAt: Date.now() }));
+            } catch {}
+        } else {
+            console.warn('[PNCP Cache] Erro ao salvar no localStorage:', e.message);
+        }
+    }
+};
 
 export default function OportunidadesSearch() {
     const location = useLocation();
@@ -1206,9 +1255,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
-                // Envia a data de publicação para filtrar no PNCP
-                // ATENÇÃO: A API do PNCP aceita estes parâmetros mas IGNORA na prática.
-                // Enviamos por completude, mas a filtragem real é client-side.
+                // Envia data para API (PNCP ignora, mas enviamos por completude)
+                // Filtragem real é client-side usando data_encerramento_proposta
                 if (dataInicialFilter || dataFinalFilter) {
                     if (dataInicialFilter) params.data_publicacao_inicial = formatToApiDate(dataInicialFilter);
                     if (dataFinalFilter) params.data_publicacao_final = formatToApiDate(dataFinalFilter);
@@ -1240,19 +1288,16 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             if (isAll) {
                 activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
-                activeQueries.push({ key: 'pcp', type: 'pcp' });
             } else {
                 if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp')) {
                     activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
                 }
-                // Para portais específicos, usa keyword injection (única forma confiável no PNCP)
+                // Para portais específicos, usa keyword injection + filtragem client-side
                 for (const f of fonteFilter) {
                     if (f === 'unificado' || f === 'pncp' || f === 'comprasnet') continue;
                     const qExtra = MAPA_FONTE_Q[f];
                     if (qExtra) {
-                        activeQueries.push({ key: f, type: f === 'pcp' ? 'pcp' : 'pncp-search', q_extra: qExtra });
-                    } else if (f === 'pcp') {
-                        activeQueries.push({ key: 'pcp', type: 'pcp' });
+                        activeQueries.push({ key: f, type: 'pncp-search', q_extra: qExtra });
                     }
                 }
             }
@@ -1271,24 +1316,18 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                             params.q = kw ? `${kw} ${qInfo.q_extra}` : qInfo.q_extra;
                         }
 
-                        const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
-                        
-                        // Tenta chamada direta primeiro (CORS * no browser), depois backend proxy
+                        // Tenta chamada direta ao PNCP primeiro, fallback backend proxy
+                        const url = '/transparency/pncp-proxy';
                         const promise = executePncpSearchDirect(url, params)
                             .catch(() => api.get(url, { params }))
                             .then(res => {
                                 const itemsData = res.data?.items || [];
                                 const totalVal = res.data?.total || 0;
                                 
-                                let mappedItems = itemsData;
-                                if (qInfo.type === 'pcp') {
-                                    mappedItems = itemsData.map((i: any) => ({ ...i, _isPcp: true, sistema_origem_id: 999 }));
-                                }
-                                
                                 return {
                                     key: qInfo.key,
                                     page: p,
-                                    items: mappedItems,
+                                    items: itemsData,
                                     total: totalVal
                                 };
                             })
@@ -1363,15 +1402,16 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const sidStr = String(sid);
                 let fonteLabel = MAPA_SISTEMA_ORIGEM_NOMES[sid] || 'PNCP';
 
-                // Heurísticas adicionais para casos onde o sistema_origem_id não está disponível
+                // Heurísticas adicionais para identificar o portal de origem
+                const searchText = `${titleLower} ${descLower} ${orgaoLower}`;
                 if (!sid || fonteLabel === 'PNCP') {
-                    if (i._isComprasNet || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br')) {
+                    if (urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br') || searchText.includes('comprasnet')) {
                         fonteLabel = 'Compras.gov.br';
                         sid = 1;
-                    } else if (i._isPcp || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'))) {
+                    } else if (urlLower.includes('portaldecompraspublicas') || searchText.includes('portal de compras públicas') || searchText.includes('compras publicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'))) {
                         fonteLabel = 'Portal de Compras Públicas';
                         sid = 999;
-                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || sid === 12) {
+                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || searchText.includes('bll compras') || sid === 12) {
                         fonteLabel = 'BLL Compras';
                         sid = 12;
                     } else if (urlLower.includes('licitacoes-e') || sid === 2) {
@@ -1386,6 +1426,24 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     } else if (urlLower.includes('bec.sp') || sid === 4) {
                         fonteLabel = 'BEC SP';
                         sid = 4;
+                    } else if (urlLower.includes('compras.rj') || sid === 5) {
+                        fonteLabel = 'Compras RJ';
+                        sid = 5;
+                    } else if (urlLower.includes('compras.mg') || sid === 6) {
+                        fonteLabel = 'Compras MG';
+                        sid = 6;
+                    } else if (urlLower.includes('compras.sc') || sid === 7) {
+                        fonteLabel = 'Compras SC';
+                        sid = 7;
+                    } else if (urlLower.includes('comprasweb.pr') || urlLower.includes('compras.pr') || sid === 8) {
+                        fonteLabel = 'Compras PR';
+                        sid = 8;
+                    } else if (urlLower.includes('compras.ba') || sid === 9) {
+                        fonteLabel = 'Compras BA';
+                        sid = 9;
+                    } else if (urlLower.includes('compras.pe') || sid === 11) {
+                        fonteLabel = 'Compras PE';
+                        sid = 11;
                     } else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
                         fonteLabel = i.sistema_origem_nome;
                     } else if (urlLower.startsWith('/')) {
@@ -1457,24 +1515,24 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
-            // Filtro client-side de período - APENAS forma confiável, pois a API do PNCP
-            // aceita os parâmetros data_publicacao_inicial/final mas IGNORA na prática.
-            // Buscamos 10 páginas (500 itens) e filtramos pela data de publicação.
+            // Filtro client-side de período - filtra pela data de encerramento das propostas
+            // A API do PNCP ignora os parâmetros de data, então buscamos páginas extras
+            // e filtramos localmente.
             if (dataInicialFilter) {
                 const minDate = dataInicialFilter;
                 items = items.filter((i: any) => {
-                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                    if (!pubDateStr) return false;
-                    const datePart = pubDateStr.split('T')[0];
+                    const endStr = i.data_encerramento_proposta || i.data_fim_vigencia;
+                    if (!endStr) return false;
+                    const datePart = endStr.split('T')[0];
                     return datePart >= minDate;
                 });
             }
             if (dataFinalFilter) {
                 const maxDate = dataFinalFilter;
                 items = items.filter((i: any) => {
-                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                    if (!pubDateStr) return false;
-                    const datePart = pubDateStr.split('T')[0];
+                    const endStr = i.data_encerramento_proposta || i.data_fim_vigencia;
+                    if (!endStr) return false;
+                    const datePart = endStr.split('T')[0];
                     return datePart <= maxDate;
                 });
             }
@@ -1893,14 +1951,14 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Publicado Após (Data Inicial)</label>
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Proposta Encerra Após (Data Inicial)</label>
                                     <input 
                                         id="pncp-filter-data-ini"
                                         name="dataInicial"
                                         type="date" value={dataInicialFilter} onChange={(e) => setDataInicialFilter(e.target.value)} className="w-full h-8 bg-background border border-border rounded px-2 text-xs focus:ring-1 focus:ring-primary" />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Publicado Até (Data Final)</label>
+                                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Proposta Encerra Até (Data Final)</label>
                                     <input 
                                         id="pncp-filter-data-fim"
                                         name="dataFinal"
