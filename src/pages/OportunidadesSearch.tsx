@@ -24,12 +24,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
 // --- Captcha Manager for PNCP Portal Endpoint ---
-let hcaptchaWidgetId: number | null = null;
-let hcaptchaResolve: ((token: string) => void) | null = null;
+// Token cache: hCaptcha tokens are valid for ~2 minutes, cache for 60s to avoid rate limits
+let cachedCaptchaToken: string | null = null;
+let cachedCaptchaExpiry = 0;
 
-const getCaptchaToken = async (): Promise<string> => {
+const getFreshCaptchaToken = async (): Promise<string> => {
     const config = await axios.get('https://pncp.gov.br/api/pncp/v1/captcha/configuracao', {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        timeout: 10000
     });
     const { hcaptchaSiteKey, hcaptchaHabilitado } = config.data;
 
@@ -47,7 +49,6 @@ const getCaptchaToken = async (): Promise<string> => {
             script.onerror = () => reject(new Error('Failed to load hCaptcha'));
             document.head.appendChild(script);
         });
-        // Aguarda hCaptcha se inicializar
         await new Promise(r => setTimeout(r, 1000));
     }
 
@@ -94,9 +95,27 @@ const getCaptchaToken = async (): Promise<string> => {
     });
 };
 
+const getCaptchaToken = async (): Promise<string> => {
+    // Reuse cached token for 60s to avoid hCaptcha rate limits (429)
+    const now = Date.now();
+    if (cachedCaptchaToken && now < cachedCaptchaExpiry) {
+        return cachedCaptchaToken;
+    }
+    const token = await getFreshCaptchaToken();
+    cachedCaptchaToken = token;
+    cachedCaptchaExpiry = now + 60000; // 60s TTL
+    return token;
+};
+
+const invalidateCaptchaToken = () => {
+    cachedCaptchaToken = null;
+    cachedCaptchaExpiry = 0;
+};
+
 const fetchPncpPortalDirect = async (cnpj: string, ano: string, sequencial: string) => {
     let lastError: any = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
             const token = await getCaptchaToken();
             const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/portal?captcha=${encodeURIComponent(token)}`;
@@ -115,8 +134,17 @@ const fetchPncpPortalDirect = async (cnpj: string, ano: string, sequencial: stri
             };
         } catch (e: any) {
             lastError = e;
-            if (e.response?.status === 422) continue; // captcha invalido, tenta outro
-            if (e.response?.status === 429) { await new Promise(r => setTimeout(r, 2000)); continue; }
+            if (e.response?.status === 422) {
+                invalidateCaptchaToken();
+                continue;
+            }
+            if (e.response?.status === 429) {
+                const backoff = Math.min(4000, 1000 * Math.pow(2, attempt)) + Math.random() * 500;
+                console.warn(`[CAPTCHA] 429 rate limited, retry ${attempt + 1}/${maxAttempts} in ${Math.round(backoff)}ms`);
+                await new Promise(r => setTimeout(r, backoff));
+                invalidateCaptchaToken();
+                continue;
+            }
             throw e;
         }
     }
