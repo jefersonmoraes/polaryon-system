@@ -1531,24 +1531,53 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const titleLower = (i.title || '').toLowerCase();
                 const orgaoLower = (i.orgao_nome || '').toLowerCase();
                 const urlLower = (i.item_url || '').toLowerCase();
-                const searchText = `${titleLower} ${descLower} ${orgaoLower}`;
+                
+                // Extract domain from item_url for domain-based identification
+                let domain = '';
+                try {
+                    if (i.item_url) domain = new URL(i.item_url).hostname.replace('www.', '');
+                } catch {}
                 
                 // Portal identification:
-                // 1. Direct field from API (always empty in search API, but keep for future)
-                // 2. URL/text heuristics
-                // 3. UF/orgão fallback
-                // NOTE: numero_controle_pncp format is CNPJ-{SEQ}-NUM/ANO - the second 
-                // part is NOT sistema_origem_id, so we don't extract from it.
+                // 1. sistema_origem_id (always empty in search API, but keep for future)
+                // 2. Domain mapping from item_url
+                // 3. URL/orgão heuristics
+                // 4. Fallback: PNCP
                 let sid = i.sistema_origem_id || i.id_sistema_origem;
-                
                 let fonteLabel = (sid && MAPA_SISTEMA_ORIGEM_NOMES[sid]) || null;
                 
+                // Domain → portal name mapping
+                const DOMAIN_PORTAL_MAP: Record<string, string> = {
+                    'compras.gov.br': 'Compras.gov.br',
+                    'comprasnet.gov.br': 'Compras.gov.br',
+                    'portaldecompraspublicas.com.br': 'Portal de Compras Públicas',
+                    'bll.com.br': 'BLL Compras',
+                    'bllcomp.com.br': 'BLL Compras',
+                    'licitacoes-e.com.br': 'Licitações-e',
+                    'siga.pr.gov.br': 'SIGA',
+                    'siga.df.gov.br': 'SIGA',
+                    'compras.rs.gov.br': 'Compras RS',
+                    'bec.sp.gov.br': 'BEC SP',
+                    'compras.rj.gov.br': 'Compras RJ',
+                    'compras.mg.gov.br': 'Compras MG',
+                    'compras.sc.gov.br': 'Compras SC',
+                    'compras.pr.gov.br': 'Compras PR',
+                    'compras.ba.gov.br': 'Compras BA',
+                    'compras.pe.gov.br': 'Compras PE',
+                    'bbmnet.licitacoes.com': 'BBMNET Licitações',
+                    'novo.bbmnet.licitacoes.com': 'BBMNET Licitações',
+                };
+
                 if (!fonteLabel) {
-                    if (urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br') || searchText.includes('comprasnet')) {
+                    fonteLabel = DOMAIN_PORTAL_MAP[domain] || null;
+                }
+                
+                if (!fonteLabel) {
+                    if (urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br')) {
                         fonteLabel = 'Compras.gov.br';
-                    } else if (urlLower.includes('portaldecompraspublicas') || searchText.includes('portal de compras públicas') || searchText.includes('compras publicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'))) {
+                    } else if (urlLower.includes('portaldecompraspublicas')) {
                         fonteLabel = 'Portal de Compras Públicas';
-                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || searchText.includes('bll compras')) {
+                    } else if (urlLower.includes('bll')) {
                         fonteLabel = 'BLL Compras';
                     } else if (urlLower.includes('licitacoes-e')) {
                         fonteLabel = 'Licitações-e';
@@ -1572,16 +1601,17 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         fonteLabel = 'Compras PE';
                     } else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
                         fonteLabel = i.sistema_origem_nome;
-                    } else if (orgaoLower.includes('prefeitura')) {
-                        fonteLabel = 'Portal Municipal';
-                    } else if (i.uf && i.uf !== 'BR') {
-                        fonteLabel = `Portal ${i.uf}`;
-                    } else {
-                        fonteLabel = 'PNCP';
                     }
                 }
 
-                return { ...i, fonte_dados: fonteLabel };
+                // Log primeiro item_url para debug (1x por busca)
+                if (!fonteLabel && domain) {
+                    if (typeof window !== 'undefined') {
+                        console.log(`[PORTAL DEBUG] item_url domain="${domain}" item_url="${i.item_url}"`);
+                    }
+                }
+
+                return { ...i, fonte_dados: fonteLabel || 'PNCP' };
             });
 
             // A API do PNCP não suporta filtragem por portal de origem.
