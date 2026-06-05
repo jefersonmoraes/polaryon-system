@@ -1207,7 +1207,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
                 // Envia a data de publicação para filtrar no PNCP
-                // A API de search aceita datas em formato YYYYMMDD (sem hífen)
+                // ATENÇÃO: A API do PNCP aceita estes parâmetros mas IGNORA na prática.
+                // Enviamos por completude, mas a filtragem real é client-side.
                 if (dataInicialFilter || dataFinalFilter) {
                     if (dataInicialFilter) params.data_publicacao_inicial = formatToApiDate(dataInicialFilter);
                     if (dataFinalFilter) params.data_publicacao_final = formatToApiDate(dataFinalFilter);
@@ -1216,13 +1217,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return params;
             };
 
-            const MAPA_SISTEMA_ORIGEM: Record<string, { id: number; label: string }> = {
-                'comprasnet': { id: 1, label: 'ComprasNet' },
-                'licitacoese': { id: 2, label: 'Licitações-e' },
-                'siga': { id: 3, label: 'SIGA' },
-                'bll': { id: 12, label: 'BLL Compras' },
-                'compras-rs': { id: 10, label: 'Compras RS' },
-                'pcp': { id: 999, label: 'Portal de Compras Públicas' },
+            const MAPA_FONTE_Q: Record<string, string> = {
+                'bll': 'Bolsa Licitações',
+                'licitacoese': 'Licitações-e',
+                'siga': 'SIGA',
+                'compras-rs': 'Compras RS',
+                'pcp': '[Portal de Compras Públicas]',
             };
 
             const isAll = fonteFilter.includes('unificado');
@@ -1230,42 +1230,29 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const searchParams = buildParams(currentPage);
 
             const hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
-            const numPages = hasDateFilter ? 2 : 2;
-            const startPage = hasDateFilter ? 1 : (currentPage - 1) * 2 + 1;
+            // Quando tem data, precisamos buscar MAIS páginas para ter dados suficientes
+            // pois a API do PNCP ignora o filtro de data e precisamos filtrar client-side
+            const numPages = hasDateFilter ? 10 : 2;
+            const startPage = hasDateFilter ? (currentPage - 1) * 10 + 1 : (currentPage - 1) * 2 + 1;
 
             // Determinar quais consultas fazemos
-            const activeQueries: { key: string; type: 'pncp-search' | 'pcp' | 'comprasnet' | 'pncp-consulta' | 'pncp-sistema'; q_extra?: string; sistemaId?: number }[] = [];
+            const activeQueries: { key: string; type: 'pcp' | 'pncp-search'; q_extra?: string }[] = [];
 
-            // SEMPRE inclui pncp-consulta quando há filtro de data (filtra corretamente por período)
-            if (hasDateFilter) {
-                activeQueries.push({ key: 'pncp_consulta', type: 'pncp-consulta' });
-            }
-
-            // Se não tem data OU tem data mas também selecionou portais específicos, inclui buscas adicionais
-            if (!hasDateFilter || !isAll) {
-                if (isAll) {
+            if (isAll) {
+                activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
+                activeQueries.push({ key: 'pcp', type: 'pcp' });
+            } else {
+                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp')) {
                     activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
-                    activeQueries.push({ key: 'pcp', type: 'pcp' });
-                } else {
-                    if (fonteFilter.includes('comprasnet')) {
-                        activeQueries.push({ key: 'comprasnet_direct', type: 'comprasnet' });
-                    }
-                    if (fonteFilter.includes('pncp')) {
-                        activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
-                    }
-                    for (const f of fonteFilter) {
-                        if (f === 'unificado' || f === 'pncp' || f === 'comprasnet') continue;
-                        const portalInfo = MAPA_SISTEMA_ORIGEM[f];
-                        if (portalInfo) {
-                            activeQueries.push({
-                                key: `${f}_sistema`,
-                                type: 'pncp-sistema',
-                                sistemaId: portalInfo.id,
-                                q_extra: portalInfo.id === 999 ? 'Portal de Compras Públicas' : undefined
-                            });
-                        } else if (f === 'pcp') {
-                            activeQueries.push({ key: 'pcp', type: 'pcp' });
-                        }
+                }
+                // Para portais específicos, usa keyword injection (única forma confiável no PNCP)
+                for (const f of fonteFilter) {
+                    if (f === 'unificado' || f === 'pncp' || f === 'comprasnet') continue;
+                    const qExtra = MAPA_FONTE_Q[f];
+                    if (qExtra) {
+                        activeQueries.push({ key: f, type: f === 'pcp' ? 'pcp' : 'pncp-search', q_extra: qExtra });
+                    } else if (f === 'pcp') {
+                        activeQueries.push({ key: 'pcp', type: 'pcp' });
                     }
                 }
             }
@@ -1277,111 +1264,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const fetchPromises: Promise<{ key: string; page: number; items: any[]; total: number }>[] = [];
 
                 activeQueries.forEach(qInfo => {
-                    if (qInfo.type === 'pncp-consulta') {
-                        // Usa o endpoint de consulta especializado para data
-                        const params: any = {
-                            pagina: currentPage,
-                            tamPagina: 50
-                        };
-                        if (dataInicialFilter) params.dataInicial = dataInicialFilter;
-                        if (dataFinalFilter) params.dataFinal = dataFinalFilter;
-                        if (ufFilter) params.uf = ufFilter;
-                        if (keyword.trim()) params.q = keyword.trim();
-                        if (orgaoFilter) params.orgao = orgaoFilter;
-
-                        const promise = api.get('/transparency/pncp-consulta', { params })
-                            .then(res => {
-                                const itemsData = res.data?.items || [];
-                                return {
-                                    key: qInfo.key,
-                                    page: currentPage,
-                                    items: itemsData,
-                                    total: res.data?.total || itemsData.length
-                                };
-                            })
-                            .catch(() => ({
-                                key: qInfo.key,
-                                page: currentPage,
-                                items: [],
-                                total: 0
-                            }));
-
-                        fetchPromises.push(promise);
-                        return;
-                    }
-
-                    if (qInfo.type === 'pncp-sistema') {
-                        // Usa o endpoint de sistema_origem_id
-                        const params: any = {
-                            pagina: currentPage,
-                            tamPagina: 50,
-                            sistemas: String(qInfo.sistemaId)
-                        };
-                        if (kw) params.q = kw;
-                        if (statusFilter) params.status = statusFilter;
-                        if (ufFilter) params.ufs = [ufFilter];
-                        if (esferaFilter) params.esferas = [esferaFilter];
-
-                        const promise = api.get('/transparency/pncp-orgaos-sistema', { params })
-                            .then(res => {
-                                let itemsData = res.data?.items || [];
-                                // Se for PCP, filtra apenas itens com "Portal de Compras Públicas"
-                                if (qInfo.sistemaId === 999) {
-                                    itemsData = itemsData.filter((i: any) =>
-                                        (i.description || '').toLowerCase().includes('portal de compras públicas') ||
-                                        (i.item_url || '').includes('portaldecompraspublicas')
-                                    );
-                                }
-                                return {
-                                    key: qInfo.key,
-                                    page: currentPage,
-                                    items: itemsData.map((i: any) => ({
-                                        ...i,
-                                        _isSistemaFiltered: true,
-                                        sistema_origem_id: qInfo.sistemaId
-                                    })),
-                                    total: itemsData.length
-                                };
-                            })
-                            .catch(() => ({
-                                key: qInfo.key,
-                                page: currentPage,
-                                items: [],
-                                total: 0
-                            }));
-
-                        fetchPromises.push(promise);
-                        return;
-                    }
-
-                    if (qInfo.type === 'comprasnet') {
-                        // Endpoint dedicado para ComprasNet/usando API oficial
-                        const params: any = { pagina: currentPage };
-                        if (kw) params.q = kw;
-                        if (statusFilter) params.status = statusFilter;
-                        if (ufFilter) params.uf = ufFilter;
-
-                        const promise = api.get('/transparency/comprasnet-proxy', { params })
-                            .then(res => {
-                                const itemsData = res.data?.items || [];
-                                return {
-                                    key: qInfo.key,
-                                    page: currentPage,
-                                    items: itemsData.map((i: any) => ({ ...i, _isComprasNet: true, sistema_origem_id: 1 })),
-                                    total: res.data?.total || itemsData.length
-                                };
-                            })
-                            .catch(() => ({
-                                key: qInfo.key,
-                                page: currentPage,
-                                items: [],
-                                total: 0
-                            }));
-                        fetchPromises.push(promise);
-                        return;
-                    }
-
-                    // PNCP Search normal (inclui PCP)
                     for (let p = startPage; p < startPage + numPages; p++) {
                         const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
                         
@@ -1391,6 +1273,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                         const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
                         
+                        // Tenta chamada direta primeiro (CORS * no browser), depois backend proxy
                         const promise = executePncpSearchDirect(url, params)
                             .catch(() => api.get(url, { params }))
                             .then(res => {
@@ -1426,9 +1309,10 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                 const allItems = resultsList.flatMap(r => r.items);
                 
+                // Soma dos totais reportados por cada query ativa
                 const totalsMap = new Map<string, number>();
                 resultsList.forEach(r => {
-                    if (r.page === (hasDateFilter ? currentPage : startPage)) {
+                    if (r.page === startPage) {
                         totalsMap.set(r.key, r.total);
                     }
                 });
@@ -1573,26 +1457,26 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
-            // Filtro client-side de período - APENAS como fallback para dados que não vieram
-            // filtrados do backend (ex: dados da busca PNCP direta que ignora datas)
-            // Quando usa pncp-consulta, o backend já filtra por data, este é só fallback.
-            if (!hasDateFilter || items.some((i: any) => i._fonte_consulta !== 'pncp_diario')) {
-                if (dataInicialFilter) {
-                    items = items.filter((i: any) => {
-                        const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                        if (!pubDateStr) return true;
-                        const datePart = pubDateStr.split('T')[0];
-                        return datePart >= dataInicialFilter;
-                    });
-                }
-                if (dataFinalFilter) {
-                    items = items.filter((i: any) => {
-                        const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                        if (!pubDateStr) return true;
-                        const datePart = pubDateStr.split('T')[0];
-                        return datePart <= dataFinalFilter;
-                    });
-                }
+            // Filtro client-side de período - APENAS forma confiável, pois a API do PNCP
+            // aceita os parâmetros data_publicacao_inicial/final mas IGNORA na prática.
+            // Buscamos 10 páginas (500 itens) e filtramos pela data de publicação.
+            if (dataInicialFilter) {
+                const minDate = dataInicialFilter;
+                items = items.filter((i: any) => {
+                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                    if (!pubDateStr) return false;
+                    const datePart = pubDateStr.split('T')[0];
+                    return datePart >= minDate;
+                });
+            }
+            if (dataFinalFilter) {
+                const maxDate = dataFinalFilter;
+                items = items.filter((i: any) => {
+                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                    if (!pubDateStr) return false;
+                    const datePart = pubDateStr.split('T')[0];
+                    return datePart <= maxDate;
+                });
             }
 
             if (orgaoFilter) items = items.filter((i: any) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
@@ -1680,7 +1564,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         if (e.key === 'Enter') handlePageInputSubmit();
     };
 
-    const totalPages = Math.min(Math.ceil(totalResults / 100), 100);
+    const totalPages = Math.min(Math.ceil(totalResults / (hasDateFilter ? 500 : 100)), 100);
 
     return (
         <div className="flex-1 overflow-hidden flex flex-col bg-background text-foreground min-h-full">
