@@ -256,26 +256,12 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 };
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
+    // V1 detail endpoint redireciona (301), usar proxy backend
+    const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`);
+    const detailData: any = consultaRes.data || {};
+
     const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
     const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
-
-    // Tenta V1 primeiro (CORS *), fallback consulta (backend proxy)
-    let detailData: any = {};
-    try {
-        const v1url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
-        const v1res = await axios.get(v1url, { timeout: 8000 });
-        detailData = v1res.data || {};
-        console.log(`[PNCP DETAIL] V1 OK — usuarioNome="${detailData.usuarioNome}"`);
-    } catch (v1err: any) {
-        console.warn(`[PNCP DETAIL] V1 falhou (${v1err.message}), tentando consulta proxy...`);
-        try {
-            const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`);
-            detailData = consultaRes.data || {};
-            console.log(`[PNCP DETAIL] Consulta proxy OK — usuarioNome="${detailData.usuarioNome}"`);
-        } catch (proxyErr: any) {
-            console.warn(`[PNCP DETAIL] Consulta proxy também falhou: ${proxyErr.message}`);
-        }
-    }
 
     const [countRes, itemsRes] = await Promise.allSettled([
         axios.get(itemsCountUrl),
@@ -582,7 +568,22 @@ function queuePncpFetch(item: PncpItem): Promise<any> {
     return promise;
 }
 
-// Componente reativo para badge de portal — atualiza quando o detalhe chega via cache
+// Mapeamento de usuarioNome (fornecido pelo PNCP) para nome de portal
+const MAPA_USUARIO_PORTAL: Record<string, string> = {
+    'novo bbmnet licitações': 'BBMNET Licitações',
+    'bbmnet licitações': 'BBMNET Licitações',
+    'licitanet licitações eletrônicas ltda': 'Licitanet',
+    'betha sistemas': 'Betha',
+    'ipm sistemas': 'IPM',
+    'e-customize consultoria em software s.a': 'ECustomize',
+    'e customize consultoria em software s.a': 'ECustomize',
+    'ecustomize consultoria em software s.a': 'ECustomize',
+    's3 consultoria e sistemas ltda': 'S3',
+    'rede geral serviços': 'Rede Geral',
+    'br conectado': 'BR Conectado',
+};
+
+// Componente reativo para badge de portal — auto-fetch + atualiza pelo cache
 const PortalBadge = memo(({ item }: { item: any }) => {
     const parts = item.numero_controle_pncp?.split('-');
     const orgaoCnpj = item.orgao_cnpj || parts?.[0];
@@ -592,25 +593,40 @@ const PortalBadge = memo(({ item }: { item: any }) => {
 
     const [usuarioNome, setUsuarioNome] = useState<string | null>(() => {
         const cached = pncpDetailCache[cacheKey]?.data;
-        return cached?.usuarioNome || null;
+        const raw = cached?.usuarioNome || null;
+        if (raw && raw !== 'undefined') return raw;
+        return null;
     });
+
+    // Auto-fetch se cache vazio
+    useEffect(() => {
+        if (!pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+            queuePncpFetch(item).catch(() => {});
+        }
+    }, [cacheKey]);
 
     useEffect(() => {
         const handler = (e: Event) => {
             const ce = e as CustomEvent;
             if (ce.detail?.cacheKey === cacheKey) {
                 const cached = pncpDetailCache[cacheKey]?.data;
-                if (cached?.usuarioNome) setUsuarioNome(cached.usuarioNome);
+                const raw = cached?.usuarioNome || null;
+                if (raw && raw !== 'undefined') {
+                    console.log(`[PORTAL BADGE] Atualizado: "${raw}"`);
+                    setUsuarioNome(raw);
+                }
             }
         };
         window.addEventListener('pncp-cache-updated', handler);
         return () => window.removeEventListener('pncp-cache-updated', handler);
     }, [cacheKey]);
 
-    const nome = usuarioNome || (item as any).fonte_dados || 'PNCP';
-    const pair = getPortalStyle(nome);
+    // Aplica mapeamento de nomes conhecidos
+    const rawNome = usuarioNome || (item as any).fonte_dados || 'PNCP';
+    const mappedNome = MAPA_USUARIO_PORTAL[rawNome.toLowerCase().trim()] || rawNome;
+    const pair = getPortalStyle(mappedNome);
     return (
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
+        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
             {pair.label}
         </span>
     );
