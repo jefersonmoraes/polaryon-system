@@ -256,18 +256,32 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 };
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    // V1 tem CORS * (diferente de /api/consulta/v1/ que é bloqueado)
-    const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
     const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
     const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
 
-    const [detailRes, countRes, itemsRes] = await Promise.allSettled([
-        axios.get(detailUrl),
+    // Tenta V1 primeiro (CORS *), fallback consulta (backend proxy)
+    let detailData: any = {};
+    try {
+        const v1url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+        const v1res = await axios.get(v1url, { timeout: 8000 });
+        detailData = v1res.data || {};
+        console.log(`[PNCP DETAIL] V1 OK — usuarioNome="${detailData.usuarioNome}"`);
+    } catch (v1err: any) {
+        console.warn(`[PNCP DETAIL] V1 falhou (${v1err.message}), tentando consulta proxy...`);
+        try {
+            const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`);
+            detailData = consultaRes.data || {};
+            console.log(`[PNCP DETAIL] Consulta proxy OK — usuarioNome="${detailData.usuarioNome}"`);
+        } catch (proxyErr: any) {
+            console.warn(`[PNCP DETAIL] Consulta proxy também falhou: ${proxyErr.message}`);
+        }
+    }
+
+    const [countRes, itemsRes] = await Promise.allSettled([
         axios.get(itemsCountUrl),
         axios.get(itemsListUrl)
     ]);
 
-    const detailData = detailRes.status === 'fulfilled' ? detailRes.value.data : {};
     const itemCount = countRes.status === 'fulfilled' ? countRes.value.data : 0;
     const itemsResponse = itemsRes.status === 'fulfilled' ? itemsRes.value.data : [];
     const items = Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse.data || []);
