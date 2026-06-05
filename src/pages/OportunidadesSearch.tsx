@@ -601,6 +601,8 @@ const PortalBadge = memo(({ item }: { item: any }) => {
         </span>
     );
 });
+
+const ProposalDates = memo(({ item }: { item: PncpItem }) => {
     // Usar datas nativas da listagem se disponíveis, caso contrário mostrar traço
     const formatNativeDate = (dateStr?: string) => {
         if (!dateStr) return '-';
@@ -617,7 +619,6 @@ const PortalBadge = memo(({ item }: { item: any }) => {
         </td>
     );
 });
-
 const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?: boolean }) => {
     const parts = item.numero_controle_pncp?.split('-');
     const orgaoCnpj = item.orgao_cnpj || parts?.[0];
