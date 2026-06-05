@@ -269,12 +269,6 @@ const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: stri
         }
     };
 };
-            minItemValue: minItemValue === Infinity ? 0 : minItemValue,
-            maxItemValue: maxItemValue === -Infinity ? 0 : maxItemValue,
-            items: items
-        }
-    };
-};
 
 const fetchPncpArquivosDirect = async (cnpj: string, ano: string, sequencial: string) => {
     try {
