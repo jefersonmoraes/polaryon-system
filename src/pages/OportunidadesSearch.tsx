@@ -1439,7 +1439,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             const buildParams = (p: number) => {
                 const params: any = {
-                    tam_pagina: 50,
+                    tam_pagina: 100,
                     pagina: p
                 };
                 if (keyword.trim()) params.q = keyword.trim();
@@ -1481,6 +1481,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 'siga': 'SIGA',
                 'compras-rs': 'Compras RS',
                 'pcp': '[Portal de Compras Públicas]',
+                'bnc': 'Bolsa Nacional de Compras',
+                'ecustomize': 'ECustomize',
             };
 
             const isAll = fonteFilter.includes('unificado');
@@ -1490,8 +1492,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
             // Quando tem data, precisamos buscar MAIS páginas para ter dados suficientes
             // pois a API do PNCP ignora o filtro de data e precisamos filtrar client-side
-            const numPages = hasDateFilter ? 10 : 2;
-            const startPage = hasDateFilter ? (currentPage - 1) * 10 + 1 : (currentPage - 1) * 2 + 1;
+            const numPages = hasDateFilter ? 5 : 1;
+            const startPage = hasDateFilter ? (currentPage - 1) * 5 + 1 : currentPage;
 
             // Determinar quais consultas fazemos
             const activeQueries: { key: string; type: 'pcp' | 'pncp-search'; q_extra?: string }[] = [];
@@ -1499,7 +1501,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (isAll) {
                 activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
             } else {
-                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp')) {
+                const NEW_PORTAL_IDS = new Set(['ipm', 'betha', 'bbmnet', 'licitanet', 'brconectado', 'governancabrasil', 'licitamais', 'centi', 'systemdesenv', 'pncp', 'comprasnet']);
+                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp') || fonteFilter.some(f => NEW_PORTAL_IDS.has(f))) {
                     activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
                 }
                 // Para portais específicos, usa keyword injection + filtragem client-side
@@ -1520,7 +1523,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                 activeQueries.forEach(qInfo => {
                     for (let p = startPage; p < startPage + numPages; p++) {
-                        const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
+                        const params: any = { ...searchParams, pagina: p, tam_pagina: 100 };
                         
                         if (qInfo.q_extra) {
                             params.q = kw ? `${kw} ${qInfo.q_extra}` : qInfo.q_extra;
@@ -1874,8 +1877,19 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                 { id: 'licitacoese', label: 'Licitações-e (BB)', color: 'text-yellow-600' },
                                                 { id: 'pcp', label: 'Portal de Compras Públicas', color: 'text-blue-500' },
                                                 { id: 'bll', label: 'BLL Compras', color: 'text-orange-600' },
+                                                { id: 'bnc', label: 'Bolsa Nacional de Compras', color: 'text-purple-600' },
+                                                { id: 'bbmnet', label: 'BBMNET Licitações', color: 'text-cyan-600' },
+                                                { id: 'licitanet', label: 'Licitanet', color: 'text-pink-600' },
                                                 { id: 'siga', label: 'SIGA (Paraná/DF)', color: 'text-red-600' },
                                                 { id: 'compras-rs', label: 'Compras RS', color: 'text-cyan-600' },
+                                                { id: 'ipm', label: 'IPM Sistemas', color: 'text-indigo-600' },
+                                                { id: 'betha', label: 'Betha Sistemas', color: 'text-teal-600' },
+                                                { id: 'ecustomize', label: 'ECustomize', color: 'text-violet-600' },
+                                                { id: 'brconectado', label: 'BR Conectado', color: 'text-sky-600' },
+                                                { id: 'governancabrasil', label: 'Governança Brasil', color: 'text-rose-600' },
+                                                { id: 'licitamais', label: 'Licita + Brasil', color: 'text-amber-600' },
+                                                { id: 'centi', label: 'CENTI', color: 'text-lime-600' },
+                                                { id: 'systemdesenv', label: 'System Desenvolvimento', color: 'text-emerald-600' },
                                                 { id: 'pncp', label: 'Municipais (via PNCP)', color: 'text-emerald-600' },
                                             ].map((portal) => (
                                                 <div 
