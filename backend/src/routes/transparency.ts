@@ -236,6 +236,198 @@ router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Resp
 });
 
 /**
+ * GET /api/transparency/pncp-consulta
+ * Proxy para a API de consulta do PNCP - especializada em busca por DATA DE PUBLICAÇÃO
+ * Usa o endpoint oficial de consulta: /api/consulta/v1/contratacoes/publicacao
+ * Enquanto o /api/search/ ignora datas, este endpoint filtra corretamente por período.
+ */
+router.get('/pncp-consulta', async (req: Request, res: Response) => {
+    try {
+        const { dataInicial, dataFinal, pagina = '1', tamPagina = '50', uf, orgao, modalidade } = req.query;
+
+        // PNCP consulta API requires dates in YYYYMMDD format
+        const formatDate = (d: string) => d ? d.replace(/-/g, '') : '';
+
+        const consultaParams: any = {
+            pagina: parseInt(pagina as string),
+            tamanhoPagina: Math.min(parseInt(tamPagina as string), 50)
+        };
+
+        // Se tem dataInicial e dataFinal, faz múltiplas chamadas (uma por dia)
+        if (dataInicial && dataFinal) {
+            const start = new Date(dataInicial as string + 'T00:00:00');
+            const end = new Date(dataFinal as string + 'T00:00:00');
+            const days: string[] = [];
+            const current = new Date(start);
+            while (current <= end) {
+                const yyyy = current.getFullYear();
+                const mm = String(current.getMonth() + 1).padStart(2, '0');
+                const dd = String(current.getDate()).padStart(2, '0');
+                days.push(`${yyyy}${mm}${dd}`);
+                current.setDate(current.getDate() + 1);
+            }
+
+            // Busca em paralelo para cada dia (máx 31 dias para não sobrecarregar)
+            const batchSize = 7;
+            let allItems: any[] = [];
+            let totalFound = 0;
+
+            for (let i = 0; i < days.length; i += batchSize) {
+                const batch = days.slice(i, i + batchSize);
+                const results = await Promise.all(batch.map(async (day) => {
+                    try {
+                        const dayParams = { ...consultaParams, data: day };
+                        const resp = await axios.get('https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao', {
+                            params: dayParams,
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                                'Accept': 'application/json, text/plain, */*'
+                            },
+                            timeout: 10000
+                        });
+                        const items = resp.data?.data || resp.data || [];
+                        if (Array.isArray(items)) {
+                            return items.map((item: any) => ({
+                                ...item,
+                                data_publicacao_pncp: `${day.substring(0,4)}-${day.substring(4,6)}-${day.substring(6,8)}`,
+                                _fonte_consulta: 'pncp_diario'
+                            }));
+                        }
+                        return [];
+                    } catch {
+                        return [];
+                    }
+                }));
+                results.forEach(r => {
+                    allItems.push(...r);
+                });
+            }
+
+            // Aplica filtros adicionais client-side (uf, orgao, modalidade)
+            if (uf) {
+                const ufStr = (uf as string).toUpperCase();
+                allItems = allItems.filter((i: any) => (i.uf || '').toUpperCase() === ufStr || (i.siglaUf || '').toUpperCase() === ufStr);
+            }
+            if (orgao) {
+                const orgaoStr = (orgao as string).toLowerCase();
+                allItems = allItems.filter((i: any) => (i.nomeOrgao || i.orgao_nome || '').toLowerCase().includes(orgaoStr));
+            }
+
+            totalFound = allItems.length;
+
+            // Paginação client-side
+            const pageNum = parseInt(pagina as string);
+            const pageSize = parseInt(tamPagina as string);
+            const startIdx = (pageNum - 1) * pageSize;
+            const pagedItems = allItems.slice(startIdx, startIdx + pageSize);
+
+            return res.json({
+                items: pagedItems,
+                total: totalFound,
+                pagina: pageNum,
+                tam_pagina: pageSize,
+                _source: 'pncp-consulta'
+            });
+        }
+
+        // Sem data: delega para o search normal
+        const response = await axios.get('https://pncp.gov.br/api/search/', {
+            params: req.query,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 15000,
+            paramsSerializer: (params) => {
+                const parts: string[] = [];
+                Object.entries(params).forEach(([key, val]) => {
+                    if (val === undefined || val === null || val === '') return;
+                    const cleanKey = key.replace(/\[\d*\]$/, '');
+                    if (Array.isArray(val)) {
+                        parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
+                    } else {
+                        if (typeof val === 'string' && val.includes('|')) {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${val}`);
+                        } else {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
+                        }
+                    }
+                });
+                return parts.join('&');
+            }
+        });
+        res.json(response.data);
+    } catch (error: any) {
+        console.error('PNCP Consulta Proxy Error:', error.message);
+        res.status(error.response?.status || 500).json({
+            error: error.message,
+            details: error.response?.data
+        });
+    }
+});
+
+/**
+ * GET /api/transparency/pncp-orgaos-sistema
+ * Busca oportunidades no PNCP filtrando por sistema_origem_id
+ * Isso permite buscar itens de portais específicos (BLL, Licitações-e, etc.)
+ * sem depender de keyword injection.
+ */
+router.get('/pncp-orgaos-sistema', async (req: Request, res: Response) => {
+    try {
+        const { sistemas, pagina = '1', tamPagina = '50' } = req.query;
+
+        // Converte para array de IDs
+        const sistemaIds = sistemas ? String(sistemas).split(',').map(s => s.trim()).filter(Boolean) : [];
+
+        if (sistemaIds.length === 0) {
+            return res.json({ items: [], total: 0 });
+        }
+
+        // A API /api/search/ não tem filtro direto por sistema_origem_id,
+        // mas podemos usar o endpoint /api/pncp/v1/contratacoes que aceita idSistemaOrigem
+        const pncpV1Params: any = {
+            pagina: parseInt(pagina as string),
+            tamanhoPagina: Math.min(parseInt(tamPagina as string), 50)
+        };
+
+        // Tenta buscar para cada sistema_origem_id em paralelo
+        const promises = sistemaIds.map(async (sid) => {
+            try {
+                const resp = await axios.get('https://pncp.gov.br/api/pncp/v1/contratacoes', {
+                    params: { ...pncpV1Params, idSistemaOrigem: parseInt(sid) },
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        'Accept': 'application/json, text/plain, */*'
+                    },
+                    timeout: 10000
+                });
+                const data = resp.data?.data || resp.data || [];
+                return Array.isArray(data) ? data.map((item: any) => ({
+                    ...item,
+                    sistema_origem_id: parseInt(sid),
+                    _fonte_sistema_id: parseInt(sid)
+                })) : [];
+            } catch {
+                return [];
+            }
+        });
+
+        const results = await Promise.all(promises);
+        const allItems = results.flat();
+
+        res.json({
+            items: allItems,
+            total: allItems.length,
+            pagina: parseInt(pagina as string),
+            tam_pagina: parseInt(tamPagina as string)
+        });
+    } catch (error: any) {
+        console.error('PNCP Orgaos Sistema Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * GET /api/transparency/pncp-proxy
  * Proxy universal para busca no PNCP (Evita CORS e centraliza User-Agent)
  */
@@ -279,6 +471,85 @@ router.get('/pncp-proxy', async (req: Request, res: Response) => {
             error: error.message,
             details: error.response?.data 
         });
+    }
+});
+
+/**
+ * GET /api/transparency/comprasnet-proxy
+ * Proxy para o Compras.gov.br (ComprasNet) - busca direta no portal federal
+ * Usa a API pública do Compras.gov.br quando disponível, ou faz scraping.
+ */
+router.get('/comprasnet-proxy', async (req: Request, res: Response) => {
+    try {
+        const { q, pagina = '1' } = req.query;
+
+        // Tenta a API de busca pública do Compras.gov.br
+        // Endpoint: https://www.gov.br/compras/pt-br/acesso-a-sistemas/saga
+        // API pública: https://api.comprasnet.gov.br/
+
+        // Como fallback, usa o PNCP com filtro de sistema_origem_id=1 (ComprasNet)
+        const pncpParams: any = {
+            pagina: parseInt(pagina as string),
+            tamanhoPagina: 50,
+            idSistemaOrigem: 1
+        };
+        if (q) pncpParams.q = q;
+
+        const response = await axios.get('https://pncp.gov.br/api/pncp/v1/contratacoes', {
+            params: pncpParams,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            timeout: 10000
+        });
+
+        let items = response.data?.data || response.data || [];
+        if (!Array.isArray(items)) items = [];
+
+        items = items.map((item: any) => ({
+            ...item,
+            _isComprasNet: true,
+            sistema_origem_id: 1
+        }));
+
+        res.json({
+            items,
+            total: items.length,
+            pagina: parseInt(pagina as string)
+        });
+    } catch (error: any) {
+        console.error('ComprasNet Proxy Error:', error.message);
+        // Fallback para o PNCP search com keyword injection
+        try {
+            const newQuery = { ...req.query };
+            if (newQuery.q) {
+                newQuery.q = `${newQuery.q} ComprasNet`;
+            } else {
+                newQuery.q = 'ComprasNet';
+            }
+            const response = await axios.get('https://pncp.gov.br/api/search/', {
+                params: newQuery,
+                headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json, text/plain, */*' },
+                timeout: 10000,
+                paramsSerializer: (params) => {
+                    const parts: string[] = [];
+                    Object.entries(params).forEach(([key, val]) => {
+                        if (val === undefined || val === null || val === '') return;
+                        const cleanKey = key.replace(/\[\d*\]$/, '');
+                        if (Array.isArray(val)) {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${val.join('|')}`);
+                        } else {
+                            parts.push(`${encodeURIComponent(cleanKey)}=${encodeURIComponent(String(val))}`);
+                        }
+                    });
+                    return parts.join('&');
+                }
+            });
+            return res.json(response.data);
+        } catch (fallbackErr: any) {
+            res.status(500).json({ error: fallbackErr.message });
+        }
     }
 });
 

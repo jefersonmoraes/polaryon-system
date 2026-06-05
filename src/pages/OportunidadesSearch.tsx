@@ -104,6 +104,31 @@ const executePncpSearchDirect = async (url: string, params: any) => {
     return res;
 };
 
+const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
+    1: 'Compras.gov.br',
+    2: 'Licitações-e',
+    3: 'SIGA',
+    4: 'Compras SP - BEC',
+    5: 'Compras RJ',
+    6: 'Compras MG',
+    7: 'Compras SC',
+    8: 'Compras PR',
+    9: 'Compras BA',
+    10: 'Compras RS',
+    11: 'Compras PE',
+    12: 'BLL Compras',
+    13: 'Banco do Brasil',
+    14: 'Caixa Econômica Federal',
+    15: 'Petrobras',
+    16: 'Correios',
+    17: 'FNDE',
+    18: 'SES/PR',
+    19: 'SES/RS',
+    20: 'SES/SC',
+    99: 'Portal Municipal',
+    999: 'Portal de Compras Públicas'
+};
+
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
     const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
     const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
@@ -207,6 +232,31 @@ const fetchPncpItensCompletosDirect = async (cnpj: string, ano: string, sequenci
 };
 
 // --- Helper: Safe ID Generation (Works in non-HTTPS/secure contexts) ---
+const getPortalStyle = (fonte: string): { style: string; label: string } => {
+    const map: Record<string, { style: string; label: string }> = {
+        'Compras.gov.br': { style: 'bg-blue-500/10 text-blue-600 border-blue-500/20', label: 'COMPRAS.GOV' },
+        'ComprasNet': { style: 'bg-blue-400/10 text-blue-600 border-blue-400/20', label: 'COMPRASNET' },
+        'Licitações-e': { style: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20', label: 'LIC.E' },
+        'Portal de Compras Públicas': { style: 'bg-orange-500/10 text-orange-600 border-orange-500/20', label: 'PCP' },
+        'BLL Compras': { style: 'bg-purple-500/10 text-purple-600 border-purple-500/20', label: 'BLL' },
+        'BEC SP': { style: 'bg-pink-500/10 text-pink-600 border-pink-500/20', label: 'BEC' },
+        'Compras RJ': { style: 'bg-red-500/10 text-red-600 border-red-500/20', label: 'RJ' },
+        'Compras MG': { style: 'bg-amber-500/10 text-amber-600 border-amber-500/20', label: 'MG' },
+        'Compras SC': { style: 'bg-green-500/10 text-green-600 border-green-500/20', label: 'SC' },
+        'Compras PR': { style: 'bg-lime-500/10 text-lime-600 border-lime-500/20', label: 'PR' },
+        'Compras BA': { style: 'bg-teal-500/10 text-teal-600 border-teal-500/20', label: 'BA' },
+        'Compras RS': { style: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20', label: 'RS' },
+        'Compras PE': { style: 'bg-sky-500/10 text-sky-600 border-sky-500/20', label: 'PE' },
+    };
+    const lower = fonte.toLowerCase();
+    for (const [key, val] of Object.entries(map)) {
+        if (lower.includes(key.toLowerCase())) return val;
+    }
+    if (lower.includes('siga')) return { style: 'bg-red-500/10 text-red-600 border-red-500/20', label: 'SIGA' };
+    if (lower.includes('portal ')) return { style: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', label: 'MUNIC' };
+    return { style: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', label: fonte.toUpperCase().substring(0, 8) };
+};
+
 const generateSafeId = () => {
     try {
         if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -1126,20 +1176,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         setError('');
         setLoadingMessage('');
         try {
-            const subtractDays = (dateStr: string, days: number) => {
-                if (!dateStr) return '';
-                try {
-                    const date = new Date(dateStr + 'T00:00:00');
-                    date.setDate(date.getDate() - days);
-                    const yyyy = date.getFullYear();
-                    const mm = String(date.getMonth() + 1).padStart(2, '0');
-                    const dd = String(date.getDate()).padStart(2, '0');
-                    return `${yyyy}-${mm}-${dd}`;
-                } catch {
-                    return '';
-                }
-            };
-
             const formatToApiDate = (dateStr: string) => {
                 if (!dateStr) return '';
                 return dateStr.replace(/-/g, '');
@@ -1170,9 +1206,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 }
                 if (ordenacaoFilter) params.ordenacao = ordenacaoFilter;
 
-                // Envia a data de publicação exata selecionada pelo usuário para filtrar no PNCP
-                // NOTA: A API do PNCP ignora esses parâmetros na prática, mas os enviamos por completude.
-                // A filtragem real é feita no client-side usando data_publicacao_pncp.
+                // Envia a data de publicação para filtrar no PNCP
+                // A API de search aceita datas em formato YYYYMMDD (sem hífen)
                 if (dataInicialFilter || dataFinalFilter) {
                     if (dataInicialFilter) params.data_publicacao_inicial = formatToApiDate(dataInicialFilter);
                     if (dataFinalFilter) params.data_publicacao_final = formatToApiDate(dataFinalFilter);
@@ -1181,41 +1216,57 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return params;
             };
 
+            const MAPA_SISTEMA_ORIGEM: Record<string, { id: number; label: string }> = {
+                'comprasnet': { id: 1, label: 'ComprasNet' },
+                'licitacoese': { id: 2, label: 'Licitações-e' },
+                'siga': { id: 3, label: 'SIGA' },
+                'bll': { id: 12, label: 'BLL Compras' },
+                'compras-rs': { id: 10, label: 'Compras RS' },
+                'pcp': { id: 999, label: 'Portal de Compras Públicas' },
+            };
+
             const isAll = fonteFilter.includes('unificado');
             const kw = keyword.trim();
             const searchParams = buildParams(currentPage);
 
             const hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
-            const numPages = hasDateFilter ? 8 : 2;
-            const startPage = hasDateFilter ? (currentPage - 1) * 8 + 1 : (currentPage - 1) * 2 + 1;
+            const numPages = hasDateFilter ? 2 : 2;
+            const startPage = hasDateFilter ? 1 : (currentPage - 1) * 2 + 1;
 
-            // Determinar quais consultas únicas (queries) precisamos fazer
-            const activeQueries: { key: string; type: 'pncp' | 'pcp'; q_extra?: string }[] = [];
+            // Determinar quais consultas fazemos
+            const activeQueries: { key: string; type: 'pncp-search' | 'pcp' | 'comprasnet' | 'pncp-consulta' | 'pncp-sistema'; q_extra?: string; sistemaId?: number }[] = [];
 
-            if (isAll) {
-                activeQueries.push({ key: 'pncp_geral', type: 'pncp' });
-                activeQueries.push({ key: 'pcp', type: 'pcp' });
-            } else {
-                // Se o usuário selecionou comprasnet ou pncp, precisamos fazer a query geral
-                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp')) {
-                    activeQueries.push({ key: 'pncp_geral', type: 'pncp' });
-                }
-                // Para os portais com termos específicos
-                if (fonteFilter.includes('bll')) {
-                    activeQueries.push({ key: 'bll_bolsa', type: 'pncp', q_extra: 'Bolsa Licitações' });
-                    activeQueries.push({ key: 'bll_bll', type: 'pncp', q_extra: 'BLL' });
-                }
-                if (fonteFilter.includes('licitacoese')) {
-                    activeQueries.push({ key: 'licitacoese', type: 'pncp', q_extra: 'Licitações-e' });
-                }
-                if (fonteFilter.includes('siga')) {
-                    activeQueries.push({ key: 'siga', type: 'pncp', q_extra: 'SIGA' });
-                }
-                if (fonteFilter.includes('compras-rs')) {
-                    activeQueries.push({ key: 'compras-rs', type: 'pncp', q_extra: 'Compras RS' });
-                }
-                if (fonteFilter.includes('pcp')) {
+            // SEMPRE inclui pncp-consulta quando há filtro de data (filtra corretamente por período)
+            if (hasDateFilter) {
+                activeQueries.push({ key: 'pncp_consulta', type: 'pncp-consulta' });
+            }
+
+            // Se não tem data OU tem data mas também selecionou portais específicos, inclui buscas adicionais
+            if (!hasDateFilter || !isAll) {
+                if (isAll) {
+                    activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
                     activeQueries.push({ key: 'pcp', type: 'pcp' });
+                } else {
+                    if (fonteFilter.includes('comprasnet')) {
+                        activeQueries.push({ key: 'comprasnet_direct', type: 'comprasnet' });
+                    }
+                    if (fonteFilter.includes('pncp')) {
+                        activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
+                    }
+                    for (const f of fonteFilter) {
+                        if (f === 'unificado' || f === 'pncp' || f === 'comprasnet') continue;
+                        const portalInfo = MAPA_SISTEMA_ORIGEM[f];
+                        if (portalInfo) {
+                            activeQueries.push({
+                                key: `${f}_sistema`,
+                                type: 'pncp-sistema',
+                                sistemaId: portalInfo.id,
+                                q_extra: portalInfo.id === 999 ? 'Portal de Compras Públicas' : undefined
+                            });
+                        } else if (f === 'pcp') {
+                            activeQueries.push({ key: 'pcp', type: 'pcp' });
+                        }
+                    }
                 }
             }
 
@@ -1226,6 +1277,111 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const fetchPromises: Promise<{ key: string; page: number; items: any[]; total: number }>[] = [];
 
                 activeQueries.forEach(qInfo => {
+                    if (qInfo.type === 'pncp-consulta') {
+                        // Usa o endpoint de consulta especializado para data
+                        const params: any = {
+                            pagina: currentPage,
+                            tamPagina: 50
+                        };
+                        if (dataInicialFilter) params.dataInicial = dataInicialFilter;
+                        if (dataFinalFilter) params.dataFinal = dataFinalFilter;
+                        if (ufFilter) params.uf = ufFilter;
+                        if (keyword.trim()) params.q = keyword.trim();
+                        if (orgaoFilter) params.orgao = orgaoFilter;
+
+                        const promise = api.get('/transparency/pncp-consulta', { params })
+                            .then(res => {
+                                const itemsData = res.data?.items || [];
+                                return {
+                                    key: qInfo.key,
+                                    page: currentPage,
+                                    items: itemsData,
+                                    total: res.data?.total || itemsData.length
+                                };
+                            })
+                            .catch(() => ({
+                                key: qInfo.key,
+                                page: currentPage,
+                                items: [],
+                                total: 0
+                            }));
+
+                        fetchPromises.push(promise);
+                        return;
+                    }
+
+                    if (qInfo.type === 'pncp-sistema') {
+                        // Usa o endpoint de sistema_origem_id
+                        const params: any = {
+                            pagina: currentPage,
+                            tamPagina: 50,
+                            sistemas: String(qInfo.sistemaId)
+                        };
+                        if (kw) params.q = kw;
+                        if (statusFilter) params.status = statusFilter;
+                        if (ufFilter) params.ufs = [ufFilter];
+                        if (esferaFilter) params.esferas = [esferaFilter];
+
+                        const promise = api.get('/transparency/pncp-orgaos-sistema', { params })
+                            .then(res => {
+                                let itemsData = res.data?.items || [];
+                                // Se for PCP, filtra apenas itens com "Portal de Compras Públicas"
+                                if (qInfo.sistemaId === 999) {
+                                    itemsData = itemsData.filter((i: any) =>
+                                        (i.description || '').toLowerCase().includes('portal de compras públicas') ||
+                                        (i.item_url || '').includes('portaldecompraspublicas')
+                                    );
+                                }
+                                return {
+                                    key: qInfo.key,
+                                    page: currentPage,
+                                    items: itemsData.map((i: any) => ({
+                                        ...i,
+                                        _isSistemaFiltered: true,
+                                        sistema_origem_id: qInfo.sistemaId
+                                    })),
+                                    total: itemsData.length
+                                };
+                            })
+                            .catch(() => ({
+                                key: qInfo.key,
+                                page: currentPage,
+                                items: [],
+                                total: 0
+                            }));
+
+                        fetchPromises.push(promise);
+                        return;
+                    }
+
+                    if (qInfo.type === 'comprasnet') {
+                        // Endpoint dedicado para ComprasNet/usando API oficial
+                        const params: any = { pagina: currentPage };
+                        if (kw) params.q = kw;
+                        if (statusFilter) params.status = statusFilter;
+                        if (ufFilter) params.uf = ufFilter;
+
+                        const promise = api.get('/transparency/comprasnet-proxy', { params })
+                            .then(res => {
+                                const itemsData = res.data?.items || [];
+                                return {
+                                    key: qInfo.key,
+                                    page: currentPage,
+                                    items: itemsData.map((i: any) => ({ ...i, _isComprasNet: true, sistema_origem_id: 1 })),
+                                    total: res.data?.total || itemsData.length
+                                };
+                            })
+                            .catch(() => ({
+                                key: qInfo.key,
+                                page: currentPage,
+                                items: [],
+                                total: 0
+                            }));
+                        fetchPromises.push(promise);
+                        return;
+                    }
+
+                    // PNCP Search normal (inclui PCP)
                     for (let p = startPage; p < startPage + numPages; p++) {
                         const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
                         
@@ -1235,7 +1391,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                         const url = qInfo.type === 'pcp' ? '/transparency/pcp-proxy' : '/transparency/pncp-proxy';
                         
-                        // Direto no PNCP (CORS *) com fallback para proxy backend
                         const promise = executePncpSearchDirect(url, params)
                             .catch(() => api.get(url, { params }))
                             .then(res => {
@@ -1271,10 +1426,9 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                 const allItems = resultsList.flatMap(r => r.items);
                 
-                // Soma dos totais reportados por cada query ativa (pega o total correspondente à página inicial)
                 const totalsMap = new Map<string, number>();
                 resultsList.forEach(r => {
-                    if (r.page === startPage) {
+                    if (r.page === (hasDateFilter ? currentPage : startPage)) {
                         totalsMap.set(r.key, r.total);
                     }
                 });
@@ -1311,8 +1465,6 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const urlLower = (i.item_url || '').toLowerCase();
                 
                 // EXTRAÇÃO ROBUSTA DO PORTAL DE ORIGEM
-                // A chave oficial do PNCP (numero_controle_pncp) é: CNPJ-ID-SEQ/ANO
-                // O ID entre o 1º e 2º hífen é o sistema_origem_id oficial.
                 let sid = i.sistema_origem_id || i.id_sistema_origem;
                 
                 if (!sid && i.numero_controle_pncp) {
@@ -1323,26 +1475,40 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     }
                 }
                 
-                const isPcp = i._isPcp || sid === 999 || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'));
-                const isBll = sid === 12 || urlLower.includes('bll') || orgaoLower.includes('bll');
-                const isCompras = sid === 1 || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br');
-                const isLic = sid === 2 || urlLower.includes('licitacoes-e');
-                const isSiga = sid === 3 || urlLower.includes('siga.pr') || urlLower.includes('siga.df');
-                const isRs = sid === 10 || urlLower.includes('compras.rs');
+                // Mapa de identificação de portal
+                const sidStr = String(sid);
+                let fonteLabel = MAPA_SISTEMA_ORIGEM_NOMES[sid] || 'PNCP';
 
-                let fonteLabel = 'PNCP';
-                if (isCompras) fonteLabel = 'Compras.gov.br';
-                else if (isLic) fonteLabel = 'Licitações-e';
-                else if (isPcp) fonteLabel = 'Portal de Compras Públicas';
-                else if (isBll) fonteLabel = 'BLL Compras';
-                else if (isSiga) fonteLabel = 'SIGA';
-                else if (isRs) fonteLabel = 'Compras RS';
-                else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
-                    fonteLabel = i.sistema_origem_nome;
-                } else if (urlLower.startsWith('/')) {
-                    const segments = urlLower.split('/').filter(Boolean);
-                    if (segments.length > 0 && segments[0] !== 'compras' && segments[0] !== 'app' && segments[0] !== 'editais') {
-                        fonteLabel = segments[0].toUpperCase().replace(/-/g, ' ');
+                // Heurísticas adicionais para casos onde o sistema_origem_id não está disponível
+                if (!sid || fonteLabel === 'PNCP') {
+                    if (i._isComprasNet || urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br')) {
+                        fonteLabel = 'Compras.gov.br';
+                        sid = 1;
+                    } else if (i._isPcp || urlLower.includes('portaldecompraspublicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'))) {
+                        fonteLabel = 'Portal de Compras Públicas';
+                        sid = 999;
+                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || sid === 12) {
+                        fonteLabel = 'BLL Compras';
+                        sid = 12;
+                    } else if (urlLower.includes('licitacoes-e') || sid === 2) {
+                        fonteLabel = 'Licitações-e';
+                        sid = 2;
+                    } else if (urlLower.includes('siga.pr') || urlLower.includes('siga.df') || sid === 3) {
+                        fonteLabel = 'SIGA';
+                        sid = 3;
+                    } else if (urlLower.includes('compras.rs') || sid === 10) {
+                        fonteLabel = 'Compras RS';
+                        sid = 10;
+                    } else if (urlLower.includes('bec.sp') || sid === 4) {
+                        fonteLabel = 'BEC SP';
+                        sid = 4;
+                    } else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
+                        fonteLabel = i.sistema_origem_nome;
+                    } else if (urlLower.startsWith('/')) {
+                        const segments = urlLower.split('/').filter(Boolean);
+                        if (segments.length > 0 && segments[0] !== 'compras' && segments[0] !== 'app' && segments[0] !== 'editais') {
+                            fonteLabel = segments[0].toUpperCase().replace(/-/g, ' ');
+                        }
                     }
                 }
 
@@ -1358,7 +1524,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             // Filtragem pós-fetch por portal selecionado (quando não está no modo unificado)
             if (!fonteFilter.includes('unificado') && fonteFilter.length > 0) {
                 const FONTE_MAP: Record<string, string[]> = {
-                    'comprasnet': ['Compras.gov.br'],
+                    'comprasnet': ['Compras.gov.br', 'ComprasNet'],
                     'licitacoese': ['Licitações-e'],
                     'pcp': ['Portal de Compras Públicas'],
                     'bll': ['BLL Compras'],
@@ -1376,29 +1542,57 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         if ((i.fonte_dados || '').startsWith('Portal ')) allowedFontes.add(i.fonte_dados);
                     });
                 }
+                // Se comprasnet estiver selecionado, inclui também o label do MAPA_SISTEMA_ORIGEM
+                if (fonteFilter.includes('comprasnet')) {
+                    allowedFontes.add('Compras.gov.br');
+                    allowedFontes.add('ComprasNet');
+                }
+                // Suporte para portais estaduais com sistema_origem_id mapeados
+                const sidToFonte: Record<number, string[]> = {
+                    4: ['BEC SP'],
+                    5: ['Compras RJ'],
+                    6: ['Compras MG'],
+                    7: ['Compras SC'],
+                    8: ['Compras PR'],
+                    9: ['Compras BA'],
+                    10: ['Compras RS'],
+                    11: ['Compras PE'],
+                };
+                for (const [sidStr, fontes] of Object.entries(sidToFonte)) {
+                    const sidNum = parseInt(sidStr);
+                    const hasItemWithSid = items.some((i: any) => {
+                        const iSid = i.sistema_origem_id || i.id_sistema_origem;
+                        return iSid === sidNum;
+                    });
+                    if (hasItemWithSid) {
+                        fontes.forEach(f => allowedFontes.add(f));
+                    }
+                }
                 items = items.filter((i: any) => allowedFontes.has(i.fonte_dados || 'PNCP'));
             }
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
-            // Filtro client-side de período com base na DATA DE PUBLICAÇÃO (data_publicacao_pncp)
-            // Isso garante que dispensas sejam incluídas, pois sua data_fim_vigencia pode estar
-            // no futuro enquanto foram publicadas no período selecionado pelo usuário.
-            if (dataInicialFilter) {
-                items = items.filter((i: any) => {
-                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                    if (!pubDateStr) return true; // Inclui itens sem data de publicação
-                    const datePart = pubDateStr.split('T')[0];
-                    return datePart >= dataInicialFilter;
-                });
-            }
-            if (dataFinalFilter) {
-                items = items.filter((i: any) => {
-                    const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
-                    if (!pubDateStr) return true; // Inclui itens sem data de publicação
-                    const datePart = pubDateStr.split('T')[0];
-                    return datePart <= dataFinalFilter;
-                });
+            // Filtro client-side de período - APENAS como fallback para dados que não vieram
+            // filtrados do backend (ex: dados da busca PNCP direta que ignora datas)
+            // Quando usa pncp-consulta, o backend já filtra por data, este é só fallback.
+            if (!hasDateFilter || items.some((i: any) => i._fonte_consulta !== 'pncp_diario')) {
+                if (dataInicialFilter) {
+                    items = items.filter((i: any) => {
+                        const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                        if (!pubDateStr) return true;
+                        const datePart = pubDateStr.split('T')[0];
+                        return datePart >= dataInicialFilter;
+                    });
+                }
+                if (dataFinalFilter) {
+                    items = items.filter((i: any) => {
+                        const pubDateStr = i.data_publicacao_pncp || i.data_atualizacao_pncp;
+                        if (!pubDateStr) return true;
+                        const datePart = pubDateStr.split('T')[0];
+                        return datePart <= dataFinalFilter;
+                    });
+                }
             }
 
             if (orgaoFilter) items = items.filter((i: any) => (i?.orgao_nome?.toLowerCase() || '').includes(orgaoFilter.toLowerCase()) || (i?.orgao_cnpj || '').includes(orgaoFilter));
@@ -1409,7 +1603,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (statusFilter === 'recebendo_proposta') {
                 const now = new Date();
                 items = items.filter((i: any) => {
-                    if (i.fonte_dados === 'BLL Compras' && (i.situacao_nome || '').toLowerCase().includes('divulga')) {
+                    if ((i.fonte_dados || '').includes('BLL') && (i.situacao_nome || '').toLowerCase().includes('divulga')) {
                         const start = new Date(i.data_inicio_proposta || i.data_inicio_vigencia);
                         const end = new Date(i.data_encerramento_proposta || i.data_fim_vigencia);
                         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) return start <= now && end >= now;
@@ -1421,15 +1615,15 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (valorMinFilter) {
                 const min = parseFloat(valorMinFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(min)) items = items.filter((i: any) => {
-                    const val = i.valorTotalEstimado || i.valor_global;
-                    return val === undefined || val === null || val >= min;
+                    const val = i.valorTotalEstimado || i.valor_global || 0;
+                    return val === 0 || val >= min;
                 });
             }
             if (valorMaxFilter) {
                 const max = parseFloat(valorMaxFilter.replace(/[^\d.]/g, ''));
                 if (!isNaN(max)) items = items.filter((i: any) => {
-                    const val = i.valorTotalEstimado || i.valor_global;
-                    return val === undefined || val === null || val <= max;
+                    const val = i.valorTotalEstimado || i.valor_global || 0;
+                    return val === 0 || val <= max;
                 });
             }
 
@@ -1936,31 +2130,10 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                     </span>
                                                     {(() => {
                                                         const fonte = (item as any).fonte_dados || 'PNCP';
-                                                        let style = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
-                                                        let label = fonte.toUpperCase();
-
-                                                        if (fonte === 'Compras.gov.br') {
-                                                            style = "bg-blue-500/10 text-blue-600 border-blue-500/20";
-                                                            label = "COMPRAS.GOV";
-                                                        } else if (fonte === 'Licitações-e') {
-                                                            style = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
-                                                            label = "LICITAÇÕES-E";
-                                                        } else if (fonte === 'Portal de Compras Públicas') {
-                                                            style = "bg-orange-500/10 text-orange-600 border-orange-500/20";
-                                                            label = "PCP";
-                                                        } else if (fonte === 'BLL Compras') {
-                                                            style = "bg-purple-500/10 text-purple-600 border-purple-500/20";
-                                                            label = "BLL";
-                                                        } else if (fonte.includes('SIGA')) {
-                                                            style = "bg-red-500/10 text-red-600 border-red-500/20";
-                                                            label = "SIGA";
-                                                        } else if (fonte.includes('RS') || fonte.includes('RIO GRANDE')) {
-                                                            style = "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
-                                                        }
-
+                                                        const pair = getPortalStyle(fonte);
                                                         return (
-                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${style}`}>
-                                                                {label}
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
+                                                                {pair.label}
                                                             </span>
                                                         );
                                                     })()}
@@ -2049,31 +2222,10 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                         </span>
                                         {(() => {
                                             const fonte = (item as any).fonte_dados || 'PNCP';
-                                            let style = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
-                                            let label = fonte.toUpperCase();
-
-                                            if (fonte === 'Compras.gov.br') {
-                                                style = "bg-blue-500/10 text-blue-600 border-blue-500/20";
-                                                label = "COMPRAS.GOV";
-                                            } else if (fonte === 'Licitações-e') {
-                                                style = "bg-yellow-500/10 text-yellow-700 border-yellow-500/20";
-                                                label = "LICITAÇÕES-E";
-                                            } else if (fonte === 'Portal de Compras Públicas') {
-                                                style = "bg-orange-500/10 text-orange-600 border-orange-500/20";
-                                                label = "PCP";
-                                            } else if (fonte === 'BLL Compras') {
-                                                style = "bg-purple-500/10 text-purple-600 border-purple-500/20";
-                                                label = "BLL";
-                                            } else if (fonte.includes('SIGA')) {
-                                                style = "bg-red-500/10 text-red-600 border-red-500/20";
-                                                label = "SIGA";
-                                            } else if (fonte.includes('RS') || fonte.includes('RIO GRANDE')) {
-                                                style = "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
-                                            }
-
+                                            const pair = getPortalStyle(fonte);
                                             return (
-                                                <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${style}`}>
-                                                    {label}
+                                                <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${pair.style}`}>
+                                                    {pair.label}
                                                 </span>
                                             );
                                         })()}

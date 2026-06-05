@@ -7,23 +7,6 @@
         console.log("%c[POLARYON] Escuta-Geral Ativado! 🛰️", "color: #00ff00; font-weight: bold;");
     });
 
-    // 🔬 TESTE DE IPC: verifica se ipcRenderer.send e invoke chegam no main process
-    try {
-        ipcRenderer.send('ws-ping', { test: true, timestamp: Date.now() });
-        console.log('%c[IPC TEST] ✅ ws-ping enviado (send)!', 'color:#a855f7;font-weight:bold;');
-    } catch (err) {
-        console.error('%c[IPC TEST] ❌ Falha ws-ping send:', 'color:#ef4444;font-weight:bold;', err);
-    }
-    try {
-        ipcRenderer.invoke('ws-item-data-invoke', { codigo: 'test', items: [] }).then(function(r) {
-            console.log('%c[IPC TEST] ✅ ws-item-data-invoke funcionou!', 'color:#a855f7;font-weight:bold;');
-        }).catch(function(err) {
-            console.warn('%c[IPC TEST] ⚠️ ws-item-data-invoke falhou: ' + err.message, 'color:#f59e0b;font-size:10px;');
-        });
-    } catch (err) {
-        console.error('%c[IPC TEST] ❌ Falha ws-item-data-invoke:', 'color:#ef4444;font-weight:bold;', err);
-    }
-
     // 📊 Coleta de latência para exibição no console
     const _latencySamples = [];
     const _maxLatencySamples = 500;
@@ -1294,35 +1277,6 @@
                 }
             })();
 
-            // 🔬 TEST MANUAL: Simula dados WebSocket para testar pipeline sem esperar disputa
-            // Uso no console: __polaryonTestWS('38947606000092026', [{identificador:1, situacaoParticipanteDisputa:'G', melhorValorGeral:{valorCalculado:500}, melhorValorFornecedor:{valorCalculado:529}, segundosParaEncerramento:600, dataHoraFimContagem:new Date(Date.now()+600000).toISOString(), fase:'LA', variacaoMinimaEntreLances:1}])
-            window.__polaryonTestWS = function(codigo, items) {
-                console.log('%c[WS TEST] 🧪 Injetando dados WS falsos para compra ' + codigo + ' (' + items.length + ' itens)', 'color:#ff9800;font-weight:bold');
-                window.postMessage({
-                    source: 'polaryon-injector',
-                    type: 'ws-item-update',
-                    codigo: codigo,
-                    data: items,
-                    timestamp: Date.now()
-                }, '*');
-            };
-            // 🔘 Botão flutuante para testar WS pipeline sem console
-            (function() {
-                var btn = document.createElement('div');
-                btn.id = 'polaryon-ws-test-btn';
-                btn.textContent = '🧪 WS';
-                btn.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:99999;background:#f59e0b;color:#000;padding:6px 12px;border-radius:6px;font:bold 12px sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:.7;transition:opacity .2s';
-                btn.onmouseenter = function(){btn.style.opacity='1'};
-                btn.onmouseleave = function(){btn.style.opacity='.7'};
-                btn.onclick = function() {
-                    var purchases = Object.keys(window.__polaryonSalas || {});
-                    var codigo = purchases.length > 0 ? purchases[0] : '38947606000092026';
-                    var testItem = {identificador:1, situacaoParticipanteDisputa:'G', melhorValorGeral:{valorCalculado:449}, melhorValorFornecedor:{valorCalculado:529}, segundosParaEncerramento:600, dataHoraFimContagem:new Date(Date.now()+600000).toISOString(), fase:'LA', variacaoMinimaEntreLances:1};
-                    console.log('%c[WS TEST BTN] 🧪 Testando WS com compra ' + codigo, 'color:#f59e0b;font-weight:bold');
-                    window.__polaryonTestWS(codigo, [testItem]);
-                };
-                setTimeout(function() { document.body.appendChild(btn); }, 3000);
-            })();
             
             function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
                 // 🎯 Extrai dataHoraFimContagem para o timer contínuo
