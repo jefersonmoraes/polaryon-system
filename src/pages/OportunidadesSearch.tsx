@@ -1405,78 +1405,54 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 const titleLower = (i.title || '').toLowerCase();
                 const orgaoLower = (i.orgao_nome || '').toLowerCase();
                 const urlLower = (i.item_url || '').toLowerCase();
+                const searchText = `${titleLower} ${descLower} ${orgaoLower}`;
                 
-                // EXTRAÇÃO ROBUSTA DO PORTAL DE ORIGEM
+                // Portal identification:
+                // 1. Direct field from API (always empty in search API, but keep for future)
+                // 2. URL/text heuristics
+                // 3. UF/orgão fallback
+                // NOTE: numero_controle_pncp format is CNPJ-{SEQ}-NUM/ANO - the second 
+                // part is NOT sistema_origem_id, so we don't extract from it.
                 let sid = i.sistema_origem_id || i.id_sistema_origem;
                 
-                if (!sid && i.numero_controle_pncp) {
-                    const parts = i.numero_controle_pncp.split('-');
-                    if (parts.length >= 2) {
-                        const extractedId = parseInt(parts[1]);
-                        if (!isNaN(extractedId)) sid = extractedId;
-                    }
-                }
+                let fonteLabel = (sid && MAPA_SISTEMA_ORIGEM_NOMES[sid]) || null;
                 
-                // Mapa de identificação de portal
-                const sidStr = String(sid);
-                let fonteLabel = MAPA_SISTEMA_ORIGEM_NOMES[sid] || 'PNCP';
-
-                // Heurísticas adicionais para identificar o portal de origem
-                const searchText = `${titleLower} ${descLower} ${orgaoLower}`;
-                if (!sid || fonteLabel === 'PNCP') {
+                if (!fonteLabel) {
                     if (urlLower.includes('comprasnet') || urlLower.includes('compras.gov.br') || searchText.includes('comprasnet')) {
                         fonteLabel = 'Compras.gov.br';
-                        sid = 1;
                     } else if (urlLower.includes('portaldecompraspublicas') || searchText.includes('portal de compras públicas') || searchText.includes('compras publicas') || (i.sistema_origem_nome && i.sistema_origem_nome.toLowerCase().includes('compras públicas'))) {
                         fonteLabel = 'Portal de Compras Públicas';
-                        sid = 999;
-                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || searchText.includes('bll compras') || sid === 12) {
+                    } else if (urlLower.includes('bll') || orgaoLower.includes('bll') || searchText.includes('bll compras')) {
                         fonteLabel = 'BLL Compras';
-                        sid = 12;
-                    } else if (urlLower.includes('licitacoes-e') || sid === 2) {
+                    } else if (urlLower.includes('licitacoes-e')) {
                         fonteLabel = 'Licitações-e';
-                        sid = 2;
-                    } else if (urlLower.includes('siga.pr') || urlLower.includes('siga.df') || sid === 3) {
+                    } else if (urlLower.includes('siga.pr') || urlLower.includes('siga.df')) {
                         fonteLabel = 'SIGA';
-                        sid = 3;
-                    } else if (urlLower.includes('compras.rs') || sid === 10) {
+                    } else if (urlLower.includes('compras.rs')) {
                         fonteLabel = 'Compras RS';
-                        sid = 10;
-                    } else if (urlLower.includes('bec.sp') || sid === 4) {
+                    } else if (urlLower.includes('bec.sp')) {
                         fonteLabel = 'BEC SP';
-                        sid = 4;
-                    } else if (urlLower.includes('compras.rj') || sid === 5) {
+                    } else if (urlLower.includes('compras.rj')) {
                         fonteLabel = 'Compras RJ';
-                        sid = 5;
-                    } else if (urlLower.includes('compras.mg') || sid === 6) {
+                    } else if (urlLower.includes('compras.mg')) {
                         fonteLabel = 'Compras MG';
-                        sid = 6;
-                    } else if (urlLower.includes('compras.sc') || sid === 7) {
+                    } else if (urlLower.includes('compras.sc')) {
                         fonteLabel = 'Compras SC';
-                        sid = 7;
-                    } else if (urlLower.includes('comprasweb.pr') || urlLower.includes('compras.pr') || sid === 8) {
+                    } else if (urlLower.includes('comprasweb.pr') || urlLower.includes('compras.pr')) {
                         fonteLabel = 'Compras PR';
-                        sid = 8;
-                    } else if (urlLower.includes('compras.ba') || sid === 9) {
+                    } else if (urlLower.includes('compras.ba')) {
                         fonteLabel = 'Compras BA';
-                        sid = 9;
-                    } else if (urlLower.includes('compras.pe') || sid === 11) {
+                    } else if (urlLower.includes('compras.pe')) {
                         fonteLabel = 'Compras PE';
-                        sid = 11;
                     } else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
                         fonteLabel = i.sistema_origem_nome;
-                    } else if (urlLower.startsWith('/')) {
-                        const segments = urlLower.split('/').filter(Boolean);
-                        if (segments.length > 0 && segments[0] !== 'compras' && segments[0] !== 'app' && segments[0] !== 'editais') {
-                            fonteLabel = segments[0].toUpperCase().replace(/-/g, ' ');
-                        }
+                    } else if (orgaoLower.includes('prefeitura')) {
+                        fonteLabel = 'Portal Municipal';
+                    } else if (i.uf && i.uf !== 'BR') {
+                        fonteLabel = `Portal ${i.uf}`;
+                    } else {
+                        fonteLabel = 'PNCP';
                     }
-                }
-
-                // Fallback para Órgãos Estaduais/Municipais específicos se a fonte for genérica
-                if (fonteLabel === 'PNCP') {
-                    if (orgaoLower.includes('prefeitura')) fonteLabel = 'Portal Municipal';
-                    else if (i.uf && i.uf !== 'BR') fonteLabel = `Portal ${i.uf}`;
                 }
 
                 return { ...i, fonte_dados: fonteLabel };
