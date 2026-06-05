@@ -485,25 +485,82 @@ const formatCurrency = (val?: number) => {
 const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = {};
 
 // Gerenciador de Fila para Requisições PNCP (Throttling) para evitar bloqueios por concorrência
-const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void }[] = [];
+const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void; retries?: number }[] = [];
 let activePncpRequests = 0;
 const MAX_CONCURRENT_PNCP = 15;
+const MAX_RETRIES_PER_ITEM = 3;
 
 async function processPncpQueue() {
     if (activePncpRequests >= MAX_CONCURRENT_PNCP || pncpRequestQueue.length === 0) return;
 
     activePncpRequests++;
-    const { cacheKey, item, resolve, reject } = pncpRequestQueue.shift()!;
+    const { cacheKey, item, resolve: origResolve, reject: origReject, retries = 0 } = pncpRequestQueue.shift()!;
 
-    try {
-        const parts = item.numero_controle_pncp?.split('-');
-        const orgaoCnpj = item.orgao_cnpj || parts?.[0];
-        const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
-        const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const tryFetch = async (): Promise<boolean> => {
+        try {
+            const parts = item.numero_controle_pncp?.split('-');
+            const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+            const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+            const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
 
-        if (!orgaoCnpj || !ano || !seq) {
-            throw new Error("Missing keys for PNCP detail");
+            if (!orgaoCnpj || !ano || !seq) {
+                throw new Error("Missing keys for PNCP detail");
+            }
+
+            let res;
+            try {
+                res = await fetchPncpDetailDirect(orgaoCnpj, ano, seq);
+            } catch (directErr) {
+                console.warn('[PNCP Direct] Falhou, tentando proxy backend:', directErr);
+                res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
+            }
+            const detail = res.data;
+
+            const result = {
+                start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
+                end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
+                valor: detail.valorTotalEstimado || detail.valor_global,
+                itemCount: detail.itemCount,
+                hasMeEppBenefit: detail.hasMeEppBenefit,
+                minItemValue: detail.minItemValue,
+                maxItemValue: detail.maxItemValue,
+                itens: detail.items || [],
+                usuarioNome: detail.usuarioNome || null,
+                raw: detail
+            };
+
+            if (pncpDetailCache[cacheKey]) pncpDetailCache[cacheKey].data = result;
+            window.dispatchEvent(new CustomEvent('pncp-cache-updated', { detail: { cacheKey } }));
+            origResolve(result);
+            return true;
+        } catch (e: any) {
+            if (e.response?.status === 404) {
+                origResolve(null);
+                return true;
+            }
+            console.warn(`[PNCP Worker] Failed for ${cacheKey} (tentativa ${retries+1}/${MAX_RETRIES_PER_ITEM}):`, e.message);
+            if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
+            if (retries < MAX_RETRIES_PER_ITEM) {
+                pncpRequestQueue.push({ cacheKey, item, resolve: origResolve, reject: origReject, retries: retries + 1 });
+            } else {
+                origReject(e);
+                return true;
+            }
+            return false;
         }
+    };
+
+    const done = await tryFetch();
+    if (!done) {
+        // Retry enqueued, trigger next item
+        activePncpRequests--;
+        setTimeout(processPncpQueue, 20);
+        return;
+    }
+
+    // If this item succeeded or exhausted, clean up and process next
+    activePncpRequests--;
+    setTimeout(processPncpQueue, 20);
 
         // CHAMADAS DIRETAS AO PNCP: A API do governo retorna CORS *, funciona em qualquer browser
         // Fallback para o proxy do backend apenas se a chamada direta falhar
@@ -539,9 +596,22 @@ async function processPncpQueue() {
         if (e.response?.status === 404) {
             resolve(null);
         } else {
-            console.warn(`[PNCP Worker] Failed for ${cacheKey}:`, e.message);
-            if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
-            reject(e);
+            const retries = (pncpRequestQueue.length > 0 && pncpRequestQueue[0].retries || 0);
+            // Re-enfileira com retry até MAX_RETRIES_PER_ITEM
+            if (retries < MAX_RETRIES_PER_ITEM) {
+                console.warn(`[PNCP Worker] Failed for ${cacheKey} (tentativa ${retries+1}/${MAX_RETRIES_PER_ITEM}), re-enfileirando:`, e.message);
+                const { resolve: origResolve, reject: origReject } = (pncpRequestQueue.length > 0) ? pncpRequestQueue[0] : { resolve: () => {}, reject: () => {} };
+                // Reconstrói a promise original, push de volta com retry incrementado
+                const requeueResolve = (data: any) => { origResolve(data); };
+                const requeueReject = (err: any) => { origReject(err); };
+                pncpRequestQueue.push({ cacheKey, item, resolve: requeueResolve, reject: requeueReject, retries: retries + 1 });
+                // Limpa promise do cache para permitir novo fetch
+                if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
+            } else {
+                console.warn(`[PNCP Worker] Failed for ${cacheKey} após ${MAX_RETRIES_PER_ITEM} tentativas, desistindo:`, e.message);
+                if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
+                reject(e);
+            }
         }
     } finally {
         activePncpRequests--;
