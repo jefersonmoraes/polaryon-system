@@ -561,62 +561,6 @@ async function processPncpQueue() {
     // If this item succeeded or exhausted, clean up and process next
     activePncpRequests--;
     setTimeout(processPncpQueue, 20);
-
-        // CHAMADAS DIRETAS AO PNCP: A API do governo retorna CORS *, funciona em qualquer browser
-        // Fallback para o proxy do backend apenas se a chamada direta falhar
-        let res;
-        try {
-            res = await fetchPncpDetailDirect(orgaoCnpj, ano, seq);
-        } catch (directErr) {
-            console.warn('[PNCP Direct] Falhou, tentando proxy backend:', directErr);
-            res = await api.get(`/transparency/pncp-detail/${orgaoCnpj}/${ano}/${seq}`);
-        }
-        const detail = res.data;
-
-        const result = {
-            start: detail.dataRecebimentoProposta || detail.dataAberturaProposta || detail.dataHoraRegistroOcorrencia,
-            end: detail.dataFimRecebimentoProposta || detail.dataEncerramentoProposta,
-            valor: detail.valorTotalEstimado || detail.valor_global,
-            itemCount: detail.itemCount,
-            hasMeEppBenefit: detail.hasMeEppBenefit,
-            minItemValue: detail.minItemValue,
-            maxItemValue: detail.maxItemValue,
-            itens: detail.items || [], // Adicionado
-            usuarioNome: detail.usuarioNome || null, // Nome do portal de origem
-            raw: detail
-        };
-        
-        if (pncpDetailCache[cacheKey]) pncpDetailCache[cacheKey].data = result;
-        
-        // DISPARA EVENTO GLOBAL PARA ATUALIZAR TODOS OS COMPONENTES QUE USAM ESTE CACHEKEY
-        window.dispatchEvent(new CustomEvent('pncp-cache-updated', { detail: { cacheKey } }));
-        
-        resolve(result);
-    } catch (e: any) {
-        if (e.response?.status === 404) {
-            resolve(null);
-        } else {
-            const retries = (pncpRequestQueue.length > 0 && pncpRequestQueue[0].retries || 0);
-            // Re-enfileira com retry até MAX_RETRIES_PER_ITEM
-            if (retries < MAX_RETRIES_PER_ITEM) {
-                console.warn(`[PNCP Worker] Failed for ${cacheKey} (tentativa ${retries+1}/${MAX_RETRIES_PER_ITEM}), re-enfileirando:`, e.message);
-                const { resolve: origResolve, reject: origReject } = (pncpRequestQueue.length > 0) ? pncpRequestQueue[0] : { resolve: () => {}, reject: () => {} };
-                // Reconstrói a promise original, push de volta com retry incrementado
-                const requeueResolve = (data: any) => { origResolve(data); };
-                const requeueReject = (err: any) => { origReject(err); };
-                pncpRequestQueue.push({ cacheKey, item, resolve: requeueResolve, reject: requeueReject, retries: retries + 1 });
-                // Limpa promise do cache para permitir novo fetch
-                if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
-            } else {
-                console.warn(`[PNCP Worker] Failed for ${cacheKey} após ${MAX_RETRIES_PER_ITEM} tentativas, desistindo:`, e.message);
-                if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
-                reject(e);
-            }
-        }
-    } finally {
-        activePncpRequests--;
-        setTimeout(processPncpQueue, 20);
-    }
 }
 
 function queuePncpFetch(item: PncpItem): Promise<any> {
