@@ -487,7 +487,7 @@ const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = 
 // Gerenciador de Fila para Requisições PNCP (Throttling) para evitar bloqueios por concorrência
 const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void }[] = [];
 let activePncpRequests = 0;
-const MAX_CONCURRENT_PNCP = 5;
+const MAX_CONCURRENT_PNCP = 15;
 
 async function processPncpQueue() {
     if (activePncpRequests >= MAX_CONCURRENT_PNCP || pncpRequestQueue.length === 0) return;
@@ -545,7 +545,7 @@ async function processPncpQueue() {
         }
     } finally {
         activePncpRequests--;
-        setTimeout(processPncpQueue, 100);
+        setTimeout(processPncpQueue, 20);
     }
 }
 
@@ -581,6 +581,15 @@ const MAPA_USUARIO_PORTAL: Record<string, string> = {
     's3 consultoria e sistemas ltda': 'S3',
     'rede geral serviços': 'Rede Geral',
     'br conectado': 'BR Conectado',
+    'licitações-e bb': 'Licitações-e',
+    'licitações e bb': 'Licitações-e',
+    'governançabrasil tecnologia e gestão em serviços': 'Governança Brasil',
+    'governancabrasil tecnologia e gestao em servicos': 'Governança Brasil',
+    'bolsa nacional de compras - bnc': 'BNC',
+    'system desenvolvimento de software': 'System',
+    'centi': 'CENTI',
+    'licita + brasil': 'Licita + Brasil',
+    'compras.gov.br': 'Compras.gov.br',
 };
 
 // Componente reativo para badge de portal — auto-fetch + atualiza pelo cache
@@ -1439,7 +1448,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
             const buildParams = (p: number) => {
                 const params: any = {
-                    tam_pagina: 100,
+                    tam_pagina: 50,
                     pagina: p
                 };
                 if (keyword.trim()) params.q = keyword.trim();
@@ -1492,8 +1501,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
             // Quando tem data, precisamos buscar MAIS páginas para ter dados suficientes
             // pois a API do PNCP ignora o filtro de data e precisamos filtrar client-side
-            const numPages = hasDateFilter ? 5 : 1;
-            const startPage = hasDateFilter ? (currentPage - 1) * 5 + 1 : currentPage;
+            const numPages = hasDateFilter ? 10 : 2;
+            const startPage = hasDateFilter ? (currentPage - 1) * 10 + 1 : (currentPage - 1) * 2 + 1;
 
             // Determinar quais consultas fazemos
             const activeQueries: { key: string; type: 'pcp' | 'pncp-search'; q_extra?: string }[] = [];
@@ -1523,7 +1532,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                 activeQueries.forEach(qInfo => {
                     for (let p = startPage; p < startPage + numPages; p++) {
-                        const params: any = { ...searchParams, pagina: p, tam_pagina: 100 };
+                        const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
                         
                         if (qInfo.q_extra) {
                             params.q = kw ? `${kw} ${qInfo.q_extra}` : qInfo.q_extra;
@@ -1747,13 +1756,16 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             else if (ordenacaoFilter === 'data_publicacao_pncp') items.sort((a, b) => new Date(a.data_publicacao_pncp || 0).getTime() - new Date(b.data_publicacao_pncp || 0).getTime());
 
             // Pré-carregar detalhes PNCP em lote (todos os itens, independente de scroll)
+            let preloadCount = 0;
             for (const item of items) {
                 const parts = item.numero_controle_pncp?.split('-');
                 const cacheKey = `${item.orgao_cnpj || parts?.[0]}-${(item as any).ano_compra || (item as any).ano || parts?.[1]}-${(item as any).numero_compra || (item as any).numero_sequencial || parts?.[2]}`;
-                if (cacheKey && !pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+                if (cacheKey && cacheKey.replace(/-/g, '').length > 5 && !pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
                     queuePncpFetch(item).catch(() => {});
+                    preloadCount++;
                 }
             }
+            console.log(`[PNCP PRELOAD] Enfileirados ${preloadCount}/${items.length} itens para detalhamento`);
 
             setResults(items);
             setTotalResults(total || items.length);
