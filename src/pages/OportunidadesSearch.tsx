@@ -487,7 +487,7 @@ const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = 
 // Gerenciador de Fila para Requisições PNCP (Throttling) para evitar bloqueios por concorrência
 const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void; retries?: number }[] = [];
 let activePncpRequests = 0;
-const MAX_CONCURRENT_PNCP = 15;
+const MAX_CONCURRENT_PNCP = 8;
 const MAX_RETRIES_PER_ITEM = 3;
 
 async function processPncpQueue() {
