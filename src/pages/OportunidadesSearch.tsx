@@ -876,17 +876,36 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
 
 // Helper: localStorage com proteção contra QuotaExceededError
 const safeSetPncpDetail = (cacheKey: string, data: any) => {
+    // Guarda só o necessário no localStorage (sem raw, itens limitados)
+    const lightData: any = { ...data, cachedAt: Date.now() };
+    delete lightData.raw;
+    if (lightData.itens && lightData.itens.length > 20) {
+        lightData.itens = lightData.itens.slice(0, 20);
+    }
+    const payload = JSON.stringify(lightData);
+    if (payload.length > 50000) {
+        // Ainda muito grande, guarda só metadados
+        const minimal = {
+            usuarioNome: lightData.usuarioNome,
+            valor: lightData.valor,
+            itemCount: lightData.itemCount,
+            cachedAt: lightData.cachedAt,
+        };
+        try {
+            localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(minimal));
+        } catch {}
+        return;
+    }
     try {
-        localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify(data));
+        localStorage.setItem(`pncp_detail_${cacheKey}`, payload);
     } catch (e: any) {
         if (e.name === 'QuotaExceededError' || e.code === 22) {
-            console.warn('[PNCP Cache] localStorage cheio, limpando entradas antigas...');
+            console.warn('[PNCP Cache] localStorage cheio, limpando metade das entradas antigas...');
             const keys: string[] = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 if (k?.startsWith('pncp_detail_')) keys.push(k);
             }
-            // Remove metade das entradas mais antigas
             keys.sort((a, b) => {
                 const aData = localStorage.getItem(a);
                 const bData = localStorage.getItem(b);
@@ -894,14 +913,16 @@ const safeSetPncpDetail = (cacheKey: string, data: any) => {
                 const bTime = bData ? JSON.parse(bData).cachedAt || 0 : 0;
                 return aTime - bTime;
             });
-            const toRemove = Math.ceil(keys.length / 2);
+            const toRemove = Math.ceil(keys.length * 0.7); // Remove 70% (mais agressivo)
             for (let i = 0; i < toRemove && i < keys.length; i++) {
                 localStorage.removeItem(keys[i]);
             }
-            // Salva com cachedAt para controle futuro
+            // Tenta salvar UMA vez após limpeza
             try {
-                localStorage.setItem(`pncp_detail_${cacheKey}`, JSON.stringify({ ...data, cachedAt: Date.now() }));
-            } catch {}
+                localStorage.setItem(`pncp_detail_${cacheKey}`, payload);
+            } catch {
+                console.warn('[PNCP Cache] Ainda sem espaço após limpeza, desistindo de salvar');
+            }
         } else {
             console.warn('[PNCP Cache] Erro ao salvar no localStorage:', e.message);
         }
