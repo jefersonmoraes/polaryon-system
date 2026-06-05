@@ -488,7 +488,7 @@ const pncpDetailCache: Record<string, { data?: any; promise?: Promise<any> }> = 
 const pncpRequestQueue: { cacheKey: string; item: PncpItem; resolve: (data: any) => void; reject: (err: any) => void; retries?: number }[] = [];
 let activePncpRequests = 0;
 const MAX_CONCURRENT_PNCP = 15;
-const MAX_RETRIES_PER_ITEM = 10;
+const MAX_RETRIES_PER_ITEM = 3;
 
 async function processPncpQueue() {
     if (activePncpRequests >= MAX_CONCURRENT_PNCP || pncpRequestQueue.length === 0) return;
@@ -541,7 +541,11 @@ async function processPncpQueue() {
             console.warn(`[PNCP Worker] Failed for ${cacheKey} (tentativa ${retries+1}/${MAX_RETRIES_PER_ITEM}):`, e.message);
             if (pncpDetailCache[cacheKey]) delete pncpDetailCache[cacheKey].promise;
             if (retries < MAX_RETRIES_PER_ITEM) {
-                pncpRequestQueue.push({ cacheKey, item, resolve: origResolve, reject: origReject, retries: retries + 1 });
+                const backoff = Math.pow(2, retries) * 500;
+                setTimeout(() => {
+                    pncpRequestQueue.push({ cacheKey, item, resolve: origResolve, reject: origReject, retries: retries + 1 });
+                    processPncpQueue();
+                }, backoff);
             } else {
                 origReject(e);
                 return true;
