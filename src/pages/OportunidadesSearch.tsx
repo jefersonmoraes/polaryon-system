@@ -1255,8 +1255,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                     pagina: p
                 };
                 if (keyword.trim()) params.q = keyword.trim();
+                // Quando filtro de data está ativo, busca em TODOS os status
+                // (itens com data_fim_vigencia passada estão em status encerradas)
+                const hasDateFilterLocal = !!(dataInicialFilter || dataFinalFilter);
                 const fallbackStatus = 'recebendo_proposta,propostas_encerradas,encerradas,suspensas,canceladas';
-                const statusVals = (statusFilter || fallbackStatus).split(',').filter(Boolean);
+                const statusVals = hasDateFilterLocal ? fallbackStatus.split(',') : (statusFilter || fallbackStatus).split(',').filter(Boolean);
                 params.status = statusVals;
                 const fallbackDocumentos = 'edital,aviso_contratacao_direta,ata,contrato';
                 const docVals = (instrumentoFilter || fallbackDocumentos).split(',').filter(Boolean);
