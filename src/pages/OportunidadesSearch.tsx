@@ -577,6 +577,12 @@ const MAPA_USUARIO_PORTAL: Record<string, string> = {
     'centi': 'CENTI',
     'licita + brasil': 'Licita + Brasil',
     'compras.gov.br': 'Compras.gov.br',
+    'memory projetos e desenvolvimento de sistemas ltda': 'Memory',
+    'licitar digital - plataforma de licitações online': 'Licitar Digital',
+    'guimarães sistemas gestão e tecnologia ltda': 'Guimarães',
+    'guimaraes sistemas gestao e tecnologia ltda': 'Guimarães',
+    'az informatica ltda': 'AZ Informática',
+    'bll compras': 'BLL Compras',
 };
 
 // Componente reativo para badge de portal — auto-fetch + atualiza pelo cache
