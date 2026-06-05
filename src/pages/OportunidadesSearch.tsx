@@ -23,6 +23,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
+// Global handler to suppress unhandled promise rejections from PNCP API calls
+if (typeof window !== 'undefined') {
+    window.addEventListener('unhandledrejection', (event) => {
+        const msg = (event.reason?.message || event.reason || '').toString().toLowerCase();
+        // Ignora erros conhecidos de CORS/Timeout das APIs gov
+        if (msg.includes('network error') || msg.includes('cors') || msg.includes('timeout') || msg.includes('404') || msg.includes('econn') || msg.includes('quotaexceeded')) {
+            event.preventDefault();
+        }
+    });
+}
+
 // --- Direct Government APIs Fetch Engine for Desktop Terminal (v3.8.60) ---
 // Bypasses the backend proxy to prevent F5 BIG-IP WAF block of the VPS IP
 const serializePncpParams = (params: any) => {
@@ -190,60 +201,68 @@ const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: stri
 };
 
 const fetchPncpArquivosDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
-    const res = await axios.get(url);
-    const files = res.data || [];
-    const mappedFiles = files.map((f: any) => {
-        const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
-        const isWinnerDoc = name.includes('proposta') || name.includes('habilitacao') || name.includes('vencedor') || name.includes('homologacao') || name.includes('ata');
-        return { ...f, isWinnerDoc };
-    });
-    return { data: mappedFiles };
+    try {
+        const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
+        const res = await axios.get(url, { timeout: 10000 });
+        const files = res.data || [];
+        const mappedFiles = files.map((f: any) => {
+            const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
+            const isWinnerDoc = name.includes('proposta') || name.includes('habilitacao') || name.includes('vencedor') || name.includes('homologacao') || name.includes('ata');
+            return { ...f, isWinnerDoc };
+        });
+        return { data: mappedFiles };
+    } catch {
+        return { data: [] };
+    }
 };
 
 const fetchPncpItensCompletosDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    const urlItems = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=500`;
-    const itemsRes = await axios.get(urlItems);
-    const items = itemsRes.data || [];
+    try {
+        const urlItems = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=500`;
+        const itemsRes = await axios.get(urlItems, { timeout: 10000 });
+        const items = itemsRes.data || [];
 
-    const detailedItems = await Promise.all(items.map(async (item: any) => {
-        let vencedor = null;
-        let marca = extractBrandLocal(item.descricao || item.description);
-        
-        try {
-            const urlResult = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
-            const rr = await axios.get(urlResult);
-            if (rr.data && rr.data.length > 0) {
-                const winner = rr.data[0];
-                
-                vencedor = { 
-                    nome: winner.nomeRazaoSocialFornecedor, 
-                    cnpj: winner.niFornecedor, 
-                    valor: winner.valorTotalHomologado,
-                    marcaFornecedor: winner.marcaFornecedor,
-                    modeloFornecedor: winner.modeloFornecedor,
-                    empenhoUrl: `https://portaldatransparencia.gov.br/busca?termo=${normalizeCnpjLocal(winner.niFornecedor)}`,
-                    empenhoDados: null
-                };
-                if (winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
-            }
-        } catch (e) {}
+        const detailedItems = await Promise.all(items.map(async (item: any) => {
+            let vencedor = null;
+            let marca = extractBrandLocal(item.descricao || item.description);
+            
+            try {
+                const urlResult = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${item.numeroItem}/resultados`;
+                const rr = await axios.get(urlResult);
+                if (rr.data && rr.data.length > 0) {
+                    const winner = rr.data[0];
+                    
+                    vencedor = { 
+                        nome: winner.nomeRazaoSocialFornecedor, 
+                        cnpj: winner.niFornecedor, 
+                        valor: winner.valorTotalHomologado,
+                        marcaFornecedor: winner.marcaFornecedor,
+                        modeloFornecedor: winner.modeloFornecedor,
+                        empenhoUrl: `https://portaldatransparencia.gov.br/busca?termo=${normalizeCnpjLocal(winner.niFornecedor)}`,
+                        empenhoDados: null
+                    };
+                    if (winner.marcaFornecedor) marca = winner.marcaFornecedor.toUpperCase().trim();
+                }
+            } catch (e) {}
 
-        return {
-            id: item.id,
-            numero: item.numeroItem,
-            descricao: item.descricao || item.description,
-            quantidade: item.quantidade,
-            valorUnitarioEstimado: item.valorUnitarioEstimado,
-            valorTotalEstimado: item.valorTotalEstimado,
-            situacao: item.situacaoItemNome,
-            vencedor,
-            marca,
-            unidadeMedida: item.unidadeMedida
-        };
-    }));
+            return {
+                id: item.id,
+                numero: item.numeroItem,
+                descricao: item.descricao || item.description,
+                quantidade: item.quantidade,
+                valorUnitarioEstimado: item.valorUnitarioEstimado,
+                valorTotalEstimado: item.valorTotalEstimado,
+                situacao: item.situacaoItemNome,
+                vencedor,
+                marca,
+                unidadeMedida: item.unidadeMedida
+            };
+        }));
 
-    return { data: detailedItems };
+        return { data: detailedItems };
+    } catch {
+        return { data: [] };
+    }
 };
 
 // --- Helper: Safe ID Generation (Works in non-HTTPS/secure contexts) ---
@@ -498,7 +517,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
         if (isVisible && !detail && !hasInitialValue) {
             queuePncpFetch(item).then(res => {
                 if (res) safeSetPncpDetail(cacheKey, res);
-            });
+            }).catch(() => {});
         }
 
         const handleUpdate = (e: any) => {
@@ -515,7 +534,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
 
     // Lógica de Cálculo em Tempo Real (Solicitado pelo Usuário)
     const valorOficial = detail?.valor || item.valorTotalEstimado || item.valor_global;
-    
+
     const valorCalculado = useMemo(() => {
         const itemsToSum = detail?.itens || item.itens; // Tenta pegar itens do detalhe ou do objeto base (se houver)
         if (!itemsToSum || !Array.isArray(itemsToSum) || itemsToSum.length === 0) return null;
@@ -613,7 +632,7 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
         if (isVisible && !detail && !hasInitialExtra) {
             queuePncpFetch(item).then(res => {
                 if (res) safeSetPncpDetail(cacheKey, res);
-            });
+            }).catch(() => {});
         }
 
         const handleUpdate = (e: any) => {
@@ -1463,76 +1482,31 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return { ...i, fonte_dados: fonteLabel };
             });
 
-            // Filtragem pós-fetch por portal selecionado (quando não está no modo unificado)
-            if (!fonteFilter.includes('unificado') && fonteFilter.length > 0) {
-                const FONTE_MAP: Record<string, string[]> = {
-                    'comprasnet': ['Compras.gov.br', 'ComprasNet'],
-                    'licitacoese': ['Licitações-e'],
-                    'pcp': ['Portal de Compras Públicas'],
-                    'bll': ['BLL Compras'],
-                    'siga': ['SIGA'],
-                    'compras-rs': ['Compras RS'],
-                    'pncp': ['PNCP', 'Portal Municipal'],
-                };
-                const allowedFontes = new Set<string>();
-                fonteFilter.forEach(f => {
-                    (FONTE_MAP[f] || []).forEach(label => allowedFontes.add(label));
-                });
-                // Se 'pncp' estiver selecionado, inclui também portais estaduais/municipais genéricos
-                if (fonteFilter.includes('pncp')) {
-                    items.forEach((i: any) => {
-                        if ((i.fonte_dados || '').startsWith('Portal ')) allowedFontes.add(i.fonte_dados);
-                    });
-                }
-                // Se comprasnet estiver selecionado, inclui também o label do MAPA_SISTEMA_ORIGEM
-                if (fonteFilter.includes('comprasnet')) {
-                    allowedFontes.add('Compras.gov.br');
-                    allowedFontes.add('ComprasNet');
-                }
-                // Suporte para portais estaduais com sistema_origem_id mapeados
-                const sidToFonte: Record<number, string[]> = {
-                    4: ['BEC SP'],
-                    5: ['Compras RJ'],
-                    6: ['Compras MG'],
-                    7: ['Compras SC'],
-                    8: ['Compras PR'],
-                    9: ['Compras BA'],
-                    10: ['Compras RS'],
-                    11: ['Compras PE'],
-                };
-                for (const [sidStr, fontes] of Object.entries(sidToFonte)) {
-                    const sidNum = parseInt(sidStr);
-                    const hasItemWithSid = items.some((i: any) => {
-                        const iSid = i.sistema_origem_id || i.id_sistema_origem;
-                        return iSid === sidNum;
-                    });
-                    if (hasItemWithSid) {
-                        fontes.forEach(f => allowedFontes.add(f));
-                    }
-                }
-                items = items.filter((i: any) => allowedFontes.has(i.fonte_dados || 'PNCP'));
-            }
+            // A API do PNCP não suporta filtragem por portal de origem.
+            // Usamos keyword injection como dica, mas a filtragem real é feita pelas heurísticas
+            // de identificação (sistema_origem_id do numero_controle_pncp, URL, texto).
+            // Todos os itens são mantidos com seus labels identificados.
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
-            // Filtro client-side de período - filtra pela data de encerramento das propostas
-            // A API do PNCP ignora os parâmetros de data, então buscamos páginas extras
-            // e filtramos localmente.
+            // Filtro client-side de período - filtra pela data de fim de vigência (prazo das propostas)
+            // A API do PNCP não retorna data_encerramento_proposta na busca, usamos data_fim_vigencia
+            // que corresponde ao prazo final da modalidade.
             if (dataInicialFilter) {
                 const minDate = dataInicialFilter;
                 items = items.filter((i: any) => {
-                    const endStr = i.data_encerramento_proposta || i.data_fim_vigencia;
-                    if (!endStr) return false;
-                    const datePart = endStr.split('T')[0];
+                    const dateStr = i.data_fim_vigencia || i.data_encerramento_proposta || i.data_publicacao_pncp;
+                    if (!dateStr) return true;
+                    const datePart = dateStr.split('T')[0];
                     return datePart >= minDate;
                 });
             }
             if (dataFinalFilter) {
                 const maxDate = dataFinalFilter;
                 items = items.filter((i: any) => {
-                    const endStr = i.data_encerramento_proposta || i.data_fim_vigencia;
-                    if (!endStr) return false;
-                    const datePart = endStr.split('T')[0];
+                    const dateStr = i.data_fim_vigencia || i.data_encerramento_proposta || i.data_publicacao_pncp;
+                    if (!dateStr) return true;
+                    const datePart = dateStr.split('T')[0];
                     return datePart <= maxDate;
                 });
             }
