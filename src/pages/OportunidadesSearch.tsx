@@ -256,7 +256,8 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 };
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+    // V1 tem CORS * (diferente de /api/consulta/v1/ que é bloqueado)
+    const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
     const itemsCountUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/quantidade`;
     const itemsListUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens?pagina=1&tamanhoPagina=100`;
 
@@ -524,6 +525,7 @@ async function processPncpQueue() {
             minItemValue: detail.minItemValue,
             maxItemValue: detail.maxItemValue,
             itens: detail.items || [], // Adicionado
+            usuarioNome: detail.usuarioNome || null, // Nome do portal de origem
             raw: detail
         };
         
@@ -566,7 +568,39 @@ function queuePncpFetch(item: PncpItem): Promise<any> {
     return promise;
 }
 
-const ProposalDates = memo(({ item }: { item: PncpItem }) => {
+// Componente reativo para badge de portal — atualiza quando o detalhe chega via cache
+const PortalBadge = memo(({ item }: { item: any }) => {
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+
+    const [usuarioNome, setUsuarioNome] = useState<string | null>(() => {
+        const cached = pncpDetailCache[cacheKey]?.data;
+        return cached?.usuarioNome || null;
+    });
+
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ce = e as CustomEvent;
+            if (ce.detail?.cacheKey === cacheKey) {
+                const cached = pncpDetailCache[cacheKey]?.data;
+                if (cached?.usuarioNome) setUsuarioNome(cached.usuarioNome);
+            }
+        };
+        window.addEventListener('pncp-cache-updated', handler);
+        return () => window.removeEventListener('pncp-cache-updated', handler);
+    }, [cacheKey]);
+
+    const nome = usuarioNome || (item as any).fonte_dados || 'PNCP';
+    const pair = getPortalStyle(nome);
+    return (
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
+            {pair.label}
+        </span>
+    );
+});
     // Usar datas nativas da listagem se disponíveis, caso contrário mostrar traço
     const formatNativeDate = (dateStr?: string) => {
         if (!dateStr) return '-';
@@ -2178,12 +2212,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                         {item.modalidade_licitacao_nome}
                                                     </span>
                                                     {(() => {
-                                                        const fonte = (item as any).fonte_dados || 'PNCP';
-                                                        const pair = getPortalStyle(fonte);
                                                         return (
-                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
-                                                                {pair.label}
-                                                            </span>
+                                                            <PortalBadge item={item} />
                                                         );
                                                     })()}
                                                 </div>
@@ -2270,12 +2300,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                             {item.modalidade_licitacao_nome}
                                         </span>
                                         {(() => {
-                                            const fonte = (item as any).fonte_dados || 'PNCP';
-                                            const pair = getPortalStyle(fonte);
                                             return (
-                                                <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${pair.style}`}>
-                                                    {pair.label}
-                                                </span>
+                                                <PortalBadge item={item} />
                                             );
                                         })()}
                                         <div className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/10">
