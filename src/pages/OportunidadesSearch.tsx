@@ -23,6 +23,106 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
+// --- Captcha Manager for PNCP Portal Endpoint ---
+let hcaptchaWidgetId: number | null = null;
+let hcaptchaResolve: ((token: string) => void) | null = null;
+
+const getCaptchaToken = async (): Promise<string> => {
+    const config = await axios.get('https://pncp.gov.br/api/pncp/v1/captcha/configuracao', {
+        headers: { 'Accept': 'application/json' }
+    });
+    const { hcaptchaSiteKey, hcaptchaHabilitado } = config.data;
+
+    if (!hcaptchaHabilitado || !hcaptchaSiteKey) {
+        throw new Error('hCaptcha not available');
+    }
+
+    if (typeof (window as any).hcaptcha === 'undefined') {
+        await new Promise<void>((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `https://js.hcaptcha.com/1/api.js?render=explicit&hl=pt`;
+            script.async = true;
+            script.defer = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load hCaptcha'));
+            document.head.appendChild(script);
+        });
+        // Aguarda hCaptcha se inicializar
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    const container = document.createElement('div');
+    container.id = 'pncp-hcaptcha-container-' + Date.now();
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '-9999px';
+    document.body.appendChild(container);
+
+    return new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error('hCaptcha timeout'));
+        }, 30000);
+
+        const cleanup = () => {
+            clearTimeout(timeout);
+            try { document.body.removeChild(container); } catch {}
+        };
+
+        try {
+            const widgetId = (window as any).hcaptcha.render(container.id, {
+                sitekey: hcaptchaSiteKey,
+                size: 'invisible',
+                callback: (token: string) => {
+                    cleanup();
+                    resolve(token);
+                },
+                'expired-callback': () => {
+                    cleanup();
+                    reject(new Error('hCaptcha expired'));
+                },
+                'error-callback': () => {
+                    cleanup();
+                    reject(new Error('hCaptcha error'));
+                }
+            });
+            (window as any).hcaptcha.execute(widgetId);
+        } catch (e: any) {
+            cleanup();
+            reject(e);
+        }
+    });
+};
+
+const fetchPncpPortalDirect = async (cnpj: string, ano: string, sequencial: string) => {
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const token = await getCaptchaToken();
+            const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/portal?captcha=${encodeURIComponent(token)}`;
+            const res = await axios.get(url, {
+                headers: { 'Accept': 'application/json' },
+                timeout: 15000
+            });
+            return {
+                dataEncerramentoProposta: res.data.dataEncerramentoProposta,
+                dataAberturaProposta: res.data.dataAberturaProposta,
+                linkSistemaOrigem: res.data.linkSistemaOrigem,
+                valorTotalEstimado: res.data.valorTotalEstimado,
+                valorTotalHomologado: res.data.valorTotalHomologado,
+                situacaoCompraNome: res.data.situacaoCompraNome,
+                usuarioNome: res.data.usuarioNome
+            };
+        } catch (e: any) {
+            lastError = e;
+            if (e.response?.status === 422) continue; // captcha invalido, tenta outro
+            if (e.response?.status === 429) { await new Promise(r => setTimeout(r, 2000)); continue; }
+            throw e;
+        }
+    }
+    throw lastError || new Error('Failed to fetch portal data');
+};
+
 // Global handler to suppress unhandled promise rejections from PNCP API calls
 if (typeof window !== 'undefined') {
     window.addEventListener('unhandledrejection', (event) => {
@@ -205,13 +305,15 @@ const fetchPncpArquivosDirect = async (cnpj: string, ano: string, sequencial: st
         const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos?pagina=1&tamanhoPagina=100`;
         const res = await axios.get(url, { timeout: 10000 });
         const files = res.data || [];
+        console.log(`[ARQUIVOS CORS] OK — ${files.length} arquivos via CORS direto`);
         const mappedFiles = files.map((f: any) => {
             const name = (f.titulo || f.nome_arquivo || '').toLowerCase();
             const isWinnerDoc = name.includes('proposta') || name.includes('habilitacao') || name.includes('vencedor') || name.includes('homologacao') || name.includes('ata');
             return { ...f, isWinnerDoc };
         });
         return { data: mappedFiles };
-    } catch {
+    } catch (e: any) {
+        console.warn(`[ARQUIVOS CORS] Falhou — ${e.message}. Usando fallback backend proxy.`);
         return { data: [] };
     }
 };
@@ -800,6 +902,10 @@ export default function OportunidadesSearch() {
     // Novo Estado para Detalhamento Completo PNCP (para pegar Valores, etc)
     const [itemDetail, setItemDetail] = useState<any>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
+
+    // Dados do endpoint de portal (captcha) - dataEncerramentoProposta, linkSistemaOrigem, etc
+    const [portalData, setPortalData] = useState<any>(null);
+    const [loadingPortal, setLoadingPortal] = useState(false);
     
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -948,9 +1054,26 @@ export default function OportunidadesSearch() {
             } finally {
                 setLoadingCgu(false);
             }
+
+            // 4. Fetch Portal Data (com captcha) - dataEncerramentoProposta, linkSistemaOrigem
+            setLoadingPortal(true);
+            try {
+                const portal = await fetchPncpPortalDirect(cnpj, ano, seq);
+                setPortalData(portal);
+            } catch (e: any) {
+                console.warn("[Portal] Não foi possível obter dados do portal (captcha):", e.message);
+                setPortalData(null);
+            } finally {
+                setLoadingPortal(false);
+            }
         };
 
         fetchDetails();
+    }, [selectedItem]);
+
+    // Reset portalData quando fecha o detalhe
+    useEffect(() => {
+        if (!selectedItem) setPortalData(null);
     }, [selectedItem]);
 
     // --- Kanban Export States ---
@@ -2340,13 +2463,35 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                             {loadingDetail ? (
                                                                 <Loader2 className="h-3 w-3 animate-spin inline-block" />
                                                             ) : (
-                                                                formatCurrency(itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || selectedItem.valor_global)
+                                                                formatCurrency(portalData?.valorTotalEstimado || itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || selectedItem.valor_global)
                                                             )}
                                                         </span>
                                                     </div>
                                                     <div>
                                                         <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Fim Recepção</span>
-                                                        <span className="text-sm font-medium text-destructive">{formatDate(selectedItem.data_fim_vigencia, true)}</span>
+                                                        <span className="text-sm font-medium text-destructive">
+                                                            {loadingPortal ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin inline-block" />
+                                                            ) : (
+                                                                formatDate(portalData?.dataEncerramentoProposta || selectedItem.data_encerramento_proposta || selectedItem.data_fim_vigencia, true)
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[10px] text-muted-foreground uppercase mb-0.5">Fonte (Sistema Origem)</span>
+                                                        <span className="text-sm font-medium">
+                                                            {loadingPortal ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin inline-block" />
+                                                            ) : portalData?.linkSistemaOrigem ? (
+                                                                <a href={portalData.linkSistemaOrigem} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80 truncate block max-w-[250px]">
+                                                                    {new URL(portalData.linkSistemaOrigem).hostname}
+                                                                </a>
+                                                            ) : portalData?.usuarioNome ? (
+                                                                <span className="text-muted-foreground">{portalData.usuarioNome}</span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">{selectedItem.fonte_dados || 'PNCP'}</span>
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
