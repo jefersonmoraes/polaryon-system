@@ -1564,7 +1564,8 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
         if (e.key === 'Enter') handlePageInputSubmit();
     };
 
-    const totalPages = Math.min(Math.ceil(totalResults / (hasDateFilter ? 500 : 100)), 100);
+    const _hasDateFilter = !!(dataInicialFilter || dataFinalFilter);
+    const totalPages = Math.min(Math.ceil(totalResults / (_hasDateFilter ? 500 : 100)), 100);
 
     return (
         <div className="flex-1 overflow-hidden flex flex-col bg-background text-foreground min-h-full">
