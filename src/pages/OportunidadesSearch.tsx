@@ -1025,6 +1025,18 @@ export default function OportunidadesSearch() {
     const [portalData, setPortalData] = useState<any>(null);
     const [loadingPortal, setLoadingPortal] = useState(false);
     
+    // Calcula valor total estimado a partir dos itens (fallback quando portal/captcha falha)
+    const fullItemsTotal = useMemo(() => {
+        if (!Array.isArray(fullItems) || fullItems.length === 0) return null;
+        let total = 0;
+        for (const item of fullItems) {
+            const unitVal = Number(item.valorUnitarioEstimado || item.valorUnitario || 0);
+            const qty = Number(item.quantidade || 0);
+            total += unitVal * qty;
+        }
+        return total > 0 ? total : null;
+    }, [fullItems]);
+    
     const [previewEmpenhoUrl, setPreviewEmpenhoUrl] = useState<string | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     
@@ -2629,7 +2641,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                             {loadingDetail ? (
                                                                 <Loader2 className="h-3 w-3 animate-spin inline-block" />
                                                             ) : (
-                                                                formatCurrency(portalData?.valorTotalEstimado || itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || selectedItem.valor_global)
+                                                                formatCurrency(portalData?.valorTotalEstimado || itemDetail?.valorTotalEstimado || selectedItem.valorTotalEstimado || fullItemsTotal || selectedItem.valor_global)
                                                             )}
                                                         </span>
                                                     </div>
@@ -2639,7 +2651,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                             {loadingPortal ? (
                                                                 <Loader2 className="h-3 w-3 animate-spin inline-block" />
                                                             ) : (
-                                                                formatDate(portalData?.dataEncerramentoProposta || selectedItem.data_encerramento_proposta || selectedItem.data_fim_vigencia, true)
+                                                                formatDate(portalData?.dataEncerramentoProposta || itemDetail?.dataEncerramentoProposta || selectedItem.data_encerramento_proposta || selectedItem.data_fim_vigencia, true)
                                                             )}
                                                         </span>
                                                     </div>
