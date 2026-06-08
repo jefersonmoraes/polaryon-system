@@ -559,6 +559,17 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 
 **Impacto:** Robot nunca mais precisa de re-autenticação manual. Após expiração do JWT Serpro (~30min), o sistema renova automaticamente usando os cookies da sessão Gov.br ativa.
 
+## Implementado (v3.8.209)
+
+### 38. `allowDowngrade = true` causava loop infinito de atualização (fix auto-updater)
+**Antes:** `autoUpdater.allowDowngrade = true` em `electron/main.js:62` — com `allowDowngrade = true`, o electron-updater considera qualquer versão diferente (incluindo a MESMA) como atualizável. O auto-updater baixava e reinstalava a mesma versão (`3.8.208`) repetidamente em loop.
+
+**Arquivo:** `electron/main.js:62`
+
+**Solução:** Removeu a linha `autoUpdater.allowDowngrade = true`. Comportamento padrão (`false`): só atualiza quando `remoteVersion > currentVersion`. Se a versão do servidor é igual à instalada, não faz nada.
+
+**Impacto:** Auto-updater não entra mais em loop de reinstalação da mesma versão.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
