@@ -222,10 +222,17 @@
     }, 3000);
 
     // 🛡️ Recebe e armazena o token de sessão capturado pelo Visual Runner
+    let _lastTokenUpdate = 0;
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
-            shared.sessionToken = data.token;
-            console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
+            var now = Date.now();
+            // Dedup + throttle: não re-injeta o mesmo token, e no mínimo 2s entre atualizações
+            // (evita loop do interceptor e protege token fresco do storage)
+            if (data.token !== shared.sessionToken && now - _lastTokenUpdate > 2000) {
+                shared.sessionToken = data.token;
+                _lastTokenUpdate = now;
+                console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
+            }
         }
     });
 
@@ -1758,6 +1765,84 @@
             });
         }
 
+        // 🔑 Tenta extrair token JWT do sessionStorage da página (Angular armazena aí)
+        function tryExtractTokenFromStorage() {
+            try {
+                // Chaves comuns onde o Serpro/Angular guarda o JWT
+                var keysToCheck = ['accessToken', 'access_token', 'token', 'jwt', 'id_token', 'currentUser', 'auth_token', 'bearerToken', 'userToken'];
+                for (var ki = 0; ki < keysToCheck.length; ki++) {
+                    var v = null;
+                    try { v = window.sessionStorage.getItem(keysToCheck[ki]); } catch(e) {}
+                    if (v && typeof v === 'string' && (v.startsWith('Bearer ') || v.startsWith('eyJ'))) {
+                        if (!v.startsWith('Bearer ')) v = 'Bearer ' + v;
+                        console.log('%c[POLARYON INJECTED] 🔑 Token capturado de sessionStorage[' + keysToCheck[ki] + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: v }, '*');
+                        return;
+                    }
+                }
+                // Varredura completa de TODAS as chaves do sessionStorage
+                for (var i = 0; i < window.sessionStorage.length; i++) {
+                    var k = window.sessionStorage.key(i);
+                    var v = null;
+                    try { v = window.sessionStorage.getItem(k); } catch(e) {}
+                    if (v && typeof v === 'string') {
+                        // JSON pode conter access_token dentro
+                        if (v.startsWith('{') || v.startsWith('[')) {
+                            try {
+                                var parsed = JSON.parse(v);
+                                var t = parsed.accessToken || parsed.access_token || parsed.token || parsed.jwt || parsed.id_token || null;
+                                if (t && typeof t === 'string' && t.length > 20) {
+                                    if (!t.startsWith('Bearer ')) t = 'Bearer ' + t;
+                                    console.log('%c[POLARYON INJECTED] 🔑 Token extraído de JSON em sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                    window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                                    return;
+                                }
+                            } catch(e) {}
+                        }
+                        // String cru pode ser o token
+                        if (v.startsWith('eyJ') && v.length > 50) {
+                            var t = 'Bearer ' + v;
+                            console.log('%c[POLARYON INJECTED] 🔑 Token capturado (full scan) de sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                            return;
+                        }
+                    }
+                }
+                // Tenta localStorage também
+                for (var i = 0; i < window.localStorage.length; i++) {
+                    var k = window.localStorage.key(i);
+                    var v = null;
+                    try { v = window.localStorage.getItem(k); } catch(e) {}
+                    if (v && typeof v === 'string') {
+                        if (v.startsWith('{') || v.startsWith('[')) {
+                            try {
+                                var parsed = JSON.parse(v);
+                                var t = parsed.accessToken || parsed.access_token || parsed.token || parsed.jwt || parsed.id_token || null;
+                                if (t && typeof t === 'string' && t.length > 20) {
+                                    if (!t.startsWith('Bearer ')) t = 'Bearer ' + t;
+                                    console.log('%c[POLARYON INJECTED] 🔑 Token extraído de localStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                    window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                                    return;
+                                }
+                            } catch(e) {}
+                        }
+                        if (v.startsWith('eyJ') && v.length > 50) {
+                            var t = 'Bearer ' + v;
+                            console.log('%c[POLARYON INJECTED] 🔑 Token capturado (localStorage) de [' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                            return;
+                        }
+                    }
+                }
+                console.log('%c[POLARYON INJECTED] ⚠️ Nenhum token JWT encontrado em sessionStorage/localStorage.', 'color:#f59e0b;');
+            } catch(e) {
+                console.warn('[POLARYON INJECTED] ⚠️ Erro ao varrer storage:', e.message);
+            }
+        }
+
+        // 🔄 Varredura periódica do storage para capturar token renovado pela página
+        setInterval(tryExtractTokenFromStorage, 5000);
+
         // 🔄 Renova token Serpro quando heartbeat detecta expiração
         window.addEventListener('message', async (event) => {
             if (!event.data || event.data.source !== 'polaryon-preload' || event.data.type !== 'refresh-token') return;
@@ -1821,10 +1906,21 @@
                 // --- Fim da busca por compras-id ---
                 if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) {
                     console.warn('[POLARYON INJECTED] ⚠️ compras-id não encontrado em nenhuma fonte.');
-                    return; // Não faz fetch genérico (sabidamente 404)
+                    // Fallback: tenta extrair token do sessionStorage da página (Angular armazena aí)
+                    tryExtractTokenFromStorage();
+                    return;
                 } else {
                     console.log('%c[POLARYON INJECTED] 🔑 compras-id encontrado: ' + comprasId, 'color:#10b981;font-weight:bold;');
-                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId, { credentials: 'include', headers: { 'Accept': 'application/json' } });
+                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            'Content-Type': 'application/json',
+                            'x-device-platform': 'web',
+                            'x-version-number': '6.0.2'
+                        }
+                    });
                 }
                 if (resp.ok) {
                     var clone = resp.clone();
@@ -1843,7 +1939,16 @@
                         console.warn('[POLARYON INJECTED] ⚠️ Falha ao parsear response body:', e.message);
                     }
                 } else {
-                    console.warn('[POLARYON INJECTED] ⚠️ Token refresh request falhou:', resp.status, resp.statusText);
+                    console.warn('[POLARYON INJECTED] ⚠️ Token refresh request falhou status=' + resp.status, resp.statusText);
+                    // Tenta ler corpo do erro para diagnóstico
+                    try {
+                        var errBody = await resp.text();
+                        if (errBody && errBody.length > 0) {
+                            console.log('%c[POLARYON INJECTED] 📄 Resposta de erro (' + errBody.length + ' chars): ' + errBody.substring(0, 300), 'color:#f59e0b;');
+                        }
+                    } catch(e) {}
+                    // Fallback: tenta extrair token do sessionStorage da página (Angular armazena aí)
+                    tryExtractTokenFromStorage();
                 }
             } catch(e) {
                 console.warn('[POLARYON INJECTED] ⚠️ Token refresh fetch error:', e.message);

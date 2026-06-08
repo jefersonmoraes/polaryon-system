@@ -629,14 +629,20 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 3. **refreshTokenViaIframe consulta main.js**: Se `compras-id` não for encontrado localmente, faz `await ipcRenderer.invoke('get-compras-id')` e usa o UUID que main.js capturou de qualquer janela
 
 **Impacto:** Mesmo que a child window nunca veja o `compras-id`, main.js o capturou da navegação da janela principal. O refresh de token agora tem o UUID de sessão necessário para chamar o endpoint `/token/{compras-id}`.
-**Problema:** `document.dispatchEvent(new CustomEvent('polaryon-refresh-token'))` do preload não chegava no injected script (page context) — `CustomEvent` não cruza a barreira de context isolation do Electron.
 
-**Arquivo:** `electron/portal-preload.js:1959-1966` (preload), `:1746-1811` (injected script)
+## Implementado (v3.8.215)
 
-**Solução:** 
-- Preload agora usa `window.postMessage({ source: 'polaryon-preload', type: 'refresh-token', comprasId })` em vez de `CustomEvent`
-- Injected script escuta `window.addEventListener('message')` e filtra por `event.data.source === 'polaryon-preload'` e `event.data.type === 'refresh-token'`
-- `window.postMessage` é o padrão Electron para comunicação preload→page com context isolation ativo
+### 46. Extração de token JWT do sessionStorage + dedup/traffic de força
+**Problema:** O token endpoint (`/usuario/token/{compras-id}`) retorna 422 quando o JWT original já expirou — Serpro não permite refresh de token expirado. O visual runner re-injetava o mesmo token expirado via `force-token-injection` (capturado de requisições XHR stale), sobrescrevendo qualquer token fresco.
+
+**Arquivo:** `electron/portal-preload.js:1761-1830` (tryExtractTokenFromStorage), `:1910-1915` (POST com headers), `:225-229` (dedup do force-token-injection)
+
+**Solução:** Cinco mudanças:
+1. **tryExtractTokenFromStorage()** — Nova função no injected script que varre `sessionStorage` e `localStorage` em busca de JWT (chaves comuns: `accessToken`, `token`, `jwt`, `id_token`, `currentUser`, etc.). Se encontra, posta ao preload via `postMessage`.
+2. **Varredura periódica** — `setInterval(tryExtractTokenFromStorage, 5000)` captura token renovado pela página automaticamente.
+3. **Fallback no 422** — Se o token endpoint falha, chama `tryExtractTokenFromStorage()` como fallback imediato.
+4. **Log do 422** — Agora loga o response body do 422 para diagnóstico.
+5. **Dedup + throttle no `force-token-injection`** — Só atualiza se o token for diferente E passou >2s desde a última atualização, evitando loop do interceptor visual-runner.
 
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
