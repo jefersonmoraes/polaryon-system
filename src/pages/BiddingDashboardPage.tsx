@@ -2972,6 +2972,11 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                                     ⚔️ GUERRA
                                 </Badge>
                             )}
+                            {item.dataSource === 'ws' && (
+                                <Badge className="text-[10px] font-bold uppercase px-2 py-1 bg-blue-500 text-white">
+                                    🌐 WS
+                                </Badge>
+                            )}
                             
                             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md border transition-all ${
                                 timeLeft < 30 && timeLeft > 0 && !isWinning 

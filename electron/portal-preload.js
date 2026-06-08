@@ -1151,6 +1151,42 @@
 
             // 🕒 Intercepta WebSocket STOMP /topic/dataHoraBrasilia (server time sync)
             (function() {
+                // 🔧 PATCH DE PROTÓTIPO: captura addEventListener('message') e onmessage em QUALQUER WebSocket,
+                // incluindo conexões criadas ANTES deste script carregar (v3.8.206)
+                var _origProtoAddEventListener = WebSocket.prototype.addEventListener;
+                WebSocket.prototype.addEventListener = function(type, fn) {
+                    if (type === 'message' && typeof fn === 'function') {
+                        var _ws = this;
+                        var _wrappedFn = function(event) {
+                            tryParseServerTime(event.data);
+                            fn.call(_ws, event);
+                        };
+                        return _origProtoAddEventListener.call(this, type, _wrappedFn);
+                    }
+                    return _origProtoAddEventListener.call(this, type, fn);
+                };
+                var _origOnmessageDescriptor = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage');
+                if (!_origOnmessageDescriptor || !_origOnmessageDescriptor.get) {
+                    var _origOnmessage = null;
+                    Object.defineProperty(WebSocket.prototype, 'onmessage', {
+                        get: function() { return this.__polaryon_onmessage || null; },
+                        set: function(fn) {
+                            var _ws = this;
+                            this.__polaryon_onmessage = fn;
+                            this.__polaryon_wrappedFn = function(event) {
+                                tryParseServerTime(event.data);
+                                if (typeof _ws.__polaryon_onmessage === 'function') _ws.__polaryon_onmessage.call(_ws, event);
+                            };
+                            // Se já existe um listener nativo, substitui
+                            if (_origOnmessageDescriptor && _origOnmessageDescriptor.set) {
+                                _origOnmessageDescriptor.set.call(this, this.__polaryon_wrappedFn);
+                            }
+                        },
+                        configurable: true,
+                        enumerable: true
+                    });
+                }
+
                 var OriginalWS = window.WebSocket;
                 window.WebSocket = function(url, protocols) {
                     var ws = new OriginalWS(url, protocols);
