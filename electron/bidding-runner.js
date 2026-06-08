@@ -728,9 +728,17 @@ class RoomRunner {
                 }
 
                 // 🎯 MOTOR DE AUTO-LANCE BACKEND (v3.8.4) - Independente da UI React!
-                if (this.biddingRunner && this.biddingRunner.configs.has(this.sessionId)) {
-                    const sessionConfig = this.biddingRunner.configs.get(this.sessionId);
-                    if (sessionConfig && sessionConfig.itemsConfig) {
+                let sessionConfig = this.biddingRunner && this.biddingRunner.configs.get(this.sessionId);
+                // Se não encontrou config para sessionId GLOBAL_, tenta qualquer sessão com mesmo idCompra
+                if ((!sessionConfig || !sessionConfig.itemsConfig || Object.keys(sessionConfig.itemsConfig).length === 0) && this.biddingRunner) {
+                    for (const [sid] of this.biddingRunner.configs) {
+                        if (sid.includes(this.idCompra)) {
+                            sessionConfig = this.biddingRunner.configs.get(sid);
+                            break;
+                        }
+                    }
+                }
+                if (sessionConfig && sessionConfig.itemsConfig) {
 
                         let itemsComEstrategia = 0;
                         let itemsBloqueados = 0;

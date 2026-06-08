@@ -1269,7 +1269,27 @@
 
                 function tryParseServerTime(data) {
                     try {
-                        if (typeof data !== 'string') { postDiag('WS data not string, type=' + (typeof data)); return; }
+                        if (typeof data !== 'string') {
+                            // 🔧 FIX v3.8.217: Converte Blob/ArrayBuffer para string (Serpro envia frames binários)
+                            if (data instanceof Blob) {
+                                postDiag('WS data is Blob (' + data.size + 'B) — converting to text...');
+                                var reader = new FileReader();
+                                reader.onload = function() { tryParseServerTime(reader.result); };
+                                reader.readAsText(data);
+                                return;
+                            } else if (data instanceof ArrayBuffer) {
+                                postDiag('WS data is ArrayBuffer (' + data.byteLength + 'B) — converting to text...');
+                                var decoder = new TextDecoder('utf-8');
+                                tryParseServerTime(decoder.decode(data));
+                                return;
+                            } else if (data && typeof data.data === 'string') {
+                                // WebSocket MessageEvent com .data string
+                                data = data.data;
+                            } else {
+                                postDiag('WS data not string, type=' + (typeof data) + ' constructor=' + (data && data.constructor && data.constructor.name));
+                                return;
+                            }
+                        }
                         // STOMP header/body separator: two real newlines (0x0A 0x0A).
                         // In template literal we write \\n\\n so the injected script gets '\\n\\n' escape correctly.
                         var body = data;
