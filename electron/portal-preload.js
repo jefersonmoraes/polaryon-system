@@ -1743,11 +1743,12 @@
         }
 
         // 🔄 Renova token Serpro quando heartbeat detecta expiração
-        document.addEventListener('polaryon-refresh-token', async (e) => {
-            console.log('%c[POLARYON INJECTED] 🔄 Refresh token triggered. Buscando compras-id...', 'color:#f59e0b;font-weight:bold;');
+        window.addEventListener('message', async (event) => {
+            if (!event.data || event.data.source !== 'polaryon-preload' || event.data.type !== 'refresh-token') return;
+            console.log('%c[POLARYON INJECTED] 🔄 Refresh token triggered via postMessage. Buscando compras-id...', 'color:#f59e0b;font-weight:bold;');
             try {
                 // Tenta encontrar compras-id (session UUID) de múltiplas fontes
-                var comprasId = (e.detail && e.detail.comprasId) || null;
+                var comprasId = event.data.comprasId || null;
                 // 1) window.opener
                 if (!comprasId) {
                     try { var m = (window.opener ? window.opener.location.href : '').match(/compras-id=([a-f0-9-]+)/i); if (m) comprasId = m[1]; } catch(e2) {}
@@ -2065,10 +2066,13 @@
             if (match && match[1]) foundComprasId = match[1];
         } catch(e) {}
             
-            document.dispatchEvent(new CustomEvent('polaryon-refresh-token', {
-                detail: { comprasId: foundComprasId }
-            }));
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Evento refresh-token disparado. compras-id=' + (foundComprasId || 'NULO'), 'color:#f59e0b;font-weight:bold;');
+            // window.postMessage é o padrão Electron para cruzar contextIsolation
+            window.postMessage({
+                source: 'polaryon-preload',
+                type: 'refresh-token',
+                comprasId: foundComprasId
+            }, '*');
+            console.log('%c[POLARYON HEARTBEAT] 🔄 postMessage refresh-token enviado. compras-id=' + (foundComprasId || 'NULO'), 'color:#f59e0b;font-weight:bold;');
         } catch(e) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao disparar refresh-token:', e.message);
         }
