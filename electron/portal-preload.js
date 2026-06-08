@@ -1006,11 +1006,12 @@
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 60 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + 60000;
             } else if (type === 'session-expired') {
-                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Limpando fila de ranking, token e resetando heartbeat.', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Disparando refresh de token...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
-                keepAliveConsecutiveFailures = 0;
-                shared.sessionToken = ''; // Limpa token obsoleto para evitar 401 em cascata
+                // Não reseta keepAliveConsecutiveFailures — deixa o heartbeat acumular e renovar
+                // Não limpa shared.sessionToken — heartbeat precisa dele para tentar o refresh
+                refreshTokenViaIframe();
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -1934,7 +1935,7 @@
                     // 🔄 Token expirado — tenta renovar (não disruptivo)
                     keepAliveConsecutiveFailures = 0;
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
-                    shared.sessionToken = '';
+                    // Não limpa token — heartbeat continua tentando com token velho até novo chegar
                     refreshTokenViaIframe();
                 }
             } else {
@@ -1954,8 +1955,17 @@
         }
     }
 
-    // 🔄 Renova token Serpro — extrai compras-id da página principal e dispara evento no page context
+    // 🔄 Renova token Serpro — extrai compras-id e dispara evento no page context
+    let _lastRefreshTime = 0;
     function refreshTokenViaIframe() {
+        // Debounce: máximo 1 refresh a cada 30s
+        var nowMs = Date.now();
+        if (nowMs - _lastRefreshTime < 30000) {
+            console.log('%c[POLARYON HEARTBEAT] ⏸️ Refresh ignorado (debounce 30s).', 'color:#6b7280;font-weight:bold;');
+            return;
+        }
+        _lastRefreshTime = nowMs;
+
         try {
             // Tenta extrair compras-id de várias fontes
             var foundComprasId = null;
