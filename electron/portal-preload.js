@@ -1699,15 +1699,28 @@
         });
 
         // 🔄 Renova token Serpro quando heartbeat detecta expiração
-        document.addEventListener('polaryon-refresh-token', async () => {
+        document.addEventListener('polaryon-refresh-token', async (e) => {
             console.log('%c[POLARYON INJECTED] 🔄 Refresh token triggered via event. Solicitando novo token Serpro...', 'color:#f59e0b;font-weight:bold;');
             try {
-                var comprasId = (window.location.pathname + window.location.search).match(/compras-id=([a-f0-9-]+)/i);
-                if (!comprasId || !comprasId[1]) {
-                    console.warn('[POLARYON INJECTED] ⚠️ compras-id não encontrado na URL. Fazendo fetch genérico.');
+                // Tenta encontrar compras-id: 1) event detail 2) window.opener URL 3) URL atual 4) cookies
+                var comprasId = (e.detail && e.detail.comprasId) || null;
+                if (!comprasId) {
+                    try { var m = (window.opener ? window.opener.location.href : '').match(/compras-id=([a-f0-9-]+)/i); if (m) comprasId = m[1]; } catch(e2) {}
+                }
+                if (!comprasId) {
+                    var m = (window.location.pathname + window.location.search).match(/compras-id=([a-f0-9-]+)/i);
+                    if (m) comprasId = m[1];
+                }
+                if (!comprasId) {
+                    // Tenta UUID pattern no path (ex: /disputa/uuid)
+                    var m = window.location.pathname.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+                    if (m) comprasId = m[1];
+                }
+                if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) {
+                    console.warn('[POLARYON INJECTED] ⚠️ compras-id não encontrado. Tentando fetch genérico pode falhar.');
                     var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario', { credentials: 'include', headers: { 'Accept': 'application/json' } });
                 } else {
-                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId[1], { credentials: 'include', headers: { 'Accept': 'application/json' } });
+                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId, { credentials: 'include', headers: { 'Accept': 'application/json' } });
                 }
                 if (resp.ok) {
                     var clone = resp.clone();
@@ -1941,11 +1954,22 @@
         }
     }
 
-    // 🔄 Renova token Serpro — dispara evento no page context (injected script faz fetch com cookies)
+    // 🔄 Renova token Serpro — extrai compras-id da página principal e dispara evento no page context
     function refreshTokenViaIframe() {
         try {
-            document.dispatchEvent(new CustomEvent('polaryon-refresh-token'));
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Evento refresh-token disparado. Aguardando novo token...', 'color:#f59e0b;font-weight:bold;');
+            // Tenta extrair compras-id de várias fontes
+            var foundComprasId = null;
+            try {
+                var currentUrl = window.location.href;
+                var openerUrl = window.opener ? window.opener.location.href : null;
+                var match = (currentUrl + '|' + (openerUrl || '')).match(/compras-id=([a-f0-9-]+)/i);
+                if (match && match[1]) foundComprasId = match[1];
+            } catch(e) {}
+            
+            document.dispatchEvent(new CustomEvent('polaryon-refresh-token', {
+                detail: { comprasId: foundComprasId }
+            }));
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Evento refresh-token disparado. compras-id=' + (foundComprasId || 'NULO'), 'color:#f59e0b;font-weight:bold;');
         } catch(e) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao disparar refresh-token:', e.message);
         }
