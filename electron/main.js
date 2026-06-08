@@ -313,23 +313,13 @@ ipcMain.on('portal-detected-room', (event, data) => {
 
 // [BRIDGE DIRETA] RELAY DE DADOS DO NAVEGADOR PARA O DASHBOARD (v3.6.27)
 ipcMain.on('send-portal-data', (event, data) => {
-    // ⚡ ROTEAMENTO WS: dados do WebSocket chegam via send-portal-data (canal que funciona)
     if (data && data.type === 'ws-item-data' && data.codigo && Array.isArray(data.items)) {
-        let routed = 0;
         if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
             biddingRunner.injectRealtimeItems(data.codigo, data.items);
-            routed++;
         }
         if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
             global.biddingRunner.injectRealtimeItems(data.codigo, data.items);
-            routed++;
         }
-    }
-        if (global.biddingRunner && global.biddingRunner !== biddingRunner && typeof global.biddingRunner.injectRealtimeItems === 'function') {
-            global.biddingRunner.injectRealtimeItems(data.codigo, data.items);
-            routed++;
-        }
-        console.log(`[WS DIAG] ✅ Roteado para ${routed} BiddingRunner(s) via send-portal-data`);
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('portal-data-update', data);
