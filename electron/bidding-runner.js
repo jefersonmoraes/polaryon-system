@@ -988,7 +988,7 @@ class RoomRunner {
                             this.webContents.send('bidding-update-log', `📊 [MOTOR] Scan: ${itemsAtivos} ativos, ${itemsBloqueados} bloqueados de ${mappedItems.length} itens`);
                         }
                     }
-                } else if (!this.webContents.isDestroyed() && Math.random() < 0.02) {
+                if (!this.webContents.isDestroyed() && Math.random() < 0.02) {
                     this.webContents.send('bidding-update-log', `⏳ [MOTOR] Aguardando configuração de estratégia...`);
                 }
             }
