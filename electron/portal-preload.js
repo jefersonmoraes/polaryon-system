@@ -1697,6 +1697,41 @@
                 console.error('[POLARYON INJECTED] ❌ Falha ao disparar hcaptcha programático:', err.message || err);
             }
         });
+
+        // 🔄 Renova token Serpro quando heartbeat detecta expiração
+        document.addEventListener('polaryon-refresh-token', async () => {
+            console.log('%c[POLARYON INJECTED] 🔄 Refresh token triggered via event. Solicitando novo token Serpro...', 'color:#f59e0b;font-weight:bold;');
+            try {
+                var comprasId = (window.location.pathname + window.location.search).match(/compras-id=([a-f0-9-]+)/i);
+                if (!comprasId || !comprasId[1]) {
+                    console.warn('[POLARYON INJECTED] ⚠️ compras-id não encontrado na URL. Fazendo fetch genérico.');
+                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario', { credentials: 'include', headers: { 'Accept': 'application/json' } });
+                } else {
+                    var resp = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId[1], { credentials: 'include', headers: { 'Accept': 'application/json' } });
+                }
+                if (resp.ok) {
+                    var clone = resp.clone();
+                    try {
+                        var body = await clone.json();
+                        // Tenta extrair token de vários formatos de resposta Serpro
+                        var newToken = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
+                        if (newToken) {
+                            if (!newToken.startsWith('Bearer ')) newToken = 'Bearer ' + newToken;
+                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: newToken }, '*');
+                            console.log('%c[POLARYON INJECTED] ✅ Novo token Serpro capturado e postado ao preload!', 'color:#10b981;font-weight:bold;');
+                        } else {
+                            console.log('%c[POLARYON INJECTED] ⚠️ Token não encontrado no response body. Chaves:', Object.keys(body).join(', '), 'color:#f59e0b;');
+                        }
+                    } catch(e) {
+                        console.warn('[POLARYON INJECTED] ⚠️ Falha ao parsear response body:', e.message);
+                    }
+                } else {
+                    console.warn('[POLARYON INJECTED] ⚠️ Token refresh request falhou:', resp.status, resp.statusText);
+                }
+            } catch(e) {
+                console.warn('[POLARYON INJECTED] ⚠️ Token refresh fetch error:', e.message);
+            }
+        });
         })();
         `;
  
@@ -1857,13 +1892,12 @@
     // =========================================================================
     let keepAliveConsecutiveFailures = 0;
     const KEEPALIVE_INTERVAL_MS = 30000; // 30 segundos (Super Estabilidade Anti-Queda)
-    const KEEPALIVE_MAX_FAILURES = 5;    // 5 falhas consecutivas = pede re-auth
+    const KEEPALIVE_MAX_FAILURES = 2;    // 2 falhas consecutivas = tenta renovar token
 
     async function sendKeepAlive() {
         if (!shared.sessionToken) return; // Sem token, não há o que manter
 
         try {
-            // 1. Ping leve na API do Serpro (endpoint de participações com paginação mínima)
             const pingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=1&pagina=0&filtro=4`;
             const res = await fetch(pingUrl, {
                 method: 'GET',
@@ -1873,27 +1907,22 @@
                     'x-device-platform': 'web',
                     'x-version-number': '6.0.2'
                 },
-                signal: AbortSignal.timeout(15000) // Timeout de 15s
+                signal: AbortSignal.timeout(15000)
             });
 
             if (res.ok || res.status === 404 || res.status === 422) {
-                // Qualquer resposta válida (mesmo 404/422 = token aceito, apenas sem dados)
                 keepAliveConsecutiveFailures = 0;
                 console.log(`%c[POLARYON HEARTBEAT] ❤️ Sessão Viva! Ping às ${new Date().toLocaleTimeString()}`, 'color: #10b981; font-size: 10px;');
             } else if (res.status === 401 || res.status === 403) {
                 keepAliveConsecutiveFailures++;
-                console.warn(`[POLARYON HEARTBEAT] ⚠️ Token expirado ou rejeitado (${res.status}). Falha ${keepAliveConsecutiveFailures}/${KEEPALIVE_MAX_FAILURES}`);
+                console.warn(`[POLARYON HEARTBEAT] ⚠️ Token expirado (${res.status}). Falha ${keepAliveConsecutiveFailures}/${KEEPALIVE_MAX_FAILURES}`);
                 
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
+                    // 🔄 Token expirado — tenta renovar (não disruptivo)
                     keepAliveConsecutiveFailures = 0;
+                    console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
                     shared.sessionToken = '';
-                    ipcRenderer.send('portal-error', {
-                        sessionId: 'HEARTBEAT',
-                        error: 'Sessão expirada por inatividade. Por favor, reautentique com o Gov.br.',
-                        code: res.status,
-                        action: 'REQUIRE_REAUTH'
-                    });
-                    console.error('[POLARYON HEARTBEAT] 🔴 Sessão encerrada definitivamente. Re-autenticação necessária.');
+                    refreshTokenViaIframe();
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
@@ -1903,17 +1932,22 @@
                 console.warn('[POLARYON HEARTBEAT] ⏰ Timeout no ping. Rede lenta? Continuando...');
             } else {
                 keepAliveConsecutiveFailures++;
-                console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede no heartbeat:`, err.message);
+                console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede:`, err.message);
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
                     keepAliveConsecutiveFailures = 0;
-                    ipcRenderer.send('portal-error', {
-                        sessionId: 'HEARTBEAT',
-                        error: 'Conexão com o Serpro perdida. Verifique sua internet.',
-                        code: 0,
-                        action: 'REQUIRE_REAUTH'
-                    });
+                    refreshTokenViaIframe();
                 }
             }
+        }
+    }
+
+    // 🔄 Renova token Serpro — dispara evento no page context (injected script faz fetch com cookies)
+    function refreshTokenViaIframe() {
+        try {
+            document.dispatchEvent(new CustomEvent('polaryon-refresh-token'));
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Evento refresh-token disparado. Aguardando novo token...', 'color:#f59e0b;font-weight:bold;');
+        } catch(e) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao disparar refresh-token:', e.message);
         }
     }
 

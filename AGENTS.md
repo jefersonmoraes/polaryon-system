@@ -544,6 +544,21 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 - `WS ITENS OK` → OK, dados de itens chegam!
 - Se nada aparecer → script injection é o problema
 
+## Implementado (v3.8.207)
+
+### 37. Auto token refresh on 401 — heartbeat renova JWT automaticamente
+**Antes:** Heartbeat detectava 401 no `sendKeepAlive()`, contava 5 falhas consecutivas, então limpava `shared.sessionToken` e emitia `portal-error` pedindo re-autenticação manual. Sistema ficava offline até o usuário interagir com o portal Gov.br novamente.
+
+**Arquivo:** `electron/portal-preload.js:1883-1937`
+
+**Solução:** Três mudanças:
+1. **Limite reduzido 5→2 falhas**: Após 2 falhas consecutivas de 401/403, invoca `refreshTokenViaIframe()` em vez de pedir re-auth.
+2. **Evento DOM `polaryon-refresh-token`**: O preload dispara um `CustomEvent` no `document`. O injected script (page context) escuta o evento e faz um `fetch` com `credentials: 'include'` (usa cookies Gov.br, sem Authorization header) para o endpoint `/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/{compras-id}`.
+3. **Extração de token do response**: O handler tenta extrair o novo JWT de vários campos possíveis no response body (`token`, `accessToken`, `access_token`, `jwt`, `bearer`, `authorization`). Se encontrar, posta via `window.postMessage({ source: 'polaryon-injector', type: 'token' })` para o preload atualizar `shared.sessionToken`.
+4. **Token zerado antes do refresh**: `shared.sessionToken = ''` antes de disparar o refresh, permitindo que o heartbeat possa tentar novamente se a renovação falhar.
+
+**Impacto:** Robot nunca mais precisa de re-autenticação manual. Após expiração do JWT Serpro (~30min), o sistema renova automaticamente usando os cookies da sessão Gov.br ativa.
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)
