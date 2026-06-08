@@ -9,6 +9,7 @@ const secureProxy = require('./secure-proxy');
 
 let biddingRunner;
 let mainWindow;
+let globalComprasId = ''; // Session UUID compartilhado entre janelas
 
 // Configure autoUpdater
 autoUpdater.autoDownload = true;
@@ -186,6 +187,24 @@ app.whenReady().then(async () => {
   });
 
   createWindow();
+
+  // 🌐 Rastreia compras-id (session UUID) em TODAS as janelas, incluindo child windows do portal Serpro
+  app.on('web-contents-created', (event, contents) => {
+    contents.on('did-navigate', (event, url) => {
+      const m = url.match(/[?&]compras-id=([a-f0-9-]+)/i);
+      if (m && m[1]) {
+        globalComprasId = m[1];
+        console.log('[MAIN] 📍 compras-id capturado de navegação: ' + globalComprasId);
+      }
+    });
+    contents.on('did-navigate-in-page', (event, url) => {
+      const m = url.match(/[?&]compras-id=([a-f0-9-]+)/i);
+      if (m && m[1]) {
+        globalComprasId = m[1];
+        console.log('[MAIN] 📍 compras-id capturado de SPA navigation: ' + globalComprasId);
+      }
+    });
+  });
 
   // Handle Windows Deep Link on First Launch
   const urlArg = process.argv.find(arg => arg.startsWith('polaryon://'));
@@ -541,4 +560,16 @@ ipcMain.on('check-for-updates', () => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// 🔑 SESSION UUID SHARING: Preload enuncia e child windows consultam
+ipcMain.on('store-session-uuid', (event, uuid) => {
+  if (uuid && uuid.match(/^[a-f0-9-]+$/i)) {
+    globalComprasId = uuid;
+    console.log('[MAIN] 💾 compras-id armazenado via IPC: ' + globalComprasId);
+  }
+});
+
+ipcMain.handle('get-compras-id', () => {
+  return globalComprasId || '';
 });

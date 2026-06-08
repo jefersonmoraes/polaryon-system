@@ -570,6 +570,74 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 
 **Impacto:** Auto-updater não entra mais em loop de reinstalação da mesma versão.
 
+## Implementado (v3.8.210)
+
+### 39. `session-expired` chamava refreshTokenViaIframe() mas zerava heartbeat counter
+**Antes:** Handler `session-expired` (portal-preload.js:1008-1020) chamava `refreshTokenViaIframe()`, mas antes resetava `_heartbeatFailures = 0` e limpava `pendingRankingTargets`. O heartbeat precisava de 5 falhas consecutivas para re-disparar refresh, então o reset impedia novo refresh mesmo se o anterior falhasse.
+
+**Arquivo:** `electron/portal-preload.js:1008-1020`
+
+**Solução:** Handler agora chama `refreshTokenViaIframe()` diretamente sem resetar contadores. O debounce de 30s já previne spam.
+
+## Implementado (v3.8.211)
+
+### 40. Token não é mais zerado antes do refresh
+**Antes:** `shared.sessionToken = ''` era chamado antes de disparar o refresh, deixando o sistema sem token durante o fetch assíncrono. Se o ranking fetch chegasse nesse intervalo, pegava 401 adicional.
+
+**Arquivo:** `electron/portal-preload.js:1883-1937`
+
+**Solução:** Removeu o `shared.sessionToken = ''`. O token antigo fica ativo até o novo chegar via `postMessage` do injected script.
+
+### 41. Debounce de 30s no refresh
+**Solução:** Adicionado `_lastRefreshAttempt` timestamp. Se `Date.now() - _lastRefreshAttempt < 30000`, o refresh é ignorado. Previne loop infinito de refresh se o endpoint de token falhar consistentemente.
+
+## Implementado (v3.8.212)
+
+### 42. 7 estratégias para encontrar compras-id (session UUID)
+**Problema:** O endpoint de refresh de token requer `compras-id` (session UUID) na URL: `/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/{compras-id}`. Nas child windows (salas de disputa), a URL não contém `compras-id` e `window.opener` é null.
+
+**Arquivo:** `electron/portal-preload.js:1702-1803` (injected script)
+
+**Solução:** O injected script tenta 7 fontes em ordem:
+1. **event.detail.comprasId** — recebido do preload via CustomEvent
+2. **window.opener.location.href** — URL da janela pai
+3. **window.location** — URL atual da child window
+4. **HTML scan** — regex no `document.documentElement.outerHTML`
+5. **Cookies** — `document.cookie` match UUID pattern
+6. **localStorage/sessionStorage** — varredura de todas as chaves buscando UUID
+7. **Hidden iframe** — navega um iframe para o portal Serpro e extrai `compras-id` da URL resultante
+
+### 43. `session-expired` não limpa mais pendingRankingTargets
+**Antes:** Limpava `pendingRankingTargets` ao receber `session-expired`, descartando targets legítimos que seriam processados após o refresh.
+
+**Solução:** Handler apenas dispara refresh, sem limpar filas de ranking.
+
+## Implementado (v3.8.213)
+
+### 44. postMessage substitui CustomEvent para cruzar contextIsolation
+
+## Implementado (v3.8.214)
+
+### 45. compras-id compartilhado via main.js entre janelas (IPC cross-window)
+**Problema:** `refreshTokenViaIframe()` não encontrava `compras-id` pois a child window URL (`compras?compra=`) não contém o session UUID. `window.opener` é null (não é popup JS). As 7 fontes do injected script (opener, URL, HTML, cookies, storage, iframe) falham.
+
+**Arquivo:** `electron/main.js:189-204` (web-contents-created), `:565-574` (IPC handlers), `electron/portal-preload.js:114-128` (storeSessionUuidFromUrl), `:2084-2089` (get-compras-id no refresh)
+
+**Solução:** Três camadas:
+1. **main.js rastreia TODAS as janelas**: `app.on('web-contents-created')` escuta `did-navigate` e `did-navigate-in-page` em qualquer webContents e extrai `compras-id` da URL, armazenando em `globalComprasId` global
+2. **portal-preload.js enuncia quando detecta**: `storeSessionUuidFromUrl()` extrai `compras-id` da URL local e envia para main.js via `ipcRenderer.send('store-session-uuid')`. Chamado no startup, no hashchange, e a cada 10s
+3. **refreshTokenViaIframe consulta main.js**: Se `compras-id` não for encontrado localmente, faz `await ipcRenderer.invoke('get-compras-id')` e usa o UUID que main.js capturou de qualquer janela
+
+**Impacto:** Mesmo que a child window nunca veja o `compras-id`, main.js o capturou da navegação da janela principal. O refresh de token agora tem o UUID de sessão necessário para chamar o endpoint `/token/{compras-id}`.
+**Problema:** `document.dispatchEvent(new CustomEvent('polaryon-refresh-token'))` do preload não chegava no injected script (page context) — `CustomEvent` não cruza a barreira de context isolation do Electron.
+
+**Arquivo:** `electron/portal-preload.js:1959-1966` (preload), `:1746-1811` (injected script)
+
+**Solução:** 
+- Preload agora usa `window.postMessage({ source: 'polaryon-preload', type: 'refresh-token', comprasId })` em vez de `CustomEvent`
+- Injected script escuta `window.addEventListener('message')` e filtra por `event.data.source === 'polaryon-preload'` e `event.data.type === 'refresh-token'`
+- `window.postMessage` é o padrão Electron para comunicação preload→page com context isolation ativo
+
 ## Política de Deploy Automático (v3.8.164+)
 **Toda melhoria de código DEVE seguir este fluxo automaticamente:**
 1. Bump patch version em `package.json` (ex: 3.8.163 → 3.8.164)

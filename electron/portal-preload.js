@@ -111,6 +111,22 @@
         }
     }).catch(err => console.error("[POLARYON] Erro get-login-token:", err));
 
+    // 🔑 Armazena compras-id em main.js sempre que detectado na URL (para child windows consultarem)
+    function storeSessionUuidFromUrl() {
+        try {
+            var m = window.location.href.match(/[?&]compras-id=([a-f0-9-]+)/i);
+            if (m && m[1]) {
+                ipcRenderer.send('store-session-uuid', m[1]);
+                console.log('%c[POLARYON] 💾 compras-id enviado ao main.js: ' + m[1], 'color:#10b981;font-weight:bold;');
+            }
+        } catch(e) {}
+    }
+    // Tenta no startup e também após navegações SPA
+    storeSessionUuidFromUrl();
+    window.addEventListener('hashchange', storeSessionUuidFromUrl);
+    // Monitora popstate (pushState/replaceState) periodicamente
+    setInterval(storeSessionUuidFromUrl, 10000);
+
     // AUTOMATIZADOR DE FILTRO: Seleciona "Disputa" automaticamente se estiver em outra opção (v3.6.86)
     // Garante que o usuário sempre seja guiado para a lista de disputas sem precisar de cliques manuais
     setInterval(() => {
@@ -2042,9 +2058,9 @@
         }
     }
 
-    // 🔄 Renova token Serpro — extrai compras-id e dispara evento no page context
+    // 🔄 Renova token Serpro — extrai compras-id e dispara postMessage no page context
     let _lastRefreshTime = 0;
-    function refreshTokenViaIframe() {
+    async function refreshTokenViaIframe() {
         // Debounce: máximo 1 refresh a cada 30s
         var nowMs = Date.now();
         if (nowMs - _lastRefreshTime < 30000) {
@@ -2065,6 +2081,15 @@
             var match = (currentUrl + '|' + (openerUrl || '')).match(/compras-id=([a-f0-9-]+)/i);
             if (match && match[1]) foundComprasId = match[1];
         } catch(e) {}
+
+            // Se não achou localmente, consulta main.js (que rastreia TODAS as janelas)
+            if (!foundComprasId) {
+                try {
+                    foundComprasId = await ipcRenderer.invoke('get-compras-id');
+                } catch(ipcErr) {
+                    console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao consultar main.js para compras-id:', ipcErr.message);
+                }
+            }
             
             // window.postMessage é o padrão Electron para cruzar contextIsolation
             window.postMessage({
