@@ -1222,6 +1222,14 @@ class BiddingRunner {
     async start(sessionId, uasg, numero, ano, vault, modality = '06') {
         const idCompra = `${uasg}${modality}${String(numero).padStart(5, '0')}${ano}`;
         if (this.activeRunners.has(sessionId)) return;
+        // ⛔ Se já existe um runner para esta compra (mesmo idCompra com sessionId diferente),
+        // não cria duplicata — o runner existente já tem as configs do usuário
+        for (const [, runner] of this.activeRunners) {
+            if (runner.idCompra === idCompra) {
+                console.log(`[POLARYON KAMIKAZE] ⏭️ Sala ${idCompra} já monitorada por ${runner.sessionId}. Ignorando ${sessionId}.`);
+                return;
+            }
+        }
 
         console.log(`[POLARYON KAMIKAZE] Dando a partida no Motor de Fundo para a sala ${idCompra}`);
 

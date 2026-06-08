@@ -518,6 +518,8 @@
     const activeRankingItems = []; // { purchaseId, itemId, timerSeconds }
     let _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
+    let _ranking429Count = 0;      // consecutive 429s for exponential backoff
+    let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
     const RANKING_RATE_MS = 2000;  // 1 item a cada 2000ms (~30 req/min) — Anti-429
 
@@ -587,6 +589,10 @@
     // 🔁 REFRESH PERIÓDICO: a cada 45s re-enfileira todos os itens ativos (no final da fila)
     setInterval(() => {
         if (!shared.sessionToken || activeRankingItems.length === 0) return;
+        if (_rankingSuppressRefresh || Date.now() < _rankingBackoffUntil) {
+            console.log(`%c[POLARYON RANKING QUEUE] ⏸️ Refresh suprimido (backoff 429 ativo)`, 'color:#f59e0b;font-size:9px;');
+            return;
+        }
         console.log(`%c[POLARYON RANKING QUEUE] 🔁 Re-enfileirando ${activeRankingItems.length} itens para refresh periódico`, 'color:#a855f7;font-size:9px;');
         activeRankingItems.forEach(target => enqueueRankingFetch(target, false));
     }, 45000);
@@ -1021,13 +1027,25 @@
                     shared.savedSegundos = event.data.savedSegundos;
                     shared.savedTimestamp = event.data.savedTimestamp;
                 }
+                if (ok && url && (url.includes('/lances/por-participante') || url.includes('/classificacao'))) {
+                    if (_ranking429Count > 0) {
+                        _ranking429Count = 0;
+                        console.log('%c[POLARYON] ✅ 429 counter reset (ranking fetch OK)', 'color:#10b981;font-weight:bold;font-size:10px;');
+                    }
+                }
                 processSerproData(data, url, status, ok, event.data.dateHeader, event.data.tStart, event.data.tEnd);
             } else if (type === 'captcha-error') {
                 console.log('%c[POLARYON] ⚠️ Captcha rejeitado/expirado (403/Forbidden). Limpando token...', 'color:#f59e0b;font-weight:bold;font-size:11px;');
                 shared.captchaToken = null;
             } else if (type === '429-error') {
-                console.log('%c[POLARYON] 🚨 429 Too Many Requests detectado! Ativando backoff de 60 segundos...', 'color:#ef4444;font-weight:bold;font-size:11px;');
-                _rankingBackoffUntil = Date.now() + 60000;
+                _ranking429Count = (_ranking429Count || 0) + 1;
+                const backoffSec = Math.min(60 * Math.pow(2, _ranking429Count - 1), 300); // 60s, 120s, 240s, max 300s
+                console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
+                _rankingQueue = [];
+                shared.pendingRankingTargets = [];
+                _rankingSuppressRefresh = true;
+                setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
             } else if (type === 'session-expired') {
                 console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Disparando refresh de token...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];

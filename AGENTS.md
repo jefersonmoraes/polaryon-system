@@ -655,3 +655,36 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 4. Auto-updater do desktop detecta nova versão em até 8s
 
 **Script local:** `node scripts/full-deploy.js` faz tudo localmente (bump + build + commit + deploy)
+
+## Implementado (v3.8.216)
+
+### 1. Anti-429: loop infinito de ranking batch + periodic refresh
+**Problema:** 429 handler só setava `_rankingBackoffUntil = Date.now() + 60000`, sem limpar as filas. O refresh periódico de 45s re-enfileirava todos os itens durante o backoff. Quando o backoff expirava, TODOS os itens eram processados em explosão → outro 429 → outro backoff... loop infinito.
+
+**Arquivo:** `electron/portal-preload.js:1028-1030` (429 handler), `:588-592` (periodic refresh)
+
+**Solução (4 mudanças):**
+1. **429 handler limpa filas**: `_rankingQueue = []` + `shared.pendingRankingTargets = []` para evitar re-processamento
+2. **Backoff exponencial**: `_ranking429Count` incrementa a cada 429 consecutivo → `min(60 * 2^(count-1), 300)` segundos (60s, 120s, 240s, max 300s)
+3. **Supressão do refresh periódico**: Flag `_rankingSuppressRefresh = true` durante o backoff. Refresh de 45s verifica `_rankingSuppressRefresh || Date.now() < _rankingBackoffUntil` antes de re-enfileirar
+4. **Reset do contador 429**: Quando um ranking fetch bem-sucedido (`ok: true`, URL `/lances/por-participante` ou `/classificacao`) chega via `serpro-data`, `_ranking429Count = 0`
+
+**Impacto:** Ranking queue não entra mais em loop infinito de 429. Após backoff, só re-enfileira no próximo ciclo de 45s (30s-90s de gap após backoff). Consecutive 429s aumentam backoff progressivamente.
+
+### 2. Diagnóstico: sniper INATIVO na reta final (item não ligado)
+**Problema:** Usuário programou robô para `snipeDelaySeconds=30` (final 30s) mas sniper não disparou. Log mostrava `[SNIPER] ⏹️ Item {sId}: sniper INATIVO (botão desligado)` consistentemente.
+
+**Causa raiz:** `strat.active` era `false` para o item — usuário configurou o retardo (`snipeDelaySeconds`) mas NÃO ligou o toggle ON do item. A checagem `!strat.active` no backend (bidding-runner.js:743) e frontend (BiddingDashboardPage.tsx:296) bloqueia o item antes de qualquer outra lógica.
+
+**Arquivo:** `src/pages/BiddingDashboardPage.tsx:294-301`, `electron/bidding-runner.js:741-743`
+
+**Solução:** Adicionado dedup por `idCompra` no `BiddingRunner.start()` (bidding-runner.js:1227-1232) — se já existe um RoomRunner para a mesma compra, o Global Scanner não cria um segundo runner. Assim o runner do usuário (com configs) não é substituído por um GLOBAL_ runner sem configs.
+
+### 3. Diagnóstico: 422 no refresh de token (limitação Serpro)
+**Problema:** Endpoint `/token/{compras-id}` retorna 422 (Unprocessable). Fallback `tryExtractTokenFromStorage()` também falha porque Serpro não gera novo token na página até o usuário re-autenticar.
+
+**Causa raiz:** Serpro NÃO permite refresh de JWT expirado via `/token/{uuid}`. O session UUID é one-time — uma vez que o JWT original expira, não é possível obter novo via API. O heartbeat continua funcionando porque o ping em `/participacoes?filtro=4` retorna 404/422 mesmo com token expirado (esses status são tratados como "Sessão Viva!").
+
+**Observação:** Na prática, o token NÃO estava expirado durante esta sessão — os ranking fetches falhavam por **429**, não 401. O heartbeat mostrava `❤️ Sessão Viva!` consistentemente a cada 30s. O problema real era o 429 flood, já corrigido acima.
+
+**Arquivos:** `electron/portal-preload.js:2137-2182` (heartbeat), `:1940-1960` (token refresh), `:1786-1828` (tryExtractTokenFromStorage)
