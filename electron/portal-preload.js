@@ -1053,6 +1053,7 @@
                 // Não reseta keepAliveConsecutiveFailures — deixa o heartbeat acumular e renovar
                 // Não limpa shared.sessionToken — heartbeat precisa dele para tentar o refresh
                 refreshTokenViaIframe();
+                triggerJwtGeneration();
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -1878,6 +1879,30 @@
             }
         }
 
+        // 🎯 Hook no Storage.prototype.setItem para capturar JWT em TEMPO REAL
+        // (qualquer same-origin iframe/window que chamar sessionStorage.setItem passa pelo hook)
+        (function() {
+            var origSetItem = Storage.prototype.setItem;
+            Storage.prototype.setItem = function(k, v) {
+                origSetItem.call(this, k, v);
+                if (v && typeof v === 'string') {
+                    if (v.startsWith('eyJ') && v.length > 50) {
+                        var t = v.startsWith('Bearer ') ? v : 'Bearer ' + v;
+                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                    } else if (v.startsWith('{')) {
+                        try {
+                            var p = JSON.parse(v);
+                            var j = p.accessToken || p.access_token || p.token || p.jwt || p.id_token || null;
+                            if (j && typeof j === 'string' && j.length > 20) {
+                                if (!j.startsWith('Bearer ')) j = 'Bearer ' + j;
+                                window.postMessage({ source: 'polaryon-injector', type: 'token', token: j }, '*');
+                            }
+                        } catch(e) {}
+                    }
+                }
+            };
+        })();
+
         // 🔄 Varredura periódica do storage para capturar token renovado pela página
         setInterval(tryExtractTokenFromStorage, 5000);
 
@@ -2183,6 +2208,7 @@
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
                     // Não limpa token — heartbeat continua tentando com token velho até novo chegar
                     refreshTokenViaIframe();
+                    triggerJwtGeneration();
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
@@ -2196,6 +2222,7 @@
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
                     keepAliveConsecutiveFailures = 0;
                     refreshTokenViaIframe();
+                    triggerJwtGeneration();
                 }
             }
         }
@@ -2246,6 +2273,43 @@
         }
     }
 
+    // Iframe para forçar geração de novo JWT quando cookie SSO está vivo mas JWT expirou
+    var _jwtIframe = null;
+    var _lastJwtTrigger = 0;
+
+    function triggerJwtGeneration() {
+        if (Date.now() - _lastJwtTrigger < 30000) return;
+        _lastJwtTrigger = Date.now();
+        if (_jwtIframe && _jwtIframe.parentNode) {
+            try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
+            _jwtIframe = null;
+        }
+        try {
+            var iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+            iframe.src = 'https://www.comprasnet.gov.br/compras/pt-br/';
+            iframe.onload = function() {
+                setTimeout(function() {
+                    if (_jwtIframe && _jwtIframe.parentNode) {
+                        try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
+                        _jwtIframe = null;
+                    }
+                }, 8000);
+            };
+            document.body.appendChild(iframe);
+            _jwtIframe = iframe;
+            console.log('%c[POLARYON HEARTBEAT] 🖼️ Iframe JWT carregando...', 'color:#6366f1;');
+            setTimeout(function() {
+                if (_jwtIframe && _jwtIframe.parentNode) {
+                    try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
+                    _jwtIframe = null;
+                }
+            }, 20000);
+        } catch(e) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ Falha iframe JWT:', e.message);
+        }
+    }
+
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
     async function renewGovBrSession() {
         try {
@@ -2256,6 +2320,8 @@
                 signal: AbortSignal.timeout(10000)
             });
             console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente (main.asp).', 'color: #6366f1; font-size: 10px;');
+            // Após renovar cookies, força geração de novo JWT via Angular app no iframe
+            triggerJwtGeneration();
         } catch (e) {
             // Silencioso — falha no Gov.br não é crítica
         }
