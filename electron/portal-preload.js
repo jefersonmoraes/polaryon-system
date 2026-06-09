@@ -225,13 +225,10 @@
     let _lastTokenUpdate = 0;
     ipcRenderer.on('force-token-injection', (event, data) => {
         if (data && data.token) {
-            var now = Date.now();
-            // Dedup + throttle: não re-injeta o mesmo token, e no mínimo 2s entre atualizações
-            // (evita loop do interceptor e protege token fresco do storage)
-            if (data.token !== shared.sessionToken && now - _lastTokenUpdate > 2000) {
+            _lastTokenUpdate = Date.now(); // sinaliza interceptor ativo
+            if (data.token !== shared.sessionToken) {
                 shared.sessionToken = data.token;
-                _lastTokenUpdate = now;
-                console.log("%c[POLARYON] Token de Combate Armado e Pronto!", "color: #ff00ff; font-size: 11px;");
+                console.log("%c[POLARYON] 🔑 Token FRESCO recebido!", "color: #10b981; font-size: 11px; font-weight: bold;");
             }
         }
     });
@@ -2232,10 +2229,15 @@
     async function refreshTokenViaIframe() {
         var nowMs = Date.now();
         if (nowMs - _lastRefreshTime < 30000) {
-            console.log('%c[POLARYON HEARTBEAT] ⏸️ Refresh ignorado (debounce 30s).', 'color:#6b7280;font-weight:bold;');
             return;
         }
         _lastRefreshTime = nowMs;
+
+        // Se o interceptor do visual runner capturou token nos últimos 120s, confia nele (v3.8.228)
+        if (_lastTokenUpdate > 0 && nowMs - _lastTokenUpdate < 120000) {
+            console.log('%c[POLARYON HEARTBEAT] ⏩ Interceptor ativo, pulando refresh IPC.', 'color:#6b7280;font-weight:bold;');
+            return;
+        }
 
         // Passo 1: Renova cookies da sessão Gov.br (main.asp) para garantir cookies frescos
         try {
@@ -2245,36 +2247,28 @@
             });
         } catch(e) {}
 
-        // Passo 2: Obtém compras-id (local + IPC fallback)
-        var foundComprasId = null;
-        try {
-            var currentUrl = window.location.href;
-            var openerUrl = null;
-            try { openerUrl = window.opener ? window.opener.location.href : null; } catch(e) {}
-            var match = (currentUrl + '|' + (openerUrl || '')).match(/compras-id=([a-f0-9-]+)/i);
-            if (match && match[1]) foundComprasId = match[1];
-        } catch(e) {}
-        if (!foundComprasId) {
-            try { foundComprasId = await ipcRenderer.invoke('get-compras-id'); } catch(e) {}
+        // Passo 2: Extrai cnet-id do JWT atual (é o jti claim) — o compras-id da URL é DIFERENTE (v3.8.229)
+        var cnetId = null;
+        if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
+            try {
+                var payloadBase64 = shared.sessionToken.split('.')[1];
+                var payload = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
+                cnetId = payload.jti || null;
+            } catch(e) {}
         }
-
-        if (!foundComprasId || !foundComprasId.match(/^[a-f0-9-]+$/i)) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ Sem compras-id — refresh de JWT impossível');
+        if (!cnetId || !cnetId.match(/^[a-f0-9-]+$/i)) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ Sem jti no JWT — refresh impossível');
             return;
         }
 
-        // Passo 3: Chama main.js para refresh JWT via hidden BrowserWindow (mesmo origin, sem CORS)
+        // Passo 3: Tenta refresh via IPC (main.js Node.js https)
         try {
-            const token = await ipcRenderer.invoke('refresh-jwt', { comprasId: foundComprasId });
+            const token = await ipcRenderer.invoke('refresh-jwt', { cnetId: cnetId });
             if (token) {
                 shared.sessionToken = token;
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado com sucesso via hidden window!', 'color:#10b981;font-weight:bold;');
-            } else {
-                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt retornou vazio');
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado com sucesso via IPC!', 'color:#10b981;font-weight:bold;');
             }
-        } catch(ipcErr) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt IPC falhou:', ipcErr.message);
-        }
+        } catch(ipcErr) {}
     }
 
     // Força renovação de JWT via hidden BrowserWindow (substitui o iframe que era bloqueado por XFO/CORS)

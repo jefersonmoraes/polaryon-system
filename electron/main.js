@@ -580,9 +580,9 @@ function diag(event, msg) {
   console.log('[MAIN] ' + msg);
   try { event.sender.send('main-diag', msg); } catch(e) {}
 }
-ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
-  if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
-  diag(event, '🔄 refresh-jwt compras-id=' + comprasId);
+ipcMain.handle('refresh-jwt', async (event, { cnetId }) => {
+  if (!cnetId || !cnetId.match(/^[a-f0-9-]+$/i)) return null;
+  diag(event, '🔄 refresh-jwt cnet-id=' + cnetId);
   try {
     const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
     const serproCookies = allCookies.filter(c => c.domain && (c.domain.includes('comprasnet.gov.br') || c.domain.includes('serpro.gov.br')));
@@ -592,7 +592,7 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
       return null;
     }
     const cookieStr = serproCookies.map(c => c.name + '=' + c.value).join('; ');
-    const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId;
+    const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + cnetId;
     // Tenta www primeiro (login origin), fallback cnetmobile (pagina atual do usuario) (v3.8.226)
     const hosts = ['www.comprasnet.gov.br', 'cnetmobile.estaleiro.serpro.gov.br'];
     const methods = ['POST', 'GET'];
