@@ -639,7 +639,7 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
         } else if (result.status === 401) {
           diag(event, '⚠️ 401 em ' + hostname + ' — sessão não autenticada');
         } else {
-          diag(event, '⚠️ ' + hostname + ' ' + method + ' status=' + result.status);
+          diag(event, '⚠️ ' + hostname + ' ' + method + ' status=' + result.status + ' body="' + String(result.body).substring(0, 200) + '"');
         }
       }
     }
