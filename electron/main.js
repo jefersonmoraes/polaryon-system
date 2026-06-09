@@ -618,15 +618,16 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       diag('⚠️ main.asp (continuando mesmo assim): ' + e.message);
     }
 
-    // Passo 2: Navega para cnetmobile onde a SPA Angular vai gerar novo JWT
-    const comprasId = globalComprasId || '';
-    const cnetUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras' +
-      (comprasId ? '?compras-id=' + encodeURIComponent(comprasId) : '');
-    diag('🔄 Navegando para cnetmobile: ' + cnetUrl);
-    await hiddenWin.loadURL(cnetUrl, { timeout: 30000 });
-    diag('✅ Hidden window carregou cnetmobile');
+    // Passo 2: Navega para www.comprasnet.gov.br/pt-br (Angular SPA que gera novo JWT)
+    diag('🔄 Navegando para www.comprasnet.gov.br/compras/pt-br/ (Gerar JWT)...');
+    try {
+      await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 25000 });
+      diag('✅ Angular SPA carregada');
+    } catch(e) {
+      diag('⚠️ Angular SPA (continuando): ' + e.message);
+    }
 
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 2500));
 
     // Diagnóstico: verifica se a página carregou o Angular app
     const pageInfo = await hiddenWin.webContents.executeJavaScript(`
@@ -640,7 +641,6 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
           fetchResult: window.__polaryonFetchResult || ''
         };
         info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === 'string' && window.__polaryonBearer.length > 50);
-        // Procura por JWT em cookies
         try {
           info.cookies = document.cookie.split('; ').filter(function(c){ 
             return c.length > 50 || c.includes('bearer') || c.includes('token') || c.includes('jwt');
@@ -650,23 +650,6 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       })()
     `);
     diag(`📊 Page: ${pageInfo.title} | app-root: ${pageInfo.hasAppRoot} | body: ${pageInfo.bodyLength}chars | bearer: ${pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'}`);
-
-    // Se não tem Angular app-root, tenta navegar para intro.htm (portal alternativo)
-    if (!pageInfo.hasAppRoot) {
-      diag('🔄 Sem app-root, tentando intro.htm para gerar sessão...');
-      try {
-        await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 20000 });
-        await new Promise(r => setTimeout(r, 3000));
-        const info2 = await hiddenWin.webContents.executeJavaScript(`
-          (function(){
-            return { url: location.href, title: document.title, hasAppRoot: !!document.querySelector('app-root') };
-          })()
-        `);
-        diag(`📊 Intro.htm: ${info2.title} | app-root: ${info2.hasAppRoot} | url: ${info2.url}`);
-      } catch(e) {
-        diag('⚠️ intro.htm erro: ' + e.message);
-      }
-    }
 
     // Polling: checa global.serproToken (visual-runner interceptor) + storages
     for (let attempt = 0; attempt < 10; attempt++) {
