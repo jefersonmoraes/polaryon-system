@@ -2241,7 +2241,7 @@
             });
         } catch(e) {}
 
-        // Passo 2: Extrai cnet-id do JWT — tenta múltiplos claims (v3.8.231)
+        // Passo 2: Extrai cnet-id (UUID v4) do JWT ou fontes alternativas (v3.8.232)
         var cnetId = null;
         var jwtClaims = {};
         if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
@@ -2249,17 +2249,29 @@
                 var payloadBase64 = shared.sessionToken.split('.')[1];
                 var payload = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
                 jwtClaims = payload;
-                // Tenta claims conhecidos em ordem de prioridade
-                cnetId = payload.jti || payload.sub || payload.nameid || payload.sid || payload.uid || null;
+                // Varre TODOS os claims do JWT em busca de UUID (formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+                var claimNames = Object.keys(payload);
+                for (var ci = 0; ci < claimNames.length; ci++) {
+                    var val = String(payload[claimNames[ci]] || '');
+                    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(val)) {
+                        cnetId = val;
+                        break;
+                    }
+                }
             } catch(e) {}
         }
-        if (!cnetId || !cnetId.match(/^[a-f0-9-]+$/i)) {
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Nenhum claim UUID encontrado no JWT. Claims disponíveis: ' + Object.keys(jwtClaims).join(', '), 'color:#f59e0b;font-weight:bold;');
-            // Fallback: tenta compras-id da URL como cnetId (pode funcionar com cookies frescos)
+        if (!cnetId) {
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Nenhum UUID no JWT. Claims: ' + Object.keys(jwtClaims).join(', ') + ' | Valores: ' + JSON.stringify(jwtClaims).substring(0, 400), 'color:#f59e0b;font-weight:bold;');
+            // Fallbacks: ASPSESSIONID cookie (ASP.NET Session ID)
             try {
-                var urlMatch = window.location.href.match(/[?&]compra=(\d+)/);
-                if (!urlMatch) urlMatch = window.location.href.match(/compras\/(\d+)/);
-                if (urlMatch) cnetId = urlMatch[1];
+                var allCookies2 = document.cookie.split('; ');
+                for (var ci2 = 0; ci2 < allCookies2.length; ci2++) {
+                    var parts = allCookies2[ci2].split('=');
+                    if (parts[0] && parts[0].toUpperCase().includes('ASPSESSIONID')) {
+                        cnetId = parts.slice(1).join('=');
+                        break;
+                    }
+                }
             } catch(e) {}
             if (!cnetId) return;
         }

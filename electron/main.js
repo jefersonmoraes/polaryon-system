@@ -581,7 +581,7 @@ function diag(event, msg) {
   try { event.sender.send('main-diag', msg); } catch(e) {}
 }
 ipcMain.handle('refresh-jwt', async (event, { cnetId }) => {
-  if (!cnetId || !cnetId.match(/^[a-f0-9-]+$/i)) return null;
+  if (!cnetId) return null;
   diag(event, '🔄 refresh-jwt cnet-id=' + cnetId);
   try {
     const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
