@@ -233,7 +233,7 @@ class VisualRunner {
         const ses = win.webContents.session;
 
         // 🎯 [SIFÃO TOTAL v4.1] Captura Token E Aprende Salas via Tráfego
-        ses.webRequest.onBeforeSendHeaders({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*'] }, (details, callback) => {
+        ses.webRequest.onBeforeSendHeaders({ urls: ['*://cnetmobile.estaleiro.serpro.gov.br/*', '*://www.comprasnet.gov.br/*'] }, (details, callback) => {
             const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization'];
             
             // 🕵️ ESPIONAGEM DE ESTRUTURA (v3.5.55)

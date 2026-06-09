@@ -233,6 +233,14 @@
         }
     });
 
+    // No startup, recupera token atual do main.js (persiste entre navegações) (v3.8.233)
+    ipcRenderer.invoke('get-stored-token').then(function(token) {
+        if (token && token !== shared.sessionToken) {
+            shared.sessionToken = token;
+            console.log("%c[POLARYON] 🔑 Token restaurado do main.js!", "color: #10b981; font-size: 11px; font-weight: bold;");
+        }
+    });
+
     // 📊 Latência WebSocket vs HTTP (v3.8.135): loga no console do frontend
     ipcRenderer.on('bidding-update-log', (event, logMsg) => {
         console.log(`%c${logMsg}`, 'color: #00ffff; font-weight: bold;');

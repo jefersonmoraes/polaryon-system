@@ -575,6 +575,10 @@ ipcMain.handle('get-compras-id', () => {
   return globalComprasId || '';
 });
 
+ipcMain.handle('get-stored-token', () => {
+  return global.serproToken || '';
+});
+
 // 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS (v3.8.225)
 function diag(event, msg) {
   console.log('[MAIN] ' + msg);
