@@ -2233,12 +2233,6 @@
         }
         _lastRefreshTime = nowMs;
 
-        // Se o interceptor do visual runner capturou token nos últimos 120s, confia nele (v3.8.228)
-        if (_lastTokenUpdate > 0 && nowMs - _lastTokenUpdate < 120000) {
-            console.log('%c[POLARYON HEARTBEAT] ⏩ Interceptor ativo, pulando refresh IPC.', 'color:#6b7280;font-weight:bold;');
-            return;
-        }
-
         // Passo 1: Renova cookies da sessão Gov.br (main.asp) para garantir cookies frescos
         try {
             await fetch('https://www.comprasnet.gov.br/main.asp', {
