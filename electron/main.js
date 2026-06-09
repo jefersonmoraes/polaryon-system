@@ -608,36 +608,79 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       }
     });
 
-    // Navega para a página de compras do cnetmobile (ASP.NET) onde o usuário já está autenticado,
-    // NÃO para www.comprasnet.gov.br (Angular SPA que requer re-autenticação)
+    // Passo 1: Navega para main.asp (legado) primeiro para renovar cookies da sessão Gov.br
+    diag('🔄 Navegando para main.asp (renovar cookies)...');
+    try {
+      await hiddenWin.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 15000 });
+      diag('✅ main.asp carregado, cookies renovados');
+    } catch(e) {
+      diag('⚠️ main.asp (continuando mesmo assim): ' + e.message);
+    }
+
+    // Passo 2: Navega para cnetmobile onde a SPA Angular vai gerar novo JWT
     const comprasId = globalComprasId || '';
     const cnetUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras' +
       (comprasId ? '?compras-id=' + encodeURIComponent(comprasId) : '');
-    diag('🔄 Hidden window navegando para: ' + cnetUrl +
-      (comprasId ? '' : ' (sem compras-id!)'));
-    
-    // Usa loadURL que compartilha cookies da sessão 'persist:polaryon-global'
+    diag('🔄 Navegando para cnetmobile: ' + cnetUrl);
     await hiddenWin.loadURL(cnetUrl, { timeout: 30000 });
-    diag('✅ Hidden window carregou a página cnetmobile');
+    diag('✅ Hidden window carregou cnetmobile');
 
-    // Aguarda 3s para a página fazer as chamadas API iniciais com o Bearer token
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, 2000));
 
-    // Tenta extrair via executeJavaScript de sessionStorage/localStorage do cnetmobile
+    // Diagnóstico: verifica se a página carregou o Angular app
+    const pageInfo = await hiddenWin.webContents.executeJavaScript(`
+      (function() {
+        var info = {
+          url: location.href,
+          title: document.title,
+          hasAppRoot: !!document.querySelector('app-root'),
+          bodyLength: (document.body && document.body.innerText || '').length,
+          hasPolaryonPreload: !!window.__polaryonFetchResult,
+          fetchResult: window.__polaryonFetchResult || ''
+        };
+        // Procura por JWT em cookies
+        try {
+          info.cookies = document.cookie.split('; ').filter(function(c){ 
+            return c.length > 50 || c.includes('bearer') || c.includes('token') || c.includes('jwt');
+          }).join('; ');
+        } catch(e) { info.cookiesErr = e.message; }
+        return info;
+      })()
+    `);
+    diag(`📊 Page: ${pageInfo.title} | app-root: ${pageInfo.hasAppRoot} | body: ${pageInfo.bodyLength}chars`);
+
+    // Se não tem Angular app-root, tenta navegar para intro.htm (portal alternativo)
+    if (!pageInfo.hasAppRoot) {
+      diag('🔄 Sem app-root, tentando intro.htm para gerar sessão...');
+      try {
+        await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 20000 });
+        await new Promise(r => setTimeout(r, 3000));
+        const info2 = await hiddenWin.webContents.executeJavaScript(`
+          (function(){
+            return { url: location.href, title: document.title, hasAppRoot: !!document.querySelector('app-root') };
+          })()
+        `);
+        diag(`📊 Intro.htm: ${info2.title} | app-root: ${info2.hasAppRoot} | url: ${info2.url}`);
+      } catch(e) {
+        diag('⚠️ intro.htm erro: ' + e.message);
+      }
+    }
+
+    // Polling: checa global.serproToken (visual-runner interceptor) + storages
     for (let attempt = 0; attempt < 10; attempt++) {
       await new Promise(r => setTimeout(r, 1500));
       try {
-        // 1. Verifica se o visual-runner já capturou o token (via interceptor onBeforeSendHeaders)
+        // 1. Visual-runner interceptor já capturou o Bearer?
         if (global.serproToken && global.serproToken.startsWith('Bearer ')) {
           diag('✅ JWT capturado pelo visual-runner interceptor!');
           hiddenWin.destroy();
           return global.serproToken;
         }
 
-        // 2. Varre sessionStorage e localStorage em busca de JWT
+        // 2. Varre storages e DOM em busca do JWT
         const result = await hiddenWin.webContents.executeJavaScript(`
           (function() {
-            // Varre sessionStorage
+            // sessionStorage
             try {
               var keys = Object.keys(sessionStorage);
               for (var i = 0; i < keys.length; i++) {
@@ -647,7 +690,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
                 }
               }
             } catch(e) {}
-            // Varre localStorage
+            // localStorage
             try {
               var keys = Object.keys(localStorage);
               for (var i = 0; i < keys.length; i++) {
@@ -657,7 +700,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
                 }
               }
             } catch(e) {}
-            // Varre variáveis globais (Angular guarda em memória)
+            // window globals
             try {
               for (var k in window) {
                 try {
@@ -666,6 +709,20 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
                     return { key: k, token: v, storage: 'window' };
                   }
                 } catch(e) {}
+              }
+            } catch(e) {}
+            // cookies
+            try {
+              var cookieArr = document.cookie.split('; ');
+              for (var i = 0; i < cookieArr.length; i++) {
+                var parts = cookieArr[i].split('=');
+                var val = decodeURIComponent(parts[1] || '');
+                if (val && val.length > 100 && val.indexOf('.') > 0 && val.split('.').length >= 2) {
+                  var key = parts[0];
+                  if (key.toLowerCase().includes('token') || key.toLowerCase().includes('bearer') || key.toLowerCase().includes('jwt') || key.toLowerCase().includes('access')) {
+                    return { key: key, token: val, storage: 'cookie' };
+                  }
+                }
               }
             } catch(e) {}
             return null;
