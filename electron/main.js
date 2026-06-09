@@ -584,7 +584,6 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
   if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
   diag(event, '🔄 refresh-jwt compras-id=' + comprasId);
   try {
-    // Portal BrowserView usa 'persist:polaryon-global' — não defaultSession! (v3.8.225)
     const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
     const serproCookies = allCookies.filter(c => c.domain && (c.domain.includes('comprasnet.gov.br') || c.domain.includes('serpro.gov.br')));
     diag(event, '🍪 Cookies Serpro: ' + serproCookies.length + ' (' + serproCookies.map(c => c.name).join(', ') + ')');
@@ -594,57 +593,57 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
     }
     const cookieStr = serproCookies.map(c => c.name + '=' + c.value).join('; ');
     const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId;
+    // Tenta www primeiro (login origin), fallback cnetmobile (pagina atual do usuario) (v3.8.226)
+    const hosts = ['www.comprasnet.gov.br', 'cnetmobile.estaleiro.serpro.gov.br'];
     const methods = ['POST', 'GET'];
-    for (const method of methods) {
-      const result = await new Promise((resolve) => {
-        const opts = {
-          hostname: 'www.comprasnet.gov.br',
-          path: urlPath,
-          method: method,
-          headers: {
-            'Cookie': cookieStr,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Content-Type': 'application/json',
-            'Referer': 'https://www.comprasnet.gov.br/main.asp',
-            'Origin': 'https://www.comprasnet.gov.br',
-            'x-device-platform': 'web',
-            'x-version-number': '6.0.2'
-          },
-          timeout: 10000,
-          rejectUnauthorized: true
-        };
-        const req = https.request(opts, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
+    for (const hostname of hosts) {
+      for (const method of methods) {
+        const result = await new Promise((resolve) => {
+          const opts = {
+            hostname, path: urlPath, method,
+            headers: {
+              'Cookie': cookieStr,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
+              'Accept': 'application/json, text/plain, */*',
+              'Content-Type': 'application/json',
+              'Referer': 'https://' + hostname + '/',
+              'Origin': 'https://' + hostname,
+              'x-device-platform': 'web',
+              'x-version-number': '6.0.2'
+            },
+            timeout: 10000,
+            rejectUnauthorized: true
+          };
+          const req = https.request(opts, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => resolve({ status: res.statusCode, body: data }));
+          });
+          req.on('error', (e) => resolve({ status: 0, body: e.message }));
+          req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
+          req.end();
         });
-        req.on('error', (e) => resolve({ status: 0, body: e.message }));
-        req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
-        req.end();
-      });
-      diag(event, '📡 Token endpoint method=' + method + ' status=' + result.status + ' body.len=' + result.body.length);
-      if (result.status === 200) {
-        try {
-          const body = typeof result.body === 'string' ? JSON.parse(result.body) : result.body;
-          const token = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
-          if (token) {
-            const finalToken = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
-            diag(event, '✅ JWT renovado! (method=' + method + ')');
-            return finalToken;
+        diag(event, '📡 Token ' + hostname + ' method=' + method + ' status=' + result.status + ' body.len=' + result.body.length);
+        if (result.status === 200) {
+          try {
+            const body = typeof result.body === 'string' ? JSON.parse(result.body) : result.body;
+            const token = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
+            if (token) {
+              diag(event, '✅ JWT renovado via ' + hostname + ' (' + method + ')');
+              return token.startsWith('Bearer ') ? token : 'Bearer ' + token;
+            }
+            diag(event, '⚠️ 200 mas sem token. Chaves: ' + Object.keys(body).join(', '));
+          } catch(e) {
+            diag(event, '⚠️ Parse JSON (' + hostname + ' ' + method + '): ' + e.message + ' body: "' + String(result.body).substring(0, 200) + '"');
           }
-          diag(event, '⚠️ 200 mas sem token. Chaves: ' + Object.keys(body).join(', '));
-        } catch(e) {
-          diag(event, '⚠️ Parse JSON falhou (' + method + '): ' + e.message + ' body: "' + String(result.body).substring(0, 200) + '"');
+        } else if (result.status === 401) {
+          diag(event, '⚠️ 401 em ' + hostname + ' — sessão não autenticada');
+        } else {
+          diag(event, '⚠️ ' + hostname + ' ' + method + ' status=' + result.status);
         }
-      } else if (result.status === 401) {
-        diag(event, '⚠️ 401 — sessão não autenticada em www.comprasnet.gov.br');
-        break;
-      } else {
-        diag(event, '⚠️ method=' + method + ' status=' + result.status + ' body="' + String(result.body).substring(0, 200) + '"');
       }
     }
-    diag(event, '❌ refresh-jwt falhou');
+    diag(event, '❌ refresh-jwt falhou em todos os hosts/metodos');
     return null;
   } catch(e) {
     diag(event, '⚠️ refresh-jwt erro: ' + e.message);
