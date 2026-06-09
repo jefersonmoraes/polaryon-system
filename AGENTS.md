@@ -688,3 +688,30 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 **Observação:** Na prática, o token NÃO estava expirado durante esta sessão — os ranking fetches falhavam por **429**, não 401. O heartbeat mostrava `❤️ Sessão Viva!` consistentemente a cada 30s. O problema real era o 429 flood, já corrigido acima.
 
 **Arquivos:** `electron/portal-preload.js:2137-2182` (heartbeat), `:1940-1960` (token refresh), `:1786-1828` (tryExtractTokenFromStorage)
+
+## Implementado (v3.8.222)
+
+### 1. Hidden BrowserWindow para refresh de JWT (CORS bypass definitivo)
+**Problema:** O refresh de JWT via injected script falhava por dois motivos:
+1. **Token endpoint 405 Method Not Allowed** — a página está em `cnetmobile.estaleiro.serpro.gov.br`, mas o fetch relativo ao token endpoint resolvia para `cnetmobile/.../token/{id}`, onde a rota não existe. O endpoint só funciona em `www.comprasnet.gov.br`.
+2. **Iframe bloqueado por CORS/XFO** — `triggerJwtGeneration()` criava iframe para `www.comprasnet.gov.br/compras/pt-br/` que retorna 404 + `X-Frame-Options: sameorigin` + bloqueio CORS (`origin 'null'`). O iframe nunca carregava.
+
+**Causa raiz:** O usuário navega em `cnetmobile.estaleiro.serpro.gov.br` (ASP.NET), não em `www.comprasnet.gov.br` (Angular). O JWT original foi capturado durante o login no `www`, mas toda renovação subsequente falha porque:
+- O injected script faz fetch relativo → resolve para `cnetmobile` onde o endpoint não existe → 405
+- O iframe tenta carregar o Angular app de `www.comprasnet.gov.br` → XFO sameorigin bloqueia (origem diferente de `cnetmobile`)
+
+**Arquivo:** `electron/main.js:577-655` (IPC handler), `electron/portal-preload.js:2226-2282` (refreshTokenViaIframe + triggerJwtGeneration)
+
+**Solução — Hidden BrowserWindow (Electron API):**
+1. **main.js `ipcMain.handle('refresh-jwt')`**: Cria um `BrowserWindow` oculto (show:false), navega para `https://www.comprasnet.gov.br/main.asp`. Como o BrowserWindow está no origin `www.comprasnet.gov.br`, o `executeJavaScript()` faz um fetch **same-origin** para `/comprasnet-usuario/v2/.../token/{compras-id}`:
+   - Sem CORS (same-origin)
+   - Cookies do `www.comprasnet.gov.br` automaticamente incluídos (mesma Electron session)
+   - Tenta POST primeiro, fallback para GET se 405
+2. **`refreshTokenViaIframe()` reescrita**: Agora:
+   - Passo 1: Fetch `main.asp` com `no-cors` para renovar cookies da sessão Gov.br
+   - Passo 2: Obtém `compras-id` (URL local + IPC fallback via main.js)
+   - Passo 3: Chama `ipcRenderer.invoke('refresh-jwt', { comprasId })` → main.js cria hidden window → retorna o token → armazena em `shared.sessionToken`
+3. **`triggerJwtGeneration()` simplificada**: Agora chama `refreshTokenViaIframe()` diretamente (elimina o iframe que nunca funcionou)
+4. **Código morto removido**: `triggerJwtGeneration()` removido de `sendKeepAlive()` e handler `session-expired` — `refreshTokenViaIframe()` faz tudo
+
+**Impacto:** JWT é renovado silenciosamente via hidden BrowserWindow a cada 30s (debounce) ou quando 401 é detectado. Sem CORS, sem 405, sem iframe block. O sistema mantém-se autenticado permanentemente.
