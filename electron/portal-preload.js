@@ -2249,63 +2249,25 @@
             });
         } catch(e) {}
 
-        // Passo 2: Extrai cnet-id (UUID v4) do JWT ou fontes alternativas (v3.8.232)
-        var cnetId = null;
-        var jwtClaims = {};
+        // Passo 2: Loga claims do JWT para diagnóstico
         if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
             try {
                 var payloadBase64 = shared.sessionToken.split('.')[1];
                 var payload = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
-                jwtClaims = payload;
-                // Varre TODOS os claims do JWT em busca de UUID (formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-                var claimNames = Object.keys(payload);
-                for (var ci = 0; ci < claimNames.length; ci++) {
-                    var val = String(payload[claimNames[ci]] || '');
-                    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(val)) {
-                        cnetId = val;
-                        break;
-                    }
-                }
+                console.log('%c[POLARYON HEARTBEAT] 📋 JWT expirado. Claims: ' + Object.keys(payload).join(', '), 'color:#f59e0b;font-weight:bold;');
             } catch(e) {}
-        }
-        if (!cnetId) {
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Nenhum UUID no JWT. Claims: ' + Object.keys(jwtClaims).join(', ') + ' | Valores: ' + JSON.stringify(jwtClaims).substring(0, 400), 'color:#f59e0b;font-weight:bold;');
-            // Fallback: varre TODOS os cookies da sessão Electron (incluindo HttpOnly) em busca de UUID (v3.8.234)
-            try {
-                var allSessionCookies = await ipcRenderer.invoke('scan-cookies');
-                for (var sci = 0; sci < allSessionCookies.length; sci++) {
-                    var cv = allSessionCookies[sci].value || '';
-                    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(cv)) {
-                        cnetId = cv;
-                        console.log('%c[POLARYON HEARTBEAT] ✅ UUID encontrado em cookie: ' + allSessionCookies[sci].name, 'color:#10b981;font-weight:bold;');
-                        break;
-                    }
-                }
-            } catch(e) {}
-            // Fallback 2: ASPSESSIONID cookie (ASP.NET Session ID)
-            if (!cnetId) {
-                try {
-                    var allCookies2 = document.cookie.split('; ');
-                    for (var ci2 = 0; ci2 < allCookies2.length; ci2++) {
-                        var parts = allCookies2[ci2].split('=');
-                        if (parts[0] && parts[0].toUpperCase().includes('ASPSESSIONID')) {
-                            cnetId = parts.slice(1).join('=');
-                            break;
-                        }
-                    }
-                } catch(e) {}
-            }
-            if (!cnetId) return;
         }
 
-        // Passo 3: Tenta refresh via IPC (main.js Node.js https)
+        // Passo 3: Tenta refresh via hidden BrowserWindow (recarrega SPA Angular para gerar novo JWT) (v3.8.235)
         try {
-            const token = await ipcRenderer.invoke('refresh-jwt', { cnetId: cnetId });
+            const token = await ipcRenderer.invoke('refresh-jwt-via-page');
             if (token) {
                 shared.sessionToken = token;
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado com sucesso via IPC!', 'color:#10b981;font-weight:bold;');
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window!', 'color:#10b981;font-weight:bold;');
             }
-        } catch(ipcErr) {}
+        } catch(ipcErr) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
+        }
     }
 
     // Força renovação de JWT via hidden BrowserWindow (substitui o iframe que era bloqueado por XFO/CORS)

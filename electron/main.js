@@ -588,6 +588,63 @@ ipcMain.handle('scan-cookies', async () => {
   }
 });
 
+// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.235): navega o portal ComprasNet,
+// espera a SPA Angular gerar novo JWT no sessionStorage, extrai e retorna
+ipcMain.handle('refresh-jwt-via-page', async (event) => {
+  const diag = (msg) => {
+    console.log('[MAIN-RELOAD] ' + msg);
+    try { event.sender.send('main-diag', msg); } catch(e) {}
+  };
+  try {
+    const { BrowserWindow } = require('electron');
+    const hiddenWin = new BrowserWindow({
+      show: false,
+      width: 1024, height: 768,
+      webPreferences: {
+        session: session.fromPartition('persist:polaryon-global'),
+        javascript: true,
+        sandbox: false
+      }
+    });
+    diag('🔄 Hidden window navegando para www.comprasnet.gov.br/compras/pt-br/...');
+    await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 30000 });
+    // Polling: checa sessionStorage a cada 2s por até 30s em busca do JWT
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const result = await hiddenWin.webContents.executeJavaScript(`
+          (function() {
+            var keys = Object.keys(sessionStorage);
+            for (var i = 0; i < keys.length; i++) {
+              var val = sessionStorage.getItem(keys[i]);
+              if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
+                return { key: keys[i], token: val };
+              }
+            }
+            return null;
+          })()
+        `);
+        if (result && result.token) {
+          const token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
+          global.serproToken = token;
+          diag('✅ JWT extraido via hidden window! key=' + result.key);
+          hiddenWin.destroy();
+          return token;
+        }
+        diag('⏳ Tentativa ' + (attempt + 1) + '/15 — JWT ainda nao encontrado no sessionStorage');
+      } catch(e2) {
+        diag('⚠️ executeJavaScript erro: ' + e2.message);
+      }
+    }
+    diag('❌ Timeout — JWT nao gerado apos 30s');
+    hiddenWin.destroy();
+    return null;
+  } catch(e) {
+    console.log('[MAIN-RELOAD] Erro: ' + e.message);
+    return null;
+  }
+});
+
 // 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS (v3.8.225)
 function diag(event, msg) {
   console.log('[MAIN] ' + msg);
