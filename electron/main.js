@@ -579,6 +579,15 @@ ipcMain.handle('get-stored-token', () => {
   return global.serproToken || '';
 });
 
+ipcMain.handle('scan-cookies', async () => {
+  try {
+    const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
+    return allCookies.map(c => ({ name: c.name, value: c.value, domain: c.domain }));
+  } catch(e) {
+    return [];
+  }
+});
+
 // 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS (v3.8.225)
 function diag(event, msg) {
   console.log('[MAIN] ' + msg);

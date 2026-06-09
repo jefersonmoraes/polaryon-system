@@ -2270,17 +2270,31 @@
         }
         if (!cnetId) {
             console.warn('%c[POLARYON HEARTBEAT] ⚠️ Nenhum UUID no JWT. Claims: ' + Object.keys(jwtClaims).join(', ') + ' | Valores: ' + JSON.stringify(jwtClaims).substring(0, 400), 'color:#f59e0b;font-weight:bold;');
-            // Fallbacks: ASPSESSIONID cookie (ASP.NET Session ID)
+            // Fallback: varre TODOS os cookies da sessão Electron (incluindo HttpOnly) em busca de UUID (v3.8.234)
             try {
-                var allCookies2 = document.cookie.split('; ');
-                for (var ci2 = 0; ci2 < allCookies2.length; ci2++) {
-                    var parts = allCookies2[ci2].split('=');
-                    if (parts[0] && parts[0].toUpperCase().includes('ASPSESSIONID')) {
-                        cnetId = parts.slice(1).join('=');
+                var allSessionCookies = await ipcRenderer.invoke('scan-cookies');
+                for (var sci = 0; sci < allSessionCookies.length; sci++) {
+                    var cv = allSessionCookies[sci].value || '';
+                    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(cv)) {
+                        cnetId = cv;
+                        console.log('%c[POLARYON HEARTBEAT] ✅ UUID encontrado em cookie: ' + allSessionCookies[sci].name, 'color:#10b981;font-weight:bold;');
                         break;
                     }
                 }
             } catch(e) {}
+            // Fallback 2: ASPSESSIONID cookie (ASP.NET Session ID)
+            if (!cnetId) {
+                try {
+                    var allCookies2 = document.cookie.split('; ');
+                    for (var ci2 = 0; ci2 < allCookies2.length; ci2++) {
+                        var parts = allCookies2[ci2].split('=');
+                        if (parts[0] && parts[0].toUpperCase().includes('ASPSESSIONID')) {
+                            cnetId = parts.slice(1).join('=');
+                            break;
+                        }
+                    }
+                } catch(e) {}
+            }
             if (!cnetId) return;
         }
 
