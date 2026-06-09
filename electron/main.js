@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, session } = require('electron');
+const https = require('https');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const isDev = !app.isPackaged;
@@ -574,82 +575,60 @@ ipcMain.handle('get-compras-id', () => {
   return globalComprasId || '';
 });
 
-// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW: Bypassa CORS usando o session compartilhado do Electron (v3.8.222)
+// 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS nem BrowserWindow (v3.8.223)
 ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
   if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
   console.log('[MAIN] 🔄 refresh-jwt iniciado para compras-id=' + comprasId);
-  return new Promise((resolve) => {
-    let hiddenWin = null;
-    let resolved = false;
-    const safeResolve = (val) => {
-      if (resolved) return;
-      resolved = true;
-      resolve(val);
-      try { if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
-    };
-    try {
-      hiddenWin = new BrowserWindow({
-        show: false,
-        width: 400,
-        height: 300,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true,
-          sandbox: false
-        }
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: 'https://www.comprasnet.gov.br' });
+    const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
+    console.log('[MAIN] 🍪 Cookies obtidos: ' + cookies.length + ' cookies para www.comprasnet.gov.br');
+    const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId;
+    const methods = ['POST', 'GET'];
+    for (const method of methods) {
+      const result = await new Promise((resolve) => {
+        const opts = {
+          hostname: 'www.comprasnet.gov.br',
+          path: urlPath,
+          method: method,
+          headers: {
+            'Cookie': cookieStr,
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'x-device-platform': 'web',
+            'x-version-number': '6.0.2'
+          },
+          timeout: 10000
+        };
+        const req = https.request(opts, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => resolve({ status: res.statusCode, body: data }));
+        });
+        req.on('error', (e) => resolve({ status: 0, body: e.message }));
+        req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
+        req.end();
       });
-      const fetchScript = `
-        (async () => {
-          try {
-            var r = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/${comprasId}', {
-              method: 'POST',
-              credentials: 'include',
-              headers: {'Accept':'application/json, text/plain, */*','Content-Type':'application/json','x-device-platform':'web','x-version-number':'6.0.2'}
-            });
-            if (!r.ok) {
-              r = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/${comprasId}', {
-                method: 'GET',
-                credentials: 'include',
-                headers: {'Accept':'application/json, text/plain, */*','x-device-platform':'web','x-version-number':'6.0.2'}
-              });
-            }
-            if (!r.ok) return JSON.stringify({error: 'HTTP ' + r.status + ' ' + r.statusText});
-            var b = await r.json();
-            var t = b.token || b.accessToken || b.access_token || b.jwt || b.bearer || b.authorization || '';
-            return JSON.stringify({token: t});
-          } catch(e) { return JSON.stringify({error: e.message}); }
-        })()
-      `;
-      let navDone = false;
-      const onLoad = async () => {
-        if (navDone) return;
-        navDone = true;
+      if (result.status === 200) {
         try {
-          const raw = await hiddenWin.webContents.executeJavaScript(fetchScript);
-          const result = JSON.parse(raw);
-          if (result.token) {
-            const finalToken = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
-            console.log('[MAIN] ✅ JWT renovado com sucesso via hidden window!');
-            safeResolve(finalToken);
-          } else {
-            console.log('[MAIN] ⚠️ Token refresh falhou: ' + (result.error || 'token vazio'));
-            safeResolve(null);
+          const body = JSON.parse(result.body);
+          const token = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
+          if (token) {
+            const finalToken = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
+            console.log('[MAIN] ✅ JWT renovado com sucesso via HTTPS direto! (method=' + method + ')');
+            return finalToken;
           }
         } catch(e) {
-          console.log('[MAIN] ⚠️ executeJavaScript error: ' + e.message);
-          safeResolve(null);
+          console.log('[MAIN] ⚠️ Falha ao parsear resposta JSON (method=' + method + '): ' + e.message);
         }
-      };
-      hiddenWin.webContents.on('did-finish-load', onLoad);
-      hiddenWin.webContents.on('did-fail-load', (e, code, desc) => {
-        console.log('[MAIN] ⚠️ Hidden window fail: ' + code + ' ' + desc);
-        safeResolve(null);
-      });
-      hiddenWin.loadURL('https://www.comprasnet.gov.br/main.asp');
-      setTimeout(() => safeResolve(null), 15000);
-    } catch(e) {
-      console.log('[MAIN] ⚠️ refresh-jwt erro: ' + e.message);
-      safeResolve(null);
+      } else {
+        console.log('[MAIN] ⚠️ Token endpoint falhou method=' + method + ' status=' + result.status);
+      }
     }
-  });
+    console.log('[MAIN] ❌ refresh-jwt falhou — token endpoint retornou erro para POST e GET');
+    return null;
+  } catch(e) {
+    console.log('[MAIN] ⚠️ refresh-jwt erro: ' + e.message);
+    return null;
+  }
 });
