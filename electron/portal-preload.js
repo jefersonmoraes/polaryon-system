@@ -241,6 +241,11 @@
         console.log(`%c${logMsg}`, 'color: #00ffff; font-weight: bold;');
     });
 
+    // 🔄 Diagnóstico do refresh-jwt enviado pelo main.js (v3.8.225)
+    ipcRenderer.on('main-diag', (event, msg) => {
+        console.log(`%c[MAIN-DIAG] ${msg}`, 'color:#f472b6;font-weight:bold;');
+    });
+
     // 🎯 O GATILHO KAMIKAZE: Envia o lance direto do BrowserView (sem proxy VPS, v3.8.85)
     ipcRenderer.on('manual-bid', async (event, { purchaseId, itemId, value }) => {
         const currentUrl = window.location.href;
