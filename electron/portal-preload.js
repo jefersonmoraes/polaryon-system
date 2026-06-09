@@ -2241,18 +2241,27 @@
             });
         } catch(e) {}
 
-        // Passo 2: Extrai cnet-id do JWT atual (é o jti claim) — o compras-id da URL é DIFERENTE (v3.8.229)
+        // Passo 2: Extrai cnet-id do JWT — tenta múltiplos claims (v3.8.231)
         var cnetId = null;
+        var jwtClaims = {};
         if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
             try {
                 var payloadBase64 = shared.sessionToken.split('.')[1];
                 var payload = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
-                cnetId = payload.jti || null;
+                jwtClaims = payload;
+                // Tenta claims conhecidos em ordem de prioridade
+                cnetId = payload.jti || payload.sub || payload.nameid || payload.sid || payload.uid || null;
             } catch(e) {}
         }
         if (!cnetId || !cnetId.match(/^[a-f0-9-]+$/i)) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ Sem jti no JWT — refresh impossível');
-            return;
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Nenhum claim UUID encontrado no JWT. Claims disponíveis: ' + Object.keys(jwtClaims).join(', '), 'color:#f59e0b;font-weight:bold;');
+            // Fallback: tenta compras-id da URL como cnetId (pode funcionar com cookies frescos)
+            try {
+                var urlMatch = window.location.href.match(/[?&]compra=(\d+)/);
+                if (!urlMatch) urlMatch = window.location.href.match(/compras\/(\d+)/);
+                if (urlMatch) cnetId = urlMatch[1];
+            } catch(e) {}
+            if (!cnetId) return;
         }
 
         // Passo 3: Tenta refresh via IPC (main.js Node.js https)
