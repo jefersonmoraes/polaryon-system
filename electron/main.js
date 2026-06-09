@@ -603,40 +603,88 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       webPreferences: {
         session: session.fromPartition('persist:polaryon-global'),
         javascript: true,
-        sandbox: false
+        sandbox: false,
+        webSecurity: true
       }
     });
-    diag('🔄 Hidden window navegando para www.comprasnet.gov.br/compras/pt-br/...');
-    await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 30000 });
-    // Polling: checa sessionStorage a cada 2s por até 30s em busca do JWT
-    for (let attempt = 0; attempt < 15; attempt++) {
-      await new Promise(r => setTimeout(r, 2000));
+
+    // Navega para a página de compras do cnetmobile (ASP.NET) onde o usuário já está autenticado,
+    // NÃO para www.comprasnet.gov.br (Angular SPA que requer re-autenticação)
+    const comprasId = globalComprasId || '';
+    const cnetUrl = 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras' +
+      (comprasId ? '?compras-id=' + encodeURIComponent(comprasId) : '');
+    diag('🔄 Hidden window navegando para: ' + cnetUrl +
+      (comprasId ? '' : ' (sem compras-id!)'));
+    
+    // Usa loadURL que compartilha cookies da sessão 'persist:polaryon-global'
+    await hiddenWin.loadURL(cnetUrl, { timeout: 30000 });
+    diag('✅ Hidden window carregou a página cnetmobile');
+
+    // Aguarda 3s para a página fazer as chamadas API iniciais com o Bearer token
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Tenta extrair via executeJavaScript de sessionStorage/localStorage do cnetmobile
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise(r => setTimeout(r, 1500));
       try {
+        // 1. Verifica se o visual-runner já capturou o token (via interceptor onBeforeSendHeaders)
+        if (global.serproToken && global.serproToken.startsWith('Bearer ')) {
+          diag('✅ JWT capturado pelo visual-runner interceptor!');
+          hiddenWin.destroy();
+          return global.serproToken;
+        }
+
+        // 2. Varre sessionStorage e localStorage em busca de JWT
         const result = await hiddenWin.webContents.executeJavaScript(`
           (function() {
-            var keys = Object.keys(sessionStorage);
-            for (var i = 0; i < keys.length; i++) {
-              var val = sessionStorage.getItem(keys[i]);
-              if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
-                return { key: keys[i], token: val };
+            // Varre sessionStorage
+            try {
+              var keys = Object.keys(sessionStorage);
+              for (var i = 0; i < keys.length; i++) {
+                var val = sessionStorage.getItem(keys[i]);
+                if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
+                  return { key: keys[i], token: val, storage: 'sessionStorage' };
+                }
               }
-            }
+            } catch(e) {}
+            // Varre localStorage
+            try {
+              var keys = Object.keys(localStorage);
+              for (var i = 0; i < keys.length; i++) {
+                var val = localStorage.getItem(keys[i]);
+                if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
+                  return { key: keys[i], token: val, storage: 'localStorage' };
+                }
+              }
+            } catch(e) {}
+            // Varre variáveis globais (Angular guarda em memória)
+            try {
+              for (var k in window) {
+                try {
+                  var v = window[k];
+                  if (v && typeof v === 'string' && v.length > 100 && v.indexOf('.') > 0 && v.split('.').length === 3) {
+                    return { key: k, token: v, storage: 'window' };
+                  }
+                } catch(e) {}
+              }
+            } catch(e) {}
             return null;
           })()
         `);
         if (result && result.token) {
           const token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
           global.serproToken = token;
-          diag('✅ JWT extraido via hidden window! key=' + result.key);
+          diag('✅ JWT extraido via ' + (result.storage || 'unknown') + '! key=' + result.key);
           hiddenWin.destroy();
           return token;
         }
-        diag('⏳ Tentativa ' + (attempt + 1) + '/15 — JWT ainda nao encontrado no sessionStorage');
+        diag('⏳ Tentativa ' + (attempt + 1) + '/10 — JWT nao encontrado (serproToken=' +
+          (global.serproToken ? 'presente' : 'ausente') + ')');
       } catch(e2) {
         diag('⚠️ executeJavaScript erro: ' + e2.message);
       }
     }
-    diag('❌ Timeout — JWT nao gerado apos 30s');
+    diag('❌ Timeout — JWT nao gerado apos ~18s');
     hiddenWin.destroy();
     return null;
   } catch(e) {
