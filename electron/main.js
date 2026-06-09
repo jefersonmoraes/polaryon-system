@@ -584,9 +584,14 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
   if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
   diag(event, '🔄 refresh-jwt compras-id=' + comprasId);
   try {
-    const allCookies = await session.defaultSession.cookies.get({});
+    // Portal BrowserView usa 'persist:polaryon-global' — não defaultSession! (v3.8.225)
+    const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
     const serproCookies = allCookies.filter(c => c.domain && (c.domain.includes('comprasnet.gov.br') || c.domain.includes('serpro.gov.br')));
     diag(event, '🍪 Cookies Serpro: ' + serproCookies.length + ' (' + serproCookies.map(c => c.name).join(', ') + ')');
+    if (serproCookies.length === 0) {
+      diag(event, '❌ sem cookies Serpro — refresh impossível');
+      return null;
+    }
     const cookieStr = serproCookies.map(c => c.name + '=' + c.value).join('; ');
     const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId;
     const methods = ['POST', 'GET'];
@@ -597,7 +602,7 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
           path: urlPath,
           method: method,
           headers: {
-            'Cookie': cookieStr || undefined,
+            'Cookie': cookieStr,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
             'Accept': 'application/json, text/plain, */*',
             'Content-Type': 'application/json',
