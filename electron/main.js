@@ -575,14 +575,16 @@ ipcMain.handle('get-compras-id', () => {
   return globalComprasId || '';
 });
 
-// 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS nem BrowserWindow (v3.8.223)
+// 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS (v3.8.224)
 ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
   if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
-  console.log('[MAIN] 🔄 refresh-jwt iniciado para compras-id=' + comprasId);
+  console.log('[MAIN] 🔄 refresh-jwt compras-id=' + comprasId);
   try {
-    const cookies = await session.defaultSession.cookies.get({ url: 'https://www.comprasnet.gov.br' });
-    const cookieStr = cookies.map(c => c.name + '=' + c.value).join('; ');
-    console.log('[MAIN] 🍪 Cookies obtidos: ' + cookies.length + ' cookies para www.comprasnet.gov.br');
+    // Pega TODOS os cookies e filtra pelo domínio (path pode variar entre cookies)
+    const allCookies = await session.defaultSession.cookies.get({});
+    const serproCookies = allCookies.filter(c => c.domain && (c.domain.includes('comprasnet.gov.br') || c.domain.includes('serpro.gov.br')));
+    console.log('[MAIN] 🍪 Cookies Serpro encontrados: ' + serproCookies.length + ' (' + serproCookies.map(c => c.name).join(', ') + ')');
+    const cookieStr = serproCookies.map(c => c.name + '=' + c.value).join('; ');
     const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + comprasId;
     const methods = ['POST', 'GET'];
     for (const method of methods) {
@@ -592,40 +594,49 @@ ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
           path: urlPath,
           method: method,
           headers: {
-            'Cookie': cookieStr,
+            'Cookie': cookieStr || undefined,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
             'Accept': 'application/json, text/plain, */*',
             'Content-Type': 'application/json',
+            'Referer': 'https://www.comprasnet.gov.br/main.asp',
+            'Origin': 'https://www.comprasnet.gov.br',
             'x-device-platform': 'web',
             'x-version-number': '6.0.2'
           },
-          timeout: 10000
+          timeout: 10000,
+          rejectUnauthorized: true
         };
         const req = https.request(opts, (res) => {
           let data = '';
           res.on('data', chunk => data += chunk);
-          res.on('end', () => resolve({ status: res.statusCode, body: data }));
+          res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
         });
         req.on('error', (e) => resolve({ status: 0, body: e.message }));
         req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
         req.end();
       });
+      console.log('[MAIN] 📡 Token endpoint method=' + method + ' status=' + result.status + ' body.len=' + result.body.length);
       if (result.status === 200) {
         try {
-          const body = JSON.parse(result.body);
+          const body = typeof result.body === 'string' ? JSON.parse(result.body) : result.body;
           const token = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
           if (token) {
             const finalToken = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
-            console.log('[MAIN] ✅ JWT renovado com sucesso via HTTPS direto! (method=' + method + ')');
+            console.log('[MAIN] ✅ JWT renovado via HTTPS direto! (method=' + method + ')');
             return finalToken;
           }
+          console.log('[MAIN] ⚠️ Token endpoint 200 mas sem token no body. Chaves: ' + Object.keys(body).join(', '));
         } catch(e) {
-          console.log('[MAIN] ⚠️ Falha ao parsear resposta JSON (method=' + method + '): ' + e.message);
+          console.log('[MAIN] ⚠️ Parse JSON falhou (method=' + method + '): ' + e.message + ' | body(200): "' + String(result.body).substring(0, 300) + '"');
         }
+      } else if (result.status === 401) {
+        console.log('[MAIN] ⚠️ Token endpoint 401 — sessão não autenticada em www.comprasnet.gov.br');
+        break; // Não adianta tentar GET se POST deu 401
       } else {
-        console.log('[MAIN] ⚠️ Token endpoint falhou method=' + method + ' status=' + result.status);
+        console.log('[MAIN] ⚠️ Token endpoint method=' + method + ' status=' + result.status + ' body="' + String(result.body).substring(0, 200) + '"');
       }
     }
-    console.log('[MAIN] ❌ refresh-jwt falhou — token endpoint retornou erro para POST e GET');
+    console.log('[MAIN] ❌ refresh-jwt falhou');
     return null;
   } catch(e) {
     console.log('[MAIN] ⚠️ refresh-jwt erro: ' + e.message);
