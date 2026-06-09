@@ -602,6 +602,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       width: 1024, height: 768,
       webPreferences: {
         session: session.fromPartition('persist:polaryon-global'),
+        preload: path.join(__dirname, 'hidden-preload.js'),
         javascript: true,
         sandbox: false,
         webSecurity: true
@@ -638,6 +639,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
           hasPolaryonPreload: !!window.__polaryonFetchResult,
           fetchResult: window.__polaryonFetchResult || ''
         };
+        info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === 'string' && window.__polaryonBearer.length > 50);
         // Procura por JWT em cookies
         try {
           info.cookies = document.cookie.split('; ').filter(function(c){ 
@@ -647,7 +649,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
         return info;
       })()
     `);
-    diag(`📊 Page: ${pageInfo.title} | app-root: ${pageInfo.hasAppRoot} | body: ${pageInfo.bodyLength}chars`);
+    diag(`📊 Page: ${pageInfo.title} | app-root: ${pageInfo.hasAppRoot} | body: ${pageInfo.bodyLength}chars | bearer: ${pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'}`);
 
     // Se não tem Angular app-root, tenta navegar para intro.htm (portal alternativo)
     if (!pageInfo.hasAppRoot) {
@@ -677,7 +679,23 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
           return global.serproToken;
         }
 
-        // 2. Varre storages e DOM em busca do JWT
+        // 2. Hidden-preload interceptou o Bearer das chamadas Angular?
+        var bearerFromHidden = null;
+        try {
+          const r = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer || null');
+          if (r && typeof r === 'string' && r.length > 50) {
+            bearerFromHidden = r;
+          }
+        } catch(e) {}
+        if (bearerFromHidden) {
+          const token = bearerFromHidden.startsWith('Bearer ') ? bearerFromHidden : 'Bearer ' + bearerFromHidden;
+          global.serproToken = token;
+          diag('✅ JWT capturado pelo hidden-preload interceptor!');
+          hiddenWin.destroy();
+          return token;
+        }
+
+        // 3. Varre storages e DOM em busca do JWT
         const result = await hiddenWin.webContents.executeJavaScript(`
           (function() {
             // sessionStorage
@@ -700,7 +718,12 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
                 }
               }
             } catch(e) {}
-            // window globals
+            // window globals (incluindo __polaryonBearer do hidden-preload)
+            try {
+              if (window.__polaryonBearer && typeof window.__polaryonBearer === 'string' && window.__polaryonBearer.length > 50) {
+                return { key: '__polaryonBearer', token: window.__polaryonBearer, storage: 'hiddenPreload' };
+              }
+            } catch(e) {}
             try {
               for (var k in window) {
                 try {
