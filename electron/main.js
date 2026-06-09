@@ -573,3 +573,83 @@ ipcMain.on('store-session-uuid', (event, uuid) => {
 ipcMain.handle('get-compras-id', () => {
   return globalComprasId || '';
 });
+
+// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW: Bypassa CORS usando o session compartilhado do Electron (v3.8.222)
+ipcMain.handle('refresh-jwt', async (event, { comprasId }) => {
+  if (!comprasId || !comprasId.match(/^[a-f0-9-]+$/i)) return null;
+  console.log('[MAIN] 🔄 refresh-jwt iniciado para compras-id=' + comprasId);
+  return new Promise((resolve) => {
+    let hiddenWin = null;
+    let resolved = false;
+    const safeResolve = (val) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(val);
+      try { if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
+    };
+    try {
+      hiddenWin = new BrowserWindow({
+        show: false,
+        width: 400,
+        height: 300,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: false
+        }
+      });
+      const fetchScript = `
+        (async () => {
+          try {
+            var r = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/${comprasId}', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {'Accept':'application/json, text/plain, */*','Content-Type':'application/json','x-device-platform':'web','x-version-number':'6.0.2'}
+            });
+            if (!r.ok) {
+              r = await fetch('/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/${comprasId}', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {'Accept':'application/json, text/plain, */*','x-device-platform':'web','x-version-number':'6.0.2'}
+              });
+            }
+            if (!r.ok) return JSON.stringify({error: 'HTTP ' + r.status + ' ' + r.statusText});
+            var b = await r.json();
+            var t = b.token || b.accessToken || b.access_token || b.jwt || b.bearer || b.authorization || '';
+            return JSON.stringify({token: t});
+          } catch(e) { return JSON.stringify({error: e.message}); }
+        })()
+      `;
+      let navDone = false;
+      const onLoad = async () => {
+        if (navDone) return;
+        navDone = true;
+        try {
+          const raw = await hiddenWin.webContents.executeJavaScript(fetchScript);
+          const result = JSON.parse(raw);
+          if (result.token) {
+            const finalToken = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
+            console.log('[MAIN] ✅ JWT renovado com sucesso via hidden window!');
+            safeResolve(finalToken);
+          } else {
+            console.log('[MAIN] ⚠️ Token refresh falhou: ' + (result.error || 'token vazio'));
+            safeResolve(null);
+          }
+        } catch(e) {
+          console.log('[MAIN] ⚠️ executeJavaScript error: ' + e.message);
+          safeResolve(null);
+        }
+      };
+      hiddenWin.webContents.on('did-finish-load', onLoad);
+      hiddenWin.webContents.on('did-fail-load', (e, code, desc) => {
+        console.log('[MAIN] ⚠️ Hidden window fail: ' + code + ' ' + desc);
+        safeResolve(null);
+      });
+      hiddenWin.loadURL('https://www.comprasnet.gov.br/main.asp');
+      setTimeout(() => safeResolve(null), 15000);
+    } catch(e) {
+      console.log('[MAIN] ⚠️ refresh-jwt erro: ' + e.message);
+      safeResolve(null);
+    }
+  });
+});

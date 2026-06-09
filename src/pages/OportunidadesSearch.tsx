@@ -284,18 +284,27 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 };
 
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    const consultaRes = await api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`, { timeout: 8000 });
-    const detailData: any = consultaRes.data || {};
-    return {
-        data: {
-            ...detailData,
-            itemCount: detailData.quantidadeItens || 0,
-            hasMeEppBenefit: false,
-            minItemValue: 0,
-            maxItemValue: 0,
-            items: []
-        }
-    };
+    if ((window as any).electronAPI?.isDesktop) {
+        const url = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+        const res = await axios.get(url, {
+            headers: {
+                'Accept': 'application/json, text/plain, */*',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            },
+            timeout: 8000
+        });
+        return {
+            data: {
+                ...res.data,
+                itemCount: res.data.quantidadeItens || 0,
+                hasMeEppBenefit: false,
+                minItemValue: 0,
+                maxItemValue: 0,
+                items: []
+            }
+        };
+    }
+    return api.get(`/transparency/pncp-detail/${cnpj}/${ano}/${sequencial}`, { timeout: 8000 });
 };
 
 const fetchPncpArquivosDirect = async (cnpj: string, ano: string, sequencial: string) => {
@@ -747,7 +756,7 @@ const PncpValue = memo(({ item, isMobile = false }: { item: PncpItem; isMobile?:
 
     const finalValue = valorOficial || valorCalculado;
     const isCalculated = !valorOficial && !!valorCalculado;
-    const isLoading = !finalValue && pncpDetailCache[cacheKey]?.promise;
+    const isLoading = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
 
     if (isMobile) {
         return (
@@ -848,7 +857,7 @@ const PncpBadgeStatus = memo(({ item }: { item: PncpItem }) => {
 
     const itemCount = detail?.itemCount || item.itemCount;
     const hasMeEppBenefit = detail?.hasMeEppBenefit || item.hasMeEppBenefit;
-    const isLoading = itemCount === undefined && pncpDetailCache[cacheKey]?.promise;
+    const isLoading = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
 
     return (
         <div ref={containerRef} className="flex flex-col gap-1.5 min-w-[120px]">
