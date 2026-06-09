@@ -1050,10 +1050,7 @@
                 console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Disparando refresh de token...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
-                // Não reseta keepAliveConsecutiveFailures — deixa o heartbeat acumular e renovar
-                // Não limpa shared.sessionToken — heartbeat precisa dele para tentar o refresh
                 refreshTokenViaIframe();
-                triggerJwtGeneration();
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -2206,9 +2203,7 @@
                     // 🔄 Token expirado — tenta renovar (não disruptivo)
                     keepAliveConsecutiveFailures = 0;
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
-                    // Não limpa token — heartbeat continua tentando com token velho até novo chegar
                     refreshTokenViaIframe();
-                    triggerJwtGeneration();
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
@@ -2222,16 +2217,14 @@
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
                     keepAliveConsecutiveFailures = 0;
                     refreshTokenViaIframe();
-                    triggerJwtGeneration();
                 }
             }
         }
     }
 
-    // 🔄 Renova token Serpro — extrai compras-id e dispara postMessage no page context
+    // 🔄 Renova token Serpro — usa hidden BrowserWindow via main.js para bypassar CORS (v3.8.222)
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe() {
-        // Debounce: máximo 1 refresh a cada 30s
         var nowMs = Date.now();
         if (nowMs - _lastRefreshTime < 30000) {
             console.log('%c[POLARYON HEARTBEAT] ⏸️ Refresh ignorado (debounce 30s).', 'color:#6b7280;font-weight:bold;');
@@ -2239,75 +2232,53 @@
         }
         _lastRefreshTime = nowMs;
 
+        // Passo 1: Renova cookies da sessão Gov.br (main.asp) para garantir cookies frescos
         try {
-            // Tenta extrair compras-id de várias fontes
-            var foundComprasId = null;
+            await fetch('https://www.comprasnet.gov.br/main.asp', {
+                method: 'GET', credentials: 'include', mode: 'no-cors',
+                signal: AbortSignal.timeout(10000)
+            });
+        } catch(e) {}
+
+        // Passo 2: Obtém compras-id (local + IPC fallback)
+        var foundComprasId = null;
         try {
             var currentUrl = window.location.href;
             var openerUrl = null;
-            try { openerUrl = window.opener ? window.opener.location.href : null; } catch(e) { openerUrl = 'ERR:' + e.message; }
-            if (openerUrl) console.log('%c[POLARYON HEARTBEAT] 📍 opener URL: ' + openerUrl.substring(0,150), 'color:#6b7280;font-size:10px;');
-            console.log('%c[POLARYON HEARTBEAT] 📍 current URL: ' + currentUrl.substring(0,150), 'color:#6b7280;font-size:10px;');
+            try { openerUrl = window.opener ? window.opener.location.href : null; } catch(e) {}
             var match = (currentUrl + '|' + (openerUrl || '')).match(/compras-id=([a-f0-9-]+)/i);
             if (match && match[1]) foundComprasId = match[1];
         } catch(e) {}
+        if (!foundComprasId) {
+            try { foundComprasId = await ipcRenderer.invoke('get-compras-id'); } catch(e) {}
+        }
 
-            // Se não achou localmente, consulta main.js (que rastreia TODAS as janelas)
-            if (!foundComprasId) {
-                try {
-                    foundComprasId = await ipcRenderer.invoke('get-compras-id');
-                } catch(ipcErr) {
-                    console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao consultar main.js para compras-id:', ipcErr.message);
-                }
+        if (!foundComprasId || !foundComprasId.match(/^[a-f0-9-]+$/i)) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ Sem compras-id — refresh de JWT impossível');
+            return;
+        }
+
+        // Passo 3: Chama main.js para refresh JWT via hidden BrowserWindow (mesmo origin, sem CORS)
+        try {
+            const token = await ipcRenderer.invoke('refresh-jwt', { comprasId: foundComprasId });
+            if (token) {
+                shared.sessionToken = token;
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado com sucesso via hidden window!', 'color:#10b981;font-weight:bold;');
+            } else {
+                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt retornou vazio');
             }
-            
-            // window.postMessage é o padrão Electron para cruzar contextIsolation
-            window.postMessage({
-                source: 'polaryon-preload',
-                type: 'refresh-token',
-                comprasId: foundComprasId
-            }, '*');
-            console.log('%c[POLARYON HEARTBEAT] 🔄 postMessage refresh-token enviado. compras-id=' + (foundComprasId || 'NULO'), 'color:#f59e0b;font-weight:bold;');
-        } catch(e) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ Falha ao disparar refresh-token:', e.message);
+        } catch(ipcErr) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt IPC falhou:', ipcErr.message);
         }
     }
 
-    // Iframe para forçar geração de novo JWT quando cookie SSO está vivo mas JWT expirou
-    var _jwtIframe = null;
+    // Força renovação de JWT via hidden BrowserWindow (substitui o iframe que era bloqueado por XFO/CORS)
     var _lastJwtTrigger = 0;
 
     function triggerJwtGeneration() {
         if (Date.now() - _lastJwtTrigger < 30000) return;
         _lastJwtTrigger = Date.now();
-        if (_jwtIframe && _jwtIframe.parentNode) {
-            try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
-            _jwtIframe = null;
-        }
-        try {
-            var iframe = document.createElement('iframe');
-            iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
-            iframe.src = 'https://www.comprasnet.gov.br/compras/pt-br/';
-            iframe.onload = function() {
-                setTimeout(function() {
-                    if (_jwtIframe && _jwtIframe.parentNode) {
-                        try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
-                        _jwtIframe = null;
-                    }
-                }, 8000);
-            };
-            document.body.appendChild(iframe);
-            _jwtIframe = iframe;
-            console.log('%c[POLARYON HEARTBEAT] 🖼️ Iframe JWT carregando...', 'color:#6366f1;');
-            setTimeout(function() {
-                if (_jwtIframe && _jwtIframe.parentNode) {
-                    try { _jwtIframe.parentNode.removeChild(_jwtIframe); } catch(e) {}
-                    _jwtIframe = null;
-                }
-            }, 20000);
-        } catch(e) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ Falha iframe JWT:', e.message);
-        }
+        refreshTokenViaIframe();
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)

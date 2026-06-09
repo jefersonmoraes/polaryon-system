@@ -27,12 +27,9 @@ const AppSidebar = () => {
     const fetchQuotes = async () => {
       try {
         const version = "3.0.0";
-        const response = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL');
+        const response = await fetch('/api/currency/quotes');
         const data = await response.json();
-        setCurrencyQuotes({
-          usd: parseFloat(data.USDBRL.bid).toFixed(2),
-          eur: parseFloat(data.EURBRL.bid).toFixed(2)
-        });
+        if (data.usd && data.eur) setCurrencyQuotes(data);
       } catch (error) {
         console.error('Error fetching currency quotes:', error);
       }
