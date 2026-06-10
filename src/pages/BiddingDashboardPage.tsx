@@ -193,7 +193,7 @@ export default function BiddingDashboardPage() {
     // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
     const backendActiveRef = useRef(false);
     // ⏱ TIMER OVERRIDE: força cronômetro para 40s fazendo sniper entender que está na reta final (v3.8.242)
-    const timerOverrideRef = useRef<Record<string, boolean>>({});
+    const timerOverrideRef = useRef<Record<string, number>>({});
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -303,8 +303,13 @@ export default function BiddingDashboardPage() {
                     return;
                 }
 
-                // ⏱ TIMER OVERRIDE: se ativo, força o sniper a rodar com cronômetro em 40s (v3.8.242)
-                const isTimerOverridden = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[sId];
+                // ⏱ TIMER OVERRIDE: se ativo (timestamp < 40s atrás), força o sniper a rodar com cronômetro em 40s (v3.8.242)
+                const overrideTs = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[sId] || 0;
+                const isTimerOverridden = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
+                if (!isTimerOverridden && overrideTs > 0) {
+                    timerOverrideRef.current[`${itemSid}_${sId}`] = 0;
+                    timerOverrideRef.current[sId] = 0;
+                }
 
                 // 🏠 Se backend está ativo E não tem override, frontend sniper não precisa disparar
                 if (backendActiveRef.current && !isTimerOverridden) {
@@ -2712,6 +2717,12 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     );
     const [directBidValue, setDirectBidValue] = useState<string>('');
     const [showRankingModal, setShowRankingModal] = useState(false);
+    // 🔄 TICK PARA COUNTDOWN DO TIMER OVERRIDE: força re-render a cada 1s para atualizar o display regressivo (v3.8.246)
+    const [overrideTick, setOverrideTick] = useState(0);
+    useEffect(() => {
+        const interval = setInterval(() => setOverrideTick(t => t + 1), 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Sincronizar com strategyConfig dinâmico
     useEffect(() => {
@@ -3119,29 +3130,51 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 </div>
 
                 <div className="col-span-1 md:col-span-3 flex flex-wrap md:flex-nowrap items-center justify-between md:justify-end gap-3 md:gap-5 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                        (timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? 40 : timeLeft) < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
-                    }`}>
-                        <Clock className="w-4 h-4" />
-                        <span className="text-sm font-bold font-mono">{timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? formatTime(40) : formatTime(timeLeft)}</span>
-                    </div>
+                    {/* ⏱ TIMER DISPLAY: mostra countdown regressivo quando override ativo (v3.8.246) */}
+                    {(() => {
+                        const itemSid = item.sid || '';
+                        const overrideKey = `${itemSid}_${item.itemId || item.numero}`;
+                        const overrideTs = timerOverrideRef?.current?.[overrideKey] || 0;
+                        const overrideLeft = overrideTs > 0 ? Math.max(0, 40 - Math.floor((Date.now() - overrideTs) / 1000)) : 0;
+                        if (overrideLeft <= 0 && overrideTs > 0) { timerOverrideRef.current[overrideKey] = 0; }
+                        const displaySeconds = overrideLeft > 0 ? overrideLeft : timeLeft;
+                        return (
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                                displaySeconds < 60 && displaySeconds > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
+                            }`}>
+                                <Clock className="w-4 h-4" />
+                                <span className="text-sm font-bold font-mono">{formatTime(displaySeconds)}</span>
+                                {overrideLeft > 0 && overrideLeft <= 10 && (
+                                    <span className="text-[10px] font-black text-red-500 animate-ping">!</span>
+                                )}
+                            </div>
+                        );
+                    })()}
                     
-                    {/* ⏱ Botão forçar 40s (v3.8.242) */}
-                    <button
-                        onClick={() => {
-                            const key = `${item.sid || sessionId}_${item.itemId}`;
-                            timerOverrideRef.current[key] = !timerOverrideRef.current[key];
-                        }}
-                        className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${
-                            timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`]
-                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200'
-                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                        }`}
-                        title={timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? 'Timer forçado em 40s — sniper ativo' : 'Forçar timer para 40s (sniper dispara na reta final)'}
-                    >
-                        <span>⏱</span>
-                        <span>{timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? '40s' : 'Forçar'}</span>
-                    </button>
+                    {/* ⏱ Botão forçar 40s com countdown regressivo (v3.8.242) */}
+                    {(() => {
+                        const itemSid = item.sid || '';
+                        const key = `${itemSid}_${item.itemId || item.numero}`;
+                        const overrideTs = timerOverrideRef?.current?.[key] || 0;
+                        const overrideActive = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
+                        const overrideLeft = overrideActive ? Math.max(0, 40 - Math.floor((Date.now() - overrideTs) / 1000)) : 0;
+                        return (
+                            <button
+                                onClick={() => {
+                                    timerOverrideRef.current[key] = overrideActive ? 0 : Date.now();
+                                }}
+                                className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${
+                                    overrideActive
+                                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200'
+                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title={overrideActive ? `Timer forçado — ${overrideLeft}s restantes` : 'Forçar timer para 40s (sniper dispara na reta final)'}
+                            >
+                                <span>⏱</span>
+                                <span>{overrideActive ? `${overrideLeft}s` : 'Forçar'}</span>
+                            </button>
+                        );
+                    })()}
 
                     
                     <button 
