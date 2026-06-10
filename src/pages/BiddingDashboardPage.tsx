@@ -2842,8 +2842,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         
         if (newState) {
             toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
-            // Se kamikaze ativado e bot ligado, dispara imediatamente
-            if ((kamikazeMode || snipeDelaySeconds === 0) && !isWinning) {
+            // Se kamikaze ou 0s, dispara imediatamente (v3.8.249 — sempre, mesmo ganhando)
+            if (kamikazeMode || snipeDelaySeconds === 0) {
                 const currentBest = valorAtualDisplay;
                 const numMin = numMinPrice;
                 const beatingAmt = useFourDecimals ? 0.0001 : 0.01;
