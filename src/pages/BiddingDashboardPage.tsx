@@ -382,7 +382,15 @@ export default function BiddingDashboardPage() {
                     // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição ou o valor indica perda, atira! Evita congelamento por falso positivo na posição)
                     const isLosing = isLosingPos || (bestBid > 0 && activeMyBid > bestBid) || (!isWinningByValue && item.posicao === '?');
                     
-                    if (isLosing) {
+                    // ⏱ Se override ativo, dispara mesmo se estiver ganhando — usuário quer forçar redução AGORA (v3.8.247)
+                    if (isTimerOverridden && !isLosing) {
+                        console.log(`[OVERRIDE] 🔵 Item ${sId}: Override ativo — forçando sniper mesmo em posição vencedora (pos=${pos}, myBid=${activeMyBid}, best=${bestBid}).`);
+                    }
+                    
+                    if (isLosing || isTimerOverridden) {
+                        if (isTimerOverridden && !isLosing) {
+                            console.log(`[OVERRIDE] 🔵 Item ${sId}: Override ativo — forçando sniper em posição vencedora. Procurando alvo...`);
+                        }
                         const myMin = Number(strat.minPrice || 0);
                         if (myMin <= 0) {
                             console.debug(`[SNIPER] Item ${sId}: BLOQUEADO - Valor mínimo não configurado.`);
