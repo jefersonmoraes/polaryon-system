@@ -2332,6 +2332,7 @@ export default function BiddingDashboardPage() {
                                                     simulationMode={session.simulationMode}
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
+                                                    timerOverrideRef={timerOverrideRef}
                                                 />
                                             ))}
                                                                     </div>
@@ -2353,6 +2354,7 @@ export default function BiddingDashboardPage() {
                                                         simulationMode={session.simulationMode}
                                                         clockSkew={clockSkewRef.current}
                                                         wsFastBidsRef={wsFastBidsRef}
+                                                        timerOverrideRef={timerOverrideRef}
                                                     />
                                                 ))];
                                             }
@@ -2369,6 +2371,7 @@ export default function BiddingDashboardPage() {
                                                     simulationMode={session.simulationMode}
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
+                                                    timerOverrideRef={timerOverrideRef}
                                                 />
                                             ));
                                         })()
