@@ -104,16 +104,14 @@ async function deploy() {
     }
 
     // 5. Atualizar backend/frontend na VPS
-    console.log('[4/4] Atualizando VPS (git pull + build + restart)...');
+    console.log('[4/4] Atualizando VPS (executando vps-deploy.sh)...');
     const cmds = [
         'cd /var/www/polaryon',
-        'git fetch origin main',
-        'git reset --hard origin/main',
-        'npx prisma@6 db push 2>&1 || true',
-        'npm run build 2>&1',
-        'pm2 restart polaryon-backend 2>&1'
+        'chmod +x vps-deploy.sh',
+        './vps-deploy.sh 2>&1'
     ];
     await sshExec(conn, cmds.join(' && '));
+
 
     // 5. Gerar latest.yml dinâmico baseado no EXE real (via base64 p/ evitar shell escaping)
     console.log('  📝 Gerando latest.yml do EXE mais recente na VPS...');
