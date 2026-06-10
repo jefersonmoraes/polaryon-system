@@ -602,6 +602,7 @@ ipcMain.handle('scan-cookies', async () => {
 // 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.235): navega o portal ComprasNet,
 // espera a SPA Angular gerar novo JWT no sessionStorage, extrai e retorna
 ipcMain.handle('refresh-jwt-via-page', async (event) => {
+  global.serproToken = null;
   const diag = (msg) => {
     console.log('[MAIN-RELOAD] ' + msg);
     try { event.sender.send('main-diag', msg); } catch(e) {}
@@ -630,9 +631,9 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     }
 
     // Passo 2: Navega para www.comprasnet.gov.br/pt-br (Angular SPA que gera novo JWT)
-    diag('🔄 Navegando para www.comprasnet.gov.br/compras/pt-br/ (Gerar JWT)...');
+    diag('🔄 Navegando para cnetmobile dashboard (Gerar JWT)...');
     try {
-      await hiddenWin.loadURL('https://www.comprasnet.gov.br/compras/pt-br/', { timeout: 25000 });
+      await hiddenWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras', { timeout: 25000 });
       diag('✅ Angular SPA carregada');
     } catch(e) {
       diag('⚠️ Angular SPA (continuando): ' + e.message);

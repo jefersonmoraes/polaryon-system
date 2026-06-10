@@ -531,7 +531,8 @@
     let _ranking429Count = 0;      // consecutive 429s for exponential backoff
     let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
-    const RANKING_RATE_MS = 2000;  // 1 item a cada 2000ms (~30 req/min) — Anti-429
+    const RANKING_RATE_MS = 3000;  // Delay entre batches de compras distintas (~20 req/min) — Anti-429
+    const RANKING_BATCH_MAX = 4;    // Máximo de itens por batch (evita rajada de 10 req simultâneos que causa 429)
 
     // Enfileira item de ranking. priority=true coloca na frente da fila.
     function enqueueRankingFetch(target, priority = false) {
@@ -583,16 +584,20 @@
             return aTimer - bTimer;
         });
         
-        // ⚡ BATCH: agrupa todos os itens da MESMA compra e processa em paralelo
+        // ⚡ BATCH: pega no máximo RANKING_BATCH_MAX itens da MESMA compra para evitar 429
         const firstPurchaseId = _rankingQueue[0].purchaseId;
-        const batch = _rankingQueue.filter(item => item.purchaseId === firstPurchaseId);
-        _rankingQueue = _rankingQueue.filter(item => item.purchaseId !== firstPurchaseId);
+        const allForPurchase = _rankingQueue.filter(item => item.purchaseId === firstPurchaseId);
+        const batch = allForPurchase.slice(0, RANKING_BATCH_MAX);
+        // Mantém na fila os itens que não entraram neste batch (serão processados nos próximos ciclos)
+        const leftover = allForPurchase.slice(RANKING_BATCH_MAX);
+        _rankingQueue = [...leftover, ..._rankingQueue.filter(item => item.purchaseId !== firstPurchaseId)];
         
         _lastRankingFetchTs = now;
-        console.log(`%c[POLARYON RANKING QUEUE] ▶️ BATCH de ${batch.length} itens (Compra: ${firstPurchaseId}) timer=${batch[0].timerSeconds}s | Fila: ${_rankingQueue.length}`, 'color:#6366f1;font-size:9px;');
+        const leftoverInfo = leftover.length > 0 ? ` (+${leftover.length} aguardando)` : '';
+        console.log(`%c[POLARYON RANKING QUEUE] ▶️ BATCH de ${batch.length} itens (Compra: ${firstPurchaseId}) timer=${batch[0].timerSeconds}s | Fila: ${_rankingQueue.length}${leftoverInfo}`, 'color:#6366f1;font-size:9px;');
         
         // 🔥 Dispara captchas do batch em SEQUÊNCIA: 1 captcha → 1 fetch → próximo captcha → ...
-        // (o encadeamento é feito no handler fresh-captcha com delay de 800ms entre fetches)
+        // (o encadeamento é feito no handler fresh-captcha com delay de 1500ms entre fetches)
         batch.forEach(target => triggerRankingFetch(target));
     }, 500);
 
@@ -1050,7 +1055,7 @@
                 shared.captchaToken = null;
             } else if (type === '429-error') {
                 _ranking429Count = (_ranking429Count || 0) + 1;
-                const backoffSec = Math.min(60 * Math.pow(2, _ranking429Count - 1), 300); // 60s, 120s, 240s, max 300s
+                const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180); // 20s, 40s, 80s, max 180s
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                 _rankingQueue = [];
@@ -1109,8 +1114,8 @@
                         const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
                         console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch com token fresco para item ${target.itemId} (batch restante: ${shared.pendingRankingTargets.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
                         
-                        // ⏳ Delay de 800ms entre items do mesmo batch para evitar 429
-                        const delay = shared.pendingRankingTargets.length > 0 ? 800 : 0;
+                        // ⏳ Delay de 1500ms entre items do mesmo batch para evitar 429
+                        const delay = shared.pendingRankingTargets.length > 0 ? 1500 : 0;
                         setTimeout(() => {
                             document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
                                 detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
@@ -2420,9 +2425,25 @@
                 _lastScheduledTokenHash = ''; // força reagendamento
                 scheduleProactiveJwtRenewal(token);
                 console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Renovação proativa reagendada.', 'color:#10b981;font-weight:bold;font-size:12px;');
+            } else {
+                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo.');
+                // Agenda um retry daqui a 15 segundos para dar tempo do portal/rede estabilizar
+                _lastScheduledTokenHash = '';
+                if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+                _proactiveRenewalTimer = setTimeout(() => {
+                    console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retentando renovação proativa após retorno nulo...', 'color:#f59e0b;font-weight:bold;');
+                    refreshTokenViaIframe();
+                }, 15000);
             }
         } catch(ipcErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
+            // Agenda um retry daqui a 15 segundos
+            _lastScheduledTokenHash = '';
+            if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+            _proactiveRenewalTimer = setTimeout(() => {
+                console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retentando renovação proativa após falha...', 'color:#f59e0b;font-weight:bold;');
+                refreshTokenViaIframe();
+            }, 15000);
         }
     }
 
