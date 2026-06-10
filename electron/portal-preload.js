@@ -1019,6 +1019,7 @@
             const { type, token, data, url, status, ok } = event.data;
             if (type === 'token') {
                 shared.sessionToken = token;
+                scheduleProactiveJwtRenewal(token);
             } else if (type === 'captcha') {
                 // Só aceita P1_... (hCaptcha do portal). Siga captcha retorna 204 no ranking.
                 if (token && token.startsWith('P1_')) {
@@ -2180,6 +2181,60 @@
     }, 5000);
 
     // =========================================================================
+    // 🔮 RENOVAÇÃO PROATIVA DE JWT (v3.8.252)
+    // Lê o campo 'exp' direto do JWT e agenda renovação 2 MINUTOS antes de expirar.
+    // Isso ELIMINA o delay de 15-30s de queda, pois o token é trocado ANTES de vencer.
+    // =========================================================================
+    let _proactiveRenewalTimer = null;
+    let _lastScheduledTokenHash = '';
+
+    function scheduleProactiveJwtRenewal(token) {
+        if (!token) return;
+        // Evita reagendar para o mesmo token (capturado múltiplas vezes pelo interceptor)
+        const tokenHash = token.slice(-20);
+        if (tokenHash === _lastScheduledTokenHash) return;
+        _lastScheduledTokenHash = tokenHash;
+
+        try {
+            const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
+            const parts = raw.split('.');
+            if (parts.length < 2) return;
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            const expSec = payload.exp;
+            if (!expSec || typeof expSec !== 'number') return;
+
+            const nowSec = Date.now() / 1000;
+            const ttlSec = expSec - nowSec;
+            const renewInSec = Math.max(10, ttlSec - 120); // 2 min antes de expirar
+
+            if (ttlSec <= 0) {
+                // Já expirou — renova imediatamente
+                console.warn('%c[POLARYON JWT-PROATIVO] ⚠️ Token já expirado! Renovando agora...', 'color:#ef4444;font-weight:bold;');
+                refreshTokenViaIframe();
+                return;
+            }
+
+            // Cancela agendamento anterior se houver
+            if (_proactiveRenewalTimer) {
+                clearTimeout(_proactiveRenewalTimer);
+                _proactiveRenewalTimer = null;
+            }
+
+            const expAt = new Date(expSec * 1000).toLocaleTimeString();
+            const renewAt = new Date((nowSec + renewInSec) * 1000).toLocaleTimeString();
+            console.log(`%c[POLARYON JWT-PROATIVO] 🔮 JWT válido por ${Math.floor(ttlSec/60)}min${Math.floor(ttlSec%60)}s (exp=${expAt}). Renovação proativa agendada em ${Math.floor(renewInSec/60)}min${Math.floor(renewInSec%60)}s às ${renewAt}`, 'color:#6366f1;font-weight:bold;font-size:11px;');
+
+            _proactiveRenewalTimer = setTimeout(async () => {
+                console.log('%c[POLARYON JWT-PROATIVO] ⏰ Prazo atingido! Iniciando renovação preventiva de token...', 'color:#f59e0b;font-weight:bold;font-size:12px;');
+                await refreshTokenViaIframe();
+            }, renewInSec * 1000);
+
+        } catch (e) {
+            console.warn('[POLARYON JWT-PROATIVO] ⚠️ Não foi possível decodificar exp do JWT:', e.message);
+        }
+    }
+
+    // =========================================================================
     // 💓 SISTEMA DE HEARTBEAT - MANTÉM A SESSÃO VIVA INDEFINIDAMENTE (v3.7.2)
     // =========================================================================
     // O SIGA Pregão nunca desconecta porque faz polling contínuo. Nós fazemos o mesmo:
@@ -2357,7 +2412,14 @@
             const token = await ipcRenderer.invoke('refresh-jwt-via-page');
             if (token) {
                 shared.sessionToken = token;
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window!', 'color:#10b981;font-weight:bold;');
+                // Notifica o backend (bidding-runner) com o novo token via IPC
+                try {
+                    ipcRenderer.send('send-portal-data', { type: 'session-token', token });
+                } catch(e) {}
+                // Reagenda renovação proativa com o novo token
+                _lastScheduledTokenHash = ''; // força reagendamento
+                scheduleProactiveJwtRenewal(token);
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Renovação proativa reagendada.', 'color:#10b981;font-weight:bold;font-size:12px;');
             }
         } catch(ipcErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
@@ -2395,6 +2457,8 @@
         // Primeiro ping
         sendKeepAlive();
         renewGovBrSession();
+        // Tenta agendar renovação proativa com o token atual na startup (pode já ter expirado)
+        if (shared.sessionToken) scheduleProactiveJwtRenewal(shared.sessionToken);
 
         // Loop de manutenção contínua
         setInterval(() => {

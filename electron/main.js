@@ -340,6 +340,17 @@ ipcMain.on('send-portal-data', (event, data) => {
             global.biddingRunner.injectRealtimeItems(data.codigo, data.items);
         }
     }
+    // 🔑 JWT renovado proativamente (v3.8.252)
+    if (data && data.type === 'session-token' && data.token) {
+        const freshToken = data.token.startsWith('Bearer ') ? data.token : 'Bearer ' + data.token;
+        global.serproToken = freshToken;
+        console.log('[MAIN] 🔑 Token atualizado proativamente. len=' + freshToken.length);
+        const runners = [biddingRunner, global.biddingRunner].filter(Boolean);
+        for (const r of runners) {
+            if (r && typeof r.setToken === 'function') r.setToken(freshToken);
+            else if (r) r.serproToken = freshToken;
+        }
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('portal-data-update', data);
     }
