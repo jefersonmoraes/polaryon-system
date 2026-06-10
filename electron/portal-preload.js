@@ -1057,10 +1057,14 @@
                 _rankingSuppressRefresh = true;
                 setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
             } else if (type === 'session-expired') {
-                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Disparando refresh de token...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Tentando recarregar via botão da página...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
-                refreshTokenViaIframe();
+                const buttonClicked = clickPortalRefreshButton();
+                if (!buttonClicked) {
+                    console.log('%c[POLARYON SESSION] ⚠️ Botão de recarregar não encontrado. Fazendo fallback para refresh via hidden window...', 'color:#f59e0b;font-weight:bold;');
+                    refreshTokenViaIframe();
+                }
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -2213,7 +2217,10 @@
                     // 🔄 Token expirado — tenta renovar (não disruptivo)
                     keepAliveConsecutiveFailures = 0;
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
-                    refreshTokenViaIframe();
+                    const buttonClicked = clickPortalRefreshButton();
+                    if (!buttonClicked) {
+                        refreshTokenViaIframe();
+                    }
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
@@ -2226,10 +2233,97 @@
                 console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede:`, err.message);
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
                     keepAliveConsecutiveFailures = 0;
-                    refreshTokenViaIframe();
+                    const buttonClicked = clickPortalRefreshButton();
+                    if (!buttonClicked) {
+                        refreshTokenViaIframe();
+                    }
                 }
             }
         }
+    }
+
+    let _lastPortalRefreshClick = 0;
+
+    function clickPortalRefreshButton() {
+        console.log('%c[POLARYON AUTOMATION] Tentando acionar o botão de recarregar do portal...', 'color:#3b82f6;font-weight:bold;');
+        
+        if (Date.now() - _lastPortalRefreshClick < 15000) {
+            console.log('%c[POLARYON AUTOMATION] Recarregamento recente. Aguardando cooldown de 15s...', 'color:#f59e0b;');
+            return true;
+        }
+        
+        // Lista de possíveis seletores (específicos primeiro)
+        const selectors = [
+            'button.btn-refresh',
+            'button.btn-reload',
+            'button.recarregar',
+            'button.atualizar',
+            '.fa-sync',
+            '.fa-sync-alt',
+            '.fa-refresh',
+            '.fa-redo',
+            'button[title*="recarregar" i]',
+            'button[title*="atualizar" i]',
+            'button[title*="refresh" i]',
+            'button[title*="sync" i]',
+            'a[title*="recarregar" i]',
+            'a[title*="atualizar" i]',
+            'a[title*="refresh" i]',
+            'a[title*="sync" i]',
+            '[aria-label*="recarregar" i]',
+            '[aria-label*="atualizar" i]',
+            '[aria-label*="refresh" i]',
+            '[aria-label*="sync" i]'
+        ];
+        
+        for (const selector of selectors) {
+            try {
+                const el = document.querySelector(selector);
+                if (el) {
+                    let clickable = el;
+                    if (el.tagName.toLowerCase() === 'i' || el.tagName.toLowerCase() === 'svg' || el.tagName.toLowerCase() === 'path') {
+                        clickable = el.closest('button') || el.closest('a') || el;
+                    }
+                    if (typeof clickable.click === 'function') {
+                        _lastPortalRefreshClick = Date.now();
+                        clickable.click();
+                        // Dispatch mouse click event as fallback support
+                        const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                        clickable.dispatchEvent(evt);
+                        console.log(`%c[POLARYON AUTOMATION] Botão de recarregar acionado via seletor: ${selector}`, 'color:#10b981;font-weight:bold;');
+                        return true;
+                    }
+                }
+            } catch (e) {}
+        }
+        
+        // Varredura manual de todos os botões e links caso os seletores falhem
+        try {
+            const clickables = document.querySelectorAll('button, a, [role="button"], div.br-button');
+            for (const el of clickables) {
+                const html = (el.innerHTML || '').toLowerCase();
+                const className = (el.className || '').toLowerCase();
+                const title = (el.getAttribute('title') || '').toLowerCase();
+                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                
+                const isRefresh = className.includes('refresh') || className.includes('sync') || className.includes('reload') || className.includes('recarregar') || className.includes('atualizar') ||
+                                  title.includes('refresh') || title.includes('sync') || title.includes('reload') || title.includes('recarregar') || title.includes('atualizar') ||
+                                  ariaLabel.includes('refresh') || ariaLabel.includes('sync') || ariaLabel.includes('reload') || ariaLabel.includes('recarregar') || ariaLabel.includes('atualizar') ||
+                                  html.includes('fa-sync') || html.includes('fa-refresh') || html.includes('fa-redo') || html.includes('fa-sync-alt');
+                                  
+                if (isRefresh && typeof el.click === 'function') {
+                    _lastPortalRefreshClick = Date.now();
+                    el.click();
+                    const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                    el.dispatchEvent(evt);
+                    console.log('%c[POLARYON AUTOMATION] Botão de recarregar acionado via varredura manual!', 'color:#10b981;font-weight:bold;');
+                    return true;
+                }
+            }
+        } catch (e) {}
+        
+        console.warn('[POLARYON AUTOMATION] Botão de recarregar do portal não encontrado na página atual.');
+        return false;
     }
 
     // 🔄 Renova token Serpro — usa hidden BrowserWindow via main.js para bypassar CORS (v3.8.222)
