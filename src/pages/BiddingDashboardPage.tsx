@@ -345,8 +345,9 @@ export default function BiddingDashboardPage() {
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
                 // ⏳ SNIPER COM RETARDO: espera o timer chegar no limite (v3.8.130)
+                // ⏱ Se override ativo, ignora snipeDelay — o botão forçar 40s já significa "vai agora" (v3.8.246)
                 const snipeDelay = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 0);
-                if (snipeDelay > 0 && currentTimeLeft >= 0 && currentTimeLeft > snipeDelay) {
+                if (snipeDelay > 0 && currentTimeLeft >= 0 && currentTimeLeft > snipeDelay && !isTimerOverridden) {
                     if ((lastLogRef.current[`delay_${sId}`] || 0) < Date.now() - 5000) {
                         console.log(`[SNIPER] ⏳ Item ${sId}: Aguardando snipeDelay (timer=${currentTimeLeft}s > snipeDelay=${snipeDelay}s).`);
                         lastLogRef.current[`delay_${sId}`] = Date.now();
