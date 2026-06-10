@@ -192,6 +192,8 @@ export default function BiddingDashboardPage() {
     const wsFastBidsRef = useRef<Record<string, { meuValor: number; valorAtual: number; posicao: string; ganhador: string }>>({});
     // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
     const backendActiveRef = useRef(false);
+    // ⏱ TIMER OVERRIDE: força cronômetro para 40s fazendo sniper entender que está na reta final (v3.8.242)
+    const timerOverrideRef = useRef<Record<string, boolean>>({});
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -301,8 +303,11 @@ export default function BiddingDashboardPage() {
                     return;
                 }
 
-                // 🏠 Se backend RoomRunner está ativo, frontend sniper não precisa disparar (v3.8.175)
-                if (backendActiveRef.current) {
+                // ⏱ TIMER OVERRIDE: se ativo, força o sniper a rodar com cronômetro em 40s (v3.8.242)
+                const isTimerOverridden = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[sId];
+
+                // 🏠 Se backend está ativo E não tem override, frontend sniper não precisa disparar
+                if (backendActiveRef.current && !isTimerOverridden) {
                     return;
                 }
 
@@ -313,19 +318,24 @@ export default function BiddingDashboardPage() {
 
                 // 🔥 Tempo restante: clockSkew ajusta dataHoraFimContagem para o relógio local
                 let currentTimeLeft: number;
-                const sts = sigaTimerSecondsRef.current;
-                const sta = sigaTimerReceivedAtRef.current;
-                if (sts !== undefined && sts >= 0 && sta > 0) {
-                    currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
-                } else if (item.dataHoraFimContagem) {
-                    const endTime = new Date(item.dataHoraFimContagem).getTime();
-                    if (!isNaN(endTime)) {
-                        currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
+                // ⏱ Se override ativo, força timer para 40s (sniper entende que está na reta final)
+                if (isTimerOverridden) {
+                    currentTimeLeft = 40;
+                } else {
+                    const sts = sigaTimerSecondsRef.current;
+                    const sta = sigaTimerReceivedAtRef.current;
+                    if (sts !== undefined && sts >= 0 && sta > 0) {
+                        currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
+                    } else if (item.dataHoraFimContagem) {
+                        const endTime = new Date(item.dataHoraFimContagem).getTime();
+                        if (!isNaN(endTime)) {
+                            currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
+                        } else {
+                            currentTimeLeft = -1;
+                        }
                     } else {
                         currentTimeLeft = -1;
                     }
-                } else {
-                    currentTimeLeft = -1;
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
@@ -3107,13 +3117,28 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
 
                 <div className="col-span-1 md:col-span-3 flex flex-wrap md:flex-nowrap items-center justify-between md:justify-end gap-3 md:gap-5 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                        timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
+                        (timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? 40 : timeLeft) < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
                     }`}>
                         <Clock className="w-4 h-4" />
-                        <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
+                        <span className="text-sm font-bold font-mono">{timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? formatTime(40) : formatTime(timeLeft)}</span>
                     </div>
                     
-
+                    {/* ⏱ Botão forçar 40s (v3.8.242) */}
+                    <button
+                        onClick={() => {
+                            const key = `${item.sid || sessionId}_${item.itemId}`;
+                            timerOverrideRef.current[key] = !timerOverrideRef.current[key];
+                        }}
+                        className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${
+                            timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`]
+                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                        }`}
+                        title={timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? 'Timer forçado em 40s — sniper ativo' : 'Forçar timer para 40s (sniper dispara na reta final)'}
+                    >
+                        <span>⏱</span>
+                        <span>{timerOverrideRef.current[`${item.sid || sessionId}_${item.itemId}`] ? '40s' : 'Forçar'}</span>
+                    </button>
 
                     
                     <button 
