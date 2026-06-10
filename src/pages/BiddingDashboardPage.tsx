@@ -401,7 +401,8 @@ export default function BiddingDashboardPage() {
                             const mandatorySerproMargin = officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal;
                             
                             // O limite máximo que o Serpro aceita
-                            const maxAllowedBidBySerpro = myCurrentBid - mandatorySerproMargin;
+                            // 🔧 FIX v3.8.240: Se myCurrentBid é 0 (nunca bidou), não travar
+                            const maxAllowedBidBySerpro = myCurrentBid > 0 ? myCurrentBid - mandatorySerproMargin : 999999999;
                             
                             let nextBid = 0;
                             // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance, não desconta do concorrente
