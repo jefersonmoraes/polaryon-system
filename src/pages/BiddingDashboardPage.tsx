@@ -292,7 +292,8 @@ export default function BiddingDashboardPage() {
             currentItems.forEach(item => {
                 const sId = String(item.itemId);
                 const itemSid = item.sid || '';
-                const strat = configs[`${itemSid}_${sId}`] || configs[sId] || configs[item.itemId] || {};
+                const sesId = sessionIdRef.current || '';
+                const strat = configs[`${itemSid}_${sId}`] || configs[`${sesId}_${sId}`] || configs[sId] || configs[item.itemId] || {};
                 const isActive = strat.active || false;
                 
                 if (!isActive) {
@@ -304,10 +305,11 @@ export default function BiddingDashboardPage() {
                 }
 
                 // ⏱ TIMER OVERRIDE: se ativo (timestamp < 40s atrás), força o sniper a rodar com cronômetro em 40s (v3.8.242)
-                const overrideTs = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[sId] || 0;
+                const overrideTs = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[`${sesId}_${sId}`] || timerOverrideRef.current[sId] || 0;
                 const isTimerOverridden = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
                 if (!isTimerOverridden && overrideTs > 0) {
                     timerOverrideRef.current[`${itemSid}_${sId}`] = 0;
+                    timerOverrideRef.current[`${sesId}_${sId}`] = 0;
                     timerOverrideRef.current[sId] = 0;
                 }
 
@@ -3141,7 +3143,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 <div className="col-span-1 md:col-span-3 flex flex-wrap md:flex-nowrap items-center justify-between md:justify-end gap-3 md:gap-5 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
                     {/* ⏱ TIMER DISPLAY: mostra countdown regressivo quando override ativo (v3.8.246) */}
                     {(() => {
-                        const itemSid = item.sid || '';
+                        const itemSid = sid || item.sid || '';
                         const overrideKey = `${itemSid}_${item.itemId || item.numero}`;
                         const overrideTs = timerOverrideRef?.current?.[overrideKey] || 0;
                         const overrideLeft = overrideTs > 0 ? Math.max(0, 40 - Math.floor((Date.now() - overrideTs) / 1000)) : 0;
@@ -3162,7 +3164,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     
                     {/* ⏱ Botão forçar 40s com countdown regressivo (v3.8.242) */}
                     {(() => {
-                        const itemSid = item.sid || '';
+                        const itemSid = sid || item.sid || '';
                         const key = `${itemSid}_${item.itemId || item.numero}`;
                         const overrideTs = timerOverrideRef?.current?.[key] || 0;
                         const overrideActive = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
