@@ -715,3 +715,29 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 4. **Código morto removido**: `triggerJwtGeneration()` removido de `sendKeepAlive()` e handler `session-expired` — `refreshTokenViaIframe()` faz tudo
 
 **Impacto:** JWT é renovado silenciosamente via hidden BrowserWindow a cada 30s (debounce) ou quando 401 é detectado. Sem CORS, sem 405, sem iframe block. O sistema mantém-se autenticado permanentemente.
+
+## Implementado (v3.8.241)
+
+### 1. Backend sniper nunca disparava com snipeDelay + líder abaixo do mínimo
+**Problema:** Quando o líder estava abaixo do `myMin` configurado, o backend setava `shouldBid = false` e nunca disparava o lance. Desde v3.8.175, o frontend sniper é desligado quando o backend está ativo (`backendActiveRef.current = true`), então NENHUM sniper disparava. Configurar sniper com "30s" e play resultava em silêncio total.
+
+**Arquivo:** `electron/bidding-runner.js:907-929` (fallback no backend)
+
+**Solução:** Três cenários no fallback (líder não batível):
+1. **Ganhando ou 2º lugar**: reduz gradualmente (`myCurrentBid - decrementStep`)
+2. **Perdendo**: reduz metade do gap até o mínimo (`gapReduction = max(margin, (myCurrentBid - myMin) * 0.5)`)
+3. **Já no mínimo ou sem lance**: mantém `shouldBid = false` (não queima captcha à toa)
+
+### 2. Frontend `maxAllowedBidBySerpro` travava com `myCurrentBid = 0`
+**Problema:** Quando o usuário nunca tinha bidado, `myCurrentBid` era 0 e `maxAllowedBidBySerpro = 0 - mandatorySerproMargin` dava negativo. A validação `nextBid > maxAllowedBidBySerpro` bloqueava QUALQUER lance.
+
+**Arquivo:** `src/pages/BiddingDashboardPage.tsx:404`
+
+**Solução:** `myCurrentBid > 0 ? myCurrentBid - mandatorySerproMargin : 999999999` — sem lance anterior, sem trava de degrau.
+
+### 3. Ranking branch também tinha `shouldBid = false` (v3.8.242)
+**Problema:** O branch `hasRankings` (quando ranking está disponível) também setava `shouldBid = false` se nenhum concorrente era batível — mesma trava do fallback.
+
+**Arquivo:** `electron/bidding-runner.js:876-891`
+
+**Solução:** Mesma lógica de redução progressiva em direção ao mínimo. Agora ambos os branches (ranking e fallback) reduzem gradualmente quando nenhum concorrente é batível.

@@ -874,11 +874,19 @@ class RoomRunner {
                                         nextBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
                                         console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Mirando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`);
                                     } else {
-                                        // 🔧 Nenhum concorrente é batível acima de myMin.
-                                        // Manter posição atual — ir pro mínimo não adianta e queima margem
-                                        shouldBid = false;
-                                        if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
-                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Mantendo R$ ${myCurrentBid}.`);
+                                        // 🔧 FIX v3.8.241: Nenhum concorrente batível — reduzir em direção ao mínimo
+                                        // para tentar alcançar uma posição onde possamos bater alguém
+                                        if (myCurrentBid !== 999999999 && myCurrentBid > myMin) {
+                                            const maxDecrement = Math.max(margin, mandatorySerproMargin);
+                                            const lowestAllowed = myCurrentBid - maxDecrement;
+                                            const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
+                                            nextBid = Math.max(myMin, Math.min(myCurrentBid - gapReduction, lowestAllowed));
+                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum batível → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (gap=${gapReduction}, mínimo R$ ${myMin}).`);
+                                        } else {
+                                            shouldBid = false;
+                                            if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
+                                                console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Já no mínimo ou sem lance. Mantendo.`);
+                                            }
                                         }
                                     }
                                 } else {
