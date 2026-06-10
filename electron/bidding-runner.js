@@ -874,19 +874,11 @@ class RoomRunner {
                                         nextBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
                                         console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Mirando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`);
                                     } else {
-                                        // 🔧 FIX v3.8.241: Nenhum concorrente batível — reduzir em direção ao mínimo
-                                        // para tentar alcançar uma posição onde possamos bater alguém
-                                        if (myCurrentBid !== 999999999 && myCurrentBid > myMin) {
-                                            const maxDecrement = Math.max(margin, mandatorySerproMargin);
-                                            const lowestAllowed = myCurrentBid - maxDecrement;
-                                            const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
-                                            nextBid = Math.max(myMin, Math.min(myCurrentBid - gapReduction, lowestAllowed));
-                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum batível → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (gap=${gapReduction}, mínimo R$ ${myMin}).`);
-                                        } else {
-                                            shouldBid = false;
-                                            if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
-                                                console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Já no mínimo ou sem lance. Mantendo.`);
-                                            }
+                                        // 🔧 FIX v3.8.242: Nenhum concorrente batível — preservar valor, não reduzir
+                                        // Reduzir não adianta se todos estão abaixo do mínimo (só queima captcha)
+                                        shouldBid = false;
+                                        if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
+                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Preservando R$ ${myCurrentBid}.`);
                                         }
                                     }
                                 } else {
@@ -912,21 +904,12 @@ class RoomRunner {
                                             }
                                         } else {
                                                 const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
-                                                // 🔧 FIX v3.8.240: Se estamos acima do mínimo, reduzir em direção a ele
-                                                // mesmo que líder não seja batível. Antes: shouldBid = false e nunca disparava.
-                                                if (myCurrentBid !== 999999999 && myCurrentBid > myMin) {
-                                                    if (isGanhando || isSecondPlace) {
-                                                        const decrementStep = Math.max(margin, mandatorySerproMargin);
-                                                        nextBid = myCurrentBid - decrementStep;
-                                                        console.log(`[BACKEND SNIPER] Item ${sId}: ${isGanhando ? 'GANHANDO' : '2º LUGAR'} no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
-                                                    } else {
-                                                        // Perdendo e líder não batível: reduz metade do gap até o mínimo
-                                                        const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
-                                                        const maxDecrement = Math.max(margin, mandatorySerproMargin);
-                                                        const lowestAllowed = myCurrentBid - maxDecrement;
-                                                        nextBid = Math.max(myMin, Math.min(myCurrentBid - gapReduction, lowestAllowed));
-                                                        console.log(`[BACKEND SNIPER] Item ${sId}: PERDENDO no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (gap=${gapReduction}, mínimo R$ ${myMin}).`);
-                                                    }
+                                                // 🔧 FIX v3.8.240: Se ganhando ou 2º, reduz gradualmente.
+                                                // Se perdendo e líder não batível: preserva valor (ninguém batível → reduzir não adianta)
+                                                if ((isGanhando || isSecondPlace) && myCurrentBid !== 999999999 && myCurrentBid > myMin) {
+                                                    const decrementStep = Math.max(margin, mandatorySerproMargin);
+                                                    nextBid = myCurrentBid - decrementStep;
+                                                    console.log(`[BACKEND SNIPER] Item ${sId}: ${isGanhando ? 'GANHANDO' : '2º LUGAR'} no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
                                                 } else if (isGanhando && myCurrentBid !== 999999999) {
                                                     const decrementStep = Math.max(margin, mandatorySerproMargin);
                                                     nextBid = myCurrentBid - decrementStep;

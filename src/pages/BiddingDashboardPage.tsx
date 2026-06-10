@@ -496,20 +496,14 @@ export default function BiddingDashboardPage() {
                                         console.log(`[SNIPER POSITIONING] Mirando concorrente R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowestAllowed=R$ ${lowestAllowed})`);
                                     }
                                 } else {
-                                    // 🔧 FIX v3.8.127: Mesmo sem concorrente batível, reduz agressivamente em direção ao mínimo
-                                    if (myCurrentBid > myMin && myCurrentBid !== 999999999) {
-                                        // Reduz pelo menos pela margem, ou metade do gap até o mínimo (o que for maior)
-                                        const gapReduction = Math.max(margin, Math.floor((myCurrentBid - myMin) * 0.5));
-                                        nextBid = Math.max(myMin, Math.min(myCurrentBid - gapReduction, lowestAllowed));
-                                        const lastNobeatLog = lastLogRef.current[`nobeat_${sId}`] || 0;
-                                        if (Date.now() - lastNobeatLog >= 2000) {
-                                            console.log(`[SNIPER] Reduzindo lance de R$ ${myCurrentBid} → R$ ${nextBid} (mínimo R$ ${myMin}, margem Serpro R$ ${mandatorySerproMargin}). Nenhum concorrente batível, mas reduzindo agressivamente.`);
-                                            lastLogRef.current[`nobeat_${sId}`] = Date.now();
-                                        }
-                                        // Não dá return - segue para validação e disparo
-                                    } else {
-                                        nextBid = myMin;
+                                    // 🔧 FIX v3.8.242: Nenhum concorrente batível — preserva valor
+                                    // Reduzir não adianta se todos estão abaixo do mínimo (só queima captcha)
+                                    const lastNobeatLog = lastLogRef.current[`nobeat_${sId}`] || 0;
+                                    if (Date.now() - lastNobeatLog >= 2000) {
+                                        console.log(`[SNIPER] Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Preservando R$ ${myCurrentBid}.`);
+                                        lastLogRef.current[`nobeat_${sId}`] = Date.now();
                                     }
+                                    return; // Sai sem disparar
                                 }
                             }
                             
