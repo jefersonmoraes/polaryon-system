@@ -2536,7 +2536,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} timerOverrideRef={timerOverrideRef} />
                         ))}
                     </div>
                 </CardContent>
@@ -2631,7 +2631,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, timerOverrideRef }: any) {
     // ⚡ SOBRESCRITA INSTANTÂNEA VIA WEBSOCKET DIRETO (RAIO DIRETO): usa dados do wsFastBidsRef
     // para meuValor, valorAtual, posicao SEMPRE que disponíveis (mais recentes que o item prop)
     const wsFastKey = sid ? `${sid}_${item.itemId || item.numero}` : `${item.itemId || item.numero}`;
