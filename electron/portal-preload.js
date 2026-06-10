@@ -2426,15 +2426,6 @@
         }
     }
 
-    // Força renovação de JWT via hidden BrowserWindow (substitui o iframe que era bloqueado por XFO/CORS)
-    var _lastJwtTrigger = 0;
-
-    function triggerJwtGeneration() {
-        if (Date.now() - _lastJwtTrigger < 30000) return;
-        _lastJwtTrigger = Date.now();
-        refreshTokenViaIframe();
-    }
-
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
     async function renewGovBrSession() {
         try {
@@ -2445,8 +2436,6 @@
                 signal: AbortSignal.timeout(10000)
             });
             console.log('%c[POLARYON HEARTBEAT] 🔄 Sessão Gov.br renovada silenciosamente (main.asp).', 'color: #6366f1; font-size: 10px;');
-            // Após renovar cookies, força geração de novo JWT via Angular app no iframe
-            triggerJwtGeneration();
         } catch (e) {
             // Silencioso — falha no Gov.br não é crítica
         }
@@ -2460,11 +2449,11 @@
         // Tenta agendar renovação proativa com o token atual na startup (pode já ter expirado)
         if (shared.sessionToken) scheduleProactiveJwtRenewal(shared.sessionToken);
 
-        // Loop de manutenção contínua
-        setInterval(() => {
-            sendKeepAlive();
-            renewGovBrSession();
-        }, KEEPALIVE_INTERVAL_MS);
+        // Loop de pings da API Serpro (30s)
+        setInterval(sendKeepAlive, KEEPALIVE_INTERVAL_MS);
+
+        // Loop de manutenção de cookies Gov.br (120s)
+        setInterval(renewGovBrSession, 120000);
 
     }, 30000);
 
