@@ -688,51 +688,48 @@ ipcMain.handle('refresh-jwt-via-page', async () => {
   return null;
 });
 
-// ☢️ RELOAD DA JANELA PRINCIPAL + POLL (v3.8.260): limpa localStorage+sessionStorage,
-// reload, e espera até 20s pelo novo JWT gerado pelo SSO.
-// Retorna o token encontrado ou null.
+// ☢️ RELOAD DA JANELA PRINCIPAL (v3.8.277): recarrega a página SEM limpar storages.
+// Limpar storages fazia a SPA perder o estado e redirecionar para /ac (acesso negado).
+// Agora só reload + poll: a SPA mantém o estado e o interceptor captura qualquer token disponível.
 ipcMain.handle('reload-main-window', async (event) => {
   try {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
-      // Salva a URL ANTES do reload para poder voltar depois
       const savedUrl = win.webContents.getURL();
-      console.log('[MAIN] ☢️ reload-main-window: limpando storages + reload + poll... URL salva: ' + savedUrl);
-      console.log('[MAIN] ☢️ NOTA: a pagina sera restaurada automaticamente apos ~10-15s');
+      console.log('[MAIN] ☢️ reload-main-window: recarregando página (SEM limpar storages)...');
+      console.log('[MAIN] ☢️ URL: ' + savedUrl);
 
       global.serproToken = null;
-      try {
-        await win.webContents.executeJavaScript('(function(){ try{localStorage.clear()}catch(e){} try{sessionStorage.clear()}catch(e){} try{indexedDB&&indexedDB.databases&&indexedDB.databases().then(function(dbs){dbs.forEach(function(db){if(db.name)indexedDB.deleteDatabase(db.name)})})}catch(e){} return true; })()');
-      } catch(e) {
-        console.log('[MAIN] ☢️ storage.clear ignorado:', e.message);
-      }
+
+      // Apenas reload - NÃO limpa storages (v3.8.277)
+      // SPA mantém estado, interceptor captura token após o carregamento
       win.webContents.reload();
-      // Poll por até 20s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
+
+      // Poll por até 30s pelo token (interceptor captura durante carregamento)
       var foundToken = null;
-      for (var a = 0; a < 20; a++) {
+      for (var a = 0; a < 30; a++) {
         await new Promise(function(r) { setTimeout(r, 1000); });
         try {
           if (win.isDestroyed()) break;
           if (!foundToken && global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
             foundToken = global.serproToken;
-            console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
-            // Log TTL
+            console.log('[MAIN] ☢️ reload-main-window: Token encontrado via interceptor!');
             try {
               var parts = foundToken.split('.');
               var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
               console.log('[MAIN] ☢️ TTL do JWT: ' + Math.floor((payload.exp - Date.now()/1000)/60) + 'min');
             } catch(ttlErr) {}
-            break; // Sai imediatamente ao encontrar
+            break;
           }
         } catch(e2) {}
       }
 
-      // ⬅️ SEMPRE volta para a URL original, mesmo sem token (v3.8.266)
+      // ⬅️ SEMPRE volta para a URL original (segurança extra)
       try {
         if (!win.isDestroyed()) {
           var currentUrl = win.webContents.getURL();
           if (currentUrl && savedUrl && currentUrl !== savedUrl) {
-            console.log('[MAIN] ☢️ reload-main-window: URL mudou para "' + currentUrl.substring(0,80) + '", navegando de volta para "' + savedUrl.substring(0,80) + '"...');
+            console.log('[MAIN] ☢️ reload-main-window: navegando de volta para URL original...');
             win.webContents.loadURL(savedUrl);
             await new Promise(function(r2) { setTimeout(r2, 3000); });
           }
@@ -742,13 +739,19 @@ ipcMain.handle('reload-main-window', async (event) => {
       }
 
       if (foundToken) {
-        console.log('[MAIN] ☢️ reload-main-window: SUCESSO! Token JWT renovado.');
+        console.log('[MAIN] ☢️ reload-main-window: SUCESSO! Token JWT.');
         return foundToken;
       }
-      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 20s (URL restaurada)');
+
+      // Fallback: último token conhecido (pode estar expirado mas evita tela de erro)
+      if (global.serproToken) {
+        console.log('[MAIN] ☢️ reload-main-window: retornando último token conhecido');
+        return global.serproToken;
+      }
+
+      console.log('[MAIN] ☢️ reload-main-window: NENHUM token encontrado');
       return null;
     }
-    console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
     return null;
   } catch(e) {
     console.log('[MAIN] ☢️ reload-main-window erro:', e.message);

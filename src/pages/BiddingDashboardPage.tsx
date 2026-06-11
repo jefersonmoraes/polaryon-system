@@ -313,10 +313,8 @@ export default function BiddingDashboardPage() {
                     timerOverrideRef.current[sId] = 0;
                 }
 
-                // 🏠 Se backend está ativo E não tem override, frontend sniper não precisa disparar
-                if (backendActiveRef.current && !isTimerOverridden) {
-                    return;
-                }
+                // 🏠 Backend ativo NÃO bloqueia itens com config do usuário (v3.8.277)
+                // Backend GLOBAL_ runner não tem as strategy configs; dedup cuida de duplicatas.
 
                 if ((lastLogRef.current[`loop_${sId}`] || 0) < Date.now() - 10000) {
                     console.log(`[SNIPER] 🔄 Item ${sId}: sniper ATIVO — avaliando lance...`);
@@ -1870,9 +1868,14 @@ export default function BiddingDashboardPage() {
         const sid = targetSid || sessionId;
         if (!sid || sid === 'undefined' || !itemId || itemId === 'undefined') return;
         try {
-            const isSimulated = sid.startsWith('virtual_') || sid.startsWith('HYBRID_') || sid.startsWith('GLOBAL_');
-            if (!isSimulated) {
-                await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
+            const isFullySimulated = sid.startsWith('virtual_') || sid.startsWith('HYBRID_');
+            // v3.8.277: GLOBAL_ manda config pro backend (runner VPS precisa das configs do usuário)
+            if (!isFullySimulated) {
+                try {
+                    await api.patch(`/bidding/sessions/${sid}/items/${itemId}`, strategy);
+                } catch (apiErr) {
+                    console.warn(`[SAVE STRATEGY] API erro ao salvar para ${sid}:`, apiErr);
+                }
             }
             setItemStrategies(prev => ({ ...prev, [`${sid}_${itemId}`]: strategy }));
             if (isLocalRunning && (window as any).electronAPI) {
