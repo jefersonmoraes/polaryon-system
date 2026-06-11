@@ -227,6 +227,14 @@ app.whenReady().then(async () => {
   });
 });
 
+// v3.8.260: força destruição de TODAS as janelas antes do quit (evita trava do instalador NSIS)
+app.on('before-quit', () => {
+  console.log('[MAIN] before-quit: destruindo todas as janelas...');
+  BrowserWindow.getAllWindows().forEach(function(w) {
+    try { if (!w.isDestroyed()) w.destroy(); } catch(e) {}
+  });
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -550,9 +558,16 @@ autoUpdater.on('update-downloaded', (info) => {
         mainWindow.webContents.send('update-downloaded', info);
         mainWindow.webContents.send('bidding-update-log', `🚀 v${info.version} PRONTA! Reiniciando em 10s para aplicar...`);
         
-        // ⚡ INSTALAÇÃO AUTOMÁTICA FORÇADA
+        // ⚡ INSTALAÇÃO AUTOMÁTICA FORÇADA (v3.8.260): destrói TODAS as janelas antes
         setTimeout(() => {
-            autoUpdater.quitAndInstall(false, true);
+            console.log('[POLARYON-UPDATE] Destruindo todas as janelas antes do quitAndInstall...');
+            BrowserWindow.getAllWindows().forEach(function(w) {
+                try { if (!w.isDestroyed()) w.destroy(); } catch(e) {}
+            });
+            // Pequena pausa para garantir que as janelas foram destruídas
+            setTimeout(() => {
+                autoUpdater.quitAndInstall(true, true);
+            }, 500);
         }, 10000);
     }
     new Notification({
