@@ -2449,8 +2449,10 @@
         return false;
     }
 
-    // 🔄 Renova token Serpro — refresh-jwt (HTTP direto Node.js) PRIMEIRO,
-    // fallback reload-main-window (v3.8.273: sem hidden window/popup — causa bloqueio)
+    // 🔄 Renova token Serpro via hidden window ISOLADA (v3.8.257+)
+    // Usa refresh-jwt-via-page: abre janela oculta com sessão temporária,
+    // copia cookies, navega para cnetmobile e captura o novo JWT.
+    // NÃO usa reload-main-window nem refresh-jwt direto (ambos causavam bugs).
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe() {
         // v3.8.273: Se IP bloqueado, não tenta nada
@@ -2461,11 +2463,12 @@
 
         var nowMs = Date.now();
         if (nowMs - _lastRefreshTime < 30000) {
+            console.log('%c[POLARYON HEARTBEAT] ⏳ Aguardando cooldown de refresh (30s)...', 'color:#94a3b8;font-size:10px;');
             return;
         }
         _lastRefreshTime = nowMs;
 
-        // Passo 1: Loga claims do JWT para diagnóstico
+        // Loga claims do JWT para diagnóstico
         if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
             try {
                 var payloadBase64 = shared.sessionToken.split('.')[1];
@@ -2474,55 +2477,30 @@
             } catch(e) {}
         }
 
-        // Passo 2: Tenta refresh-jwt (HTTP direto Node.js com cookies) (v3.8.257)
-        // v3.8.273: sem fetch main.asp — evitou bloqueio Serpro
+        // ÚNICO MÉTODO: hidden window ISOLADA com cookies copiados (v3.8.256+)
+        // Não usa reload-main-window (causa "Acesso não autorizado")
+        // Não usa refresh-jwt direto (endpoint retorna 404/422)
         try {
-            var comprasId = await ipcRenderer.invoke('get-compras-id');
-            if (comprasId) {
-                console.log('%c[POLARYON HEARTBEAT] 🔑 refresh-jwt direto com compras-id=' + comprasId, 'color:#6366f1;font-weight:bold;');
-                var directToken = await ipcRenderer.invoke('refresh-jwt', { cnetId: comprasId });
-                if (directToken) {
-                    shared.sessionToken = directToken;
-                    try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: directToken }); } catch(e) {}
-                    try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: directToken }, '*'); } catch(e) {}
-                    _lastScheduledTokenHash = '';
-                    scheduleProactiveJwtRenewal(directToken);
-                    console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via refresh-jwt direto! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
-                    return;
-                }
-                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto retornou nulo.');
-            } else {
-                console.warn('[POLARYON HEARTBEAT] ⚠️ compras-id não disponível.');
-            }
-        } catch(directErr) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto falhou: ' + (directErr.message || directErr));
-        }
-
-        // Passo 3: ÚLTIMO RECURSO — nuclear reload da janela principal (v3.8.272)
-        // NOTA: v3.8.273 — só chama reload se o JWT REALMENTE expirou (não proativo)
-        // O heartbeat vai detectar 401 e isso só roda como último recurso.
-        // Enquanto isso, o interceptor pode capturar um novo JWT se o usuário re-logar.
-        console.warn('%c[POLARYON HEARTBEAT] ☢️ Último recurso: reload main window...', 'color:#ef4444;font-weight:bold;font-size:13px;');
-        try {
-            var reloadToken = await ipcRenderer.invoke('reload-main-window');
-            if (reloadToken) {
-                shared.sessionToken = reloadToken;
-                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: reloadToken }); } catch(e) {}
-                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: reloadToken }, '*'); } catch(e) {}
+            console.log('%c[POLARYON HEARTBEAT] 🔑 Renovando JWT via hidden window isolada...', 'color:#6366f1;font-weight:bold;');
+            var newToken = await ipcRenderer.invoke('refresh-jwt-via-page');
+            if (newToken && newToken.startsWith('Bearer ')) {
+                shared.sessionToken = newToken;
+                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: newToken }); } catch(e) {}
+                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: newToken }, '*'); } catch(e) {}
                 _lastScheduledTokenHash = '';
-                scheduleProactiveJwtRenewal(reloadToken);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
+                scheduleProactiveJwtRenewal(newToken);
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Token injetado.', 'color:#10b981;font-weight:bold;font-size:12px;');
                 return;
             }
-            console.warn('%c[POLARYON HEARTBEAT] ⏳ reload-main-window retornou nulo. Retentando em 10min...', 'color:#f59e0b;font-weight:bold;');
-        } catch(reloadErr) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window falhou: ' + (reloadErr.message || reloadErr));
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo. Sessão pode ter expirado completamente.', 'color:#f59e0b;font-weight:bold;');
+        } catch(err) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (err.message || err));
         }
 
-        // Se todos falharam, retenta em 10min (v3.8.273: 600s em vez de 60s — menos requests)
+        // Se falhou, retenta em 2min (sessão expirou, aguarda relogin manual)
         _lastScheduledTokenHash = '';
         if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 600000);
+        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 120000);
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
