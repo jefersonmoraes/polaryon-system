@@ -995,9 +995,9 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO (v3.8.273 - Conservador Anti-Bloqueio)
-            // GUERRA 300ms | Reta <30s 500ms | Reta <60s 1000ms | Ativo 1500ms | Passivo 10s
-            let nextInterval = 10000;
+            // ⚡ POLLING ADAPTATIVO (v3.8.274 - Ultra Conservador)
+            // GUERRA 3000ms | Reta <30s 3000ms | Reta <60s 3000ms | Ativo 5000ms | Passivo 15s
+            let nextInterval = 15000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
             // 🚦 ANTI-429: Se recebemos 429 recentemente, aumenta intervalo preventivamente
@@ -1023,21 +1023,21 @@ class RoomRunner {
             const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
 
             if (wsFresh) {
-                nextInterval = 10000; // Heartbeat 10s (v3.8.273: 10s em vez de 5s)
+                nextInterval = 10000;
             } else if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 300; // ⚔️ GUERRA 300ms (v3.8.273: 30ms→300ms — anti-bloqueio)
+                    nextInterval = 3000; // ⚔️ GUERRA 3000ms (v3.8.274: 300ms→3000ms)
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
                     }
                 } else if (minTimer <= 30) {
-                    nextInterval = 500; // 🔥 Reta final <30s (v3.8.273: 300ms→500ms)
+                    nextInterval = 3000; // 🔥 Reta <30s 3000ms
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = 1000; // ⚡ Reta final <60s (v3.8.273: 500ms→1000ms)
+                    nextInterval = 3000; // ⚡ Reta <60s 3000ms
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = 1500; // Ativo estável (v3.8.273: 800ms→1500ms)
+                    nextInterval = 5000; // Ativo estável 5000ms
                 }
             }
 
