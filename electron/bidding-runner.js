@@ -995,8 +995,8 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO MULTI-MODO (v3.8.141 - Agressivo)
-            // Guerra de lances → 50ms | Reta final 30s → 300ms | Reta final 60s → 500ms | Ativo normal → 800ms | Passivo → 10s
+            // ⚡ POLLING ADAPTATIVO (v3.8.273 - Conservador Anti-Bloqueio)
+            // GUERRA 300ms | Reta <30s 500ms | Reta <60s 1000ms | Ativo 1500ms | Passivo 10s
             let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
@@ -1020,33 +1020,24 @@ class RoomRunner {
             if (this.warCountCache === undefined) this.warCountCache = 0;
 
             // 🌐 Se WS está fresco (< 60s), POLLING ZERO — dados reais chegam via WebSocket
-            // O injectRealtimeItems() já acorda o runner quando dados WS chegam
             const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
 
             if (wsFresh) {
-                nextInterval = 5000; // Heartbeat 5s — só pra detectar se WS ficou stale
-                if (Math.random() < 0.1) {
-                    console.log(`[POLARYON MOTOR] 💚 WS Heartbeat (${this.sessionId}) — 5s, sem HTTP polling`);
-                }
+                nextInterval = 10000; // Heartbeat 10s (v3.8.273: 10s em vez de 5s)
             } else if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 30; // 💢 30ms agressivo (sem WS, precisa de HTTP polling rápido)
+                    nextInterval = 300; // ⚔️ GUERRA 300ms (v3.8.273: 30ms→300ms — anti-bloqueio)
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
-                        console.log(`[POLARYON MOTOR] ⚔️ GUERRA (${this.sessionId}) WS=stale backoff 429: ${nextInterval}ms`);
                     }
                 } else if (minTimer <= 30) {
-                    nextInterval = 300; // 🔥 Reta final <30s
+                    nextInterval = 500; // 🔥 Reta final <30s (v3.8.273: 300ms→500ms)
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = 500; // ⚡ Reta final <60s
+                    nextInterval = 1000; // ⚡ Reta final <60s (v3.8.273: 500ms→1000ms)
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = 800; // Ativo estável
-                }
-            } else {
-                if (Math.random() < 0.1) {
-                    console.log(`[POLARYON MOTOR] 💤 Radar Passivo (${this.sessionId}) a 10s (Anti-429).`);
+                    nextInterval = 1500; // Ativo estável (v3.8.273: 800ms→1500ms)
                 }
             }
 

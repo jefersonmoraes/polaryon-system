@@ -682,74 +682,10 @@ ipcMain.handle('scan-cookies', async () => {
 // 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.268): navega para main.asp (SSO)
 // A hidden window usa a MESMA sessão da janela principal (cookies compartilhados).
 // main.asp → redirect → www SPA → SSO → novo JWT. Main window NÃO é afetada.
-ipcMain.handle('refresh-jwt-via-page', async (event) => {
-  var popupToken = null;
-  var timedOut = false;
-  const diag = (msg) => {
-    console.log('[MAIN-RELOAD] ' + msg);
-    try { event.sender.send('main-diag', msg); } catch(e) {}
-  };
-  try {
-    const mainSession = session.fromPartition('persist:polaryon-global');
-    const { BrowserWindow } = require('electron');
-    const popupWin = new BrowserWindow({
-      show: true,
-      width: 800, height: 600,
-      center: true,
-      title: 'Polaryon — Renovando sessão...',
-      webPreferences: {
-        session: mainSession,
-        preload: path.join(__dirname, 'hidden-preload.js'),
-        javascript: true,
-        sandbox: false,
-        webSecurity: true
-      }
-    });
-
-    // 🩺 Diagnóstico de crash/erro/close
-    popupWin.webContents.on('crashed', function() { diag('💥 RENDERER CRASHED'); });
-    popupWin.webContents.on('did-fail-load', function(ev, code, desc, url) { diag('❌ did-fail-load code=' + code + ' desc="' + desc + '" url="' + (url||'').substring(0,80) + '"'); });
-    popupWin.on('closed', function() { diag('🔒 Popup fechado (window.close() ou manual)'); });
-
-    // Navega para main.asp — SSO auto-login do Gov.br
-    diag('🔄 Navegando para www.comprasnet.gov.br/main.asp (SSO)...');
-    try {
-      await popupWin.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 20000 });
-    } catch(e) {
-      diag('⚠️ main.asp (continuando): ' + e.message);
-    }
-
-    // Aguarda SSO redirects estabilizarem
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Polling por até 30s: extrai JWT do sessionStorage + interceptor
-    for (var attempt = 0; attempt < 30 && !popupWin.isDestroyed(); attempt++) {
-      try {
-        if (attempt % 3 === 0) {
-          try { var curUrl = await popupWin.webContents.executeJavaScript('location.href.substring(0,120)'); diag('📍 URL at #' + (attempt+1) + ': ' + curUrl); } catch(e3) { diag('📍 URL at #' + (attempt+1) + ': (cross-origin/crashed)'); }
-        }
-        var result = await popupWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
-        if (result && result.token) {
-          var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
-          popupToken = token;
-          diag('✅ JWT fresco! key=' + result.key + ' ttl=' + (result.ttl || 'N/A') + 's');
-          try { if (!popupWin.isDestroyed()) popupWin.destroy(); } catch(e) {}
-          return token;
-        }
-        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — JWT nao encontrado');
-        await new Promise(r => setTimeout(r, 1000));
-      } catch(e2) {
-        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — erro: ' + e2.message);
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-    diag('❌ Timeout — JWT nao gerado apos ~33s');
-    try { if (!popupWin.isDestroyed()) popupWin.destroy(); } catch(e) {}
-    return null;
-  } catch(e) {
-    console.log('[MAIN-RELOAD] Erro: ' + e.message);
-    return null;
-  }
+ipcMain.handle('refresh-jwt-via-page', async () => {
+  // ⚠️ v3.8.273: janela oculta/popup removido — navegar ao SSO causa bloqueio Serpro.
+  // Refresh real é feito via reload-main-window (que só roda quando JWT já expirou).
+  return null;
 });
 
 // ☢️ RELOAD DA JANELA PRINCIPAL + POLL (v3.8.260): limpa localStorage+sessionStorage,

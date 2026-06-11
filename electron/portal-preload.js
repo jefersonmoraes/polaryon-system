@@ -2273,11 +2273,16 @@
     // Isso renova o TTL do JWT/sessão no servidor e impede o timeout por inatividade.
     // =========================================================================
     let keepAliveConsecutiveFailures = 0;
-    const KEEPALIVE_INTERVAL_MS = 30000; // 30 segundos (Super Estabilidade Anti-Queda)
+    let _serproBlocked = false; // v3.8.273 — detecta bloqueio Serpro
+    const KEEPALIVE_INTERVAL_MS = 60000; // 60s (v3.8.273: reduzido de 30s para evitar bloqueio)
     const KEEPALIVE_MAX_FAILURES = 2;    // 2 falhas consecutivas = tenta renovar token
 
     async function sendKeepAlive() {
         if (!shared.sessionToken) return; // Sem token, não há o que manter
+        if (_serproBlocked) {
+            console.warn('%c[POLARYON HEARTBEAT] 🚫 IP bloqueado pelo Serpro! Pare todas as requisições. Use VPN e faça login manualmente.', 'color:#ef4444;font-weight:bold;font-size:13px;');
+            return;
+        }
 
         try {
             const pingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/compras/participacoes?tamanhoPagina=1&pagina=0&filtro=4`;
@@ -2289,11 +2294,12 @@
                     'x-device-platform': 'web',
                     'x-version-number': '6.0.2'
                 },
-                signal: AbortSignal.timeout(15000)
+                signal: AbortSignal.timeout(30000) // 30s timeout (v3.8.273: mais paciente)
             });
 
             if (res.ok || res.status === 404 || res.status === 422) {
                 keepAliveConsecutiveFailures = 0;
+                _serproBlocked = false; // Se funcionou, não está mais bloqueado
                 console.log(`%c[POLARYON HEARTBEAT] ❤️ Sessão Viva! Ping às ${new Date().toLocaleTimeString()}`, 'color: #10b981; font-size: 10px;');
             } else if (res.status === 401 || res.status === 403) {
                 keepAliveConsecutiveFailures++;
@@ -2310,6 +2316,14 @@
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
+                // 429, 0, etc. — pode indicar bloqueio
+                if (res.status === 429 || res.status === 0) {
+                    keepAliveConsecutiveFailures++;
+                    if (keepAliveConsecutiveFailures >= 3) {
+                        _serproBlocked = true;
+                        console.error('%c[POLARYON HEARTBEAT] 🚫 BLOQUEIO DETECTADO! Serpro bloqueou este IP. Pare todas as requisições.', 'color:#dc2626;font-weight:bold;font-size:15px;');
+                    }
+                }
             }
         } catch (err) {
             if (err.name === 'AbortError' || err.name === 'TimeoutError') {
@@ -2317,12 +2331,11 @@
             } else {
                 keepAliveConsecutiveFailures++;
                 console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede:`, err.message);
-                if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
+                // Erro de rede consecutivo = possível bloqueio
+                if (keepAliveConsecutiveFailures >= 3) {
+                    _serproBlocked = true;
+                    console.error('%c[POLARYON HEARTBEAT] 🚫 BLOQUEIO DETECTADO! Falha de rede consistente. Pare todas as requisições.', 'color:#dc2626;font-weight:bold;font-size:15px;');
                     keepAliveConsecutiveFailures = 0;
-                    const buttonClicked = clickPortalRefreshButton();
-                    if (!buttonClicked) {
-                        refreshTokenViaIframe();
-                    }
                 }
             }
         }
@@ -2412,25 +2425,23 @@
         return false;
     }
 
-    // 🔄 Renova token Serpro — tenta refresh-jwt (HTTP direto Node.js) PRIMEIRO,
-    // fallback para hidden BrowserWindow (v3.8.257)
+    // 🔄 Renova token Serpro — refresh-jwt (HTTP direto Node.js) PRIMEIRO,
+    // fallback reload-main-window (v3.8.273: sem hidden window/popup — causa bloqueio)
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe() {
+        // v3.8.273: Se IP bloqueado, não tenta nada
+        if (_serproBlocked) {
+            console.warn('%c[POLARYON HEARTBEAT] 🚫 IP bloqueado! Refresh ignorado. Use VPN e reconecte manualmente.', 'color:#ef4444;font-weight:bold;');
+            return;
+        }
+
         var nowMs = Date.now();
         if (nowMs - _lastRefreshTime < 30000) {
             return;
         }
         _lastRefreshTime = nowMs;
 
-        // Passo 1: Renova cookies da sessão Gov.br (main.asp) para garantir cookies frescos
-        try {
-            await fetch('https://www.comprasnet.gov.br/main.asp', {
-                method: 'GET', credentials: 'include', mode: 'no-cors',
-                signal: AbortSignal.timeout(10000)
-            });
-        } catch(e) {}
-
-        // Passo 2: Loga claims do JWT para diagnóstico
+        // Passo 1: Loga claims do JWT para diagnóstico
         if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
             try {
                 var payloadBase64 = shared.sessionToken.split('.')[1];
@@ -2439,7 +2450,8 @@
             } catch(e) {}
         }
 
-        // Passo 3: Tenta refresh-jwt (HTTP direto Node.js com cookies) PRIMEIRO (v3.8.257)
+        // Passo 2: Tenta refresh-jwt (HTTP direto Node.js com cookies) (v3.8.257)
+        // v3.8.273: sem fetch main.asp — evitou bloqueio Serpro
         try {
             var comprasId = await ipcRenderer.invoke('get-compras-id');
             if (comprasId) {
@@ -2454,35 +2466,19 @@
                     console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via refresh-jwt direto! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
                     return;
                 }
-                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto retornou nulo. Tentando hidden window...');
+                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto retornou nulo.');
             } else {
-                console.warn('[POLARYON HEARTBEAT] ⚠️ compras-id não disponível. Tentando hidden window...');
+                console.warn('[POLARYON HEARTBEAT] ⚠️ compras-id não disponível.');
             }
         } catch(directErr) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto falhou: ' + (directErr.message || directErr) + '. Tentando hidden window...');
+            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto falhou: ' + (directErr.message || directErr));
         }
 
-        // Passo 4: Fallback — refresh via hidden BrowserWindow (SPA Angular) (v3.8.235)
-        try {
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Tentando hidden window para refresh JWT...', 'color:#f59e0b;font-weight:bold;');
-            const token = await ipcRenderer.invoke('refresh-jwt-via-page');
-            if (token) {
-                shared.sessionToken = token;
-                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token }); } catch(e) {}
-                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: token }, '*'); } catch(e) {}
-                _lastScheduledTokenHash = '';
-                scheduleProactiveJwtRenewal(token);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
-                return;
-            }
-            console.warn('%c[POLARYON HEARTBEAT] ⏳ refresh-jwt-via-page retornou nulo.', 'color:#f59e0b;font-weight:bold;');
-        } catch(ipcErr) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
-        }
-
-        // Passo 5: ÚLTIMO RECURSO — nuclear reload da janela principal (v3.8.272)
-        // O reload + SSO auto-login gera novo JWT. A página é restaurada após ~15s.
-        console.warn('%c[POLARYON HEARTBEAT] ☢️ Último recurso: reload main window (v3.8.272)...', 'color:#ef4444;font-weight:bold;font-size:13px;');
+        // Passo 3: ÚLTIMO RECURSO — nuclear reload da janela principal (v3.8.272)
+        // NOTA: v3.8.273 — só chama reload se o JWT REALMENTE expirou (não proativo)
+        // O heartbeat vai detectar 401 e isso só roda como último recurso.
+        // Enquanto isso, o interceptor pode capturar um novo JWT se o usuário re-logar.
+        console.warn('%c[POLARYON HEARTBEAT] ☢️ Último recurso: reload main window...', 'color:#ef4444;font-weight:bold;font-size:13px;');
         try {
             var reloadToken = await ipcRenderer.invoke('reload-main-window');
             if (reloadToken) {
@@ -2494,15 +2490,15 @@
                 console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
                 return;
             }
-            console.warn('%c[POLARYON HEARTBEAT] ⏳ reload-main-window retornou nulo. Retentando em 60s...', 'color:#f59e0b;font-weight:bold;');
+            console.warn('%c[POLARYON HEARTBEAT] ⏳ reload-main-window retornou nulo. Retentando em 10min...', 'color:#f59e0b;font-weight:bold;');
         } catch(reloadErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window falhou: ' + (reloadErr.message || reloadErr));
         }
 
-        // Se todos falharam, retenta em 60s
+        // Se todos falharam, retenta em 10min (v3.8.273: 600s em vez de 60s — menos requests)
         _lastScheduledTokenHash = '';
         if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 60000);
+        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 600000);
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
@@ -2531,8 +2527,8 @@
         // Loop de pings da API Serpro (30s)
         setInterval(sendKeepAlive, KEEPALIVE_INTERVAL_MS);
 
-        // Loop de manutenção de cookies Gov.br (120s)
-        setInterval(renewGovBrSession, 120000);
+        // Loop de manutenção de cookies Gov.br (v3.8.273: desligado — causou bloqueio Serpro)
+        // setInterval(renewGovBrSession, 120000);
 
     }, 30000);
 
