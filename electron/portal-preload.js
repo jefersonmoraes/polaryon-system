@@ -2473,18 +2473,36 @@
                 _lastScheduledTokenHash = '';
                 scheduleProactiveJwtRenewal(token);
                 console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
-            } else {
-                console.warn('%c[POLARYON HEARTBEAT] ⏳ refresh-jwt-via-page retornou nulo. Retentando em 60s...', 'color:#f59e0b;font-weight:bold;');
-                _lastScheduledTokenHash = '';
-                if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-                _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 60000);
+                return;
             }
+            console.warn('%c[POLARYON HEARTBEAT] ⏳ refresh-jwt-via-page retornou nulo.', 'color:#f59e0b;font-weight:bold;');
         } catch(ipcErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
-            _lastScheduledTokenHash = '';
-            if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-            _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 60000);
         }
+
+        // Passo 5: ÚLTIMO RECURSO — nuclear reload da janela principal (v3.8.272)
+        // O reload + SSO auto-login gera novo JWT. A página é restaurada após ~15s.
+        console.warn('%c[POLARYON HEARTBEAT] ☢️ Último recurso: reload main window (v3.8.272)...', 'color:#ef4444;font-weight:bold;font-size:13px;');
+        try {
+            var reloadToken = await ipcRenderer.invoke('reload-main-window');
+            if (reloadToken) {
+                shared.sessionToken = reloadToken;
+                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: reloadToken }); } catch(e) {}
+                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: reloadToken }, '*'); } catch(e) {}
+                _lastScheduledTokenHash = '';
+                scheduleProactiveJwtRenewal(reloadToken);
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window! Token injetado no sessionStorage.', 'color:#10b981;font-weight:bold;font-size:12px;');
+                return;
+            }
+            console.warn('%c[POLARYON HEARTBEAT] ⏳ reload-main-window retornou nulo. Retentando em 60s...', 'color:#f59e0b;font-weight:bold;');
+        } catch(reloadErr) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window falhou: ' + (reloadErr.message || reloadErr));
+        }
+
+        // Se todos falharam, retenta em 60s
+        _lastScheduledTokenHash = '';
+        if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 60000);
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)

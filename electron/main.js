@@ -683,7 +683,8 @@ ipcMain.handle('scan-cookies', async () => {
 // A hidden window usa a MESMA sessão da janela principal (cookies compartilhados).
 // main.asp → redirect → www SPA → SSO → novo JWT. Main window NÃO é afetada.
 ipcMain.handle('refresh-jwt-via-page', async (event) => {
-  var hiddenWinToken = null;
+  var popupToken = null;
+  var timedOut = false;
   const diag = (msg) => {
     console.log('[MAIN-RELOAD] ' + msg);
     try { event.sender.send('main-diag', msg); } catch(e) {}
@@ -691,9 +692,11 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
   try {
     const mainSession = session.fromPartition('persist:polaryon-global');
     const { BrowserWindow } = require('electron');
-    const hiddenWin = new BrowserWindow({
-      show: false,
-      width: 1024, height: 768,
+    const popupWin = new BrowserWindow({
+      show: true,
+      width: 800, height: 600,
+      center: true,
+      title: 'Polaryon — Renovando sessão...',
       webPreferences: {
         session: mainSession,
         preload: path.join(__dirname, 'hidden-preload.js'),
@@ -703,41 +706,45 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       }
     });
 
-    // Navega para cnetmobile SPA (mesma sessão da janela principal)
-    diag('🔄 Navegando para cnetmobile SPA (mesma sessão)...');
+    // 🩺 Diagnóstico de crash/erro/close
+    popupWin.webContents.on('crashed', function() { diag('💥 RENDERER CRASHED'); });
+    popupWin.webContents.on('did-fail-load', function(ev, code, desc, url) { diag('❌ did-fail-load code=' + code + ' desc="' + desc + '" url="' + (url||'').substring(0,80) + '"'); });
+    popupWin.on('closed', function() { diag('🔒 Popup fechado (window.close() ou manual)'); });
+
+    // Navega para main.asp — SSO auto-login do Gov.br
+    diag('🔄 Navegando para www.comprasnet.gov.br/main.asp (SSO)...');
     try {
-      await hiddenWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras', { timeout: 25000 });
+      await popupWin.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 20000 });
     } catch(e) {
-      diag('⚠️ cnetmobile (continuando): ' + e.message);
+      diag('⚠️ main.asp (continuando): ' + e.message);
     }
 
-    // Aguarda SPA carregar + estabilizar (até 20s)
-    await new Promise(r => setTimeout(r, 5000));
+    // Aguarda SSO redirects estabilizarem
+    await new Promise(r => setTimeout(r, 3000));
 
-    // Polling: extrai JWT do sessionStorage + interceptor hidden-preload (60 tentativas)
-    for (var attempt = 0; attempt < 60; attempt++) {
+    // Polling por até 30s: extrai JWT do sessionStorage + interceptor
+    for (var attempt = 0; attempt < 30 && !popupWin.isDestroyed(); attempt++) {
       try {
-        // Log URL a cada 10 tentativas para diagnóstico
-        if (attempt % 10 === 0) {
-          try { var curUrl = await hiddenWin.webContents.executeJavaScript('location.href.substring(0,120)'); diag('📍 URL at #' + (attempt+1) + ': ' + curUrl); } catch(e3) { diag('📍 URL at #' + (attempt+1) + ': (cross-origin)'); }
+        if (attempt % 3 === 0) {
+          try { var curUrl = await popupWin.webContents.executeJavaScript('location.href.substring(0,120)'); diag('📍 URL at #' + (attempt+1) + ': ' + curUrl); } catch(e3) { diag('📍 URL at #' + (attempt+1) + ': (cross-origin/crashed)'); }
         }
-        var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
+        var result = await popupWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
         if (result && result.token) {
           var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
-          hiddenWinToken = token;
+          popupToken = token;
           diag('✅ JWT fresco! key=' + result.key + ' ttl=' + (result.ttl || 'N/A') + 's');
-          try { if (!hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
+          try { if (!popupWin.isDestroyed()) popupWin.destroy(); } catch(e) {}
           return token;
         }
-        diag('⏳ Tentativa ' + (attempt + 1) + '/60 — JWT nao encontrado');
+        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — JWT nao encontrado');
         await new Promise(r => setTimeout(r, 1000));
       } catch(e2) {
-        diag('⏳ Tentativa ' + (attempt + 1) + '/60 — aguardando (cross-origin): ' + e2.message);
+        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — erro: ' + e2.message);
         await new Promise(r => setTimeout(r, 1000));
       }
     }
-    diag('❌ Timeout — JWT nao gerado apos ~60s');
-    try { if (!hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
+    diag('❌ Timeout — JWT nao gerado apos ~33s');
+    try { if (!popupWin.isDestroyed()) popupWin.destroy(); } catch(e) {}
     return null;
   } catch(e) {
     console.log('[MAIN-RELOAD] Erro: ' + e.message);
@@ -755,6 +762,7 @@ ipcMain.handle('reload-main-window', async (event) => {
       // Salva a URL ANTES do reload para poder voltar depois
       const savedUrl = win.webContents.getURL();
       console.log('[MAIN] ☢️ reload-main-window: limpando storages + reload + poll... URL salva: ' + savedUrl);
+      console.log('[MAIN] ☢️ NOTA: a pagina sera restaurada automaticamente apos ~10-15s');
 
       global.serproToken = null;
       try {
@@ -763,21 +771,27 @@ ipcMain.handle('reload-main-window', async (event) => {
         console.log('[MAIN] ☢️ storage.clear ignorado:', e.message);
       }
       win.webContents.reload();
-      // Poll por até 30s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
+      // Poll por até 20s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
       var foundToken = null;
-      for (var a = 0; a < 30; a++) {
+      for (var a = 0; a < 20; a++) {
         await new Promise(function(r) { setTimeout(r, 1000); });
         try {
           if (win.isDestroyed()) break;
           if (!foundToken && global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
             foundToken = global.serproToken;
             console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
+            // Log TTL
+            try {
+              var parts = foundToken.split('.');
+              var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+              console.log('[MAIN] ☢️ TTL do JWT: ' + Math.floor((payload.exp - Date.now()/1000)/60) + 'min');
+            } catch(ttlErr) {}
+            break; // Sai imediatamente ao encontrar
           }
         } catch(e2) {}
       }
 
       // ⬅️ SEMPRE volta para a URL original, mesmo sem token (v3.8.266)
-      // O SPA recarrega na página certa, detecta auth ausente, e o interceptor captura o novo JWT
       try {
         if (!win.isDestroyed()) {
           var currentUrl = win.webContents.getURL();
@@ -791,8 +805,11 @@ ipcMain.handle('reload-main-window', async (event) => {
         console.log('[MAIN] ☢️ reload-main-window: erro ao navegar de volta:', e3.message);
       }
 
-      if (foundToken) return foundToken;
-      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 30s (URL restaurada)');
+      if (foundToken) {
+        console.log('[MAIN] ☢️ reload-main-window: SUCESSO! Token JWT renovado.');
+        return foundToken;
+      }
+      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 20s (URL restaurada)');
       return null;
     }
     console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
