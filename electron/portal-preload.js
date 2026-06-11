@@ -2210,12 +2210,24 @@
 
             const nowSec = Date.now() / 1000;
             const ttlSec = expSec - nowSec;
-            const renewInSec = Math.max(10, ttlSec - 120); // 2 min antes de expirar
 
             if (ttlSec <= 0) {
                 // Já expirou — renova imediatamente
                 console.warn('%c[POLARYON JWT-PROATIVO] ⚠️ Token já expirado! Renovando agora...', 'color:#ef4444;font-weight:bold;');
                 refreshTokenViaIframe();
+                return;
+            }
+
+            // Se o TTL é menor que 3 minutos, o token capturado provavelmente é o MESMO
+            // token antigo (a sessão isolada ainda não gerou um novo). Agenda retry em 30s.
+            if (ttlSec < 180) {
+                console.warn(`%c[POLARYON JWT-PROATIVO] ⚠️ Token capturado com TTL muito curto (${Math.floor(ttlSec)}s) — pode ser token antigo. Retry em 30s.`, 'color:#f59e0b;font-weight:bold;');
+                if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+                _lastScheduledTokenHash = ''; // permite reagendar com o mesmo hash
+                _proactiveRenewalTimer = setTimeout(async () => {
+                    console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retry de renovação (token curto)...', 'color:#f59e0b;font-weight:bold;');
+                    await refreshTokenViaIframe();
+                }, 30000);
                 return;
             }
 
@@ -2225,6 +2237,7 @@
                 _proactiveRenewalTimer = null;
             }
 
+            const renewInSec = ttlSec - 120; // 2 min antes de expirar
             const expAt = new Date(expSec * 1000).toLocaleTimeString();
             const renewAt = new Date((nowSec + renewInSec) * 1000).toLocaleTimeString();
             console.log(`%c[POLARYON JWT-PROATIVO] 🔮 JWT válido por ${Math.floor(ttlSec/60)}min${Math.floor(ttlSec%60)}s (exp=${expAt}). Renovação proativa agendada em ${Math.floor(renewInSec/60)}min${Math.floor(renewInSec%60)}s às ${renewAt}`, 'color:#6366f1;font-weight:bold;font-size:11px;');

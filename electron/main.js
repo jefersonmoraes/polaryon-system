@@ -608,12 +608,36 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     try { event.sender.send('main-diag', msg); } catch(e) {}
   };
   try {
+    // ⚠️ SESSÃO ISOLADA (v3.8.256): hidden window usa sessão TEMPORÁRIA para não
+    // redirecionar o portal principal (BrowserView). Cookies de auth são copiados.
+    const mainSession = session.fromPartition('persist:polaryon-global');
+    const tempPartition = `persist:polaryon-jwt-refresh-${Date.now()}`;
+    const tempSession = session.fromPartition(tempPartition);
+    const cookieDomains = [
+      '.comprasnet.gov.br', 'www.comprasnet.gov.br',
+      'cnetmobile.estaleiro.serpro.gov.br', '.estaleiro.serpro.gov.br',
+      'sso.acesso.gov.br', '.acesso.gov.br', '.gov.br'
+    ];
+    let copiedCookies = 0;
+    for (const domain of cookieDomains) {
+      try {
+        const cks = await mainSession.cookies.get({ domain });
+        for (const ck of cks) {
+          try {
+            const url = (ck.secure ? 'https://' : 'http://') + (ck.domain.startsWith('.') ? ck.domain.slice(1) : ck.domain);
+            await tempSession.cookies.set({ url, name: ck.name, value: ck.value, domain: ck.domain, path: ck.path || '/', secure: ck.secure, httpOnly: ck.httpOnly, expirationDate: ck.expirationDate, sameSite: ck.sameSite || 'no_restriction' });
+            copiedCookies++;
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+    diag(`🍪 ${copiedCookies} cookies copiados para sessão isolada`);
     const { BrowserWindow } = require('electron');
     const hiddenWin = new BrowserWindow({
       show: false,
       width: 1024, height: 768,
       webPreferences: {
-        session: session.fromPartition('persist:polaryon-global'),
+        session: tempSession,
         preload: path.join(__dirname, 'hidden-preload.js'),
         javascript: true,
         sandbox: false,
@@ -621,20 +645,11 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       }
     });
 
-    // Passo 1: Navega para main.asp (legado) primeiro para renovar cookies da sessão Gov.br
-    diag('🔄 Navegando para main.asp (renovar cookies)...');
-    try {
-      await hiddenWin.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 15000 });
-      diag('✅ main.asp carregado, cookies renovados');
-    } catch(e) {
-      diag('⚠️ main.asp (continuando mesmo assim): ' + e.message);
-    }
-
-    // Passo 2: Navega para www.comprasnet.gov.br/pt-br (Angular SPA que gera novo JWT)
-    diag('🔄 Navegando para cnetmobile dashboard (Gerar JWT)...');
+    // Navega direto para cnetmobile (cookies já copiados → sem main.asp para não afetar portal)
+    diag('🔄 Navegando para cnetmobile (sessão isolada)...');
     try {
       await hiddenWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras', { timeout: 25000 });
-      diag('✅ Angular SPA carregada');
+      diag('✅ Angular SPA carregada (sessão isolada)');
     } catch(e) {
       diag('⚠️ Angular SPA (continuando): ' + e.message);
     }
