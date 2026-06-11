@@ -675,12 +675,14 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     await new Promise(resolve => {
       var settleTimer = null;
       var navCount = 0;
+      var safeRemoveListeners = function() {
+        try { if (hiddenWin && !hiddenWin.isDestroyed()) { hiddenWin.webContents.removeListener('did-navigate', onNav); hiddenWin.webContents.removeListener('did-navigate-in-page', onNav); } } catch(e) {}
+      };
       var onNav = function() {
         navCount++;
         if (settleTimer) clearTimeout(settleTimer);
         settleTimer = setTimeout(function() {
-          hiddenWin.webContents.removeListener('did-navigate', onNav);
-          hiddenWin.webContents.removeListener('did-navigate-in-page', onNav);
+          safeRemoveListeners();
           resolve();
         }, 3000);
       };
@@ -691,9 +693,8 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       // Timeout de segurança 40s
       setTimeout(function() {
         if (settleTimer) clearTimeout(settleTimer);
-        hiddenWin.webContents.removeListener('did-navigate', onNav);
-        hiddenWin.webContents.removeListener('did-navigate-in-page', onNav);
-        resolve();
+        safeRemoveListeners();
+        try { if (resolve && typeof resolve === 'function') resolve(); } catch(e) {}
       }, 40000);
     });
     diag('✅ Navegacao estabilizada apos SSO');
@@ -706,7 +707,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
           var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
           hiddenWinToken = token;
           diag('✅ JWT fresco! key=' + result.key + ' ttl=' + (result.ttl || 'N/A') + 's');
-          hiddenWin.destroy();
+          try { if (!hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
           return token;
         }
         diag('⏳ Tentativa ' + (attempt + 1) + '/20 — JWT nao encontrado');
@@ -718,7 +719,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       }
     }
     diag('❌ Timeout — JWT nao gerado apos ~30s');
-    hiddenWin.destroy();
+    try { if (!hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
     return null;
   } catch(e) {
     console.log('[MAIN-RELOAD] Erro: ' + e.message);
