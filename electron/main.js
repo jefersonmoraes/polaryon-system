@@ -599,9 +599,9 @@ ipcMain.handle('scan-cookies', async () => {
   }
 });
 
-// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.257): navega o portal ComprasNet,
-// espera a SPA Angular gerar novo JWT no sessionStorage, extrai e retorna.
-// IMPORTANTE: NÃO usa global.serproToken (evita contaminação do visual-runner da janela principal).
+// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.260): navega o portal ComprasNet
+// na MESMA sessão da janela principal (cookies compartilhados, frescos pelo heartbeat).
+// Remove sessionStorage + localStorage, reload, espera SSO, extrai JWT.
 ipcMain.handle('refresh-jwt-via-page', async (event) => {
   var hiddenWinToken = null;
   const diag = (msg) => {
@@ -609,36 +609,13 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     try { event.sender.send('main-diag', msg); } catch(e) {}
   };
   try {
-    // ⚠️ SESSÃO ISOLADA (v3.8.256): hidden window usa sessão TEMPORÁRIA para não
-    // redirecionar o portal principal (BrowserView). Cookies de auth são copiados.
     const mainSession = session.fromPartition('persist:polaryon-global');
-    const tempPartition = 'persist:polaryon-jwt-refresh-' + Date.now();
-    const tempSession = session.fromPartition(tempPartition);
-    const cookieDomains = [
-      '.comprasnet.gov.br', 'www.comprasnet.gov.br',
-      'cnetmobile.estaleiro.serpro.gov.br', '.estaleiro.serpro.gov.br',
-      'sso.acesso.gov.br', '.acesso.gov.br', '.gov.br'
-    ];
-    let copiedCookies = 0;
-    for (const domain of cookieDomains) {
-      try {
-        const cks = await mainSession.cookies.get({ domain });
-        for (const ck of cks) {
-          try {
-            const url = (ck.secure ? 'https://' : 'http://') + (ck.domain.startsWith('.') ? ck.domain.slice(1) : ck.domain);
-            await tempSession.cookies.set({ url, name: ck.name, value: ck.value, domain: ck.domain, path: ck.path || '/', secure: ck.secure, httpOnly: ck.httpOnly, expirationDate: ck.expirationDate, sameSite: ck.sameSite || 'no_restriction' });
-            copiedCookies++;
-          } catch(e) {}
-        }
-      } catch(e) {}
-    }
-    diag('🍪 ' + copiedCookies + ' cookies copiados para sessão isolada');
     const { BrowserWindow } = require('electron');
     const hiddenWin = new BrowserWindow({
       show: false,
       width: 1024, height: 768,
       webPreferences: {
-        session: tempSession,
+        session: mainSession,
         preload: path.join(__dirname, 'hidden-preload.js'),
         javascript: true,
         sandbox: false,
@@ -646,32 +623,27 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       }
     });
 
-    // Navega direto para cnetmobile (cookies já copiados → sem main.asp para não afetar portal)
-    diag('🔄 Navegando para cnetmobile (sessão isolada)...');
+    diag('🔄 Navegando para cnetmobile (mesma sessão da janela principal)...');
     try {
       await hiddenWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras', { timeout: 25000 });
-      diag('✅ Angular SPA carregada (sessão isolada)');
+      diag('✅ Angular SPA carregada');
     } catch(e) {
       diag('⚠️ Angular SPA (continuando): ' + e.message);
     }
 
     await new Promise(r => setTimeout(r, 2000));
 
-    // Diagnóstico: verifica se a página carregou o Angular app
     const pageInfo = await hiddenWin.webContents.executeJavaScript('(function() { var info = { url: location.href, title: document.title, hasAppRoot: !!document.querySelector(\'app-root\'), bodyLength: (document.body && document.body.innerText || \'\').length, hasPolaryonPreload: !!window.__polaryonFetchResult, fetchResult: window.__polaryonFetchResult || \'\' }; info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50); try { info.cookies = document.cookie.split(\'; \').filter(function(c){ return c.length > 50 || c.includes(\'bearer\') || c.includes(\'token\') || c.includes(\'jwt\'); }).join(\'; \'); } catch(e) { info.cookiesErr = e.message; } return info; })()');
     diag('📊 Page: ' + pageInfo.title + ' | app-root: ' + pageInfo.hasAppRoot + ' | body: ' + pageInfo.bodyLength + 'chars | bearer: ' + (pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'));
 
-    // v3.8.258: Força a SPA a re-autenticar via SSO limpando sessionStorage e dando reload.
-    // A SPA Angular detecta que não tem JWT, inicia o fluxo SSO com os cookies copiados,
-    // o SSO redireciona de volta, e a SPA gera um JWT fresco no sessionStorage.
-    diag('🧹 Forcando re-autenticacao SSO (limpando sessionStorage + reload)...');
+    // Limpa localStorage (token velho) + sessionStorage, reload para forçar SSO
+    diag('🧹 Limpando storages + IndexedDB + reload para forçar SSO...');
     try {
-      await hiddenWin.webContents.executeJavaScript('sessionStorage.clear();');
+      await hiddenWin.webContents.executeJavaScript('(function(){ try{localStorage.clear()}catch(e){} try{sessionStorage.clear()}catch(e){} try{indexedDB&&indexedDB.databases&&indexedDB.databases().then(function(dbs){dbs.forEach(function(db){if(db.name)indexedDB.deleteDatabase(db.name)})})}catch(e){} return true; })()');
     } catch(e) {
-      diag('⚠️ sessionStorage.clear erro: ' + e.message);
+      diag('⚠️ storage.clear erro: ' + e.message);
     }
 
-    // Monitora navegações: reload → (possível SSO redirect) → redirect de volta → settle
     await new Promise(resolve => {
       var settleTimer = null;
       var navCount = 0;
@@ -688,19 +660,17 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       };
       hiddenWin.webContents.on('did-navigate', onNav);
       hiddenWin.webContents.on('did-navigate-in-page', onNav);
-      // Dispara reload
       hiddenWin.webContents.reload();
-      // Timeout de segurança 40s
       setTimeout(function() {
         if (settleTimer) clearTimeout(settleTimer);
         safeRemoveListeners();
         try { if (resolve && typeof resolve === 'function') resolve(); } catch(e) {}
       }, 40000);
     });
-    diag('✅ Navegacao estabilizada apos SSO');
+    diag('✅ Navegacao estabilizada');
 
-    // Polling: extrai JWT do sessionStorage (agora deve ter o token fresco)
-    for (var attempt = 0; attempt < 20; attempt++) {
+    // Polling: extrai JWT do sessionStorage (token fresco da SSO)
+    for (var attempt = 0; attempt < 30; attempt++) {
       try {
         var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
         if (result && result.token) {
@@ -710,11 +680,10 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
           try { if (!hiddenWin.isDestroyed()) hiddenWin.destroy(); } catch(e) {}
           return token;
         }
-        diag('⏳ Tentativa ' + (attempt + 1) + '/20 — JWT nao encontrado');
+        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — JWT nao encontrado');
         await new Promise(r => setTimeout(r, 1000));
       } catch(e2) {
-        // Cross-origin durante SSO é esperado
-        diag('⏳ Tentativa ' + (attempt + 1) + '/20 — aguardando (cross-origin): ' + e2.message);
+        diag('⏳ Tentativa ' + (attempt + 1) + '/30 — aguardando (cross-origin): ' + e2.message);
         await new Promise(r => setTimeout(r, 1000));
       }
     }
@@ -727,27 +696,41 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
   }
 });
 
-// ☢️ RELOAD DA JANELA PRINCIPAL (v3.8.258): último recurso quando refresh JWT falha.
-// Força reload da página principal para que o SSO gere um novo JWT via cookies.
+// ☢️ RELOAD DA JANELA PRINCIPAL + POLL (v3.8.260): limpa localStorage+sessionStorage,
+// reload, e espera até 20s pelo novo JWT gerado pelo SSO.
+// Retorna o token encontrado ou null.
 ipcMain.handle('reload-main-window', async (event) => {
   try {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
-      console.log('[MAIN] ☢️ reload-main-window: forçando reload...');
-      // Limpa sessionStorage antes do reload para forçar SSO
+      console.log('[MAIN] ☢️ reload-main-window: limpando global.serproToken + storages + reload + poll...');
+      // Limpa o token global para que o novo preload comece do zero (v3.8.260)
+      global.serproToken = null;
       try {
-        await win.webContents.executeJavaScript('sessionStorage.clear();');
+        await win.webContents.executeJavaScript('(function(){ try{localStorage.clear()}catch(e){} try{sessionStorage.clear()}catch(e){} try{indexedDB&&indexedDB.databases&&indexedDB.databases().then(function(dbs){dbs.forEach(function(db){if(db.name)indexedDB.deleteDatabase(db.name)})})}catch(e){} return true; })()');
       } catch(e) {
-        console.log('[MAIN] ☢️ sessionStorage.clear ignorado:', e.message);
+        console.log('[MAIN] ☢️ storage.clear ignorado:', e.message);
       }
       win.webContents.reload();
-      return true;
+      // Poll por até 30s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
+      for (var a = 0; a < 30; a++) {
+        await new Promise(function(r) { setTimeout(r, 1000); });
+        try {
+          if (win.isDestroyed()) break;
+          if (global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
+            console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
+            return global.serproToken;
+          }
+        } catch(e2) {}
+      }
+      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 30s');
+      return null;
     }
     console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
-    return false;
+    return null;
   } catch(e) {
     console.log('[MAIN] ☢️ reload-main-window erro:', e.message);
-    return false;
+    return null;
   }
 });
 

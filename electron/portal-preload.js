@@ -2462,10 +2462,18 @@
                 console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo.');
                 _lastScheduledTokenHash = '';
                 if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-                // v3.8.258: nuclear option — força reload da janela principal para gerar novo JWT via SSO
+                // v3.8.260: nuclear option — reload + poll por novo JWT
                 console.warn('%c[POLARYON HEARTBEAT] ☢️ refresh falhou — forçando reload da janela principal...', 'color:#ef4444;font-weight:bold;font-size:12px;');
                 try {
-                    await ipcRenderer.invoke('reload-main-window');
+                    var reloadToken = await ipcRenderer.invoke('reload-main-window');
+                    if (reloadToken && typeof reloadToken === 'string' && reloadToken.startsWith('Bearer ') && reloadToken.length > 60) {
+                        shared.sessionToken = reloadToken;
+                        try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: reloadToken }); } catch(e) {}
+                        _lastScheduledTokenHash = '';
+                        scheduleProactiveJwtRenewal(reloadToken);
+                        console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                        return;
+                    }
                 } catch(reloadErr) {
                     console.error('[POLARYON HEARTBEAT] ☢️ reload-main-window IPC falhou:', reloadErr);
                 }
@@ -2478,10 +2486,17 @@
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
             _lastScheduledTokenHash = '';
             if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-            // v3.8.258: nuclear option — força reload da janela principal
             console.warn('%c[POLARYON HEARTBEAT] ☢️ refresh-jwt-via-page falhou — forçando reload da janela principal...', 'color:#ef4444;font-weight:bold;font-size:12px;');
             try {
-                await ipcRenderer.invoke('reload-main-window');
+                var reloadToken2 = await ipcRenderer.invoke('reload-main-window');
+                if (reloadToken2 && typeof reloadToken2 === 'string' && reloadToken2.startsWith('Bearer ') && reloadToken2.length > 60) {
+                    shared.sessionToken = reloadToken2;
+                    try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: reloadToken2 }); } catch(e) {}
+                    _lastScheduledTokenHash = '';
+                    scheduleProactiveJwtRenewal(reloadToken2);
+                    console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                    return;
+                }
             } catch(reloadErr) {
                 console.error('[POLARYON HEARTBEAT] ☢️ reload-main-window IPC falhou:', reloadErr);
             }
