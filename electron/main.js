@@ -558,16 +558,81 @@ autoUpdater.on('update-downloaded', (info) => {
         mainWindow.webContents.send('update-downloaded', info);
         mainWindow.webContents.send('bidding-update-log', `🚀 v${info.version} PRONTA! Reiniciando em 10s para aplicar...`);
         
-        // ⚡ INSTALAÇÃO AUTOMÁTICA FORÇADA (v3.8.260): destrói TODAS as janelas antes
         setTimeout(() => {
-            console.log('[POLARYON-UPDATE] Destruindo todas as janelas antes do quitAndInstall...');
+            console.log('[POLARYON-UPDATE] Destruindo todas as janelas...');
             BrowserWindow.getAllWindows().forEach(function(w) {
                 try { if (!w.isDestroyed()) w.destroy(); } catch(e) {}
             });
-            // Pequena pausa para garantir que as janelas foram destruídas
-            setTimeout(() => {
-                autoUpdater.quitAndInstall(true, true);
-            }, 500);
+            
+            // ⚡ UPDATE NUCLEAR (v3.8.263): PowerShell script que mata o processo e executa o instalador
+            // app.quit() é assíncrono — o NSIS installer espera o processo morrer mas o app demora
+            // Solução: spawn PowerShell detached, depois app.exit(0) síncrono
+            const { spawn } = require('child_process');
+            const fs = require('fs');
+            const tempDir = app.getPath('temp');
+            const appData = app.getPath('appData');
+            
+            const psScript = `Start-Sleep -Seconds 3
+$pendingDirs = @(
+    "$env:APPDATA\\Polaryon\\electron-updater\\pending",
+    "$env:LOCALAPPDATA\\electron-updater\\pending",
+    "$env:APPDATA\\electron-updater\\pending",
+    "$env:LOCALAPPDATA\\Polaryon\\electron-updater\\pending"
+)
+$installer = $null
+foreach ($dir in $pendingDirs) {
+    if (Test-Path $dir) {
+        $exes = Get-ChildItem -Path $dir -Filter "*.exe" | Sort-Object LastWriteTime -Descending
+        if ($exes.Length -gt 0) {
+            $installer = $exes[0].FullName
+            break
+        }
+    }
+}
+if ($installer) {
+    taskkill /F /IM Polaryon.exe 2>$null
+    Start-Sleep -Seconds 2
+    Start-Process -Wait -NoNewWindow -FilePath $installer -ArgumentList "/S"
+    Start-Process "$env:LOCALAPPDATA\\Programs\\polaryon\\Polaryon.exe"
+} else {
+    # Fallback: tenta quitAndInstall se não achou instalador
+    Start-Sleep -Seconds 3
+    $installer = $null
+    foreach ($dir in $pendingDirs) {
+        if (Test-Path $dir) {
+            $exes = Get-ChildItem -Path $dir -Filter "*.exe" | Sort-Object LastWriteTime -Descending
+            if ($exes.Length -gt 0) {
+                $installer = $exes[0].FullName
+                break
+            }
+        }
+    }
+    if ($installer) {
+        taskkill /F /IM Polaryon.exe 2>$null
+        Start-Sleep -Seconds 2
+        Start-Process -Wait -NoNewWindow -FilePath $installer -ArgumentList "/S"
+        Start-Process "$env:LOCALAPPDATA\\Programs\\polaryon\\Polaryon.exe"
+    }
+}`;
+            
+            const psPath = path.join(tempDir, 'polaryon-update.ps1');
+            try {
+                fs.writeFileSync(psPath, psScript, 'utf8');
+                spawn('powershell.exe', [
+                    '-ExecutionPolicy', 'Bypass',
+                    '-File', psPath
+                ], {
+                    detached: true,
+                    stdio: 'ignore',
+                    windowsHide: true
+                });
+                console.log('[POLARYON-UPDATE] Script PowerShell spawnado. Saindo com app.exit(0)...');
+            } catch(e) {
+                console.error('[POLARYON-UPDATE] Erro ao criar script PowerShell:', e);
+            }
+            
+            // ⚡ app.exit() é SÍNCRONO — mata o processo imediatamente
+            app.exit(0);
         }, 10000);
     }
     new Notification({
