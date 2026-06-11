@@ -599,10 +599,11 @@ ipcMain.handle('scan-cookies', async () => {
   }
 });
 
-// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.235): navega o portal ComprasNet,
-// espera a SPA Angular gerar novo JWT no sessionStorage, extrai e retorna
+// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.257): navega o portal ComprasNet,
+// espera a SPA Angular gerar novo JWT no sessionStorage, extrai e retorna.
+// IMPORTANTE: NÃO usa global.serproToken (evita contaminação do visual-runner da janela principal).
 ipcMain.handle('refresh-jwt-via-page', async (event) => {
-  global.serproToken = null;
+  var hiddenWinToken = null;
   const diag = (msg) => {
     console.log('[MAIN-RELOAD] ' + msg);
     try { event.sender.send('main-diag', msg); } catch(e) {}
@@ -611,7 +612,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     // ⚠️ SESSÃO ISOLADA (v3.8.256): hidden window usa sessão TEMPORÁRIA para não
     // redirecionar o portal principal (BrowserView). Cookies de auth são copiados.
     const mainSession = session.fromPartition('persist:polaryon-global');
-    const tempPartition = `persist:polaryon-jwt-refresh-${Date.now()}`;
+    const tempPartition = 'persist:polaryon-jwt-refresh-' + Date.now();
     const tempSession = session.fromPartition(tempPartition);
     const cookieDomains = [
       '.comprasnet.gov.br', 'www.comprasnet.gov.br',
@@ -631,7 +632,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
         }
       } catch(e) {}
     }
-    diag(`🍪 ${copiedCookies} cookies copiados para sessão isolada`);
+    diag('🍪 ' + copiedCookies + ' cookies copiados para sessão isolada');
     const { BrowserWindow } = require('electron');
     const hiddenWin = new BrowserWindow({
       show: false,
@@ -657,39 +658,39 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     await new Promise(r => setTimeout(r, 2500));
 
     // Diagnóstico: verifica se a página carregou o Angular app
-    const pageInfo = await hiddenWin.webContents.executeJavaScript(`
-      (function() {
-        var info = {
-          url: location.href,
-          title: document.title,
-          hasAppRoot: !!document.querySelector('app-root'),
-          bodyLength: (document.body && document.body.innerText || '').length,
-          hasPolaryonPreload: !!window.__polaryonFetchResult,
-          fetchResult: window.__polaryonFetchResult || ''
-        };
-        info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === 'string' && window.__polaryonBearer.length > 50);
-        try {
-          info.cookies = document.cookie.split('; ').filter(function(c){ 
-            return c.length > 50 || c.includes('bearer') || c.includes('token') || c.includes('jwt');
-          }).join('; ');
-        } catch(e) { info.cookiesErr = e.message; }
-        return info;
-      })()
-    `);
-    diag(`📊 Page: ${pageInfo.title} | app-root: ${pageInfo.hasAppRoot} | body: ${pageInfo.bodyLength}chars | bearer: ${pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'}`);
+    const pageInfo = await hiddenWin.webContents.executeJavaScript('(function() { var info = { url: location.href, title: document.title, hasAppRoot: !!document.querySelector(\'app-root\'), bodyLength: (document.body && document.body.innerText || \'\').length, hasPolaryonPreload: !!window.__polaryonFetchResult, fetchResult: window.__polaryonFetchResult || \'\' }; info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50); try { info.cookies = document.cookie.split(\'; \').filter(function(c){ return c.length > 50 || c.includes(\'bearer\') || c.includes(\'token\') || c.includes(\'jwt\'); }).join(\'; \'); } catch(e) { info.cookiesErr = e.message; } return info; })()');
+    diag('📊 Page: ' + pageInfo.title + ' | app-root: ' + pageInfo.hasAppRoot + ' | body: ' + pageInfo.bodyLength + 'chars | bearer: ' + (pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'));
 
-    // Polling: checa global.serproToken (visual-runner interceptor) + storages
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise(r => setTimeout(r, 1500));
+    // Polling: NÃO usa global.serproToken (evita contaminação do visual-runner da janela principal).
+    // Prioriza storages (sessionStorage da SPA Angular) sobre interceptors.
+    var storageAttempts = 0;
+    for (var attempt = 0; attempt < 12; attempt++) {
       try {
-        // 1. Visual-runner interceptor já capturou o Bearer?
-        if (global.serproToken && global.serproToken.startsWith('Bearer ')) {
-          diag('✅ JWT capturado pelo visual-runner interceptor!');
-          hiddenWin.destroy();
-          return global.serproToken;
+        // 1. Varre storages e DOM em busca do JWT (prioridade: sessionStorage da SPA)
+        var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { var val = localStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { return { key: keys[i], token: val, storage: \'localStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} try { for (var k in window) { try { var v = window[k]; if (v && typeof v === \'string\' && v.length > 100 && v.indexOf(\'.\') > 0 && v.split(\'.\').length === 3) { return { key: k, token: v, storage: \'window\' }; } } catch(e) {} } } catch(e) {} try { var cookieArr = document.cookie.split(\'; \'); for (var i = 0; i < cookieArr.length; i++) { var parts = cookieArr[i].split(\'=\'); var val = decodeURIComponent(parts[1] || \'\'); if (val && val.length > 100 && val.indexOf(\'.\') > 0 && val.split(\'.\').length >= 2) { var key = parts[0]; if (key.toLowerCase().includes(\'token\') || key.toLowerCase().includes(\'bearer\') || key.toLowerCase().includes(\'jwt\') || key.toLowerCase().includes(\'access\')) { return { key: key, token: val, storage: \'cookie\' }; } } } } catch(e) {} return null; })()');
+        if (result && result.token) {
+          var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
+          hiddenWinToken = token;
+          diag('✅ JWT extraido via ' + (result.storage || 'unknown') + '! key=' + result.key + (result.ttl ? ' ttl=' + result.ttl + 's' : ''));
+          // Se veio de storage e tem TTL, verifica se é fresco
+          if (result.ttl && result.ttl > 180) {
+            hiddenWin.destroy();
+            return token;
+          }
+          storageAttempts++;
+          // Se não tem TTL suficiente, continua tentando (pode ser token velho)
+          if (storageAttempts >= 3) {
+            // 3 tentativas de storage sem sucesso → aceita o que temos
+            diag('⚠️ Storage token com TTL curto, mas aceitando apos 3 tentativas: ' + (result.ttl || 'N/A') + 's');
+            hiddenWin.destroy();
+            return token;
+          }
+          diag('⏳ Storage token com TTL=' + (result.ttl || 'N/A') + 's, aguardando token fresco...');
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
         }
 
-        // 2. Hidden-preload interceptou o Bearer das chamadas Angular?
+        // 2. Hidden-preload interceptou o Bearer das chamadas Angular? (fallback)
         var bearerFromHidden = null;
         try {
           const r = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer || null');
@@ -699,82 +700,20 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
         } catch(e) {}
         if (bearerFromHidden) {
           const token = bearerFromHidden.startsWith('Bearer ') ? bearerFromHidden : 'Bearer ' + bearerFromHidden;
-          global.serproToken = token;
+          hiddenWinToken = token;
           diag('✅ JWT capturado pelo hidden-preload interceptor!');
           hiddenWin.destroy();
           return token;
         }
 
-        // 3. Varre storages e DOM em busca do JWT
-        const result = await hiddenWin.webContents.executeJavaScript(`
-          (function() {
-            // sessionStorage
-            try {
-              var keys = Object.keys(sessionStorage);
-              for (var i = 0; i < keys.length; i++) {
-                var val = sessionStorage.getItem(keys[i]);
-                if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
-                  return { key: keys[i], token: val, storage: 'sessionStorage' };
-                }
-              }
-            } catch(e) {}
-            // localStorage
-            try {
-              var keys = Object.keys(localStorage);
-              for (var i = 0; i < keys.length; i++) {
-                var val = localStorage.getItem(keys[i]);
-                if (val && typeof val === 'string' && val.length > 100 && val.includes('.')) {
-                  return { key: keys[i], token: val, storage: 'localStorage' };
-                }
-              }
-            } catch(e) {}
-            // window globals (incluindo __polaryonBearer do hidden-preload)
-            try {
-              if (window.__polaryonBearer && typeof window.__polaryonBearer === 'string' && window.__polaryonBearer.length > 50) {
-                return { key: '__polaryonBearer', token: window.__polaryonBearer, storage: 'hiddenPreload' };
-              }
-            } catch(e) {}
-            try {
-              for (var k in window) {
-                try {
-                  var v = window[k];
-                  if (v && typeof v === 'string' && v.length > 100 && v.indexOf('.') > 0 && v.split('.').length === 3) {
-                    return { key: k, token: v, storage: 'window' };
-                  }
-                } catch(e) {}
-              }
-            } catch(e) {}
-            // cookies
-            try {
-              var cookieArr = document.cookie.split('; ');
-              for (var i = 0; i < cookieArr.length; i++) {
-                var parts = cookieArr[i].split('=');
-                var val = decodeURIComponent(parts[1] || '');
-                if (val && val.length > 100 && val.indexOf('.') > 0 && val.split('.').length >= 2) {
-                  var key = parts[0];
-                  if (key.toLowerCase().includes('token') || key.toLowerCase().includes('bearer') || key.toLowerCase().includes('jwt') || key.toLowerCase().includes('access')) {
-                    return { key: key, token: val, storage: 'cookie' };
-                  }
-                }
-              }
-            } catch(e) {}
-            return null;
-          })()
-        `);
-        if (result && result.token) {
-          const token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
-          global.serproToken = token;
-          diag('✅ JWT extraido via ' + (result.storage || 'unknown') + '! key=' + result.key);
-          hiddenWin.destroy();
-          return token;
-        }
-        diag('⏳ Tentativa ' + (attempt + 1) + '/10 — JWT nao encontrado (serproToken=' +
-          (global.serproToken ? 'presente' : 'ausente') + ')');
+        diag('⏳ Tentativa ' + (attempt + 1) + '/12 — JWT nao encontrado');
+        await new Promise(r => setTimeout(r, 1500));
       } catch(e2) {
         diag('⚠️ executeJavaScript erro: ' + e2.message);
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
-    diag('❌ Timeout — JWT nao gerado apos ~18s');
+    diag('❌ Timeout — JWT nao gerado apos ~20s');
     hiddenWin.destroy();
     return null;
   } catch(e) {

@@ -2399,7 +2399,8 @@
         return false;
     }
 
-    // 🔄 Renova token Serpro — usa hidden BrowserWindow via main.js para bypassar CORS (v3.8.222)
+    // 🔄 Renova token Serpro — tenta refresh-jwt (HTTP direto Node.js) PRIMEIRO,
+    // fallback para hidden BrowserWindow (v3.8.257)
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe() {
         var nowMs = Date.now();
@@ -2425,22 +2426,40 @@
             } catch(e) {}
         }
 
-        // Passo 3: Tenta refresh via hidden BrowserWindow (recarrega SPA Angular para gerar novo JWT) (v3.8.235)
+        // Passo 3: Tenta refresh-jwt (HTTP direto Node.js com cookies) PRIMEIRO (v3.8.257)
         try {
+            var comprasId = await ipcRenderer.invoke('get-compras-id');
+            if (comprasId) {
+                console.log('%c[POLARYON HEARTBEAT] 🔑 refresh-jwt direto com compras-id=' + comprasId, 'color:#6366f1;font-weight:bold;');
+                var directToken = await ipcRenderer.invoke('refresh-jwt', { cnetId: comprasId });
+                if (directToken) {
+                    shared.sessionToken = directToken;
+                    try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: directToken }); } catch(e) {}
+                    _lastScheduledTokenHash = '';
+                    scheduleProactiveJwtRenewal(directToken);
+                    console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via refresh-jwt direto!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                    return;
+                }
+                console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto retornou nulo. Tentando hidden window...');
+            } else {
+                console.warn('[POLARYON HEARTBEAT] ⚠️ compras-id não disponível. Tentando hidden window...');
+            }
+        } catch(directErr) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt direto falhou: ' + (directErr.message || directErr) + '. Tentando hidden window...');
+        }
+
+        // Passo 4: Fallback — refresh via hidden BrowserWindow (SPA Angular) (v3.8.235)
+        try {
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Tentando hidden window para refresh JWT...', 'color:#f59e0b;font-weight:bold;');
             const token = await ipcRenderer.invoke('refresh-jwt-via-page');
             if (token) {
                 shared.sessionToken = token;
-                // Notifica o backend (bidding-runner) com o novo token via IPC
-                try {
-                    ipcRenderer.send('send-portal-data', { type: 'session-token', token });
-                } catch(e) {}
-                // Reagenda renovação proativa com o novo token
-                _lastScheduledTokenHash = ''; // força reagendamento
+                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token }); } catch(e) {}
+                _lastScheduledTokenHash = '';
                 scheduleProactiveJwtRenewal(token);
                 console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window! Renovação proativa reagendada.', 'color:#10b981;font-weight:bold;font-size:12px;');
             } else {
                 console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo.');
-                // Agenda um retry daqui a 15 segundos para dar tempo do portal/rede estabilizar
                 _lastScheduledTokenHash = '';
                 if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
                 _proactiveRenewalTimer = setTimeout(() => {
@@ -2450,7 +2469,6 @@
             }
         } catch(ipcErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
-            // Agenda um retry daqui a 15 segundos
             _lastScheduledTokenHash = '';
             if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
             _proactiveRenewalTimer = setTimeout(() => {
