@@ -995,9 +995,9 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO (v3.8.274 - Ultra Conservador)
-            // GUERRA 3000ms | Reta <30s 3000ms | Reta <60s 3000ms | Ativo 5000ms | Passivo 15s
-            let nextInterval = 15000;
+            // ⚡ POLLING ADAPTATIVO (v3.8.275 - Agressivo c/ Anti-Bloqueio)
+            // GUERRA 30ms | Reta <30s 300ms | Reta <60s 500ms | Ativo 800ms | Passivo 10s
+            let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
             // 🚦 ANTI-429: Se recebemos 429 recentemente, aumenta intervalo preventivamente
@@ -1023,21 +1023,21 @@ class RoomRunner {
             const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
 
             if (wsFresh) {
-                nextInterval = 10000;
+                nextInterval = 5000; // Heartbeat 5s — WS faz tempo real
             } else if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 3000; // ⚔️ GUERRA 3000ms (v3.8.274: 300ms→3000ms)
+                    nextInterval = 30; // 💢 GUERRA 30ms
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
                     }
                 } else if (minTimer <= 30) {
-                    nextInterval = 3000; // 🔥 Reta <30s 3000ms
+                    nextInterval = 300; // 🔥 Reta <30s 300ms
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else if (minTimer <= 60) {
-                    nextInterval = 3000; // ⚡ Reta <60s 3000ms
+                    nextInterval = 500; // ⚡ Reta <60s 500ms
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
-                    nextInterval = 5000; // Ativo estável 5000ms
+                    nextInterval = 800; // Ativo estável 800ms
                 }
             }
 

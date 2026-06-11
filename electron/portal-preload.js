@@ -1024,6 +1024,7 @@
             const { type, token, data, url, status, ok } = event.data;
             if (type === 'token') {
                 shared.sessionToken = token;
+                if (_serproBlocked) clearSerproBlocked(); // Novo token = IP desbloqueado!
                 scheduleProactiveJwtRenewal(token);
             } else if (type === 'captcha') {
                 // Só aceita P1_... (hCaptcha do portal). Siga captcha retorna 204 no ranking.
@@ -2273,14 +2274,42 @@
     // Isso renova o TTL do JWT/sessão no servidor e impede o timeout por inatividade.
     // =========================================================================
     let keepAliveConsecutiveFailures = 0;
-    let _serproBlocked = false; // v3.8.273 — detecta bloqueio Serpro
-    const KEEPALIVE_INTERVAL_MS = 60000; // 60s (v3.8.273: reduzido de 30s para evitar bloqueio)
-    const KEEPALIVE_MAX_FAILURES = 2;    // 2 falhas consecutivas = tenta renovar token
+    let _serproBlocked = false; // v3.8.273 — trava anti-bloqueio
+    let _serproBlockedLogged = false;
+    let _blockedNetworkErrCount = 0;
+    const KEEPALIVE_INTERVAL_MS = 30000; // 30s (rápido p/ detectar bloqueio)
+    const KEEPALIVE_MAX_FAILURES = 2;    // 2 falhas = tenta renovar token
+
+    // 🛡️ TRAVA ANTI-BLOQUEIO (v3.8.275): se detectar bloqueio, PARA TUDO
+    function setSerproBlocked(reason) {
+        if (_serproBlocked) return;
+        _serproBlocked = true;
+        _serproBlockedLogged = false;
+        console.error('%c🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴', 'color:#dc2626;font-weight:bold;font-size:15px;');
+        console.error(`%c[POLARYON 🚫] BLOQUEIO SERPRO DETECTADO: ${reason}`, 'color:#dc2626;font-weight:bold;font-size:15px;');
+        console.error('%c[POLARYON 🚫] Todas as requisições ao Serpro serão PARADAS imediatamente.', 'color:#dc2626;font-weight:bold;');
+        console.error('%c[POLARYON 🚫] Desligue o modem por 5 min para trocar de IP e reinicie o app.', 'color:#dc2626;font-weight:bold;');
+        console.error('%c🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴', 'color:#dc2626;font-weight:bold;font-size:15px;');
+        // Limpa filas de ranking para não acumular pendências
+        try { shared.pendingRankingTargets = []; } catch(e) {}
+        try { _rankingQueue = []; } catch(e) {}
+    }
+
+    function clearSerproBlocked() {
+        if (!_serproBlocked) return;
+        _serproBlocked = false;
+        _blockedNetworkErrCount = 0;
+        keepAliveConsecutiveFailures = 0;
+        console.log('%c[POLARYON ✅] Bloqueio Serpro removido! Retomando operação normal.', 'color:#10b981;font-weight:bold;');
+    }
 
     async function sendKeepAlive() {
-        if (!shared.sessionToken) return; // Sem token, não há o que manter
+        if (!shared.sessionToken) return;
         if (_serproBlocked) {
-            console.warn('%c[POLARYON HEARTBEAT] 🚫 IP bloqueado pelo Serpro! Pare todas as requisições. Use VPN e faça login manualmente.', 'color:#ef4444;font-weight:bold;font-size:13px;');
+            if (!_serproBlockedLogged) {
+                console.warn('%c[POLARYON HEARTBEAT] 🚫 BLOQUEADO — sem requisições ao Serpro.', 'color:#ef4444;font-weight:bold;');
+                _serproBlockedLogged = true;
+            }
             return;
         }
 
@@ -2294,19 +2323,19 @@
                     'x-device-platform': 'web',
                     'x-version-number': '6.0.2'
                 },
-                signal: AbortSignal.timeout(30000) // 30s timeout (v3.8.273: mais paciente)
+                signal: AbortSignal.timeout(15000)
             });
 
             if (res.ok || res.status === 404 || res.status === 422) {
                 keepAliveConsecutiveFailures = 0;
-                _serproBlocked = false; // Se funcionou, não está mais bloqueado
+                _blockedNetworkErrCount = 0;
+                if (_serproBlocked) clearSerproBlocked();
                 console.log(`%c[POLARYON HEARTBEAT] ❤️ Sessão Viva! Ping às ${new Date().toLocaleTimeString()}`, 'color: #10b981; font-size: 10px;');
             } else if (res.status === 401 || res.status === 403) {
                 keepAliveConsecutiveFailures++;
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Token expirado (${res.status}). Falha ${keepAliveConsecutiveFailures}/${KEEPALIVE_MAX_FAILURES}`);
                 
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
-                    // 🔄 Token expirado — tenta renovar (não disruptivo)
                     keepAliveConsecutiveFailures = 0;
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
                     const buttonClicked = clickPortalRefreshButton();
@@ -2314,28 +2343,23 @@
                         refreshTokenViaIframe();
                     }
                 }
+            } else if (res.status === 429 || res.status === 0) {
+                _blockedNetworkErrCount++;
+                console.warn(`[POLARYON HEARTBEAT] ⚠️ ${res.status === 429 ? '429 Rate Limit' : 'Status 0'}. Tentativa ${_blockedNetworkErrCount}/3`);
+                if (_blockedNetworkErrCount >= 3) {
+                    setSerproBlocked(res.status === 429 ? '429 Rate Limit repetido' : 'Status HTTP 0 (bloqueio)');
+                }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
-                // 429, 0, etc. — pode indicar bloqueio
-                if (res.status === 429 || res.status === 0) {
-                    keepAliveConsecutiveFailures++;
-                    if (keepAliveConsecutiveFailures >= 3) {
-                        _serproBlocked = true;
-                        console.error('%c[POLARYON HEARTBEAT] 🚫 BLOQUEIO DETECTADO! Serpro bloqueou este IP. Pare todas as requisições.', 'color:#dc2626;font-weight:bold;font-size:15px;');
-                    }
-                }
             }
         } catch (err) {
             if (err.name === 'AbortError' || err.name === 'TimeoutError') {
-                console.warn('[POLARYON HEARTBEAT] ⏰ Timeout no ping. Rede lenta? Continuando...');
+                console.warn('[POLARYON HEARTBEAT] ⏰ Timeout. Rede lenta?');
             } else {
-                keepAliveConsecutiveFailures++;
-                console.warn(`[POLARYON HEARTBEAT] ❌ Falha de rede:`, err.message);
-                // Erro de rede consecutivo = possível bloqueio
-                if (keepAliveConsecutiveFailures >= 3) {
-                    _serproBlocked = true;
-                    console.error('%c[POLARYON HEARTBEAT] 🚫 BLOQUEIO DETECTADO! Falha de rede consistente. Pare todas as requisições.', 'color:#dc2626;font-weight:bold;font-size:15px;');
-                    keepAliveConsecutiveFailures = 0;
+                _blockedNetworkErrCount++;
+                console.warn(`[POLARYON HEARTBEAT] ❌ Rede: ${_blockedNetworkErrCount}/3 — ${err.message}`);
+                if (_blockedNetworkErrCount >= 3) {
+                    setSerproBlocked('Erro de rede consistente (' + err.message + ')');
                 }
             }
         }
