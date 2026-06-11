@@ -699,7 +699,7 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
         preload: path.join(__dirname, 'hidden-preload.js'),
         javascript: true,
         sandbox: false,
-        webSecurity: true
+        webSecurity: false
       }
     });
 
@@ -717,15 +717,19 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       var safeRemoveListeners = function() {
         try { if (hiddenWin && !hiddenWin.isDestroyed()) { hiddenWin.webContents.removeListener('did-navigate', onNav); hiddenWin.webContents.removeListener('did-navigate-in-page', onNav); } } catch(e) {}
       };
-      var onNav = function() {
+      var navCount = 0;
+      var onNav = function(ev, url) {
+        navCount++;
+        var shortUrl = url ? url.substring(0,100) : '';
+        diag('📍 Nav #' + navCount + ': ' + shortUrl);
         if (settleTimer) clearTimeout(settleTimer);
         settleTimer = setTimeout(function() {
           safeRemoveListeners();
           resolve();
         }, 3000);
       };
-      hiddenWin.webContents.on('did-navigate', onNav);
-      hiddenWin.webContents.on('did-navigate-in-page', onNav);
+      hiddenWin.webContents.on('did-navigate', function(ev, url, code, desc) { onNav(ev, url); });
+      hiddenWin.webContents.on('did-navigate-in-page', function(ev, url) { onNav(ev, url); });
       // Se não navegar em 30s, resolve anyway
       setTimeout(function() {
         if (settleTimer) clearTimeout(settleTimer);
@@ -738,6 +742,10 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
     // Polling: extrai JWT do sessionStorage + interceptor hidden-preload (60 tentativas)
     for (var attempt = 0; attempt < 60; attempt++) {
       try {
+        // Log URL a cada 10 tentativas para diagnóstico
+        if (attempt % 10 === 0) {
+          try { var curUrl = await hiddenWin.webContents.executeJavaScript('location.href.substring(0,120)'); diag('📍 URL at #' + (attempt+1) + ': ' + curUrl); } catch(e3) { diag('📍 URL at #' + (attempt+1) + ': (cross-origin)'); }
+        }
         var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
         if (result && result.token) {
           var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
