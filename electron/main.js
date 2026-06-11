@@ -783,8 +783,10 @@ ipcMain.handle('reload-main-window', async (event) => {
   try {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
-      console.log('[MAIN] ☢️ reload-main-window: limpando global.serproToken + storages + reload + poll...');
-      // Limpa o token global para que o novo preload comece do zero (v3.8.260)
+      // Salva a URL ANTES do reload para poder voltar depois
+      const savedUrl = win.webContents.getURL();
+      console.log('[MAIN] ☢️ reload-main-window: limpando storages + reload + poll... URL salva: ' + savedUrl);
+
       global.serproToken = null;
       try {
         await win.webContents.executeJavaScript('(function(){ try{localStorage.clear()}catch(e){} try{sessionStorage.clear()}catch(e){} try{indexedDB&&indexedDB.databases&&indexedDB.databases().then(function(dbs){dbs.forEach(function(db){if(db.name)indexedDB.deleteDatabase(db.name)})})}catch(e){} return true; })()');
@@ -799,6 +801,20 @@ ipcMain.handle('reload-main-window', async (event) => {
           if (win.isDestroyed()) break;
           if (global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
             console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
+
+            // ⬅️ Volta para a URL original se a pagina mudou (ex: SPA redirecionou para login/main)
+            try {
+              var currentUrl = win.webContents.getURL();
+              if (currentUrl && savedUrl && currentUrl !== savedUrl && !savedUrl.includes('main.asp')) {
+                console.log('[MAIN] ☢️ reload-main-window: URL mudou para "' + currentUrl.substring(0,80) + '", navegando de volta para "' + savedUrl.substring(0,80) + '"...');
+                win.webContents.loadURL(savedUrl);
+                // Aguarda a navegação completar e o preload reinjetar o token
+                await new Promise(function(r2) { setTimeout(r2, 3000); });
+              }
+            } catch(e3) {
+              console.log('[MAIN] ☢️ reload-main-window: erro ao navegar de volta:', e3.message);
+            }
+
             return global.serproToken;
           }
         } catch(e2) {}
