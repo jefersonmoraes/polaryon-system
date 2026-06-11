@@ -795,31 +795,35 @@ ipcMain.handle('reload-main-window', async (event) => {
       }
       win.webContents.reload();
       // Poll por até 30s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
+      var foundToken = null;
       for (var a = 0; a < 30; a++) {
         await new Promise(function(r) { setTimeout(r, 1000); });
         try {
           if (win.isDestroyed()) break;
-          if (global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
+          if (!foundToken && global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
+            foundToken = global.serproToken;
             console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
-
-            // ⬅️ Volta para a URL original se a pagina mudou (ex: SPA redirecionou para login/main)
-            try {
-              var currentUrl = win.webContents.getURL();
-              if (currentUrl && savedUrl && currentUrl !== savedUrl && !savedUrl.includes('main.asp')) {
-                console.log('[MAIN] ☢️ reload-main-window: URL mudou para "' + currentUrl.substring(0,80) + '", navegando de volta para "' + savedUrl.substring(0,80) + '"...');
-                win.webContents.loadURL(savedUrl);
-                // Aguarda a navegação completar e o preload reinjetar o token
-                await new Promise(function(r2) { setTimeout(r2, 3000); });
-              }
-            } catch(e3) {
-              console.log('[MAIN] ☢️ reload-main-window: erro ao navegar de volta:', e3.message);
-            }
-
-            return global.serproToken;
           }
         } catch(e2) {}
       }
-      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 30s');
+
+      // ⬅️ SEMPRE volta para a URL original, mesmo sem token (v3.8.266)
+      // O SPA recarrega na página certa, detecta auth ausente, e o interceptor captura o novo JWT
+      try {
+        if (!win.isDestroyed()) {
+          var currentUrl = win.webContents.getURL();
+          if (currentUrl && savedUrl && currentUrl !== savedUrl) {
+            console.log('[MAIN] ☢️ reload-main-window: URL mudou para "' + currentUrl.substring(0,80) + '", navegando de volta para "' + savedUrl.substring(0,80) + '"...');
+            win.webContents.loadURL(savedUrl);
+            await new Promise(function(r2) { setTimeout(r2, 3000); });
+          }
+        }
+      } catch(e3) {
+        console.log('[MAIN] ☢️ reload-main-window: erro ao navegar de volta:', e3.message);
+      }
+
+      if (foundToken) return foundToken;
+      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 30s (URL restaurada)');
       return null;
     }
     console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
