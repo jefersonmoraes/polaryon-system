@@ -741,3 +741,32 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 **Arquivo:** `electron/bidding-runner.js:876-891`
 
 **Solução:** Mesma lógica de redução progressiva em direção ao mínimo. Agora ambos os branches (ranking e fallback) reduzem gradualmente quando nenhum concorrente é batível.
+
+## Implementado (v3.8.279)
+
+### 1. Refresh JWT via hidden window — SEM QUEBRAR A PÁGINA DO PORTAL
+**Problema:** `reload-main-window` recarregava (via `win.webContents.reload()`) a JANELA DO PORTAL (Serpro SPA) sempre que o JWT precisava ser renovado. O reload quebrava o estado da SPA Angular, que:
+- Redirecionava para `/ac` (acesso negado) se o JWT estava expirado
+- Perdia o estado da tela de disputa
+- Console ficava preto (DevTools perdia conexão com webContents reloaded)
+- Captchas e conexão falhavam após o reload
+
+**Arquivo:** `electron/main.js:685-760` (handler `refresh-jwt-via-hidden-page`), `electron/portal-preload.js:2508-2540` (método 1)
+
+**Solução — hidden window silenciosa:**
+- **main.js (`refresh-jwt-via-hidden-page`):** Cria um `BrowserWindow` oculto (`show: false`) com a mesma partition (`persist:polaryon-global`) e o mesmo `portal-preload.js` como preload.
+  - Navega para a URL do SPA (mesma compra que o usuário está vendo, ou fallback "minhas compras")
+  - `sessionStorage` é por-aba → hidden window tem sessionStorage VAZIO → SPA não encontra JWT → redireciona para SSO
+  - SSO auto-login (cookies compartilhados) → retorna ao SPA com JWT NOVO
+  - Interceptor `onBeforeSendHeaders` (visual-runner.js) + `setRequestHeader` override (portal-preload.js) capturam o novo token → `global.serproToken` atualizado
+  - Poll de 25s → se token encontrado, fecha hidden window e retorna o token
+  - Auto-close em 30s (timeout)
+  - Listeners `crashed` + `closed` garantem cleanup
+- **portal-preload.js (`refreshTokenViaIframe`):** Método 1 agora é `refresh-jwt-via-hidden-page`. Método 2 (`reload-main-window`) é fallback (só usado se hidden window falhar).
+
+**Por que funciona:**
+- `sessionStorage` é per-aba no Electron (diferente de `localStorage` e cookies que são compartilhados na partition)
+- A hidden window NUNCA tem o JWT antigo → força SSO auto-login → JWT NOVO
+- A janela do portal NUNCA é tocada → SPA continua funcionando normalmente
+- Após o refresh, `shared.sessionToken` é atualizado via IPC → interceptor do portal começa a usar o novo token nas próximas requisições XHR/fetch
+- Se SSO cookies expiraram → hidden window mostra login page → timeout → null → `reload-main-window` como fallback

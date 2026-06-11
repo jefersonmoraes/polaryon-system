@@ -2478,9 +2478,10 @@
         }
     }
 
-    // 🔄 Renova token Serpro (v3.8.277): reload-main-window é o ÚNICO método que funciona.
-    // Limpa storages, reload na página SSO, espera novo JWT, volta à URL original.
-    // refresh-jwt-via-page (hidden window) retorna null (desativado desde v3.8.273).
+    // 🔄 Renova token Serpro (v3.8.279): janela oculta silenciosa é o método 1.
+    // Cria hidden BrowserWindow que navega ao SPA → SSO auto-login → novo JWT.
+    // A janela do portal NUNCA é tocada — zero interrupção.
+    // reload-main-window é método 2 (fallback, MEXE na janela).
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe() {
         // v3.8.273: Se IP bloqueado, não tenta nada
@@ -2505,41 +2506,42 @@
             } catch(e) {}
         }
 
-        // MÉTODO 1: reload-main-window (v3.8.277 — ÚNICO que realmente funciona)
-        // Limpa localStorage/sessionStorage, reload, espera SSO gerar novo JWT, volta à URL.
+        // MÉTODO 1: hidden window silenciosa (v3.8.279 — NÃO mexe na janela do portal)
+        // Cria uma janela oculta que navega para o SPA. SSO auto-login (cookies) gera novo JWT.
+        // Interceptor captura e retorna. Janela do portal NUNCA é tocada.
         try {
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Recarregando página principal para renovar JWT...', 'color:#6366f1;font-weight:bold;');
-            var newToken = await ipcRenderer.invoke('reload-main-window');
+            console.log('%c[POLARYON HEARTBEAT] 🔑 Capturando JWT via janela oculta (sem mexer no portal)...', 'color:#6366f1;font-weight:bold;');
+            var newToken = await ipcRenderer.invoke('refresh-jwt-via-hidden-page');
             if (newToken && newToken.startsWith('Bearer ')) {
                 shared.sessionToken = newToken;
                 try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: newToken }); } catch(e) {}
                 try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: newToken }, '*'); } catch(e) {}
                 _lastScheduledTokenHash = '';
                 scheduleProactiveJwtRenewal(newToken);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via janela oculta!', 'color:#10b981;font-weight:bold;font-size:12px;');
                 return;
             }
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ reload-main-window retornou nulo.', 'color:#f59e0b;font-weight:bold;');
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Janela oculta retornou nulo.', 'color:#f59e0b;font-weight:bold;');
         } catch(err) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window falhou: ' + (err.message || err));
+            console.warn('[POLARYON HEARTBEAT] ⚠️ Janela oculta falhou: ' + (err.message || err));
         }
 
-        // MÉTODO 2: hidden window (fallback — provavelmente retorna null)
+        // MÉTODO 2: reload-main-window (v3.8.277 — fallback agressivo, MEXE na janela)
         try {
-            console.log('%c[POLARYON HEARTBEAT] 🔑 Tentando hidden window (fallback)...', 'color:#6366f1;font-weight:bold;');
-            var newToken2 = await ipcRenderer.invoke('refresh-jwt-via-page');
+            console.log('%c[POLARYON HEARTBEAT] 🔄 Mensagem: recarregando página principal para renovar JWT (fallback)...', 'color:#f59e0b;font-weight:bold;');
+            var newToken2 = await ipcRenderer.invoke('reload-main-window');
             if (newToken2 && newToken2.startsWith('Bearer ')) {
                 shared.sessionToken = newToken2;
                 try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: newToken2 }); } catch(e) {}
                 try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: newToken2 }, '*'); } catch(e) {}
                 _lastScheduledTokenHash = '';
                 scheduleProactiveJwtRenewal(newToken2);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via hidden window!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window (fallback)!', 'color:#10b981;font-weight:bold;font-size:12px;');
                 return;
             }
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo.', 'color:#f59e0b;font-weight:bold;');
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ reload-main-window (fallback) retornou nulo.', 'color:#f59e0b;font-weight:bold;');
         } catch(err) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (err.message || err));
+            console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window (fallback) falhou: ' + (err.message || err));
         }
 
         // Se falhou, retenta em 2min

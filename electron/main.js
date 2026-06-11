@@ -679,13 +679,111 @@ ipcMain.handle('scan-cookies', async () => {
   }
 });
 
-// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.268): navega para main.asp (SSO)
-// A hidden window usa a MESMA sessão da janela principal (cookies compartilhados).
-// main.asp → redirect → www SPA → SSO → novo JWT. Main window NÃO é afetada.
-ipcMain.handle('refresh-jwt-via-page', async () => {
-  // ⚠️ v3.8.273: janela oculta/popup removido — navegar ao SSO causa bloqueio Serpro.
-  // Refresh real é feito via reload-main-window (que só roda quando JWT já expirou).
-  return null;
+// 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.279):
+// Cria uma janela Electron oculta que navega para o SPA do ComprasNet.
+// Como sessionStorage é por aba (não compartilhada entre janelas mesmo com same partition),
+// a hidden window NÃO tem o JWT — o SPA redireciona para SSO → auto-login → novo JWT.
+// O interceptor (onBeforeSendHeaders em visual-runner.js) captura o novo token.
+// A JANELA DO PORTAL NÃO É MEXIDA — zero interrupção para o usuário.
+ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
+  try {
+    // Obtém URL atual do solicitante (portal window) para navegar para a mesma página
+    let currentUrl = '';
+    try {
+      const senderWin = BrowserWindow.fromWebContents(event.sender);
+      if (senderWin && !senderWin.isDestroyed()) {
+        currentUrl = senderWin.webContents.getURL();
+      }
+    } catch (urlErr) {}
+
+    // Filtra URLs inválidas (páginas de erro /ac, login, etc)
+    const targetUrl = (currentUrl && currentUrl.includes('cnetmobile.estaleiro.serpro.gov.br') && !currentUrl.includes('/ac'))
+      ? currentUrl
+      : 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
+
+    console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Capturando JWT em janela oculta...');
+    console.log('[MAIN] 🔄 URL alvo: ' + targetUrl);
+
+    // Cria janela oculta com MESMA sessão (cookies compartilhados) e portal-preload.js
+    const hiddenWin = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 600,
+      webPreferences: {
+        preload: path.join(__dirname, 'portal-preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false,
+        allowRunningInsecureContent: true,
+        backgroundThrottling: false,
+        partition: 'persist:polaryon-global'
+      }
+    });
+
+    // Auto-close timeout (30s máximo)
+    let hiddenClosed = false;
+    const timeoutId = setTimeout(() => {
+      if (!hiddenClosed) {
+        hiddenClosed = true;
+        try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
+      }
+    }, 30000);
+
+    hiddenWin.on('closed', () => { hiddenClosed = true; clearTimeout(timeoutId); });
+    hiddenWin.webContents.on('crashed', () => {
+      if (!hiddenClosed) {
+        hiddenClosed = true;
+        try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
+      }
+    });
+
+    // Navega para o SPA — erros de navegação (redirect SSO) são esperados
+    try {
+      await hiddenWin.loadURL(targetUrl);
+    } catch (navErr) {
+      // Redirect durante SSO é normal
+    }
+
+    // Poll por até 25s pelo token capturado
+    let foundToken = null;
+    for (let i = 0; i < 25; i++) {
+      await new Promise(function(r) { setTimeout(r, 1000); });
+      if (hiddenClosed || hiddenWin.isDestroyed()) break;
+      try {
+        const g = global.serproToken;
+        if (g && typeof g === 'string' && g.startsWith('Bearer ') && g.length > 60) {
+          foundToken = g;
+          console.log('[MAIN] ✅ refresh-jwt-via-hidden-page: Token capturado!');
+          break;
+        }
+        // Diagnóstico: loga URL atual a cada 5s
+        if (i % 5 === 4) {
+          try {
+            const url = hiddenWin.webContents.getURL();
+            console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Ainda aguardando... URL=' + url);
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+
+    // Fecha janela oculta
+    if (!hiddenClosed) {
+      hiddenClosed = true;
+      clearTimeout(timeoutId);
+      try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
+    }
+
+    if (foundToken) {
+      console.log('[MAIN] ✅ refresh-jwt-via-hidden-page: SUCESSO! Token len=' + foundToken.length);
+      return foundToken;
+    }
+
+    console.log('[MAIN] ⚠️ refresh-jwt-via-hidden-page: Nenhum token capturado');
+    return null;
+  } catch(e) {
+    console.log('[MAIN] ⚠️ refresh-jwt-via-hidden-page erro:', e.message);
+    return null;
+  }
 });
 
 // ☢️ RELOAD DA JANELA PRINCIPAL (v3.8.277): recarrega a página SEM limpar storages.
