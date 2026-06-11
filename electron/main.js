@@ -699,45 +699,20 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
         preload: path.join(__dirname, 'hidden-preload.js'),
         javascript: true,
         sandbox: false,
-        webSecurity: false
+        webSecurity: true
       }
     });
 
-    // Navega para main.asp — o SSO do www.comprasnet.gov.br vai redirect até a SPA
-    diag('🔄 Navegando para www.comprasnet.gov.br/main.asp (SSO)...');
+    // Navega para cnetmobile SPA (mesma sessão da janela principal)
+    diag('🔄 Navegando para cnetmobile SPA (mesma sessão)...');
     try {
-      await hiddenWin.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 20000 });
+      await hiddenWin.loadURL('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras', { timeout: 25000 });
     } catch(e) {
-      diag('⚠️ main.asp (continuando): ' + e.message);
+      diag('⚠️ cnetmobile (continuando): ' + e.message);
     }
 
-    // Aguarda redirects do SSO estabilizarem (main.asp → www SPA)
-    await new Promise(resolve => {
-      var settleTimer = null;
-      var safeRemoveListeners = function() {
-        try { if (hiddenWin && !hiddenWin.isDestroyed()) { hiddenWin.webContents.removeListener('did-navigate', onNav); hiddenWin.webContents.removeListener('did-navigate-in-page', onNav); } } catch(e) {}
-      };
-      var navCount = 0;
-      var onNav = function(ev, url) {
-        navCount++;
-        var shortUrl = url ? url.substring(0,100) : '';
-        diag('📍 Nav #' + navCount + ': ' + shortUrl);
-        if (settleTimer) clearTimeout(settleTimer);
-        settleTimer = setTimeout(function() {
-          safeRemoveListeners();
-          resolve();
-        }, 3000);
-      };
-      hiddenWin.webContents.on('did-navigate', function(ev, url, code, desc) { onNav(ev, url); });
-      hiddenWin.webContents.on('did-navigate-in-page', function(ev, url) { onNav(ev, url); });
-      // Se não navegar em 30s, resolve anyway
-      setTimeout(function() {
-        if (settleTimer) clearTimeout(settleTimer);
-        safeRemoveListeners();
-        try { if (resolve && typeof resolve === 'function') resolve(); } catch(e) {}
-      }, 30000);
-    });
-    diag('✅ Navegacao SSO estabilizada');
+    // Aguarda SPA carregar + estabilizar (até 20s)
+    await new Promise(r => setTimeout(r, 5000));
 
     // Polling: extrai JWT do sessionStorage + interceptor hidden-preload (60 tentativas)
     for (var attempt = 0; attempt < 60; attempt++) {
