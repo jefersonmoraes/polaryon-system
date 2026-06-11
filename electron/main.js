@@ -788,27 +788,33 @@ ipcMain.handle('reload-main-window', async (event) => {
       console.log('[MAIN] ☢️ reload-main-window: limpando storages + reload + poll... URL salva: ' + savedUrl);
 
       global.serproToken = null;
+
+      // ✅ NOVA ABORDAGEM (v3.8.267): navega para main.asp (SSO) em vez de reload()
+      // O reload() mantinha a SPA na URL atual, que nunca gerava novo JWT.
+      // main.asp força o fluxo SSO completo: main.asp → CAS/login → SPA → novo JWT
+      console.log('[MAIN] ☢️ reload-main-window: navegando para www.comprasnet.gov.br/main.asp (SSO)...');
       try {
-        await win.webContents.executeJavaScript('(function(){ try{localStorage.clear()}catch(e){} try{sessionStorage.clear()}catch(e){} try{indexedDB&&indexedDB.databases&&indexedDB.databases().then(function(dbs){dbs.forEach(function(db){if(db.name)indexedDB.deleteDatabase(db.name)})})}catch(e){} return true; })()');
+        await win.webContents.loadURL('https://www.comprasnet.gov.br/main.asp', { timeout: 20000 });
       } catch(e) {
-        console.log('[MAIN] ☢️ storage.clear ignorado:', e.message);
+        console.log('[MAIN] ☢️ reload-main-window: loadURL main.asp (continuando):', e.message);
       }
-      win.webContents.reload();
-      // Poll por até 30s pelo global.serproToken (preload captura token da SPA e envia p/ main process)
+      // Aguarda navegação SSO estabilizar (até 20s)
+      await new Promise(function(s) { setTimeout(s, 3000); });
+
+      // Poll por até 60s pelo global.serproToken (SSO pode levar mais tempo)
       var foundToken = null;
-      for (var a = 0; a < 30; a++) {
+      for (var a = 0; a < 60; a++) {
         await new Promise(function(r) { setTimeout(r, 1000); });
         try {
           if (win.isDestroyed()) break;
           if (!foundToken && global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
             foundToken = global.serproToken;
-            console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via interceptor!');
+            console.log('[MAIN] ☢️ reload-main-window: JWT fresco encontrado via SSO!');
           }
         } catch(e2) {}
       }
 
-      // ⬅️ SEMPRE volta para a URL original, mesmo sem token (v3.8.266)
-      // O SPA recarrega na página certa, detecta auth ausente, e o interceptor captura o novo JWT
+      // ⬅️ SEMPRE volta para a URL original (v3.8.266)
       try {
         if (!win.isDestroyed()) {
           var currentUrl = win.webContents.getURL();
@@ -823,7 +829,7 @@ ipcMain.handle('reload-main-window', async (event) => {
       }
 
       if (foundToken) return foundToken;
-      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 30s (URL restaurada)');
+      console.log('[MAIN] ☢️ reload-main-window: JWT nao encontrado apos 60s (URL restaurada)');
       return null;
     }
     console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
