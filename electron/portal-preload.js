@@ -2462,19 +2462,35 @@
                 console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page retornou nulo.');
                 _lastScheduledTokenHash = '';
                 if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+                // v3.8.258: nuclear option — força reload da janela principal para gerar novo JWT via SSO
+                console.warn('%c[POLARYON HEARTBEAT] ☢️ refresh falhou — forçando reload da janela principal...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+                try {
+                    await ipcRenderer.invoke('reload-main-window');
+                } catch(reloadErr) {
+                    console.error('[POLARYON HEARTBEAT] ☢️ reload-main-window IPC falhou:', reloadErr);
+                }
                 _proactiveRenewalTimer = setTimeout(() => {
                     console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retentando renovação proativa após retorno nulo...', 'color:#f59e0b;font-weight:bold;');
                     refreshTokenViaIframe();
-                }, 15000);
+                }, 30000);
             }
         } catch(ipcErr) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ refresh-jwt-via-page falhou: ' + (ipcErr.message || ipcErr));
             _lastScheduledTokenHash = '';
             if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+            // v3.8.258: nuclear option — força reload da janela principal
+            console.warn('%c[POLARYON HEARTBEAT] ☢️ refresh-jwt-via-page falhou — forçando reload da janela principal...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+            try {
+                await ipcRenderer.invoke('reload-main-window');
+            } catch(reloadErr) {
+                console.error('[POLARYON HEARTBEAT] ☢️ reload-main-window IPC falhou:', reloadErr);
+            }
+            _lastScheduledTokenHash = '';
+            if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
             _proactiveRenewalTimer = setTimeout(() => {
                 console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retentando renovação proativa após falha...', 'color:#f59e0b;font-weight:bold;');
                 refreshTokenViaIframe();
-            }, 15000);
+            }, 30000);
         }
     }
 

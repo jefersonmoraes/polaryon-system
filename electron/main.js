@@ -655,70 +655,98 @@ ipcMain.handle('refresh-jwt-via-page', async (event) => {
       diag('⚠️ Angular SPA (continuando): ' + e.message);
     }
 
-    await new Promise(r => setTimeout(r, 2500));
+    await new Promise(r => setTimeout(r, 2000));
 
     // Diagnóstico: verifica se a página carregou o Angular app
     const pageInfo = await hiddenWin.webContents.executeJavaScript('(function() { var info = { url: location.href, title: document.title, hasAppRoot: !!document.querySelector(\'app-root\'), bodyLength: (document.body && document.body.innerText || \'\').length, hasPolaryonPreload: !!window.__polaryonFetchResult, fetchResult: window.__polaryonFetchResult || \'\' }; info.hasPolaryonBearer = !!(window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50); try { info.cookies = document.cookie.split(\'; \').filter(function(c){ return c.length > 50 || c.includes(\'bearer\') || c.includes(\'token\') || c.includes(\'jwt\'); }).join(\'; \'); } catch(e) { info.cookiesErr = e.message; } return info; })()');
     diag('📊 Page: ' + pageInfo.title + ' | app-root: ' + pageInfo.hasAppRoot + ' | body: ' + pageInfo.bodyLength + 'chars | bearer: ' + (pageInfo.hasPolaryonBearer ? 'SIM' : 'nao'));
 
-    // Polling: NÃO usa global.serproToken (evita contaminação do visual-runner da janela principal).
-    // Prioriza storages (sessionStorage da SPA Angular) sobre interceptors.
-    var storageAttempts = 0;
-    for (var attempt = 0; attempt < 12; attempt++) {
+    // v3.8.258: Força a SPA a re-autenticar via SSO limpando sessionStorage e dando reload.
+    // A SPA Angular detecta que não tem JWT, inicia o fluxo SSO com os cookies copiados,
+    // o SSO redireciona de volta, e a SPA gera um JWT fresco no sessionStorage.
+    diag('🧹 Forcando re-autenticacao SSO (limpando sessionStorage + reload)...');
+    try {
+      await hiddenWin.webContents.executeJavaScript('sessionStorage.clear();');
+    } catch(e) {
+      diag('⚠️ sessionStorage.clear erro: ' + e.message);
+    }
+
+    // Monitora navegações: reload → (possível SSO redirect) → redirect de volta → settle
+    await new Promise(resolve => {
+      var settleTimer = null;
+      var navCount = 0;
+      var onNav = function() {
+        navCount++;
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(function() {
+          hiddenWin.webContents.removeListener('did-navigate', onNav);
+          hiddenWin.webContents.removeListener('did-navigate-in-page', onNav);
+          resolve();
+        }, 3000);
+      };
+      hiddenWin.webContents.on('did-navigate', onNav);
+      hiddenWin.webContents.on('did-navigate-in-page', onNav);
+      // Dispara reload
+      hiddenWin.webContents.reload();
+      // Timeout de segurança 40s
+      setTimeout(function() {
+        if (settleTimer) clearTimeout(settleTimer);
+        hiddenWin.webContents.removeListener('did-navigate', onNav);
+        hiddenWin.webContents.removeListener('did-navigate-in-page', onNav);
+        resolve();
+      }, 40000);
+    });
+    diag('✅ Navegacao estabilizada apos SSO');
+
+    // Polling: extrai JWT do sessionStorage (agora deve ter o token fresco)
+    for (var attempt = 0; attempt < 20; attempt++) {
       try {
-        // 1. Varre storages e DOM em busca do JWT (prioridade: sessionStorage da SPA)
-        var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { var val = localStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { return { key: keys[i], token: val, storage: \'localStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} try { for (var k in window) { try { var v = window[k]; if (v && typeof v === \'string\' && v.length > 100 && v.indexOf(\'.\') > 0 && v.split(\'.\').length === 3) { return { key: k, token: v, storage: \'window\' }; } } catch(e) {} } } catch(e) {} try { var cookieArr = document.cookie.split(\'; \'); for (var i = 0; i < cookieArr.length; i++) { var parts = cookieArr[i].split(\'=\'); var val = decodeURIComponent(parts[1] || \'\'); if (val && val.length > 100 && val.indexOf(\'.\') > 0 && val.split(\'.\').length >= 2) { var key = parts[0]; if (key.toLowerCase().includes(\'token\') || key.toLowerCase().includes(\'bearer\') || key.toLowerCase().includes(\'jwt\') || key.toLowerCase().includes(\'access\')) { return { key: key, token: val, storage: \'cookie\' }; } } } } catch(e) {} return null; })()');
+        var result = await hiddenWin.webContents.executeJavaScript('(function() { try { var keys = Object.keys(sessionStorage); for (var i = 0; i < keys.length; i++) { var val = sessionStorage.getItem(keys[i]); if (val && typeof val === \'string\' && val.length > 100 && val.indexOf(\'.\') > 0) { try { var parts = val.split(\'.\'); var payload = JSON.parse(atob(parts[1].replace(/-/g, \'+\').replace(/_/g, \'/\'))); var expSec = payload.exp; if (expSec && (expSec - Date.now()/1000) > 180) { return { key: keys[i], token: val, storage: \'sessionStorage\', ttl: Math.floor(expSec - Date.now()/1000) }; } } catch(e) {} return { key: keys[i], token: val, storage: \'sessionStorage\' }; } } } catch(e) {} try { if (window.__polaryonBearer && typeof window.__polaryonBearer === \'string\' && window.__polaryonBearer.length > 50) { return { key: \'__polaryonBearer\', token: window.__polaryonBearer, storage: \'hiddenPreload\' }; } } catch(e) {} return null; })()');
         if (result && result.token) {
           var token = result.token.startsWith('Bearer ') ? result.token : 'Bearer ' + result.token;
           hiddenWinToken = token;
-          diag('✅ JWT extraido via ' + (result.storage || 'unknown') + '! key=' + result.key + (result.ttl ? ' ttl=' + result.ttl + 's' : ''));
-          // Se veio de storage e tem TTL, verifica se é fresco
-          if (result.ttl && result.ttl > 180) {
-            hiddenWin.destroy();
-            return token;
-          }
-          storageAttempts++;
-          // Se não tem TTL suficiente, continua tentando (pode ser token velho)
-          if (storageAttempts >= 3) {
-            // 3 tentativas de storage sem sucesso → aceita o que temos
-            diag('⚠️ Storage token com TTL curto, mas aceitando apos 3 tentativas: ' + (result.ttl || 'N/A') + 's');
-            hiddenWin.destroy();
-            return token;
-          }
-          diag('⏳ Storage token com TTL=' + (result.ttl || 'N/A') + 's, aguardando token fresco...');
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        }
-
-        // 2. Hidden-preload interceptou o Bearer das chamadas Angular? (fallback)
-        var bearerFromHidden = null;
-        try {
-          const r = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer || null');
-          if (r && typeof r === 'string' && r.length > 50) {
-            bearerFromHidden = r;
-          }
-        } catch(e) {}
-        if (bearerFromHidden) {
-          const token = bearerFromHidden.startsWith('Bearer ') ? bearerFromHidden : 'Bearer ' + bearerFromHidden;
-          hiddenWinToken = token;
-          diag('✅ JWT capturado pelo hidden-preload interceptor!');
+          diag('✅ JWT fresco! key=' + result.key + ' ttl=' + (result.ttl || 'N/A') + 's');
           hiddenWin.destroy();
           return token;
         }
-
-        diag('⏳ Tentativa ' + (attempt + 1) + '/12 — JWT nao encontrado');
-        await new Promise(r => setTimeout(r, 1500));
+        diag('⏳ Tentativa ' + (attempt + 1) + '/20 — JWT nao encontrado');
+        await new Promise(r => setTimeout(r, 1000));
       } catch(e2) {
-        diag('⚠️ executeJavaScript erro: ' + e2.message);
-        await new Promise(r => setTimeout(r, 1500));
+        // Cross-origin durante SSO é esperado
+        diag('⏳ Tentativa ' + (attempt + 1) + '/20 — aguardando (cross-origin): ' + e2.message);
+        await new Promise(r => setTimeout(r, 1000));
       }
     }
-    diag('❌ Timeout — JWT nao gerado apos ~20s');
+    diag('❌ Timeout — JWT nao gerado apos ~30s');
     hiddenWin.destroy();
     return null;
   } catch(e) {
     console.log('[MAIN-RELOAD] Erro: ' + e.message);
     return null;
+  }
+});
+
+// ☢️ RELOAD DA JANELA PRINCIPAL (v3.8.258): último recurso quando refresh JWT falha.
+// Força reload da página principal para que o SSO gere um novo JWT via cookies.
+ipcMain.handle('reload-main-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      console.log('[MAIN] ☢️ reload-main-window: forçando reload...');
+      // Limpa sessionStorage antes do reload para forçar SSO
+      try {
+        await win.webContents.executeJavaScript('sessionStorage.clear();');
+      } catch(e) {
+        console.log('[MAIN] ☢️ sessionStorage.clear ignorado:', e.message);
+      }
+      win.webContents.reload();
+      return true;
+    }
+    console.log('[MAIN] ☢️ reload-main-window: janela principal nao encontrada');
+    return false;
+  } catch(e) {
+    console.log('[MAIN] ☢️ reload-main-window erro:', e.message);
+    return false;
   }
 });
 
