@@ -783,3 +783,13 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 - **Emulação de Navegador na Oculta:** O `hiddenWin` de refresh agora usa o User-Agent moderno e encaminha todas as mensagens de console (`console-message`) de volta ao console principal via `sendDiag` para facilitar diagnóstico.
 - **Cópia Precisa de Cookies:** O helper `copyAuthCookies()` agora preserva o atributo `sameSite` original dos cookies, garantindo que redirecionamentos do SSO na janela oculta herdem a autoridade correta da partição principal.
 - **Prevenção de Reload Destrutivo:** No `refreshTokenViaIframe` (Layer 3), se todos os métodos silenciosos falharem mas o token ainda tiver TTL válido (>=15s), evita o reload nuclear da página e reagenda o refresh silencioso em 15s.
+
+## Implementado (v3.8.294)
+
+### 1. Correção de Tela Preta / Crash de Renderização no Frontend React (BiddingDashboardPage)
+**Problema:** Na versão `3.8.293`, introduzimos o broadcast global de tokens via canal `portal-data-update` (contendo o payload `{ type: 'session-token', token }`). No entanto, o manipulador `handlePortalSync` em `BiddingDashboardPage.tsx` não tratava esse tipo de mensagem. A função continuava o processamento assumindo que se tratava de uma sincronização de sala e desestruturava `roomCode` como `undefined`. Ao tentar executar `roomCode.substring(0, 6)`, ocorria uma exceção de tipo não capturada (`TypeError: Cannot read properties of undefined (reading 'substring')`), resultando no travamento total do renderizador do React (tela completamente preta/branca).
+
+**Solução:**
+- Adicionado um guard-clause no topo da função `handlePortalSync` em `BiddingDashboardPage.tsx` para ignorar mensagens com tipo `'session-token'` ou que não tenham `roomCode` definido (`if (data.type === 'session-token' || !data.roomCode) return;`).
+- Isso evita qualquer possibilidade de colisão com os eventos de broadcast de tokens ou outras atualizações não relacionadas à sincronização de salas do portal, blindando o React contra exceções fatais.
+

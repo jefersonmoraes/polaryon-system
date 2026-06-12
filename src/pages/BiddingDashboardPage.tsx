@@ -1072,6 +1072,9 @@ export default function BiddingDashboardPage() {
                     sigaTimerReceivedAtRef.current = now;
                     return;
                 }
+                if (data.type === 'session-token' || !data.roomCode) {
+                    return;
+                }
                 const { roomCode, items: newItems, timestamp, sigaTimerSeconds } = data;
                 
                 console.log(`[PORTAL SYNC] room=${roomCode} items=${newItems?.length} sigaTimer=${sigaTimerSeconds} serverOffset=${data.serverOffset} clockSkew=${data.clockSkew?.toFixed(2) || 'N/A'}`);
