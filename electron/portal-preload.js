@@ -1072,7 +1072,7 @@
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
                 // v3.8.280: janela oculta (SEM botão de recarregar) — não mexe no portal.
-                refreshTokenViaIframe();
+                refreshTokenViaIframe(true);
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -1607,6 +1607,40 @@
                 initPolaryonHcaptcha();
             }, 1500);
 
+            let refreshPromise = null;
+            async function getOrRenewToken() {
+                if (refreshPromise) return refreshPromise;
+
+                refreshPromise = new Promise((resolve) => {
+                    const onMessage = (ev) => {
+                        if (ev.data && ev.data.source === 'polaryon-preload' && ev.data.type === 'inject-token' && ev.data.token) {
+                            window.removeEventListener('message', onMessage);
+                            refreshPromise = null;
+                            resolve(ev.data.token);
+                        }
+                    };
+                    window.addEventListener('message', onMessage);
+
+                    // Timeout de 35 segundos
+                    setTimeout(() => {
+                        window.removeEventListener('message', onMessage);
+                        if (refreshPromise) {
+                            refreshPromise = null;
+                            resolve(null);
+                        }
+                    }, 35000);
+                });
+
+                // Notifica o preload para iniciar a renovação proativa / reativa
+                window.postMessage({
+                    source: 'polaryon-injector',
+                    type: 'session-expired',
+                    status: 401
+                }, '*');
+
+                return refreshPromise;
+            }
+
             const originalFetch = window.fetch;
             window.fetch = async (...args) => {
                 if (args[1] && args[1].headers) {
@@ -1627,9 +1661,45 @@
                     }
                 }
                 const tStart = Date.now();
-                const response = await originalFetch(...args);
+                let response = await originalFetch(...args);
                 const tEnd = Date.now();
                 const url = typeof args[0] === 'string' ? args[0] : args[0].url;
+
+                const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
+                
+                // Intercepta 401 Unauthorized e faz retry transparente
+                if (response.status === 401 && isSerpro) {
+                    console.warn('%c[POLARYON INTERCEPTOR] ⚠️ Request returned 401! URL: ' + url + '. Retrying with background renewed token...', 'color:#f59e0b;font-weight:bold;');
+                    const newToken = await getOrRenewToken();
+                    if (newToken) {
+                        console.log('%c[POLARYON INTERCEPTOR] ✅ Token renewed! Retrying request...', 'color:#10b981;font-weight:bold;');
+                        if (args[0] instanceof Request) {
+                            const newHeaders = new Headers(args[0].headers);
+                            newHeaders.set('Authorization', newToken);
+                            const newRequest = new Request(args[0], { headers: newHeaders });
+                            response = await originalFetch(newRequest);
+                        } else {
+                            const options = args[1] ? { ...args[1] } : {};
+                            if (options.headers instanceof Headers) {
+                                options.headers.set('Authorization', newToken);
+                            } else if (typeof options.headers === 'object') {
+                                options.headers = { ...options.headers };
+                                let foundKey = 'Authorization';
+                                for (const k in options.headers) {
+                                    if (k.toLowerCase() === 'authorization') {
+                                        foundKey = k;
+                                        break;
+                                    }
+                                }
+                                options.headers[foundKey] = newToken;
+                            } else {
+                                options.headers = { 'Authorization': newToken };
+                            }
+                            response = await originalFetch(args[0], options);
+                        }
+                    }
+                }
+
                 const captchaMatch = url.match(/[?&]captcha\d*=([^&]+)/);
                 if (captchaMatch) {
                     window.postMessage({
@@ -1638,7 +1708,6 @@
                         token: decodeURIComponent(captchaMatch[1])
                     }, '*');
                 }
-                const isSerpro = url.includes('serpro.gov.br') || url.includes('/comprasnet-') || url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br') || url.includes('/classificacao') || url.includes('comprasnet/classificacao');
                 if (isSerpro) {
                     if (response.ok) {
                         const dateHeader = response.headers.get('Date') || response.headers.get('date') || '';
@@ -1667,12 +1736,74 @@
 
             const open = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(method, url) {
+                this._method = method;
                 this._url = url;
+                this._headers = {};
+                this._retryState = 'none'; // 'none', 'pending', 'done'
+                
+                const xhr = this;
+                const handleEvent = async (event) => {
+                    if (xhr.status === 401 && xhr._retryState === 'none') {
+                        const isSerpro = xhr._url && (xhr._url.includes('serpro.gov.br') || xhr._url.includes('/comprasnet-') || xhr._url.includes('/compras/') || window.location.hostname.includes('serpro.gov.br'));
+                        if (isSerpro) {
+                            event.stopImmediatePropagation();
+                            xhr._retryState = 'pending';
+                            
+                            console.warn('%c[POLARYON XHR INTERCEPTOR] ⚠️ XHR returned 401! URL: ' + xhr._url + '. Retrying with background renewed token...', 'color:#f59e0b;font-weight:bold;');
+                            
+                            const newToken = await getOrRenewToken();
+                            if (newToken) {
+                                console.log('%c[POLARYON XHR INTERCEPTOR] ✅ Token renewed! Retrying XHR...', 'color:#10b981;font-weight:bold;');
+                                try {
+                                    const res = await originalFetch(xhr._url, {
+                                        method: xhr._method || 'GET',
+                                        headers: {
+                                            ...xhr._headers,
+                                            'Authorization': newToken
+                                        },
+                                        body: xhr._body
+                                    });
+                                    
+                                    const resText = await res.text();
+                                    
+                                    // Override properties
+                                    Object.defineProperty(xhr, 'status', { value: res.status, configurable: true, enumerable: true, writable: true });
+                                    Object.defineProperty(xhr, 'statusText', { value: res.statusText, configurable: true, enumerable: true, writable: true });
+                                    Object.defineProperty(xhr, 'responseText', { value: resText, configurable: true, enumerable: true, writable: true });
+                                    Object.defineProperty(xhr, 'response', { value: resText, configurable: true, enumerable: true, writable: true });
+                                    Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true, enumerable: true, writable: true });
+                                    
+                                    xhr._retryState = 'done';
+                                    
+                                    xhr.dispatchEvent(new Event('readystatechange'));
+                                    xhr.dispatchEvent(new Event('load'));
+                                    xhr.dispatchEvent(new Event('loadend'));
+                                } catch (err) {
+                                    console.error('[POLARYON XHR INTERCEPTOR] Retry failed:', err);
+                                    xhr._retryState = 'done';
+                                    xhr.dispatchEvent(new Event(event.type));
+                                }
+                            } else {
+                                xhr._retryState = 'done';
+                                xhr.dispatchEvent(new Event(event.type));
+                            }
+                        }
+                    } else if (xhr._retryState === 'pending') {
+                        event.stopImmediatePropagation();
+                    }
+                };
+
+                xhr.addEventListener('readystatechange', handleEvent, true);
+                xhr.addEventListener('load', handleEvent, true);
+                xhr.addEventListener('loadend', handleEvent, true);
+                
                 return open.apply(this, arguments);
             };
 
             const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
             XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+                if (!this._headers) this._headers = {};
+                this._headers[header] = value;
                 if (header.toLowerCase() === 'authorization' && value && value.toLowerCase().startsWith('bearer')) {
                     sessionToken = value;
                     window.postMessage({
@@ -1685,9 +1816,13 @@
             };
 
             const send = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.send = function() {
+            XMLHttpRequest.prototype.send = function(body) {
+                this._body = body;
                 this._tStart = Date.now();
+                
                 this.addEventListener('load', function() {
+                    if (this._retryState === 'pending') return;
+                    
                     const tEnd = Date.now();
                     const tStart = this._tStart || tEnd;
                     const captchaMatch = this._url && this._url.match(/[?&]captcha\d*=([^&]+)/);
@@ -1930,6 +2065,7 @@
         // 💉 Injeta token no sessionStorage quando preload consegue um novo JWT (hidden window/SSO)
         window.addEventListener('message', function(ev) {
             if (ev.data && ev.data.source === 'polaryon-preload' && ev.data.type === 'inject-token' && ev.data.token) {
+                sessionToken = ev.data.token;
                 var raw = ev.data.token;
                 if (raw.startsWith('Bearer ')) raw = raw.substring(7);
                 var keys = ['accessToken', 'token', 'jwt', 'access_token', 'bearerToken'];
@@ -2343,7 +2479,7 @@
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando via janela oculta...', 'color:#f59e0b;font-weight:bold;');
                     // v3.8.280: janela oculta (método 1) SEMPRE primeiro — não mexe no portal.
                     // clickPortalRefreshButton() removido: causava reload do portal e tela azul.
-                    refreshTokenViaIframe();
+                    refreshTokenViaIframe(true);
                 }
             } else if (res.status === 429 || res.status === 0) {
                 _blockedNetworkErrCount++;
@@ -2479,7 +2615,7 @@
     // A janela do portal NUNCA é tocada — zero interrupção.
     // reload-main-window é método 2 (fallback, MEXE na janela).
     let _lastRefreshTime = 0;
-    async function refreshTokenViaIframe() {
+    async function refreshTokenViaIframe(force) {
         // v3.8.273: Se IP bloqueado, não tenta nada
         if (_serproBlocked) {
             console.warn('%c[POLARYON HEARTBEAT] 🚫 IP bloqueado! Refresh ignorado. Use VPN e reconecte manualmente.', 'color:#ef4444;font-weight:bold;');
@@ -2487,7 +2623,7 @@
         }
 
         var nowMs = Date.now();
-        if (nowMs - _lastRefreshTime < 30000) {
+        if (!force && (nowMs - _lastRefreshTime < 30000)) {
             console.log('%c[POLARYON HEARTBEAT] ⏳ Aguardando cooldown de refresh (30s)...', 'color:#94a3b8;font-size:10px;');
             return;
         }

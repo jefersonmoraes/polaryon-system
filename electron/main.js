@@ -764,60 +764,40 @@ async function copyAuthCookies() {
     sendDiag(`[MAIN] 🍪 Copiando ${cookies.length} cookies da sessão principal...`);
     for (const cookie of cookies) {
       try {
-        let url = (cookie.secure ? 'https://' : 'http://') + cookie.domain.replace(/^\./, '') + cookie.path;
-        
+        let domain = cookie.domain;
+        if (domain.startsWith('.')) {
+          domain = domain.substring(1);
+        }
+        const scheme = cookie.secure ? 'https://' : 'http://';
+        const url = scheme + domain + cookie.path;
+
         // Loga cookies importantes
         if (cookie.name.includes('ASPSESSION') || cookie.name.includes('token') || cookie.domain.includes('acesso.gov.br')) {
           sendDiag(`  - Cookie: name=${cookie.name} domain=${cookie.domain} path=${cookie.path}`);
         }
 
-        try {
-          await refreshSession.cookies.set({
-            url: url,
-            name: cookie.name,
-            value: cookie.value,
-            domain: cookie.domain,
-            path: cookie.path,
-            secure: cookie.secure,
-            httpOnly: cookie.httpOnly,
-            expirationDate: cookie.expirationDate
-          });
-        } catch (e) {
-          // Tenta sem especificar o domain explicitamente (deixa o Electron inferir do URL)
-          try {
-            await refreshSession.cookies.set({
-              url: url,
-              name: cookie.name,
-              value: cookie.value,
-              path: cookie.path,
-              secure: cookie.secure,
-              httpOnly: cookie.httpOnly,
-              expirationDate: cookie.expirationDate
-            });
-          } catch (e2) {
-            // Tenta adicionando 'www.' se for um domínio sem subdomínio
-            let fallbackUrl = url;
-            if (!cookie.domain.includes('www') && !cookie.domain.includes('sso')) {
-              fallbackUrl = (cookie.secure ? 'https://www.' : 'http://www.') + cookie.domain.replace(/^\./, '') + cookie.path;
-            }
-            try {
-              await refreshSession.cookies.set({
-                url: fallbackUrl,
-                name: cookie.name,
-                value: cookie.value,
-                domain: cookie.domain,
-                path: cookie.path,
-                secure: cookie.secure,
-                httpOnly: cookie.httpOnly,
-                expirationDate: cookie.expirationDate
-              });
-            } catch (e3) {
-              sendDiag(`[MAIN] ⚠️ Erro ao copiar cookie ${cookie.name} (domain=${cookie.domain}): ${e3.message}`);
-            }
-          }
+        const details = {
+          url: url,
+          name: cookie.name,
+          value: cookie.value,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+        };
+
+        // Se for um cookie de domínio (começa com ponto), especifica o domain para o Electron.
+        // Se for host-only (sem ponto), não especifica o domain para que o Electron crie como host-only.
+        if (cookie.domain.startsWith('.')) {
+          details.domain = cookie.domain;
         }
-      } catch (cookieErr) {
-        sendDiag(`[MAIN] ⚠️ Erro ao preparar cookie ${cookie.name}: ${cookieErr.message}`);
+
+        if (cookie.expirationDate) {
+          details.expirationDate = cookie.expirationDate;
+        }
+
+        await refreshSession.cookies.set(details);
+      } catch (err) {
+        sendDiag(`[MAIN] ⚠️ Erro ao copiar cookie ${cookie.name} (${cookie.domain}): ${err.message}`);
       }
     }
     sendDiag(`[MAIN] 🍪 Cópia de cookies concluída.`);

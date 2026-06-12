@@ -317,6 +317,14 @@ class VisualRunner {
             };
 
             targetWin.webContents.on('will-navigate', (event, url) => {
+                if (!isLoginFlow && url.includes('sso.acesso.gov.br')) {
+                    event.preventDefault();
+                    console.log(`[POLARYON] [${label}] 🛡️ Bloqueado will-navigate para login Gov.br: ${url}`);
+                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] 🛡️ Bloqueado redirecionamento automático para login Gov.br!`);
+                    }
+                    return;
+                }
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] will-navigate: ${url}`);
                 }
@@ -324,6 +332,14 @@ class VisualRunner {
             });
 
             targetWin.webContents.on('will-redirect', (event, url) => {
+                if (!isLoginFlow && url.includes('sso.acesso.gov.br')) {
+                    event.preventDefault();
+                    console.log(`[POLARYON] [${label}] 🛡️ Bloqueado will-redirect para login Gov.br: ${url}`);
+                    if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
+                        this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] 🛡️ Bloqueado redirecionamento automático para login Gov.br!`);
+                    }
+                    return;
+                }
                 if (this.dashboardWebContents && !this.dashboardWebContents.isDestroyed()) {
                     this.dashboardWebContents.send('bidding-update-log', `[VISUAL] [${label}] will-redirect: ${url}`);
                 }
