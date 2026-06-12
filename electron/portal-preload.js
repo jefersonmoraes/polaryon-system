@@ -229,6 +229,7 @@
             if (data.token !== shared.sessionToken) {
                 shared.sessionToken = data.token;
                 console.log("%c[POLARYON] 🔑 Token FRESCO recebido!", "color: #10b981; font-size: 11px; font-weight: bold;");
+                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: data.token }, '*'); } catch(e) {}
             }
         }
     });
@@ -238,6 +239,7 @@
         if (token && token !== shared.sessionToken) {
             shared.sessionToken = token;
             console.log("%c[POLARYON] 🔑 Token restaurado do main.js!", "color: #10b981; font-size: 11px; font-weight: bold;");
+            try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: token }, '*'); } catch(e) {}
         }
     });
 
@@ -1853,11 +1855,12 @@
                 });
                 return send.apply(this, arguments);
             };
-        // 🏆 Ranking fetch handler: triggered by preload via DOM event.
-        // Uses the page's originalFetch (with credentials/cookies) instead of preload's isolated fetch.
         document.addEventListener('polaryon-fetch-ranking', async (e) => {
             const { url, sessionToken: tokenFromPreload } = e.detail || {};
             if (!url) return;
+            if (tokenFromPreload && tokenFromPreload.startsWith('Bearer ') && tokenFromPreload !== sessionToken) {
+                sessionToken = tokenFromPreload;
+            }
             try {
                 const xsrfCookie = document.cookie.split('; ').find(c => c.startsWith('XSRF-TOKEN='));
                 const xsrfToken = xsrfCookie ? xsrfCookie.split('=')[1] : '';
@@ -2163,8 +2166,9 @@
                         var newToken = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
                         if (newToken) {
                             if (!newToken.startsWith('Bearer ')) newToken = 'Bearer ' + newToken;
+                            sessionToken = newToken; // <-- Update local variable!
                             window.postMessage({ source: 'polaryon-injector', type: 'token', token: newToken }, '*');
-                            console.log('%c[POLARYON INJECTED] ✅ Novo token Serpro capturado e postado ao preload!', 'color:#10b981;font-weight:bold;');
+                            console.log('%c[POLARYON INJECTED] ✅ Novo token Serpro capturado, atualizado localmente e postado ao preload!', 'color:#10b981;font-weight:bold;');
                         } else {
                             console.log('%c[POLARYON INJECTED] ⚠️ Token não encontrado no response body. Chaves:', Object.keys(body).join(', '), 'color:#f59e0b;');
                         }
@@ -2372,14 +2376,15 @@
             }
 
             // Se o TTL é menor que 3 minutos, o token capturado provavelmente é o MESMO
-            // token antigo (a sessão isolada ainda não gerou um novo). Agenda retry em 30s.
+            // token antigo (a sessão isolada ainda não gerou um novo). Agenda retry em 30s (ou antes se estiver prestes a expirar).
             if (ttlSec < 180) {
-                console.warn(`%c[POLARYON JWT-PROATIVO] ⚠️ Token capturado com TTL muito curto (${Math.floor(ttlSec)}s) — pode ser token antigo. Retry em 30s.`, 'color:#f59e0b;font-weight:bold;');
+                const retryDelayMs = Math.max(1000, Math.min(30000, (ttlSec - 10) * 1000));
+                console.warn(`%c[POLARYON JWT-PROATIVO] ⚠️ Token capturado com TTL muito curto (${Math.floor(ttlSec)}s) — pode ser token antigo. Retry em ${Math.round(retryDelayMs/1000)}s.`, 'color:#f59e0b;font-weight:bold;');
                 if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
                 _proactiveRenewalTimer = setTimeout(async () => {
                     console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retry de renovação (token curto)...', 'color:#f59e0b;font-weight:bold;');
                     await refreshTokenViaIframe();
-                }, 30000);
+                }, retryDelayMs);
                 return;
             }
 
@@ -2669,6 +2674,8 @@
                 await new Promise(r => setTimeout(r, 100));
                 if (shared.sessionToken && shared.sessionToken !== oldToken) {
                     console.log('%c[POLARYON HEARTBEAT] ✅ [LAYER 1] Token renovado com sucesso via compras-id!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                    // Notifica o page context para injetar o novo token nas variáveis da página
+                    try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: shared.sessionToken }, '*'); } catch(e) {}
                     _isRefreshingJwt = false;
                     return;
                 }
