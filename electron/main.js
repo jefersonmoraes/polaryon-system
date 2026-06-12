@@ -687,20 +687,23 @@ ipcMain.handle('scan-cookies', async () => {
 // A JANELA DO PORTAL NÃO É MEXIDA — zero interrupção para o usuário.
 
 // Verifica se o token JWT tem TTL suficiente (> minTtlSec) para ser considerado "novo"
-function isTokenFreshEnough(token, minTtlSec) {
+function getTokenTtl(token) {
   try {
     const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
     const parts = raw.split('.');
-    if (parts.length < 2) return false;
+    if (parts.length < 2) return 0;
     const safeB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const payload = JSON.parse(Buffer.from(safeB64, 'base64').toString('utf8'));
     const exp = payload.exp;
-    if (!exp || typeof exp !== 'number') return false;
-    const ttlSec = exp - (Date.now() / 1000);
-    return ttlSec >= minTtlSec;
+    if (!exp || typeof exp !== 'number') return 0;
+    return exp - (Date.now() / 1000);
   } catch(e) {
-    return false; // se não consegue validar, assume não-fresco
+    return 0;
   }
+}
+
+function isTokenFreshEnough(token, minTtlSec) {
+  return getTokenTtl(token) >= minTtlSec;
 }
 
 ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
@@ -738,14 +741,14 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       }
     });
 
-    // Auto-close timeout (30s máximo)
+    // Auto-close timeout (55s máximo — SSO pode levar 15s + reload 8s + poll 30s)
     let hiddenClosed = false;
     const timeoutId = setTimeout(() => {
       if (!hiddenClosed) {
         hiddenClosed = true;
         try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
       }
-    }, 30000);
+    }, 55000);
 
     hiddenWin.on('closed', () => { hiddenClosed = true; clearTimeout(timeoutId); });
     hiddenWin.webContents.on('crashed', () => {
@@ -756,77 +759,121 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     });
 
     // ============================================================
-    // PRIMEIRA CARGA: O SPA carrega e encontra o JWT VELHO no
-    // localStorage (compartilhado com a janela do portal).
-    // Permite carregar, então limpa localStorage + recarrega para
-    // FORÇAR o SSO a gerar um JWT NOVO.
+    // CARGA INICIAL: navega para o SPA.
+    // loadURL resolve na PRIMEIRA página que carregar (SPA ou SSO).
     // ============================================================
     try {
       await hiddenWin.loadURL(targetUrl);
     } catch (navErr) {
-      // Redirect durante SSO é normal
+      // Redirect durante SSO é normal (throws navigation error)
     }
 
-    // Aguarda SPA inicializar e ler do localStorage
-    await new Promise(function(r) { setTimeout(r, 2000); });
+    // Pequena pausa para navegação se estabilizar
+    await new Promise(function(r) { setTimeout(r, 1000); });
 
-    // Limpa localStorage JWT keys + recarrega para forçar SSO
-    try {
-      await hiddenWin.webContents.executeJavaScript(`
-        (function(){
-          var keys=['accessToken','access_token','token','jwt','id_token','currentUser','auth_token','bearerToken','userToken','idToken','bearer','authorization'];
-          for(var ki=0;ki<keys.length;ki++){try{localStorage.removeItem(keys[ki])}catch(e){}try{sessionStorage.removeItem(keys[ki])}catch(e){}}
-          // Varredura completa do localStorage
-          for(var i=localStorage.length-1;i>=0;i--){
-            try{
-              var k=localStorage.key(i),v=localStorage.getItem(k);
-              if(v&&typeof v==='string'){
-                if(v.startsWith('eyJ')&&v.length>50)try{localStorage.removeItem(k)}catch(e){}
-                else if(v.startsWith('{')){
-                  try{var p=JSON.parse(v);if(p.accessToken||p.token||p.jwt)try{localStorage.removeItem(k)}catch(e){}}catch(e){}
-                }
-              }
-            }catch(e){}
+    // Descobre onde estamos: SPA (token velho encontrado) ou SSO (sem token)
+    let currentUrl = '';
+    try { currentUrl = hiddenWin.webContents.getURL(); } catch(e) {}
+    console.log('[MAIN] 📍 refresh-jwt: URL após navegação: ' + currentUrl);
+
+    if (currentUrl.includes('sso.acesso.gov.br') || currentUrl.includes('login') || currentUrl.includes('main.asp')) {
+      // ============================================================
+      // CASO SSO: SPA não achou token no localStorage → SSO auto-login
+      // Apenas esperamos o SSO redirecionar de volta ao SPA,
+      // que gerará um token NOVO automaticamente.
+      // ============================================================
+      console.log('[MAIN] 🔄 refresh-jwt: Página SSO detectada. Aguardando auto-login...');
+      for (var si = 0; si < 15; si++) {
+        await new Promise(function(r) { setTimeout(r, 1000); });
+        if (hiddenClosed || hiddenWin.isDestroyed()) break;
+        try {
+          const u = hiddenWin.webContents.getURL();
+          if (u.includes('cnetmobile') && !u.includes('/ac')) {
+            console.log('[MAIN] ✅ refresh-jwt: SSO redirecionou para SPA: ' + u);
+            break;
           }
-          sessionStorage.clear();
-          window.location.reload();
-        })();
-      `);
-    } catch(e) {
-      console.log('[MAIN] ⚠️ Erro ao limpar localStorage:', e.message);
-    }
+        } catch(e) {}
+      }
+      // Pequena pausa extra para SPA inicializar após SSO redirect
+      await new Promise(function(r) { setTimeout(r, 2000); });
 
-    // Aguarda recarga + SSO redirect + novo token
-    await new Promise(function(r) { setTimeout(r, 3000); });
+    } else if (currentUrl.includes('cnetmobile')) {
+      // ============================================================
+      // CASO SPA: SPA carregou com token velho do localStorage comum.
+      // Limpamos localStorage + sessionStorage e recarregamos
+      // para FORÇAR o SSO a gerar um token NOVO.
+      // ============================================================
+      console.log('[MAIN] 🔄 refresh-jwt: SPA carregada. Limpando localStorage para forçar SSO...');
+      // Aguarda SPA terminar bootstrap
+      await new Promise(function(r) { setTimeout(r, 4000); });
+
+      try {
+        await hiddenWin.webContents.executeJavaScript(`
+          (function(){
+            var keys=['accessToken','access_token','token','jwt','id_token','currentUser','auth_token','bearerToken','userToken','idToken','bearer','authorization'];
+            for(var ki=0;ki<keys.length;ki++){try{localStorage.removeItem(keys[ki])}catch(e){}try{sessionStorage.removeItem(keys[ki])}catch(e){}}
+            for(var i=localStorage.length-1;i>=0;i--){
+              try{
+                var k=localStorage.key(i),v=localStorage.getItem(k);
+                if(v&&typeof v==='string'){
+                  if(v.startsWith('eyJ')&&v.length>50)try{localStorage.removeItem(k)}catch(e){}
+                  else if(v.startsWith('{')){
+                    try{var p=JSON.parse(v);if(p.accessToken||p.token||p.jwt)try{localStorage.removeItem(k)}catch(e){}}catch(e){}
+                  }
+                }
+              }catch(e){}
+            }
+            sessionStorage.clear();
+            window.location.reload();
+          })();
+        `);
+        console.log('[MAIN] 🔄 refresh-jwt: localStorage limpo, página recarregando...');
+      } catch(e) {
+        console.log('[MAIN] ⚠️ refresh-jwt: Erro ao limpar localStorage:', e.message);
+      }
+
+      // Aguarda reload + SSO redirect + SPA recarregar
+      await new Promise(function(r) { setTimeout(r, 5000); });
+
+    } else {
+      // ============================================================
+      // CASO DESCONHECIDO: loga URL e dá tempo para navegação completar
+      // ============================================================
+      console.log('[MAIN] ⚠️ refresh-jwt: URL desconhecida: ' + currentUrl);
+      await new Promise(function(r) { setTimeout(r, 3000); });
+    }
 
     // ============================================================
-    // POLL: captura o NOVO token gerado pelo SSO.
-    // Só aceita token com TTL > 5min (300s) — se for o token velho,
-    // continua aguardando o SSO produzir um novo.
+    // POLL: captura o token (novo do SSO) por até 30s.
+    // Só aceita se TTL > 5min para garantir que é token NOVO.
     // ============================================================
     let foundToken = null;
-    for (let i = 0; i < 25; i++) {
+    for (let pi = 0; pi < 30; pi++) {
       await new Promise(function(r) { setTimeout(r, 1000); });
       if (hiddenClosed || hiddenWin.isDestroyed()) break;
       try {
         const g = global.serproToken;
         if (g && typeof g === 'string' && g.startsWith('Bearer ') && g.length > 60) {
-          // Verifica se o token tem TTL > 5min (token NOVO do SSO)
           if (isTokenFreshEnough(g, 300)) {
             foundToken = g;
-            console.log('[MAIN] ✅ refresh-jwt-via-hidden-page: Token NOVO capturado!');
+            console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado! TTL=' + Math.floor(getTokenTtl(g)) + 's');
             break;
           }
-          // Token velho ainda — continua aguardando SSO
-          if (i % 3 === 2) {
-            console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Token velho descartado, aguardando SSO...');
+          // Token velho — continua aguardando SSO
+          if (pi % 3 === 2) {
+            try {
+              const url = hiddenWin.webContents.getURL();
+              console.log('[MAIN] 🔄 refresh-jwt: Token velho descartado. URL=' + url);
+            } catch(e) {
+              console.log('[MAIN] 🔄 refresh-jwt: Token velho descartado, aguardando SSO...');
+            }
           }
         }
         // Diagnóstico: URL a cada 5s
-        if (i % 5 === 4) {
+        if (pi > 0 && pi % 5 === 0) {
           try {
             const url = hiddenWin.webContents.getURL();
-            console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Ainda aguardando... URL=' + url);
+            console.log('[MAIN] 🔄 refresh-jwt: Aguardando... URL=' + url);
           } catch(e) {}
         }
       } catch(e) {}
