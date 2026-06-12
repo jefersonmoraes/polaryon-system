@@ -327,19 +327,23 @@ export default function BiddingDashboardPage() {
                 if (isTimerOverridden) {
                     currentTimeLeft = 40;
                 } else {
-                    const sts = sigaTimerSecondsRef.current;
-                    const sta = sigaTimerReceivedAtRef.current;
-                    if (sts !== undefined && sts >= 0 && sta > 0) {
-                        currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
-                    } else if (item.dataHoraFimContagem) {
-                        const endTime = new Date(item.dataHoraFimContagem).getTime();
+                    const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
+                    if (endTimeStr) {
+                        const endTime = new Date(endTimeStr).getTime();
                         if (!isNaN(endTime)) {
                             currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
                         } else {
                             currentTimeLeft = -1;
                         }
                     } else {
-                        currentTimeLeft = -1;
+                        // Fallback: timer do DOM geral da sala
+                        const sts = sigaTimerSecondsRef.current;
+                        const sta = sigaTimerReceivedAtRef.current;
+                        if (sts !== undefined && sts >= 0 && sta > 0) {
+                            currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
+                        } else {
+                            currentTimeLeft = -1;
+                        }
                     }
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;

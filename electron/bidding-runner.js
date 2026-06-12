@@ -194,6 +194,7 @@ class RoomRunner {
         this._429count = 0;              // 🚦 Contagem de 429 na janela atual
         this._429windowStart = Date.now(); // 🚦 Início da janela de contagem de 429
         this._429backoffMs = 0;          // 🚦 Backoff preventivo extra por excesso de 429
+        this.lastKnownItems = new Map();  // 🕒 Cache de dados de itens (preserva dataHoraFimContagem do HTTP/REST)
     }
 
     injectRealtimeItems(items) {
@@ -306,11 +307,27 @@ class RoomRunner {
             const wsAge = this.realtimeItems ? (Date.now() - this.realtimeItemsAt) : Infinity;
             if (this.realtimeItems && wsAge < 60000) {
                 itemsList = this.realtimeItems;
+                
+                // Mescla com as informações anteriores do REST/HTTP para não perder dataHoraFimContagem
+                const merged = [];
+                for (const wsItem of itemsList) {
+                    const itemIdStr = String(wsItem.identificador || wsItem.numero);
+                    const existing = this.lastKnownItems.get(itemIdStr) || {};
+                    const mergedItem = {
+                        ...existing,
+                        ...wsItem,
+                        dataHoraFimContagem: wsItem.dataHoraFimContagem || existing.dataHoraFimContagem,
+                        segundosParaEncerramento: wsItem.segundosParaEncerramento !== undefined ? wsItem.segundosParaEncerramento : existing.segundosParaEncerramento
+                    };
+                    merged.push(mergedItem);
+                }
+                itemsList = merged;
+
                 tStart = Date.now();
                 tEnd = tStart;
                 this.clockSync.update(null, itemsList, tStart, tEnd);
                 if (Math.random() < 0.05) {
-                    console.log(`[POLARYON MOTOR] 🎯 WS data (${Math.round(wsAge)}ms de idade, ${itemsList.length} itens) — sem HTTP!`);
+                    console.log(`[POLARYON MOTOR] 🎯 WS data (${Math.round(wsAge)}ms de idade, ${itemsList.length} itens) — mesclado com cache REST!`);
                 }
                 // 📊 Registra latência zero (WebSocket é instantâneo no backend)
                 this._trackLatency('ws', 0);
@@ -341,6 +358,18 @@ class RoomRunner {
             let minTimer = Infinity;
 
             if (itemsList.length > 0) {
+                // Atualiza o cache do lastKnownItems com os itens atuais do loop
+                for (const item of itemsList) {
+                    const itemIdStr = String(item.identificador || item.numero);
+                    const existing = this.lastKnownItems.get(itemIdStr) || {};
+                    this.lastKnownItems.set(itemIdStr, {
+                        ...existing,
+                        ...item,
+                        dataHoraFimContagem: item.dataHoraFimContagem || existing.dataHoraFimContagem,
+                        segundosParaEncerramento: item.segundosParaEncerramento !== undefined ? item.segundosParaEncerramento : existing.segundosParaEncerramento
+                    });
+                }
+
                 const serverNow = this.clockSync.getServerTime();
                 const mappedItems = itemsList.map(item => {
                     const itemIdStr = String(item.identificador || item.numero);
