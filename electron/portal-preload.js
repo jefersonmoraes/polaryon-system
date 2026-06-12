@@ -2486,6 +2486,10 @@
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ ${res.status === 429 ? '429 Rate Limit' : 'Status 0'}. Tentativa ${_blockedNetworkErrCount}/3`);
                 if (_blockedNetworkErrCount >= 3) {
                     setSerproBlocked(res.status === 429 ? '429 Rate Limit repetido' : 'Status HTTP 0 (bloqueio)');
+                    if (res.status === 0) {
+                        console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida (Status 0). Tentando recarregar o portal...', 'color:#ef4444;font-weight:bold;');
+                        clickPortalRefreshButton();
+                    }
                 }
             } else {
                 console.warn(`[POLARYON HEARTBEAT] ⚠️ Status inesperado: ${res.status}`);
@@ -2498,6 +2502,8 @@
                 console.warn(`[POLARYON HEARTBEAT] ❌ Rede: ${_blockedNetworkErrCount}/3 — ${err.message}`);
                 if (_blockedNetworkErrCount >= 3) {
                     setSerproBlocked('Erro de rede consistente (' + err.message + ')');
+                    console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida ou erro de rede consistente. Tentando recarregar o portal...', 'color:#ef4444;font-weight:bold;');
+                    clickPortalRefreshButton();
                 }
             }
         }
@@ -2519,10 +2525,14 @@
             'button.btn-reload',
             'button.recarregar',
             'button.atualizar',
+            'button.circle',
+            'button.br-button.circle',
             '.fa-sync',
             '.fa-sync-alt',
             '.fa-refresh',
             '.fa-redo',
+            '.fa-arrows-rotate',
+            '.fa-rotate',
             'button[title*="recarregar" i]',
             'button[title*="atualizar" i]',
             'button[title*="refresh" i]',
@@ -2543,7 +2553,7 @@
                 if (el) {
                     let clickable = el;
                     if (el.tagName.toLowerCase() === 'i' || el.tagName.toLowerCase() === 'svg' || el.tagName.toLowerCase() === 'path') {
-                        clickable = el.closest('button') || el.closest('a') || el;
+                        clickable = el.closest('button') || el.closest('a') || el.closest('[role="button"]') || el.closest('.br-button') || el.closest('div') || el;
                     }
                     if (typeof clickable.click === 'function') {
                         _lastPortalRefreshClick = Date.now();
@@ -2560,7 +2570,7 @@
         
         // Varredura manual de todos os botões e links caso os seletores falhem
         try {
-            const clickables = document.querySelectorAll('button, a, [role="button"], div.br-button');
+            const clickables = document.querySelectorAll('button, a, [role="button"], div.br-button, .circle');
             for (const el of clickables) {
                 const html = (el.innerHTML || '').toLowerCase();
                 const className = (el.className || '').toLowerCase();
@@ -2570,7 +2580,8 @@
                 const isRefresh = className.includes('refresh') || className.includes('sync') || className.includes('reload') || className.includes('recarregar') || className.includes('atualizar') ||
                                   title.includes('refresh') || title.includes('sync') || title.includes('reload') || title.includes('recarregar') || title.includes('atualizar') ||
                                   ariaLabel.includes('refresh') || ariaLabel.includes('sync') || ariaLabel.includes('reload') || ariaLabel.includes('recarregar') || ariaLabel.includes('atualizar') ||
-                                  html.includes('fa-sync') || html.includes('fa-refresh') || html.includes('fa-redo') || html.includes('fa-sync-alt');
+                                  html.includes('fa-sync') || html.includes('fa-refresh') || html.includes('fa-redo') || html.includes('fa-sync-alt') ||
+                                  html.includes('fa-arrows-rotate') || html.includes('fa-rotate');
                                   
                 if (isRefresh && typeof el.click === 'function') {
                     _lastPortalRefreshClick = Date.now();
@@ -2583,8 +2594,11 @@
             }
         } catch (e) {}
         
-        console.warn('[POLARYON AUTOMATION] Botão de recarregar do portal não encontrado na página atual.');
-        return false;
+        // Se nenhum botão for encontrado, recarrega a página inteira como último recurso
+        console.log('%c[POLARYON AUTOMATION] Botão de recarregar não encontrado no DOM. Fazendo reload da página...', 'color:#f59e0b;');
+        _lastPortalRefreshClick = Date.now();
+        window.location.reload();
+        return true;
     }
 
     // 🕒 PREEMPTIVE JWT RELOAD (v3.8.277): recarrega a página ~2 minutos antes da
@@ -2657,6 +2671,10 @@
         } catch(err) {
             console.warn('[POLARYON HEARTBEAT] ⚠️ Janela oculta falhou: ' + (err.message || err));
         }
+
+        // FALLBACK: Se a janela oculta falhar ou retornar nulo, aciona o botão de recarregar do portal
+        console.log('%c[POLARYON HEARTBEAT] 🔄 Janela oculta falhou ou retornou nulo. Acionando recarregamento do portal...', 'color:#f59e0b;font-weight:bold;');
+        clickPortalRefreshButton();
 
         // Se falhou, retenta em 2min
         _lastScheduledTokenHash = '';
