@@ -113,6 +113,47 @@ router.get('/credentials/:id/vault', requireAuth, async (req: AuthRequest | any,
 
 import { BiddingListener } from '../services/bidding-listener';
 
+// Helper to find or automatically upsert dynamic sessions (HYBRID_ and GLOBAL_) (v3.8.295)
+async function getOrCreateSession(id: string) {
+    let session = await prisma.biddingSession.findUnique({ where: { id } });
+    if (!session && (id.startsWith('HYBRID_') || id.startsWith('GLOBAL_'))) {
+        let uasg = '000000';
+        let num = '00000';
+        let ano = '2026';
+
+        if (id.startsWith('HYBRID_')) {
+            const parts = id.split('_'); 
+            uasg = parts[1] || '000000';
+            num = parts[2] || '00000';
+            ano = parts[3] || '2026';
+        } else if (id.startsWith('GLOBAL_')) {
+            const idCompra = id.replace('GLOBAL_', '');
+            uasg = idCompra.substring(0, 6) || '000000';
+            num = idCompra.substring(8, 13) || '00000';
+            ano = idCompra.substring(13, 17) || '2026';
+        }
+
+        try {
+            session = await prisma.biddingSession.create({
+                data: {
+                    id,
+                    uasg,
+                    numeroPregao: num,
+                    anoPregao: ano,
+                    portal: 'compras_gov',
+                    credentialId: null,
+                    itemsConfig: {}
+                }
+            });
+        } catch (err) {
+            // Safe fallback in case of simultaneous creations (race condition)
+            session = await prisma.biddingSession.findUnique({ where: { id } });
+        }
+    }
+    return session;
+}
+
+
 // Create a new Bidding Session (Prep for monitoring)
 router.post('/sessions', requireAuth, async (req: AuthRequest | any, res: Response) => {
     try {
@@ -160,7 +201,7 @@ router.post('/sessions', requireAuth, async (req: AuthRequest | any, res: Respon
 router.post('/sessions/:id/start', requireAuth, async (req: AuthRequest | any, res: Response) => {
     try {
         const { id } = req.params;
-        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        const session = await getOrCreateSession(id);
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         await BiddingListener.startMonitoring(session.id, session.uasg, session.numeroPregao);
@@ -192,7 +233,7 @@ router.patch('/sessions/:id/items/bulk', requireAuth, async (req: AuthRequest | 
             return res.status(400).json({ error: 'itemIds array is required' });
         }
 
-        const session = await prisma.biddingSession.findUnique({ where: { id } });
+        const session = await getOrCreateSession(id);
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         const currentConfig = (session.itemsConfig as any) || {};
@@ -218,28 +259,7 @@ router.patch('/sessions/:id/items/:itemId', requireAuth, async (req: AuthRequest
         const { id, itemId } = req.params;
         const config = req.body;
 
-        let session = await prisma.biddingSession.findUnique({ where: { id } });
-        
-        // 🚀 AUTO-UPSERT PARA SESSÕES HÍBRIDAS (v3.5.68)
-        if (!session && id.startsWith('HYBRID_')) {
-            const parts = id.split('_'); 
-            const uasg = parts[1] || '000000';
-            const num = parts[2] || '00000';
-            const ano = parts[3] || '2026';
-
-            session = await prisma.biddingSession.create({
-                data: {
-                    id,
-                    uasg: uasg,
-                    numeroPregao: num,
-                    anoPregao: ano,
-                    portal: 'compras_gov',
-                    credentialId: null, // 🎯 FIX: Evita erro de chave estrangeira
-                    itemsConfig: {}
-                }
-            });
-        }
-
+        let session = await getOrCreateSession(id);
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         const currentConfig = (session.itemsConfig as any) || {};
