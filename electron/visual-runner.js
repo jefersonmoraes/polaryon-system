@@ -507,7 +507,7 @@ class VisualRunner {
         });
 
         // 🔄 AUTO-RENEW: Disparado pelo bidding-runner quando o token expira (401)
-        ipcMain.on('request-token-renewal', (event, { sessionId }) => {
+        ipcMain.on('request-token-renewal', async (event, { sessionId }) => {
             console.log(`[VISUAL RUNNER] 🔑 Renovação de token solicitada para sessão ${sessionId}. Recarregando autenticação...`);
             
             // Estratégia 1: Se já temos um token válido, reinjeta nas janelas abertas
@@ -521,13 +521,26 @@ class VisualRunner {
                 return;
             }
 
-            // Estratégia 2: Sem token, recarrega a janela de sessão para capturar um novo
+            // Estratégia 2: Sem token, aciona silenciosamente o refresh em janela oculta
+            console.log(`[VISUAL RUNNER] 🔄 Disparando refresh-jwt-via-hidden-page silencioso para capturar novo token...`);
+            try {
+                // Dispara o handle do main process internamente via event emitter/ipcMain
+                const newToken = await ipcMain.listeners('refresh-jwt-via-hidden-page')[0]({ sender: event.sender });
+                if (newToken) {
+                    console.log(`[VISUAL RUNNER] ✅ Sucesso! Novo token capturado de forma silenciosa para sessão.`);
+                    return;
+                }
+            } catch (err) {
+                console.error(`[VISUAL RUNNER] ❌ Falha no refresh de token silencioso:`, err.message);
+            }
+
+            // Estratégia 3: Fallback de reload controlado caso o silencioso falhe
             const session = this.sessions.get(sessionId);
             if (session && session.window && !session.window.isDestroyed()) {
                 const currentUrl = session.window.webContents.getURL();
                 // Só recarrega se não estiver já na tela de login
                 if (!currentUrl.includes('login') && !currentUrl.includes('acesso.gov.br')) {
-                    console.log(`[VISUAL RUNNER] 🔄 Recarregando janela da sessão ${sessionId} para capturar novo token...`);
+                    console.log(`[VISUAL RUNNER] 🔄 [Fallback] Recarregando janela da sessão ${sessionId} para capturar novo token...`);
                     session.window.webContents.reload();
                 }
             }

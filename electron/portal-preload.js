@@ -2522,24 +2522,6 @@
             console.warn('[POLARYON HEARTBEAT] ⚠️ Janela oculta falhou: ' + (err.message || err));
         }
 
-        // MÉTODO 2: reload-main-window (v3.8.277 — fallback agressivo, MEXE na janela)
-        try {
-            console.log('%c[POLARYON HEARTBEAT] 🔄 Mensagem: recarregando página principal para renovar JWT (fallback)...', 'color:#f59e0b;font-weight:bold;');
-            var newToken2 = await ipcRenderer.invoke('reload-main-window');
-            if (newToken2 && newToken2.startsWith('Bearer ')) {
-                shared.sessionToken = newToken2;
-                try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: newToken2 }); } catch(e) {}
-                try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: newToken2 }, '*'); } catch(e) {}
-                _lastScheduledTokenHash = '';
-                scheduleProactiveJwtRenewal(newToken2);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via reload-main-window (fallback)!', 'color:#10b981;font-weight:bold;font-size:12px;');
-                return;
-            }
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ reload-main-window (fallback) retornou nulo.', 'color:#f59e0b;font-weight:bold;');
-        } catch(err) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ reload-main-window (fallback) falhou: ' + (err.message || err));
-        }
-
         // Se falhou, retenta em 2min
         _lastScheduledTokenHash = '';
         if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);

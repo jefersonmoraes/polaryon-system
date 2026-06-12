@@ -187,6 +187,37 @@ app.whenReady().then(async () => {
     callback({ requestHeaders: details.requestHeaders });
   });
 
+  // Interceptador e hijacker dedicados para a sessão isolada de refresh (v3.8.284)
+  const refreshSession = session.fromPartition('persist:polaryon-jwt-refresh');
+  refreshSession.webRequest.onBeforeSendHeaders({ urls: ['*://*.comprasnet.gov.br/*', '*://*.serpro.gov.br/*'] }, (details, callback) => {
+    const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization'];
+    if (auth && auth.toLowerCase().startsWith('bearer')) {
+      const token = auth.replace(/^bearer/i, 'Bearer');
+      global.serproToken = token;
+      
+      // Notifica o frontend da janela principal se estiver ativa
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('portal-data-update', { type: 'session-token', token });
+        mainWindow.webContents.send('force-token-injection', { token });
+      }
+
+      const runners = [biddingRunner, global.biddingRunner].filter(Boolean);
+      for (const r of runners) {
+        if (r && typeof r.setToken === 'function') r.setToken(token);
+        else if (r) r.serproToken = token;
+      }
+      console.log('[MAIN] 🔑 Interceptado Bearer token da sessão de refresh! len=' + token.length);
+    }
+
+    if (details.url.includes('dispensa_eletronica.asp') || details.url.includes('comprasnet-web/seguro') || details.url.includes('servico=226') || details.url.includes('login_f.asp')) {
+      details.requestHeaders['Referer'] = 'https://www.comprasnet.gov.br/main.asp';
+      details.requestHeaders['Origin'] = 'https://www.comprasnet.gov.br';
+      details.requestHeaders['Sec-Fetch-Mode'] = 'navigate';
+      details.requestHeaders['Sec-Fetch-Site'] = 'same-origin';
+    }
+    callback({ requestHeaders: details.requestHeaders });
+  });
+
   createWindow();
 
   // 🌐 Rastreia compras-id (session UUID) em TODAS as janelas, incluindo child windows do portal Serpro
@@ -706,6 +737,45 @@ function isTokenFreshEnough(token, minTtlSec) {
   return getTokenTtl(token) >= minTtlSec;
 }
 
+// Copia cookies de autenticação da partição principal para a partição isolada do refresh (v3.8.284)
+async function copyAuthCookies() {
+  try {
+    const mainSession = session.fromPartition('persist:polaryon-global');
+    const refreshSession = session.fromPartition('persist:polaryon-jwt-refresh');
+    
+    // Limpa cookies antigos na partição de refresh para evitar conflitos de sessão
+    const existingCookies = await refreshSession.cookies.get({});
+    for (const c of existingCookies) {
+      const url = (c.secure ? 'https://' : 'http://') + c.domain.replace(/^\./, '') + c.path;
+      await refreshSession.cookies.remove(url, c.name);
+    }
+
+    // Copia os cookies atuais da partição de combate
+    const cookies = await mainSession.cookies.get({});
+    console.log(`[MAIN] 🍪 Copiando ${cookies.length} cookies da sessão principal para a sessão de refresh...`);
+    for (const cookie of cookies) {
+      try {
+        let url = (cookie.secure ? 'https://' : 'http://') + cookie.domain.replace(/^\./, '') + cookie.path;
+        await refreshSession.cookies.set({
+          url: url,
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          expirationDate: cookie.expirationDate
+        });
+      } catch (cookieErr) {
+        console.warn(`[MAIN] ⚠️ Erro ao copiar cookie ${cookie.name}:`, cookieErr.message);
+      }
+    }
+    console.log(`[MAIN] 🍪 Cópia de cookies concluída.`);
+  } catch (e) {
+    console.error('[MAIN] ❌ Falha crítica ao copiar cookies:', e.message);
+  }
+}
+
 ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
   try {
     // Obtém URL atual do solicitante (portal window) para navegar para a mesma página
@@ -722,22 +792,23 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       ? currentUrl
       : 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
 
-    console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Capturando JWT em janela oculta...');
+    console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Copiando cookies e abrindo janela oculta isolada...');
+    await copyAuthCookies();
     console.log('[MAIN] 🔄 URL alvo: ' + targetUrl);
 
-    // Cria janela oculta com MESMA sessão (cookies compartilhados) e portal-preload.js
+    // Cria janela oculta com sessão ISOLADA (evita que o clear/executeJS afete a janela principal)
     const hiddenWin = new BrowserWindow({
       show: false,
       width: 800,
       height: 600,
       webPreferences: {
-        preload: path.join(__dirname, 'portal-preload.js'),
+        preload: path.join(__dirname, 'hidden-preload.js'),
         nodeIntegration: false,
         contextIsolation: true,
         webSecurity: false,
         allowRunningInsecureContent: true,
         backgroundThrottling: false,
-        partition: 'persist:polaryon-global'
+        partition: 'persist:polaryon-jwt-refresh'
       }
     });
 
@@ -799,11 +870,10 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
 
     } else if (hiddenStartUrl.includes('cnetmobile')) {
       // ============================================================
-      // CASO SPA: SPA carregou com token velho do localStorage comum.
-      // Limpamos localStorage + sessionStorage e recarregamos
-      // para FORÇAR o SSO a gerar um token NOVO.
+      // CASO SPA: SPA carregou. Limpamos localStorage do partition isolado
+      // e recarregamos para forçar o SSO a gerar um token novo.
       // ============================================================
-      console.log('[MAIN] 🔄 refresh-jwt: SPA carregada. Limpando localStorage para forçar SSO...');
+      console.log('[MAIN] 🔄 refresh-jwt: SPA carregada na partição isolada. Limpando localStorage...');
       // Aguarda SPA terminar bootstrap
       await new Promise(function(r) { setTimeout(r, 4000); });
 
@@ -827,9 +897,9 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
             window.location.reload();
           })();
         `);
-        console.log('[MAIN] 🔄 refresh-jwt: localStorage limpo, página recarregando...');
+        console.log('[MAIN] 🔄 refresh-jwt: localStorage isolado limpo, página recarregando...');
       } catch(e) {
-        console.log('[MAIN] ⚠️ refresh-jwt: Erro ao limpar localStorage:', e.message);
+        console.log('[MAIN] ⚠️ refresh-jwt: Erro ao limpar localStorage isolado:', e.message);
       }
 
       // Aguarda reload + SSO redirect + SPA recarregar
@@ -859,16 +929,20 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
             console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado! TTL=' + Math.floor(getTokenTtl(g)) + 's');
             break;
           }
-          // Token velho — continua aguardando SSO
-          if (pi % 3 === 2) {
-            try {
-              const url = hiddenWin.webContents.getURL();
-              console.log('[MAIN] 🔄 refresh-jwt: Token velho descartado. URL=' + url);
-            } catch(e) {
-              console.log('[MAIN] 🔄 refresh-jwt: Token velho descartado, aguardando SSO...');
-            }
+        }
+        
+        // Backup: tenta ler o token do window.__polaryonBearer injetado no page context da hidden page
+        const pageToken = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer').catch(() => null);
+        if (pageToken && typeof pageToken === 'string' && pageToken.length > 60) {
+          const formatted = pageToken.startsWith('Bearer ') ? pageToken : 'Bearer ' + pageToken;
+          if (isTokenFreshEnough(formatted, 300)) {
+            foundToken = formatted;
+            global.serproToken = formatted;
+            console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado do page context (backup)! TTL=' + Math.floor(getTokenTtl(formatted)) + 's');
+            break;
           }
         }
+        
         // Diagnóstico: URL a cada 5s
         if (pi > 0 && pi % 5 === 0) {
           try {
@@ -895,153 +969,6 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     return null;
   } catch(e) {
     console.log('[MAIN] ⚠️ refresh-jwt-via-hidden-page erro:', e.message);
-    return null;
-  }
-});
-
-// ☢️ RELOAD DA JANELA PRINCIPAL (v3.8.277): recarrega a página SEM limpar storages.
-// Limpar storages fazia a SPA perder o estado e redirecionar para /ac (acesso negado).
-// Agora só reload + poll: a SPA mantém o estado e o interceptor captura qualquer token disponível.
-ipcMain.handle('reload-main-window', async (event) => {
-  try {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win && !win.isDestroyed()) {
-      const savedUrl = win.webContents.getURL();
-      console.log('[MAIN] ☢️ reload-main-window: recarregando página (SEM limpar storages)...');
-      console.log('[MAIN] ☢️ URL: ' + savedUrl);
-
-      global.serproToken = null;
-
-      // Apenas reload - NÃO limpa storages (v3.8.277)
-      // SPA mantém estado, interceptor captura token após o carregamento
-      win.webContents.reload();
-
-      // Poll por até 30s pelo token (interceptor captura durante carregamento)
-      var foundToken = null;
-      for (var a = 0; a < 30; a++) {
-        await new Promise(function(r) { setTimeout(r, 1000); });
-        try {
-          if (win.isDestroyed()) break;
-          if (!foundToken && global.serproToken && typeof global.serproToken === 'string' && global.serproToken.startsWith('Bearer ') && global.serproToken.length > 60) {
-            foundToken = global.serproToken;
-            console.log('[MAIN] ☢️ reload-main-window: Token encontrado via interceptor!');
-            try {
-              var parts = foundToken.split('.');
-              var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-              console.log('[MAIN] ☢️ TTL do JWT: ' + Math.floor((payload.exp - Date.now()/1000)/60) + 'min');
-            } catch(ttlErr) {}
-            break;
-          }
-        } catch(e2) {}
-      }
-
-      // ⬅️ SEMPRE volta para a URL original (segurança extra)
-      try {
-        if (!win.isDestroyed()) {
-          var currentUrl = win.webContents.getURL();
-          if (currentUrl && savedUrl && currentUrl !== savedUrl) {
-            console.log('[MAIN] ☢️ reload-main-window: navegando de volta para URL original...');
-            win.webContents.loadURL(savedUrl);
-            await new Promise(function(r2) { setTimeout(r2, 3000); });
-          }
-        }
-      } catch(e3) {
-        console.log('[MAIN] ☢️ reload-main-window: erro ao navegar de volta:', e3.message);
-      }
-
-      if (foundToken) {
-        console.log('[MAIN] ☢️ reload-main-window: SUCESSO! Token JWT.');
-        return foundToken;
-      }
-
-      // Fallback: último token conhecido (pode estar expirado mas evita tela de erro)
-      if (global.serproToken) {
-        console.log('[MAIN] ☢️ reload-main-window: retornando último token conhecido');
-        return global.serproToken;
-      }
-
-      console.log('[MAIN] ☢️ reload-main-window: NENHUM token encontrado');
-      return null;
-    }
-    return null;
-  } catch(e) {
-    console.log('[MAIN] ☢️ reload-main-window erro:', e.message);
-    return null;
-  }
-});
-
-// 🔄 JWT REFRESH VIA HTTPS DIRETO (Node.js): usa cookies da sessão Electron, sem CORS (v3.8.225)
-function diag(event, msg) {
-  console.log('[MAIN] ' + msg);
-  try { event.sender.send('main-diag', msg); } catch(e) {}
-}
-ipcMain.handle('refresh-jwt', async (event, { cnetId }) => {
-  if (!cnetId) return null;
-  diag(event, '🔄 refresh-jwt cnet-id=' + cnetId);
-  try {
-    const allCookies = await session.fromPartition('persist:polaryon-global').cookies.get({});
-    const serproCookies = allCookies.filter(c => c.domain && (c.domain.includes('comprasnet.gov.br') || c.domain.includes('serpro.gov.br')));
-    diag(event, '🍪 Cookies Serpro: ' + serproCookies.length + ' (' + serproCookies.map(c => c.name).join(', ') + ')');
-    if (serproCookies.length === 0) {
-      diag(event, '❌ sem cookies Serpro — refresh impossível');
-      return null;
-    }
-    const cookieStr = serproCookies.map(c => c.name + '=' + c.value).join('; ');
-    const urlPath = '/comprasnet-usuario/v2/sessao/fornecedor/usuario/token/' + cnetId;
-    // Tenta www primeiro (login origin), fallback cnetmobile (pagina atual do usuario) (v3.8.226)
-    const hosts = ['www.comprasnet.gov.br', 'cnetmobile.estaleiro.serpro.gov.br'];
-    const methods = ['POST', 'GET'];
-    for (const hostname of hosts) {
-      for (const method of methods) {
-        const result = await new Promise((resolve) => {
-          const opts = {
-            hostname, path: urlPath, method,
-            headers: {
-              'Cookie': cookieStr,
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
-              'Accept': 'application/json, text/plain, */*',
-              'Content-Type': 'application/json',
-              'Referer': 'https://' + hostname + '/',
-              'Origin': 'https://' + hostname,
-              'x-device-platform': 'web',
-              'x-version-number': '6.0.2'
-            },
-            timeout: 10000,
-            rejectUnauthorized: true
-          };
-          const req = https.request(opts, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => resolve({ status: res.statusCode, body: data }));
-          });
-          req.on('error', (e) => resolve({ status: 0, body: e.message }));
-          req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
-          req.end();
-        });
-        diag(event, '📡 Token ' + hostname + ' method=' + method + ' status=' + result.status + ' body.len=' + result.body.length);
-        if (result.status === 200) {
-          try {
-            const body = typeof result.body === 'string' ? JSON.parse(result.body) : result.body;
-            const token = body.token || body.accessToken || body.access_token || body.jwt || body.bearer || body.authorization || null;
-            if (token) {
-              diag(event, '✅ JWT renovado via ' + hostname + ' (' + method + ')');
-              return token.startsWith('Bearer ') ? token : 'Bearer ' + token;
-            }
-            diag(event, '⚠️ 200 mas sem token. Chaves: ' + Object.keys(body).join(', '));
-          } catch(e) {
-            diag(event, '⚠️ Parse JSON (' + hostname + ' ' + method + '): ' + e.message + ' body: "' + String(result.body).substring(0, 200) + '"');
-          }
-        } else if (result.status === 401) {
-          diag(event, '⚠️ 401 em ' + hostname + ' — sessão não autenticada');
-        } else {
-          diag(event, '⚠️ ' + hostname + ' ' + method + ' status=' + result.status + ' body="' + String(result.body).substring(0, 200) + '"');
-        }
-      }
-    }
-    diag(event, '❌ refresh-jwt falhou em todos os hosts/metodos');
-    return null;
-  } catch(e) {
-    diag(event, '⚠️ refresh-jwt erro: ' + e.message);
     return null;
   }
 });
