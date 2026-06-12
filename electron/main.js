@@ -778,6 +778,7 @@ async function copyAuthCookies() {
 
 ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
   try {
+    const initialToken = global.serproToken;
     // Obtém URL atual do solicitante (portal window) para navegar para a mesma página
     let currentUrl = '';
     try {
@@ -923,7 +924,7 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       if (hiddenClosed || hiddenWin.isDestroyed()) break;
       try {
         const g = global.serproToken;
-        if (g && typeof g === 'string' && g.startsWith('Bearer ') && g.length > 60) {
+        if (g && typeof g === 'string' && g.startsWith('Bearer ') && g.length > 60 && g !== initialToken) {
           if (isTokenFreshEnough(g, 300)) {
             foundToken = g;
             console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado! TTL=' + Math.floor(getTokenTtl(g)) + 's');
@@ -935,7 +936,7 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
         const pageToken = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer').catch(() => null);
         if (pageToken && typeof pageToken === 'string' && pageToken.length > 60) {
           const formatted = pageToken.startsWith('Bearer ') ? pageToken : 'Bearer ' + pageToken;
-          if (isTokenFreshEnough(formatted, 300)) {
+          if (formatted !== initialToken && isTokenFreshEnough(formatted, 300)) {
             foundToken = formatted;
             global.serproToken = formatted;
             console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado do page context (backup)! TTL=' + Math.floor(getTokenTtl(formatted)) + 's');

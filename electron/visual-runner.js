@@ -507,9 +507,15 @@ class VisualRunner {
         });
 
         // 🔄 AUTO-RENEW: Disparado pelo bidding-runner quando o token expira (401)
-        ipcMain.on('request-token-renewal', async (event, { sessionId }) => {
+        ipcMain.on('request-token-renewal', async (event, { sessionId, failedToken }) => {
             console.log(`[VISUAL RUNNER] 🔑 Renovação de token solicitada para sessão ${sessionId}. Recarregando autenticação...`);
             
+            // Invalida token falho se corresponder ao token global atual
+            if (failedToken && global.serproToken === failedToken) {
+                console.log(`[VISUAL RUNNER] 🔑 Invalidadando token falho.`);
+                global.serproToken = null;
+            }
+
             // Estratégia 1: Se já temos um token válido, reinjeta nas janelas abertas
             if (global.serproToken) {
                 for (const [sId, session] of this.sessions) {

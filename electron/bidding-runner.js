@@ -1080,7 +1080,7 @@ class RoomRunner {
                 // Sinaliza para o visual-runner renovar o token capturando um novo login furtivo
                 if (!this.webContents.isDestroyed()) {
                     this.webContents.send('bidding-update-log', `🔑 [AUTO-RENEW] Token expirou. Renovando automaticamente... (${this.tokenRetryCount}ª tentativa)`);
-                    this.webContents.send('request-token-renewal', { sessionId: this.sessionId });
+                    this.webContents.send('request-token-renewal', { sessionId: this.sessionId, failedToken: global.serproToken });
                 }
                 
                 // Limpa o token atual para forçar o visual-runner a capturar um novo
@@ -1119,6 +1119,7 @@ class GlobalScanner {
         this.active = true;
         this.timeoutId = null;
         this.knownRooms = new Set();
+        this.tokenRetryCount = 0;
     }
 
     async run() {
@@ -1143,6 +1144,7 @@ class GlobalScanner {
                 }
             });
 
+            this.tokenRetryCount = 0;
             const participacoes = res.data || [];
             
             participacoes.forEach(p => {
@@ -1177,14 +1179,29 @@ class GlobalScanner {
             console.error('[GLOBAL SCANNER] Erro na varredura global:', e.message);
             const statusError = e.response ? e.response.status : 500;
             if ((statusError === 401 || statusError === 403) && !this.webContents.isDestroyed()) {
-                console.warn(`[GLOBAL SCANNER] 🚨 Sessão Expirada durante varredura. Solicitando re-autenticação.`);
-                this.webContents.send('bidding-error', {
-                    sessionId: 'GLOBAL',
-                    error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
-                    code: statusError,
-                    action: 'REQUIRE_REAUTH'
-                });
+                this.tokenRetryCount = (this.tokenRetryCount || 0) + 1;
+                console.warn(`[GLOBAL SCANNER] 🚨 401/403 detectado durante varredura global (tentativa ${this.tokenRetryCount}). Solicitando renovação de token...`);
+                
+                // Solicita renovação de token ao Visual Runner
+                this.webContents.send('request-token-renewal', { sessionId: 'GLOBAL', failedToken: global.serproToken });
+                
+                if (this.tokenRetryCount >= 5) {
+                    this.tokenRetryCount = 0;
+                    console.error(`[GLOBAL SCANNER] 🚨 Sessão Expirada após 5 tentativas de renovação.`);
+                    this.webContents.send('bidding-error', {
+                        sessionId: 'GLOBAL',
+                        error: 'Sessão Expirada. Por favor, reautentique com o Gov.br.',
+                        code: statusError,
+                        action: 'REQUIRE_REAUTH'
+                    });
+                    this.timeoutId = setTimeout(() => this.run(), 60000);
+                } else {
+                    // Retenta em 5 segundos esperando que o token seja renovado
+                    this.timeoutId = setTimeout(() => this.run(), 5000);
+                }
+                return;
             }
+            this.tokenRetryCount = 0;
             this.timeoutId = setTimeout(() => this.run(), 60000);
         }
     }
