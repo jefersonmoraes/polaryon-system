@@ -2486,8 +2486,8 @@
                 if (_blockedNetworkErrCount >= 3) {
                     setSerproBlocked(res.status === 429 ? '429 Rate Limit repetido' : 'Status HTTP 0 (bloqueio)');
                     if (res.status === 0) {
-                        console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida (Status 0). Tentando recarregar o portal...', 'color:#ef4444;font-weight:bold;');
-                        clickPortalRefreshButton();
+                        console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida (Status 0). Recarregando o portal...', 'color:#ef4444;font-weight:bold;');
+                        window.location.reload();
                     }
                 }
             } else {
@@ -2501,8 +2501,8 @@
                 console.warn(`[POLARYON HEARTBEAT] ❌ Rede: ${_blockedNetworkErrCount}/3 — ${err.message}`);
                 if (_blockedNetworkErrCount >= 3) {
                     setSerproBlocked('Erro de rede consistente (' + err.message + ')');
-                    console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida ou erro de rede consistente. Tentando recarregar o portal...', 'color:#ef4444;font-weight:bold;');
-                    clickPortalRefreshButton();
+                    console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida ou erro de rede consistente. Recarregando o portal...', 'color:#ef4444;font-weight:bold;');
+                    window.location.reload();
                 }
             }
         }
@@ -2627,11 +2627,17 @@
     // Cria hidden BrowserWindow que navega ao SPA → SSO auto-login → novo JWT.
     // A janela do portal NUNCA é tocada — zero interrupção.
     // reload-main-window é método 2 (fallback, MEXE na janela).
+    let _isRefreshingJwt = false;
     let _lastRefreshTime = 0;
     async function refreshTokenViaIframe(force) {
         // v3.8.273: Se IP bloqueado, não tenta nada
         if (_serproBlocked) {
             console.warn('%c[POLARYON HEARTBEAT] 🚫 IP bloqueado! Refresh ignorado. Use VPN e reconecte manualmente.', 'color:#ef4444;font-weight:bold;');
+            return;
+        }
+
+        if (_isRefreshingJwt) {
+            console.log('%c[POLARYON HEARTBEAT] ⏳ Renovação de token já em andamento. Ignorando chamada duplicada.', 'color:#94a3b8;font-size:10px;');
             return;
         }
 
@@ -2641,44 +2647,66 @@
             return;
         }
         _lastRefreshTime = nowMs;
+        _isRefreshingJwt = true;
 
         // Loga claims do JWT para diagnóstico
-        if (shared.sessionToken && shared.sessionToken.startsWith('Bearer ')) {
+        var oldToken = shared.sessionToken;
+        if (oldToken && oldToken.startsWith('Bearer ')) {
             try {
-                var payloadBase64 = shared.sessionToken.split('.')[1];
+                var payloadBase64 = oldToken.split('.')[1];
                 var payload = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
-                console.log('%c[POLARYON HEARTBEAT] 📋 JWT expirado. Claims: ' + Object.keys(payload).join(', '), 'color:#f59e0b;font-weight:bold;');
+                console.log('%c[POLARYON HEARTBEAT] 📋 Claims do token atual: ' + Object.keys(payload).join(', '), 'color:#f59e0b;font-weight:bold;');
             } catch(e) {}
         }
 
-        // MÉTODO 1: hidden window silenciosa (v3.8.279 — NÃO mexe na janela do portal)
-        // Cria uma janela oculta que navega para o SPA. SSO auto-login (cookies) gera novo JWT.
-        // Interceptor captura e retorna. Janela do portal NUNCA é tocada.
+        // LAYER 1: Fast POST refresh via Page Context (instantâneo via compras-id)
+        console.log('%c[POLARYON HEARTBEAT] ⚡ [LAYER 1] Disparando renovação rápida via postMessage...', 'color:#6366f1;font-weight:bold;');
         try {
-            console.log('%c[POLARYON HEARTBEAT] 🔑 Capturando JWT via janela oculta (sem mexer no portal)...', 'color:#6366f1;font-weight:bold;');
+            window.postMessage({ source: 'polaryon-preload', type: 'refresh-token' }, '*');
+            
+            // Aguarda até 4 segundos para ver se o token é atualizado
+            for (let i = 0; i < 40; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                if (shared.sessionToken && shared.sessionToken !== oldToken) {
+                    console.log('%c[POLARYON HEARTBEAT] ✅ [LAYER 1] Token renovado com sucesso via compras-id!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                    _isRefreshingJwt = false;
+                    return;
+                }
+            }
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ [LAYER 1] Renovação rápida via compras-id não retornou novo token.', 'color:#f59e0b;font-weight:bold;');
+        } catch (e) {
+            console.warn('[POLARYON HEARTBEAT] ⚠️ [LAYER 1] Falha ao disparar renovação rápida:', e.message);
+        }
+
+        // LAYER 2: hidden window silenciosa (NÃO mexe na janela do portal)
+        try {
+            console.log('%c[POLARYON HEARTBEAT] 🔑 [LAYER 2] Capturando JWT via janela oculta...', 'color:#6366f1;font-weight:bold;');
             var newToken = await ipcRenderer.invoke('refresh-jwt-via-hidden-page');
-            if (newToken && newToken.startsWith('Bearer ')) {
+            if (newToken && newToken.startsWith('Bearer ') && newToken !== oldToken) {
                 shared.sessionToken = newToken;
                 try { ipcRenderer.send('send-portal-data', { type: 'session-token', token: newToken }); } catch(e) {}
                 try { window.postMessage({ source: 'polaryon-preload', type: 'inject-token', token: newToken }, '*'); } catch(e) {}
                 _lastScheduledTokenHash = '';
                 scheduleProactiveJwtRenewal(newToken);
-                console.log('%c[POLARYON HEARTBEAT] ✅ JWT renovado via janela oculta!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                console.log('%c[POLARYON HEARTBEAT] ✅ [LAYER 2] JWT renovado via janela oculta!', 'color:#10b981;font-weight:bold;font-size:12px;');
+                _isRefreshingJwt = false;
                 return;
             }
-            console.warn('%c[POLARYON HEARTBEAT] ⚠️ Janela oculta retornou nulo.', 'color:#f59e0b;font-weight:bold;');
+            console.warn('%c[POLARYON HEARTBEAT] ⚠️ [LAYER 2] Janela oculta retornou nulo ou token idêntico.', 'color:#f59e0b;font-weight:bold;');
         } catch(err) {
-            console.warn('[POLARYON HEARTBEAT] ⚠️ Janela oculta falhou: ' + (err.message || err));
+            console.warn('[POLARYON HEARTBEAT] ⚠️ [LAYER 2] Janela oculta falhou: ' + (err.message || err));
         }
 
-        // FALLBACK: Se a janela oculta falhar ou retornar nulo, aciona o botão de recarregar do portal
-        console.log('%c[POLARYON HEARTBEAT] 🔄 Janela oculta falhou ou retornou nulo. Acionando recarregamento do portal...', 'color:#f59e0b;font-weight:bold;');
-        clickPortalRefreshButton();
+        // LAYER 3: Recarregamento completo da página do compras (Fallback Final)
+        console.log('%c[POLARYON HEARTBEAT] 🔄 [LAYER 3] Todos os métodos silenciosos falharam. Recarregando a página do compras para reautenticação...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+        _isRefreshingJwt = false;
 
         // Se falhou, retenta em 2min
         _lastScheduledTokenHash = '';
         if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
         _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 120000);
+
+        window.location.reload();
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)
