@@ -319,6 +319,29 @@ router.get('/captcha-pool', async (req: Request, res: Response) => {
     }
 });
 
+function formatBidValueString(value: any): string {
+    const num = Number(value);
+    if (isNaN(num)) return String(value);
+    let strVal = num.toString();
+    const parts = strVal.split('.');
+    if (parts.length === 1) {
+        return num.toFixed(2);
+    } else {
+        const decimals = parts[1];
+        if (decimals.length < 2) {
+            return num.toFixed(2);
+        } else if (decimals.length > 4) {
+            let formatted = num.toFixed(4);
+            while (formatted.endsWith('0') && formatted.split('.').length > 1 && formatted.split('.')[1].length > 2) {
+                formatted = formatted.slice(0, -1);
+            }
+            return formatted;
+        } else {
+            return strVal;
+        }
+    }
+}
+
 // VPS Proxy Bid Dispatcher (⚡ Ultra-low latency backend routing)
 router.post('/proxy-bid', requireAuth, async (req: Request, res: Response) => {
     try {
@@ -328,10 +351,8 @@ router.post('/proxy-bid', requireAuth, async (req: Request, res: Response) => {
         }
 
         const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
-        const payload = {
-            valorInformado: parseFloat(value),
-            faseItem: "LA"
-        };
+        const formattedVal = formatBidValueString(value);
+        const payload = `{"valorInformado":${formattedVal},"faseItem":"LA"}`;
 
         const response = await axios.post(targetUrl, payload, {
             timeout: 5000,

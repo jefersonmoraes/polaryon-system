@@ -48,6 +48,29 @@
         }
     }
 
+    function formatBidValueString(value) {
+        const num = Number(value);
+        if (isNaN(num)) return String(value);
+        let strVal = num.toString();
+        const parts = strVal.split('.');
+        if (parts.length === 1) {
+            return num.toFixed(2);
+        } else {
+            const decimals = parts[1];
+            if (decimals.length < 2) {
+                return num.toFixed(2);
+            } else if (decimals.length > 4) {
+                let formatted = num.toFixed(4);
+                while (formatted.endsWith('0') && formatted.split('.')[1].length > 2) {
+                    formatted = formatted.slice(0, -1);
+                }
+                return formatted;
+            } else {
+                return strVal;
+            }
+        }
+    }
+
     // Estabiliza serverOffset com média dos últimos N valores (Date header tem precisão de 1s)
     const offsetHistory = [];
     const OFFSET_SAMPLES = 5;
@@ -300,9 +323,10 @@
                     })();
 
                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${c1}&captcha2=${c2}&captcha3=${c1}`;
-                const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
+                const formattedVal = formatBidValueString(value);
+                const payloadString = `{"valorInformado":${formattedVal},"faseItem":"LA"}`;
 
-                console.log(`%c[POLARYON] 🚀 [Tentativa ${attempt}] Disparando lance de R$ ${value} no Item ${itemId}...`, "color: #a855f7; font-weight: bold;");
+                console.log(`%c[POLARYON] 🚀 [Tentativa ${attempt}] Disparando lance de R$ ${formattedVal} no Item ${itemId}...`, "color: #a855f7; font-weight: bold;");
 
                 const response = await fetch(targetUrl, {
                     method: 'POST',
@@ -314,7 +338,7 @@
                         'x-device-platform': 'web',
                         'x-version-number': '6.0.2'
                     },
-                    body: JSON.stringify(payload)
+                    body: payloadString
                 });
 
                 if (response.ok) {

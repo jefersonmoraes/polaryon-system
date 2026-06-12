@@ -3,6 +3,29 @@ const https = require('https');
 const http2 = require('http2');
 const { ipcMain, session } = require('electron');
 
+function formatBidValueString(value) {
+    const num = Number(value);
+    if (isNaN(num)) return String(value);
+    let strVal = num.toString();
+    const parts = strVal.split('.');
+    if (parts.length === 1) {
+        return num.toFixed(2);
+    } else {
+        const decimals = parts[1];
+        if (decimals.length < 2) {
+            return num.toFixed(2);
+        } else if (decimals.length > 4) {
+            let formatted = num.toFixed(4);
+            while (formatted.endsWith('0') && formatted.split('.')[1].length > 2) {
+                formatted = formatted.slice(0, -1);
+            }
+            return formatted;
+        } else {
+            return strVal;
+        }
+    }
+}
+
 /**
  * CaptchaManager - Bypass Automático via Nuvem Siga
  */
@@ -1448,7 +1471,7 @@ class BiddingRunner {
         const session = await this._getHttp2Session();
         if (!session) throw new Error('HTTP/2 session unavailable');
 
-        const body = JSON.stringify(payload);
+        const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
         const reqHeaders = {
             ':method': 'POST',
             ':path': path,
@@ -1562,8 +1585,9 @@ class BiddingRunner {
                     fresh.captcha1 = fresh.captcha1 || captchas.captcha1;
                     fresh.captcha2 = fresh.captcha2 || captchas.captcha2;
                     const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${fresh.captcha1}&captcha2=${fresh.captcha2}&captcha3=${fresh.captcha1}`;
-                    const payload = { valorInformado: parseFloat(value), faseItem: "LA" };
-                    const response = await this._bidRequest(targetUrl, payload, {
+                    const formattedVal2 = formatBidValueString(value);
+                    const payload2 = `{"valorInformado":${formattedVal2},"faseItem":"LA"}`;
+                    const response = await this._bidRequest(targetUrl, payload2, {
                         'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
@@ -1575,17 +1599,15 @@ class BiddingRunner {
                     const proto2 = response._http2 ? 'HTTP/2' : 'HTTP/1.1';
                     console.log(`[KAMIKAZE SNIPER] 🎯 Headshot Confirmado! Status API Serpro: ${response.status} (${bidLatency2}ms, ${proto2})`);
                     if (this.webContents && !this.webContents.isDestroyed()) {
-                        this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${value} no Item ${itemId} ACERTOU O ALVO! (${bidLatency2}ms, ${proto2})`);
+                        this.webContents.send('bidding-update-log', `🎯 Lance Kamikaze de R$ ${formattedVal2} no Item ${itemId} ACERTOU O ALVO! (${bidLatency2}ms, ${proto2})`);
                     }
                     return; // Sucesso
                 }
 
                 const targetUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${purchaseId}/itens/${itemId}/lances?captcha1=${captchas.captcha1}&captcha2=${captchas.captcha2}&captcha3=${captchas.captcha3}`;
 
-                const payload = {
-                    valorInformado: parseFloat(value),
-                    faseItem: "LA"
-                };
+                const formattedVal = formatBidValueString(value);
+                const payload = `{"valorInformado":${formattedVal},"faseItem":"LA"}`;
 
                 const response = await this._bidRequest(targetUrl, payload, {
                     'Authorization': token.toLowerCase().startsWith('bearer') ? token : `Bearer ${token}`,
