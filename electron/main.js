@@ -196,10 +196,8 @@ app.whenReady().then(async () => {
       global.serproToken = token;
       
       // Notifica o frontend da janela principal se estiver ativa
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('portal-data-update', { type: 'session-token', token });
-        mainWindow.webContents.send('force-token-injection', { token });
-      }
+      // Broadcast to all windows
+      broadcastToken(token);
 
       const runners = [biddingRunner, global.biddingRunner].filter(Boolean);
       for (const r of runners) {
@@ -384,14 +382,16 @@ ipcMain.on('send-portal-data', (event, data) => {
         const freshToken = data.token.startsWith('Bearer ') ? data.token : 'Bearer ' + data.token;
         global.serproToken = freshToken;
         console.log('[MAIN] 🔑 Token atualizado proativamente. len=' + freshToken.length);
+        broadcastToken(freshToken);
         const runners = [biddingRunner, global.biddingRunner].filter(Boolean);
         for (const r of runners) {
             if (r && typeof r.setToken === 'function') r.setToken(freshToken);
             else if (r) r.serproToken = freshToken;
         }
-    }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('portal-data-update', data);
+    } else {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('portal-data-update', data);
+        }
     }
 });
 
@@ -740,10 +740,23 @@ function isTokenFreshEnough(token, minTtlSec) {
 function sendDiag(msg) {
   console.log(msg);
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('main-diag', msg);
-    }
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('main-diag', msg);
+      }
+    });
   } catch(e) {}
+}
+
+function broadcastToken(token) {
+  try {
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('force-token-injection', { token });
+        win.webContents.send('portal-data-update', { type: 'session-token', token });
+      }
+    });
+  } catch (e) {}
 }
 
 // Copia cookies de autenticação da partição principal para a partição isolada do refresh (v3.8.284)
@@ -793,6 +806,10 @@ async function copyAuthCookies() {
 
         if (cookie.expirationDate) {
           details.expirationDate = cookie.expirationDate;
+        }
+
+        if (cookie.sameSite) {
+          details.sameSite = cookie.sameSite;
         }
 
         await refreshSession.cookies.set(details);
@@ -848,6 +865,15 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
         backgroundThrottling: false,
         partition: 'persist:polaryon-jwt-refresh'
       }
+    });
+
+    // Define User-Agent moderno para evitar detecção e bloqueio de automação
+    const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    hiddenWin.webContents.setUserAgent(modernUserAgent);
+
+    // Encaminha console logs da janela oculta para diagnóstico
+    hiddenWin.webContents.on('console-message', (event, level, message) => {
+      sendDiag(`[MAIN][HIDDEN-WIN] ${message}`);
     });
 
     // Diagnóstico de Navegação em tempo real para o console do DevTools do usuário

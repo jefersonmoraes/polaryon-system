@@ -31,6 +31,23 @@
         savedTimestampByRoom: {}
     };
 
+    function getTokenTtl(token) {
+        if (!token) return 0;
+        try {
+            const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
+            const parts = raw.split('.');
+            if (parts.length < 2) return 0;
+            let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4) b64 += '=';
+            const payload = JSON.parse(atob(b64));
+            const expSec = payload.exp;
+            if (!expSec || typeof expSec !== 'number') return 0;
+            return expSec - (Date.now() / 1000);
+        } catch (e) {
+            return 0;
+        }
+    }
+
     // Estabiliza serverOffset com média dos últimos N valores (Date header tem precisão de 1s)
     const offsetHistory = [];
     const OFFSET_SAMPLES = 5;
@@ -1025,7 +1042,10 @@
         if (event.data && event.data.source === 'polaryon-injector') {
             const { type, token, data, url, status, ok } = event.data;
             if (type === 'token') {
-                shared.sessionToken = token;
+                if (token && token !== shared.sessionToken) {
+                    shared.sessionToken = token;
+                    try { ipcRenderer.send('send-portal-data', { type: 'session-token', token }); } catch(e) {}
+                }
                 if (_serproBlocked) clearSerproBlocked(); // Novo token = IP desbloqueado!
                 scheduleProactiveJwtRenewal(token);
             } else if (type === 'captcha') {
@@ -1197,6 +1217,23 @@
             // ⚠️ DIAGNÓSTICO: posta mensagens para o preload (aparecem no console main.js)
             function postDiag(msg) { try { window.postMessage({ source: 'polaryon-injector', type: 'ws-diagnostic', message: msg }, '*'); } catch(e) {} }
             postDiag('Injected script loaded at ' + new Date().toISOString());
+
+            function getJwtTtl(token) {
+                if (!token) return 0;
+                try {
+                    var raw = token.indexOf('Bearer ') === 0 ? token.substring(7) : token;
+                    var parts = raw.split('.');
+                    if (parts.length < 2) return 0;
+                    var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                    while (b64.length % 4) b64 += '=';
+                    var payload = JSON.parse(atob(b64));
+                    var expSec = payload.exp;
+                    if (!expSec || typeof expSec !== 'number') return 0;
+                    return expSec - (Date.now() / 1000);
+                } catch (e) {
+                    return 0;
+                }
+            }
             // 🕒 Intercepta console.log do Siga para capturar server time (/topic/dataHoraBrasilia)
             var __origLog = console.log;
             console.log = function() {
@@ -1655,11 +1692,13 @@
                     }
                     if (auth && auth.toLowerCase().startsWith('bearer')) {
                         sessionToken = auth;
-                        window.postMessage({
-                            source: 'polaryon-injector',
-                            type: 'token',
-                            token: sessionToken
-                        }, '*');
+                        if (getJwtTtl(auth) > 10) {
+                            window.postMessage({
+                                source: 'polaryon-injector',
+                                type: 'token',
+                                token: sessionToken
+                            }, '*');
+                        }
                     }
                 }
                 const tStart = Date.now();
@@ -1808,11 +1847,13 @@
                 this._headers[header] = value;
                 if (header.toLowerCase() === 'authorization' && value && value.toLowerCase().startsWith('bearer')) {
                     sessionToken = value;
-                    window.postMessage({
-                        source: 'polaryon-injector',
-                        type: 'token',
-                        token: sessionToken
-                    }, '*');
+                    if (getJwtTtl(value) > 10) {
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: 'token',
+                            token: sessionToken
+                        }, '*');
+                    }
                 }
                 return setRequestHeader.apply(this, arguments);
             };
@@ -1972,10 +2013,12 @@
                     var v = null;
                     try { v = window.sessionStorage.getItem(keysToCheck[ki]); } catch(e) {}
                     if (v && typeof v === 'string' && (v.startsWith('Bearer ') || v.startsWith('eyJ'))) {
-                        if (!v.startsWith('Bearer ')) v = 'Bearer ' + v;
-                        console.log('%c[POLARYON INJECTED] 🔑 Token capturado de sessionStorage[' + keysToCheck[ki] + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
-                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: v }, '*');
-                        return;
+                        var formatted = v.startsWith('Bearer ') ? v : 'Bearer ' + v;
+                        if (getJwtTtl(formatted) > 10) {
+                            console.log('%c[POLARYON INJECTED] 🔑 Token capturado de sessionStorage[' + keysToCheck[ki] + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: formatted }, '*');
+                            return;
+                        }
                     }
                 }
                 // Varredura completa de TODAS as chaves do sessionStorage
@@ -1990,19 +2033,23 @@
                                 var parsed = JSON.parse(v);
                                 var t = parsed.accessToken || parsed.access_token || parsed.token || parsed.jwt || parsed.id_token || null;
                                 if (t && typeof t === 'string' && t.length > 20) {
-                                    if (!t.startsWith('Bearer ')) t = 'Bearer ' + t;
-                                    console.log('%c[POLARYON INJECTED] 🔑 Token extraído de JSON em sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
-                                    window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
-                                    return;
+                                    var formatted = t.startsWith('Bearer ') ? t : 'Bearer ' + t;
+                                    if (getJwtTtl(formatted) > 10) {
+                                        console.log('%c[POLARYON INJECTED] 🔑 Token extraído de JSON em sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: formatted }, '*');
+                                        return;
+                                    }
                                 }
                             } catch(e) {}
                         }
                         // String cru pode ser o token
                         if (v.startsWith('eyJ') && v.length > 50) {
                             var t = 'Bearer ' + v;
-                            console.log('%c[POLARYON INJECTED] 🔑 Token capturado (full scan) de sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
-                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
-                            return;
+                            if (getJwtTtl(t) > 10) {
+                                console.log('%c[POLARYON INJECTED] 🔑 Token capturado (full scan) de sessionStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                                return;
+                            }
                         }
                     }
                 }
@@ -2017,18 +2064,22 @@
                                 var parsed = JSON.parse(v);
                                 var t = parsed.accessToken || parsed.access_token || parsed.token || parsed.jwt || parsed.id_token || null;
                                 if (t && typeof t === 'string' && t.length > 20) {
-                                    if (!t.startsWith('Bearer ')) t = 'Bearer ' + t;
-                                    console.log('%c[POLARYON INJECTED] 🔑 Token extraído de localStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
-                                    window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
-                                    return;
+                                    var formatted = t.startsWith('Bearer ') ? t : 'Bearer ' + t;
+                                    if (getJwtTtl(formatted) > 10) {
+                                        console.log('%c[POLARYON INJECTED] 🔑 Token extraído de localStorage[' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: formatted }, '*');
+                                        return;
+                                    }
                                 }
                             } catch(e) {}
                         }
                         if (v.startsWith('eyJ') && v.length > 50) {
                             var t = 'Bearer ' + v;
-                            console.log('%c[POLARYON INJECTED] 🔑 Token capturado (localStorage) de [' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
-                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
-                            return;
+                            if (getJwtTtl(t) > 10) {
+                                console.log('%c[POLARYON INJECTED] 🔑 Token capturado (localStorage) de [' + k + ']', 'color:#10b981;font-weight:bold;font-size:11px;');
+                                window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                                return;
+                            }
                         }
                     }
                 }
@@ -2047,14 +2098,18 @@
                 if (v && typeof v === 'string') {
                     if (v.startsWith('eyJ') && v.length > 50) {
                         var t = v.startsWith('Bearer ') ? v : 'Bearer ' + v;
-                        window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                        if (getJwtTtl(t) > 10) {
+                            window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                        }
                     } else if (v.startsWith('{')) {
                         try {
                             var p = JSON.parse(v);
                             var j = p.accessToken || p.access_token || p.token || p.jwt || p.id_token || null;
                             if (j && typeof j === 'string' && j.length > 20) {
-                                if (!j.startsWith('Bearer ')) j = 'Bearer ' + j;
-                                window.postMessage({ source: 'polaryon-injector', type: 'token', token: j }, '*');
+                                var t = j.startsWith('Bearer ') ? j : 'Bearer ' + j;
+                                if (getJwtTtl(t) > 10) {
+                                    window.postMessage({ source: 'polaryon-injector', type: 'token', token: t }, '*');
+                                }
                             }
                         } catch(e) {}
                     }
@@ -2705,15 +2760,19 @@
         }
 
         // LAYER 3: Recarregamento completo da página do compras (Fallback Final)
-        console.log('%c[POLARYON HEARTBEAT] 🔄 [LAYER 3] Todos os métodos silenciosos falharam. Recarregando a página do compras para reautenticação...', 'color:#ef4444;font-weight:bold;font-size:12px;');
-        _isRefreshingJwt = false;
-
-        // Se falhou, retenta em 2min
-        _lastScheduledTokenHash = '';
-        if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-        _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 120000);
-
-        window.location.reload();
+        const currentTtl = shared.sessionToken ? getTokenTtl(shared.sessionToken) : 0;
+        if (force || currentTtl < 15) {
+            console.log('%c[POLARYON HEARTBEAT] 🔄 [LAYER 3] Todos os métodos silenciosos falharam. Recarregando a página do compras para reautenticação...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+            _isRefreshingJwt = false;
+            window.location.reload();
+        } else {
+            console.warn(`%c[POLARYON HEARTBEAT] ⚠️ [LAYER 3] Métodos silenciosos falharam, mas o token ainda é válido por ${Math.floor(currentTtl)}s. Evitando reload nuclear.`, 'color:#f59e0b;font-weight:bold;');
+            _isRefreshingJwt = false;
+            // Reschedule proactive renewal in 15 seconds
+            _lastScheduledTokenHash = '';
+            if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+            _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(); }, 15000);
+        }
     }
 
     // 2. Ping de renovação de cookies Gov.br (fetch silencioso para manter o SSO vivo)

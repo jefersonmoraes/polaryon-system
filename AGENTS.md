@@ -770,3 +770,16 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 - A janela do portal NUNCA é tocada → SPA continua funcionando normalmente
 - Após o refresh, `shared.sessionToken` é atualizado via IPC → interceptor do portal começa a usar o novo token nas próximas requisições XHR/fetch
 - Se SSO cookies expiraram → hidden window mostra login page → timeout → null → `reload-main-window` como fallback
+
+## Implementado (v3.8.293)
+
+### 1. Token Refresh & Synchronization Hardening
+**Problema:** "401 Session Expired" ocorria devido a (1) loops infinitos de renovação provocados por tokens expirados persistidos em sessionStorage que eram reenviados continuamente pelo script injetado, (2) falta de propagação do token capturado da janela do portal de volta ao processo principal/outras janelas imediatamente, e (3) falta de emulação robusta (modern User-Agent e flags de SameSite) na janela oculta do refresh.
+
+**Soluções:**
+- **Prevenção de Loops Stale:** Adicionada validação de claims do JWT (`getJwtTtl`) antes de enviar o token via `postMessage`. Tokens com menos de 10s de TTL são totalmente descartados da extração (`tryExtractTokenFromStorage`, hook de Storage.setItem, Fetch e XHR interceptors).
+- **Sincronização Bidirecional Direta:** Quando um token é capturado pelo injected script da janela do portal, o `portal-preload.js` o envia imediatamente ao processo principal via `send-portal-data`.
+- **Broadcast Global de Token:** O main process agora faz broadcast do token atualizado para todos os `webContents` ativos via `force-token-injection` e `portal-data-update`, garantindo que todas as janelas (principal, visual-runners, etc.) e bidding runners usem o mesmo JWT síncrono.
+- **Emulação de Navegador na Oculta:** O `hiddenWin` de refresh agora usa o User-Agent moderno e encaminha todas as mensagens de console (`console-message`) de volta ao console principal via `sendDiag` para facilitar diagnóstico.
+- **Cópia Precisa de Cookies:** O helper `copyAuthCookies()` agora preserva o atributo `sameSite` original dos cookies, garantindo que redirecionamentos do SSO na janela oculta herdem a autoridade correta da partição principal.
+- **Prevenção de Reload Destrutivo:** No `refreshTokenViaIframe` (Layer 3), se todos os métodos silenciosos falharem mas o token ainda tiver TTL válido (>=15s), evita o reload nuclear da página e reagenda o refresh silencioso em 15s.
