@@ -2376,7 +2376,6 @@
             if (ttlSec < 180) {
                 console.warn(`%c[POLARYON JWT-PROATIVO] ⚠️ Token capturado com TTL muito curto (${Math.floor(ttlSec)}s) — pode ser token antigo. Retry em 30s.`, 'color:#f59e0b;font-weight:bold;');
                 if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
-                _lastScheduledTokenHash = ''; // permite reagendar com o mesmo hash
                 _proactiveRenewalTimer = setTimeout(async () => {
                     console.log('%c[POLARYON JWT-PROATIVO] ⏰ Retry de renovação (token curto)...', 'color:#f59e0b;font-weight:bold;');
                     await refreshTokenViaIframe();
