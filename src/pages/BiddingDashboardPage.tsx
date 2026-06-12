@@ -958,24 +958,34 @@ export default function BiddingDashboardPage() {
 
                         // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
                         if (mergedRanking && mergedRanking.length > 0) {
-                            const { minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
+                            const { ranking, minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
                             if (minhaPosicao > 0) {
                                 mergedPosicao = String(minhaPosicao);
+                                mergedGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
+                            }
+                            if (ranking && ranking.length > 0) {
+                                const lowestVal = ranking[0].valor;
+                                if (lowestVal > 0 && (mergedValorAtual <= 0 || lowestVal < mergedValorAtual)) {
+                                    mergedValorAtual = lowestVal;
+                                }
                             }
                         }
 
                         // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
-                        if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
-                            const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
-                            if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
-                                const portalPos = String(it.posicao || '').toUpperCase().trim();
-                                const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
-                                mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
-                                mergedGanhador = 'Outro';
+                        const temRankingValido = (mergedRanking && mergedRanking.length > 0);
+                        if (!temRankingValido) {
+                            if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
+                                const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
+                                if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
+                                    const portalPos = String(it.posicao || '').toUpperCase().trim();
+                                    const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
+                                    mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
+                                    mergedGanhador = 'Outro';
+                                }
+                            } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
+                                mergedPosicao = '1';
+                                mergedGanhador = 'Você';
                             }
-                        } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
-                            mergedPosicao = '1';
-                            mergedGanhador = 'Você';
                         }
 
                         itemMap.set(it.itemId, { 
@@ -1161,24 +1171,34 @@ export default function BiddingDashboardPage() {
 
                             // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
                             if (mergedRanking && mergedRanking.length > 0) {
-                                const { minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
+                                const { ranking, minhaPosicao } = buildRankingPorParticipante(mergedRanking, mergedMeuValor);
                                 if (minhaPosicao > 0) {
                                     mergedPosicao = String(minhaPosicao);
+                                    mergedGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
+                                }
+                                if (ranking && ranking.length > 0) {
+                                    const lowestVal = ranking[0].valor;
+                                    if (lowestVal > 0 && (mergedValorAtual <= 0 || lowestVal < mergedValorAtual)) {
+                                        mergedValorAtual = lowestVal;
+                                    }
                                 }
                             }
 
                             // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
-                            if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
-                                const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
-                                if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
-                                    const portalPos = String(it.posicao || '').toUpperCase().trim();
-                                    const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
-                                    mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
-                                    mergedGanhador = 'Outro';
+                            const temRankingValido = (mergedRanking && mergedRanking.length > 0);
+                            if (!temRankingValido) {
+                                if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor > mergedValorAtual) {
+                                    const mergedPosNorm = String(mergedPosicao || '').toUpperCase().trim();
+                                    if (mergedPosNorm === '1' || mergedPosNorm === '1º' || mergedPosNorm === '1°' || mergedPosNorm === 'G' || mergedPosNorm === 'V' || mergedPosNorm === 'GANHANDO' || mergedPosNorm === 'VENCEDOR' || mergedGanhador === 'Você') {
+                                        const portalPos = String(it.posicao || '').toUpperCase().trim();
+                                        const isPortalPosWinning = portalPos === '1' || portalPos === '1º' || portalPos === '1°' || portalPos === 'G' || portalPos === 'V' || portalPos === 'GANHANDO' || portalPos === 'VENCEDOR';
+                                        mergedPosicao = (!isPortalPosWinning && portalPos) ? portalPos : '2';
+                                        mergedGanhador = 'Outro';
+                                    }
+                                } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
+                                    mergedPosicao = '1';
+                                    mergedGanhador = 'Você';
                                 }
-                            } else if (mergedMeuValor > 0 && mergedValorAtual > 0 && mergedMeuValor <= mergedValorAtual) {
-                                mergedPosicao = '1';
-                                mergedGanhador = 'Você';
                             }
 
                             // 🕒 Preserva timer do portal-preload e timestamp de quando foi recebido
@@ -1481,20 +1501,23 @@ export default function BiddingDashboardPage() {
                             // --- CÁLCULO E VALIDAÇÃO MATEMÁTICA DO RANKING / POSIÇÃO (v4.2.0) ---
                             if (minhaPosicao > 0) {
                                 posicaoFinal = String(minhaPosicao);
+                                finalGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
                             }
 
                             // --- CORREÇÃO E ENFORCEMENT DE FALSOS POSITIVOS (v4.2.0) ---
-                            let finalGanhador = it.ganhador;
-                            if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor > finalValorAtual) {
-                                if (posicaoFinal === "1" || posicaoFinal === "1º" || posicaoFinal === "1°" || finalGanhador === "Você") {
-                                    const portalPos = String(it.posicao || "");
-                                    const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
-                                    posicaoFinal = (!isPortalPosWinning && portalPos) ? portalPos : "2";
-                                    finalGanhador = "Outro";
+                            const temRankingValido = (ranking && ranking.length > 0);
+                            if (!temRankingValido) {
+                                if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor > finalValorAtual) {
+                                    if (posicaoFinal === "1" || posicaoFinal === "1º" || posicaoFinal === "1°" || finalGanhador === "Você") {
+                                        const portalPos = String(it.posicao || "");
+                                        const isPortalPosWinning = portalPos === "1" || portalPos === "1º" || portalPos === "1°" || portalPos === "V" || portalPos === "VENCEDOR";
+                                        posicaoFinal = (!isPortalPosWinning && portalPos) ? portalPos : "2";
+                                        finalGanhador = "Outro";
+                                    }
+                                } else if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor <= finalValorAtual) {
+                                    posicaoFinal = "1";
+                                    finalGanhador = "Você";
                                 }
-                            } else if (finalMeuValor > 0 && finalValorAtual > 0 && finalMeuValor <= finalValorAtual) {
-                                posicaoFinal = "1";
-                                finalGanhador = "Você";
                             }
 
                             return {
@@ -1641,15 +1664,26 @@ export default function BiddingDashboardPage() {
                             const itItemId = String(it.itemId || it.numero || '');
                             if (itItemId !== String(itemId)) return it;
 
-                            const { minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
+                            const { ranking, minhaPosicao } = buildRankingPorParticipante(rankingLances, it.meuValor);
                             const posicaoFinal = minhaPosicao > 0
                                 ? String(minhaPosicao)
                                 : (realPosicao || it.posicao);
+                            const finalGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
 
-                            console.log(`%c[POLARYON RANKING SOCKET] ✅ Ranking injetado: sessão=${targetSid} item=${itemId} posição=${posicaoFinal} participantes=${rankingLances.length}`, 'color:#10b981;font-weight:bold;');
+                            let finalValorAtual = it.valorAtual;
+                            if (ranking && ranking.length > 0) {
+                                const lowestVal = ranking[0].valor;
+                                if (lowestVal > 0 && (finalValorAtual <= 0 || lowestVal < finalValorAtual)) {
+                                    finalValorAtual = lowestVal;
+                                }
+                            }
+
+                            console.log(`%c[POLARYON RANKING SOCKET] ✅ Ranking injetado: sessão=${targetSid} item=${itemId} posição=${posicaoFinal} ganhador=${finalGanhador} valorAtual=${finalValorAtual}`, 'color:#10b981;font-weight:bold;');
                             return {
                                 ...it,
                                 posicao: posicaoFinal,
+                                ganhador: finalGanhador,
+                                valorAtual: finalValorAtual,
                                 rankingLances
                             };
                         })
@@ -2678,7 +2712,13 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
 
     // ⚡ Usa wsFastData quando disponível (frescor do WebSocket em tempo real)
     const meuValorDisplay = wsFastData?.meuValor ?? safeParseNumber(item.meuValor);
-    const valorAtualDisplay = wsFastData?.valorAtual ?? safeParseNumber(item.valorAtual);
+    const rawValorAtual = wsFastData?.valorAtual ?? safeParseNumber(item.valorAtual);
+    const lowestRankingBid = (rankingComputado && rankingComputado.length > 0)
+        ? rankingComputado[0].valor
+        : 0;
+    const valorAtualDisplay = (lowestRankingBid > 0 && lowestRankingBid < rawValorAtual)
+        ? lowestRankingBid
+        : (rawValorAtual > 0 ? rawValorAtual : lowestRankingBid);
     const ganhadorDisplay = wsFastData?.ganhador || item.ganhador || 'Outro';
 
     const myBidVal = meuValorDisplay;
