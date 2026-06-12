@@ -772,11 +772,11 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     await new Promise(function(r) { setTimeout(r, 1000); });
 
     // Descobre onde estamos: SPA (token velho encontrado) ou SSO (sem token)
-    let currentUrl = '';
-    try { currentUrl = hiddenWin.webContents.getURL(); } catch(e) {}
-    console.log('[MAIN] 📍 refresh-jwt: URL após navegação: ' + currentUrl);
+    let hiddenStartUrl = '';
+    try { hiddenStartUrl = hiddenWin.webContents.getURL(); } catch(e) {}
+    console.log('[MAIN] 📍 refresh-jwt: URL após navegação: ' + hiddenStartUrl);
 
-    if (currentUrl.includes('sso.acesso.gov.br') || currentUrl.includes('login') || currentUrl.includes('main.asp')) {
+    if (hiddenStartUrl.includes('sso.acesso.gov.br') || hiddenStartUrl.includes('login') || hiddenStartUrl.includes('main.asp')) {
       // ============================================================
       // CASO SSO: SPA não achou token no localStorage → SSO auto-login
       // Apenas esperamos o SSO redirecionar de volta ao SPA,
@@ -797,7 +797,7 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       // Pequena pausa extra para SPA inicializar após SSO redirect
       await new Promise(function(r) { setTimeout(r, 2000); });
 
-    } else if (currentUrl.includes('cnetmobile')) {
+    } else if (hiddenStartUrl.includes('cnetmobile')) {
       // ============================================================
       // CASO SPA: SPA carregou com token velho do localStorage comum.
       // Limpamos localStorage + sessionStorage e recarregamos
@@ -839,7 +839,7 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       // ============================================================
       // CASO DESCONHECIDO: loga URL e dá tempo para navegação completar
       // ============================================================
-      console.log('[MAIN] ⚠️ refresh-jwt: URL desconhecida: ' + currentUrl);
+      console.log('[MAIN] ⚠️ refresh-jwt: URL desconhecida: ' + hiddenStartUrl);
       await new Promise(function(r) { setTimeout(r, 3000); });
     }
 
