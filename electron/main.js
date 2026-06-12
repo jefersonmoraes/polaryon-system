@@ -737,6 +737,15 @@ function isTokenFreshEnough(token, minTtlSec) {
   return getTokenTtl(token) >= minTtlSec;
 }
 
+function sendDiag(msg) {
+  console.log(msg);
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('main-diag', msg);
+    }
+  } catch(e) {}
+}
+
 // Copia cookies de autenticação da partição principal para a partição isolada do refresh (v3.8.284)
 async function copyAuthCookies() {
   try {
@@ -752,34 +761,74 @@ async function copyAuthCookies() {
 
     // Copia os cookies atuais da partição de combate
     const cookies = await mainSession.cookies.get({});
-    console.log(`[MAIN] 🍪 Copiando ${cookies.length} cookies da sessão principal para a sessão de refresh...`);
+    sendDiag(`[MAIN] 🍪 Copiando ${cookies.length} cookies da sessão principal...`);
     for (const cookie of cookies) {
       try {
         let url = (cookie.secure ? 'https://' : 'http://') + cookie.domain.replace(/^\./, '') + cookie.path;
-        await refreshSession.cookies.set({
-          url: url,
-          name: cookie.name,
-          value: cookie.value,
-          domain: cookie.domain,
-          path: cookie.path,
-          secure: cookie.secure,
-          httpOnly: cookie.httpOnly,
-          expirationDate: cookie.expirationDate
-        });
+        
+        // Loga cookies importantes
+        if (cookie.name.includes('ASPSESSION') || cookie.name.includes('token') || cookie.domain.includes('acesso.gov.br')) {
+          sendDiag(`  - Cookie: name=${cookie.name} domain=${cookie.domain} path=${cookie.path}`);
+        }
+
+        try {
+          await refreshSession.cookies.set({
+            url: url,
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            path: cookie.path,
+            secure: cookie.secure,
+            httpOnly: cookie.httpOnly,
+            expirationDate: cookie.expirationDate
+          });
+        } catch (e) {
+          // Tenta sem especificar o domain explicitamente (deixa o Electron inferir do URL)
+          try {
+            await refreshSession.cookies.set({
+              url: url,
+              name: cookie.name,
+              value: cookie.value,
+              path: cookie.path,
+              secure: cookie.secure,
+              httpOnly: cookie.httpOnly,
+              expirationDate: cookie.expirationDate
+            });
+          } catch (e2) {
+            // Tenta adicionando 'www.' se for um domínio sem subdomínio
+            let fallbackUrl = url;
+            if (!cookie.domain.includes('www') && !cookie.domain.includes('sso')) {
+              fallbackUrl = (cookie.secure ? 'https://www.' : 'http://www.') + cookie.domain.replace(/^\./, '') + cookie.path;
+            }
+            try {
+              await refreshSession.cookies.set({
+                url: fallbackUrl,
+                name: cookie.name,
+                value: cookie.value,
+                domain: cookie.domain,
+                path: cookie.path,
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly,
+                expirationDate: cookie.expirationDate
+              });
+            } catch (e3) {
+              sendDiag(`[MAIN] ⚠️ Erro ao copiar cookie ${cookie.name} (domain=${cookie.domain}): ${e3.message}`);
+            }
+          }
+        }
       } catch (cookieErr) {
-        console.warn(`[MAIN] ⚠️ Erro ao copiar cookie ${cookie.name}:`, cookieErr.message);
+        sendDiag(`[MAIN] ⚠️ Erro ao preparar cookie ${cookie.name}: ${cookieErr.message}`);
       }
     }
-    console.log(`[MAIN] 🍪 Cópia de cookies concluída.`);
+    sendDiag(`[MAIN] 🍪 Cópia de cookies concluída.`);
   } catch (e) {
-    console.error('[MAIN] ❌ Falha crítica ao copiar cookies:', e.message);
+    sendDiag(`[MAIN] ❌ Falha crítica ao copiar cookies: ${e.message}`);
   }
 }
 
 ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
   try {
     const initialToken = global.serproToken;
-    // Obtém URL atual do solicitante (portal window) para navegar para a mesma página
     let currentUrl = '';
     try {
       const senderWin = BrowserWindow.fromWebContents(event.sender);
@@ -788,16 +837,24 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       }
     } catch (urlErr) {}
 
-    // Filtra URLs inválidas (páginas de erro /ac, login, etc)
     const targetUrl = (currentUrl && currentUrl.includes('cnetmobile.estaleiro.serpro.gov.br') && !currentUrl.includes('/ac'))
       ? currentUrl
       : 'https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor/compras';
 
-    console.log('[MAIN] 🔄 refresh-jwt-via-hidden-page: Copiando cookies e abrindo janela oculta isolada...');
-    await copyAuthCookies();
-    console.log('[MAIN] 🔄 URL alvo: ' + targetUrl);
+    sendDiag(`[MAIN] 🔄 Iniciando refresh-jwt-via-hidden-page...`);
+    
+    // 1. Limpa completamente o storage da partição de refresh
+    const refreshSession = session.fromPartition('persist:polaryon-jwt-refresh');
+    sendDiag(`[MAIN] 🧹 Limpando storage da partição de refresh...`);
+    await refreshSession.clearStorageData({
+      storages: ['cookies', 'localstorage', 'indexdb']
+    });
 
-    // Cria janela oculta com sessão ISOLADA (evita que o clear/executeJS afete a janela principal)
+    // 2. Copia cookies da partição de combate
+    await copyAuthCookies();
+    sendDiag(`[MAIN] 🔄 URL alvo: ${targetUrl}`);
+
+    // 3. Cria janela oculta com sessão ISOLADA
     const hiddenWin = new BrowserWindow({
       show: false,
       width: 800,
@@ -813,11 +870,23 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       }
     });
 
-    // Auto-close timeout (55s máximo — SSO pode levar 15s + reload 8s + poll 30s)
+    // Diagnóstico de Navegação em tempo real para o console do DevTools do usuário
+    hiddenWin.webContents.on('did-start-navigation', (e, url) => {
+      sendDiag(`[MAIN] 🧭 Navegação iniciada: ${url}`);
+    });
+    hiddenWin.webContents.on('did-redirect-navigation', (e, url) => {
+      sendDiag(`[MAIN] 🔀 Redirecionamento: ${url}`);
+    });
+    hiddenWin.webContents.on('did-navigate', (e, url) => {
+      sendDiag(`[MAIN] 📍 Navegado para: ${url}`);
+    });
+
+    // Auto-close timeout (55s)
     let hiddenClosed = false;
     const timeoutId = setTimeout(() => {
       if (!hiddenClosed) {
         hiddenClosed = true;
+        sendDiag('[MAIN] ⚠️ refresh-jwt-via-hidden-page: Timeout atingido (55s).');
         try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
       }
     }, 55000);
@@ -826,98 +895,19 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     hiddenWin.webContents.on('crashed', () => {
       if (!hiddenClosed) {
         hiddenClosed = true;
+        sendDiag('[MAIN] ❌ Janela oculta crasheou.');
         try { if (!hiddenWin.isDestroyed()) hiddenWin.close(); } catch(e) {}
       }
     });
 
-    // ============================================================
-    // CARGA INICIAL: navega para o SPA.
-    // loadURL resolve na PRIMEIRA página que carregar (SPA ou SSO).
-    // ============================================================
+    // 4. Carrega a URL alvo
     try {
       await hiddenWin.loadURL(targetUrl);
     } catch (navErr) {
-      // Redirect durante SSO é normal (throws navigation error)
+      sendDiag(`[MAIN] 🔄 loadURL finalizado (normal se houve redirect): ${navErr.message}`);
     }
 
-    // Pequena pausa para navegação se estabilizar
-    await new Promise(function(r) { setTimeout(r, 1000); });
-
-    // Descobre onde estamos: SPA (token velho encontrado) ou SSO (sem token)
-    let hiddenStartUrl = '';
-    try { hiddenStartUrl = hiddenWin.webContents.getURL(); } catch(e) {}
-    console.log('[MAIN] 📍 refresh-jwt: URL após navegação: ' + hiddenStartUrl);
-
-    if (hiddenStartUrl.includes('sso.acesso.gov.br') || hiddenStartUrl.includes('login') || hiddenStartUrl.includes('main.asp')) {
-      // ============================================================
-      // CASO SSO: SPA não achou token no localStorage → SSO auto-login
-      // Apenas esperamos o SSO redirecionar de volta ao SPA,
-      // que gerará um token NOVO automaticamente.
-      // ============================================================
-      console.log('[MAIN] 🔄 refresh-jwt: Página SSO detectada. Aguardando auto-login...');
-      for (var si = 0; si < 15; si++) {
-        await new Promise(function(r) { setTimeout(r, 1000); });
-        if (hiddenClosed || hiddenWin.isDestroyed()) break;
-        try {
-          const u = hiddenWin.webContents.getURL();
-          if (u.includes('cnetmobile') && !u.includes('/ac')) {
-            console.log('[MAIN] ✅ refresh-jwt: SSO redirecionou para SPA: ' + u);
-            break;
-          }
-        } catch(e) {}
-      }
-      // Pequena pausa extra para SPA inicializar após SSO redirect
-      await new Promise(function(r) { setTimeout(r, 2000); });
-
-    } else if (hiddenStartUrl.includes('cnetmobile')) {
-      // ============================================================
-      // CASO SPA: SPA carregou. Limpamos localStorage do partition isolado
-      // e recarregamos para forçar o SSO a gerar um token novo.
-      // ============================================================
-      console.log('[MAIN] 🔄 refresh-jwt: SPA carregada na partição isolada. Limpando localStorage...');
-      // Aguarda SPA terminar bootstrap
-      await new Promise(function(r) { setTimeout(r, 4000); });
-
-      try {
-        await hiddenWin.webContents.executeJavaScript(`
-          (function(){
-            var keys=['accessToken','access_token','token','jwt','id_token','currentUser','auth_token','bearerToken','userToken','idToken','bearer','authorization'];
-            for(var ki=0;ki<keys.length;ki++){try{localStorage.removeItem(keys[ki])}catch(e){}try{sessionStorage.removeItem(keys[ki])}catch(e){}}
-            for(var i=localStorage.length-1;i>=0;i--){
-              try{
-                var k=localStorage.key(i),v=localStorage.getItem(k);
-                if(v&&typeof v==='string'){
-                  if(v.startsWith('eyJ')&&v.length>50)try{localStorage.removeItem(k)}catch(e){}
-                  else if(v.startsWith('{')){
-                    try{var p=JSON.parse(v);if(p.accessToken||p.token||p.jwt)try{localStorage.removeItem(k)}catch(e){}}catch(e){}
-                  }
-                }
-              }catch(e){}
-            }
-            sessionStorage.clear();
-            window.location.reload();
-          })();
-        `);
-        console.log('[MAIN] 🔄 refresh-jwt: localStorage isolado limpo, página recarregando...');
-      } catch(e) {
-        console.log('[MAIN] ⚠️ refresh-jwt: Erro ao limpar localStorage isolado:', e.message);
-      }
-
-      // Aguarda reload + SSO redirect + SPA recarregar
-      await new Promise(function(r) { setTimeout(r, 5000); });
-
-    } else {
-      // ============================================================
-      // CASO DESCONHECIDO: loga URL e dá tempo para navegação completar
-      // ============================================================
-      console.log('[MAIN] ⚠️ refresh-jwt: URL desconhecida: ' + hiddenStartUrl);
-      await new Promise(function(r) { setTimeout(r, 3000); });
-    }
-
-    // ============================================================
-    // POLL: captura o token (novo do SSO) por até 30s.
-    // Só aceita se TTL > 5min para garantir que é token NOVO.
-    // ============================================================
+    // 5. Poll loop de 30 segundos aguardando o token
     let foundToken = null;
     for (let pi = 0; pi < 30; pi++) {
       await new Promise(function(r) { setTimeout(r, 1000); });
@@ -927,28 +917,27 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
         if (g && typeof g === 'string' && g.startsWith('Bearer ') && g.length > 60 && g !== initialToken) {
           if (isTokenFreshEnough(g, 300)) {
             foundToken = g;
-            console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado! TTL=' + Math.floor(getTokenTtl(g)) + 's');
+            sendDiag(`[MAIN] ✅ Token NOVO capturado! TTL=${Math.floor(getTokenTtl(g))}s`);
             break;
           }
         }
         
-        // Backup: tenta ler o token do window.__polaryonBearer injetado no page context da hidden page
+        // Backup: tenta ler o token do window.__polaryonBearer injetado
         const pageToken = await hiddenWin.webContents.executeJavaScript('window.__polaryonBearer').catch(() => null);
         if (pageToken && typeof pageToken === 'string' && pageToken.length > 60) {
           const formatted = pageToken.startsWith('Bearer ') ? pageToken : 'Bearer ' + pageToken;
           if (formatted !== initialToken && isTokenFreshEnough(formatted, 300)) {
             foundToken = formatted;
             global.serproToken = formatted;
-            console.log('[MAIN] ✅ refresh-jwt: Token NOVO capturado do page context (backup)! TTL=' + Math.floor(getTokenTtl(formatted)) + 's');
+            sendDiag(`[MAIN] ✅ Token NOVO capturado do page context (backup)! TTL=${Math.floor(getTokenTtl(formatted))}s`);
             break;
           }
         }
         
-        // Diagnóstico: URL a cada 5s
         if (pi > 0 && pi % 5 === 0) {
           try {
             const url = hiddenWin.webContents.getURL();
-            console.log('[MAIN] 🔄 refresh-jwt: Aguardando... URL=' + url);
+            sendDiag(`[MAIN] 🔄 Aguardando token... URL=${url}`);
           } catch(e) {}
         }
       } catch(e) {}
@@ -962,14 +951,14 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     }
 
     if (foundToken) {
-      console.log('[MAIN] ✅ refresh-jwt-via-hidden-page: SUCESSO! Token len=' + foundToken.length);
+      sendDiag(`[MAIN] ✅ SUCESSO! Token len=${foundToken.length}`);
       return foundToken;
     }
 
-    console.log('[MAIN] ⚠️ refresh-jwt-via-hidden-page: Nenhum token capturado');
+    sendDiag('[MAIN] ⚠️ Falha: Nenhum token capturado');
     return null;
   } catch(e) {
-    console.log('[MAIN] ⚠️ refresh-jwt-via-hidden-page erro:', e.message);
+    sendDiag(`[MAIN] ❌ Erro no refresh: ${e.message}`);
     return null;
   }
 });
