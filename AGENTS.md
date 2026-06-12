@@ -793,3 +793,15 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 - Adicionado um guard-clause no topo da função `handlePortalSync` em `BiddingDashboardPage.tsx` para ignorar mensagens com tipo `'session-token'` ou que não tenham `roomCode` definido (`if (data.type === 'session-token' || !data.roomCode) return;`).
 - Isso evita qualquer possibilidade de colisão com os eventos de broadcast de tokens ou outras atualizações não relacionadas à sincronização de salas do portal, blindando o React contra exceções fatais.
 
+## Implementado (v3.8.295)
+
+### 1. Auto-Upsert de Sessões Globais (`GLOBAL_`) no Banco de Dados do Backend
+**Problema:** Ao salvar estratégias no painel para salas monitoradas via sessão global (`GLOBAL_`), a requisição HTTP PATCH falhava com status `404 Not Found` no backend, exibindo um toast de erro de conexão ("Erro ao salvar estratégia").
+
+**Solução:**
+- Criado o helper `getOrCreateSession` em `backend/src/routes/bidding.ts` que gerencia a busca e criação automática (auto-upsert) de sessões tanto para o prefixo `HYBRID_` quanto para `GLOBAL_`.
+- Para sessões com prefixo `GLOBAL_`, extrai-se dinamicamente os campos `uasg`, `numeroPregao` (número da disputa) e `anoPregao` a partir do `idCompra` (removendo o prefixo `GLOBAL_`).
+- Atualizados todos os endpoints de edição individual (`PATCH /sessions/:id/items/:itemId`), edição em lote (`PATCH /sessions/:id/items/bulk`) e início de radar (`POST /sessions/:id/start`) para usar o helper `getOrCreateSession`.
+- Isso evita erros de 404, permitindo salvar e persistir as estratégias com sucesso diretamente no PostgreSQL da VPS.
+
+
