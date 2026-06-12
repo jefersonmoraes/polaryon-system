@@ -1068,14 +1068,11 @@
                 _rankingSuppressRefresh = true;
                 setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
             } else if (type === 'session-expired') {
-                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Tentando recarregar via botão da página...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Renovando via janela oculta...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
-                const buttonClicked = clickPortalRefreshButton();
-                if (!buttonClicked) {
-                    console.log('%c[POLARYON SESSION] ⚠️ Botão de recarregar não encontrado. Fazendo fallback para refresh via hidden window...', 'color:#f59e0b;font-weight:bold;');
-                    refreshTokenViaIframe();
-                }
+                // v3.8.280: janela oculta (SEM botão de recarregar) — não mexe no portal.
+                refreshTokenViaIframe();
             } else if (type === 'siga-timer') {
                 shared.sigaTimerSeconds = event.data.remainingSec;
                 shared.sigaTimerMs = event.data.remainingMs;
@@ -2343,11 +2340,10 @@
                 
                 if (keepAliveConsecutiveFailures >= KEEPALIVE_MAX_FAILURES) {
                     keepAliveConsecutiveFailures = 0;
-                    console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando...', 'color:#f59e0b;font-weight:bold;');
-                    const buttonClicked = clickPortalRefreshButton();
-                    if (!buttonClicked) {
-                        refreshTokenViaIframe();
-                    }
+                    console.log('%c[POLARYON HEARTBEAT] 🔄 Token expirado — renovando via janela oculta...', 'color:#f59e0b;font-weight:bold;');
+                    // v3.8.280: janela oculta (método 1) SEMPRE primeiro — não mexe no portal.
+                    // clickPortalRefreshButton() removido: causava reload do portal e tela azul.
+                    refreshTokenViaIframe();
                 }
             } else if (res.status === 429 || res.status === 0) {
                 _blockedNetworkErrCount++;
