@@ -913,18 +913,25 @@ class RoomRunner {
                                     const beatingAmount = allow4 ? 0.0001 : 0.01;
 
                                     let targetCompetitorBid = null;
+                                    let isTieBid = false;
                                     for (const c of competitorBids) {
                                         const beatingBid = c - beatingAmount;
                                         const candidateBid = Math.max(myMin, Math.min(beatingBid, lowestPossibleBid));
-                                        if (candidateBid < c && candidateBid < myCurrentBid) {
+                                        // Pode vencer (candidateBid < c) OU empatar quando myMin == valor do concorrente
+                                        const canBeat = candidateBid < c;
+                                        const canTie = !canBeat && candidateBid === c && c === myMin && candidateBid < myCurrentBid;
+                                        if ((canBeat || canTie) && candidateBid < myCurrentBid) {
                                             targetCompetitorBid = c;
+                                            isTieBid = canTie;
                                             break;
                                         }
                                     }
 
                                     if (targetCompetitorBid !== null) {
-                                        nextBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
-                                        console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Mirando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`);
+                                        nextBid = isTieBid
+                                            ? myMin
+                                            : Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, lowestPossibleBid));
+                                        console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - ${isTieBid ? 'EMPATANDO' : 'Mirando'} R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid}${isTieBid ? ' (empate!)' : ` (beatingAmount=${beatingAmount}, lowest=R$ ${lowestPossibleBid})`}`);
                                     } else {
                                         // 🔧 FIX v3.8.242: Nenhum concorrente batível — preservar valor, não reduzir
                                         // Reduzir não adianta se todos estão abaixo do mínimo (só queima captcha)

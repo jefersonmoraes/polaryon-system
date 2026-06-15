@@ -497,32 +497,52 @@ export default function BiddingDashboardPage() {
                                     // 🔧 FIX v3.8.127: Margem valida degrau do MEU lance, não desconta do concorrente
                                     // Antes: competidor batível se cBid - margin >= myMin
                                     // Agora: se lowestAllowed < cBid (consigo ir abaixo dele) E beatingBid >= myMin
+                                    // v3.8.XXX: Também considera empate (candidateBid == cBid == myMin)
+                                    let isTieBid = false;
                                     for (const cBid of competitorBids) {
                                         const beatingBid = cBid - beatingAmount;
                                         const candidateBid = Math.max(myMin, Math.min(beatingBid, serproLowestAllowed));
-                                        if (candidateBid < cBid && candidateBid < myCurrentBid) {
+                                        const canBeat = candidateBid < cBid;
+                                        const canTie = !canBeat && candidateBid === cBid && cBid === myMin && candidateBid < myCurrentBid;
+                                        if ((canBeat || canTie) && candidateBid < myCurrentBid) {
                                             targetCompetitorBid = cBid;
+                                            isTieBid = canTie;
                                             break;
                                         }
                                     }
                                 }
 
                                 if (targetCompetitorBid !== null) {
-                                    const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, serproLowestAllowed));
-                                    
-                                    // 🔧 FIX v3.8.131: Compara diretamente contra o limiar de batida do concorrente, não contra idealBid
-                                    // (idealBid é limitado por lowestAllowed = myCurrentBid - maxDecrement, então myCurrentBid <= idealBid é quase sempre falso)
-                                    const beatingThreshold = targetCompetitorBid - beatingAmount;
-                                    if (myCurrentBid <= beatingThreshold) {
-                                        const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
-                                        if (Date.now() - lastLogTime >= 1000) {
-                                            console.log(`[SNIPER] Posição ideal já garantida. Mantendo R$ ${myCurrentBid} (Concorrente R$ ${targetCompetitorBid}).`);
-                                            lastLogRef.current[`pos_${sId}`] = Date.now();
+                                    if (isTieBid) {
+                                        // Empate: usa o próprio myMin (que é igual ao valor do concorrente)
+                                        if (myCurrentBid <= myMin) {
+                                            const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
+                                            if (Date.now() - lastLogTime >= 1000) {
+                                                console.log(`[SNIPER] Empate já garantido. Mantendo R$ ${myCurrentBid} (concorrente R$ ${targetCompetitorBid}).`);
+                                                lastLogRef.current[`pos_${sId}`] = Date.now();
+                                            }
+                                            return;
+                                        } else {
+                                            nextBid = myMin;
+                                            console.log(`[SNIPER POSITIONING] Empatando R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid}`);
                                         }
-                                        return;
                                     } else {
-                                        nextBid = idealBid;
-                                        console.log(`[SNIPER POSITIONING] Mirando concorrente R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowestAllowed=R$ ${lowestAllowed})`);
+                                        const idealBid = Math.max(myMin, Math.min(targetCompetitorBid - beatingAmount, serproLowestAllowed));
+                                        
+                                        // 🔧 FIX v3.8.131: Compara diretamente contra o limiar de batida do concorrente, não contra idealBid
+                                        // (idealBid é limitado por lowestAllowed = myCurrentBid - maxDecrement, então myCurrentBid <= idealBid é quase sempre falso)
+                                        const beatingThreshold = targetCompetitorBid - beatingAmount;
+                                        if (myCurrentBid <= beatingThreshold) {
+                                            const lastLogTime = lastLogRef.current[`pos_${sId}`] || 0;
+                                            if (Date.now() - lastLogTime >= 1000) {
+                                                console.log(`[SNIPER] Posição ideal já garantida. Mantendo R$ ${myCurrentBid} (Concorrente R$ ${targetCompetitorBid}).`);
+                                                lastLogRef.current[`pos_${sId}`] = Date.now();
+                                            }
+                                            return;
+                                        } else {
+                                            nextBid = idealBid;
+                                            console.log(`[SNIPER POSITIONING] Mirando concorrente R$ ${targetCompetitorBid}. nextBid=R$ ${nextBid} (beatingAmount=${beatingAmount}, lowestAllowed=R$ ${lowestAllowed})`);
+                                        }
                                     }
                                 } else {
                                     // 🔧 FIX v3.8.242: Nenhum concorrente batível — preserva valor
@@ -3017,8 +3037,10 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                     for (const cBid of competitorBids) {
                         const beatingBid = cBid - beatingAmt;
                         const candidateBid = Math.max(numMin, Math.min(beatingBid, serproLowestAllowed));
-                        if (candidateBid < cBid && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
-                            fireVal = candidateBid;
+                        const canBeat = candidateBid < cBid;
+                        const canTie = !canBeat && candidateBid === cBid && cBid === numMin && (myCurrentBid <= 0 || candidateBid < myCurrentBid);
+                        if ((canBeat || canTie) && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
+                            fireVal = canTie ? numMin : candidateBid;
                             break;
                         }
                     }

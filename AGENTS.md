@@ -804,4 +804,24 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 - Atualizados todos os endpoints de edição individual (`PATCH /sessions/:id/items/:itemId`), edição em lote (`PATCH /sessions/:id/items/bulk`) e início de radar (`POST /sessions/:id/start`) para usar o helper `getOrCreateSession`.
 - Isso evita erros de 404, permitindo salvar e persistir as estratégias com sucesso diretamente no PostgreSQL da VPS.
 
+## Implementado (v3.8.306)
+
+### 1. Lógica de empate quando `myMin == valor_de_um_concorrente`
+**Problema:** Quando o líder estava abaixo do mínimo (ex: R$ 1.799,96) e um concorrente no ranking tinha exatamente o mesmo valor do `myMin` (R$ 1.800,00), o robô ignorava esse concorrente e disparava um lance intermediário contra um concorrente mais abaixo (R$ 1.894,9999), queimando R$ 94,99 de margem desnecessariamente.
+
+**Causa raiz:** A condição `candidateBid < c` no loop de ranking (`bidding-runner.js:916-923`, `BiddingDashboardPage.tsx:500-507`, `handleToggle:3037-3044`) falhava quando `myMin == c`, porque `candidateBid = max(myMin, beatingBid) = myMin = c`, e `c < c` é falso.
+
+**Arquivos:**
+- `electron/bidding-runner.js:916-934` (backend sniper ranking)
+- `src/pages/BiddingDashboardPage.tsx:500-556` (frontend sniper ranking)
+- `src/pages/BiddingDashboardPage.tsx:3037-3046` (handleToggle com 0s)
+
+**Solução:** Nova flag `isTieBid` / `canTie`. Quando `candidateBid == c == myMin`, o concorrente é considerado **empatável**:
+- `canTie = !canBeat && candidateBid === c && c === myMin && candidateBid < myCurrentBid`
+- Se `isTieBid`, o `nextBid` é `myMin` (em vez de `target - beatingAmount`)
+- No logging: mostra `EMPATANDO` em vez de `Mirando`, genérico (qualquer posição)
+- `handleToggle` usa `fireVal = numMin` no caso de empate
+
+**Impacto:** O robô agora empata com qualquer concorrente cujo valor seja igual ao `myMin`, em vez de queimar margem contra posições inferiores. Prioridade: 1º bater líder → 2º empatar (match myMin) → 3º bater concorrente no ranking → 4º gap reduction.
+
 
