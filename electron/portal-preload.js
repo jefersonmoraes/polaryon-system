@@ -568,13 +568,46 @@
     //   - Carga instantânea (0ms) no primeiro item, com delay de 400ms entre itens subsequentes do mesmo lote
     //   - 429 → backoff automático exponencial antes de continuar
     //   - Refresh periódico de todos os itens a cada 45s (re-enfileira no final)
-    const activeRankingItems = []; // { purchaseId, itemId, timerSeconds }
+    const activeRankingItems = []; // { purchaseId, itemId, timerSeconds, lastRefreshAt }
     let _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _ranking429Count = 0;      // consecutive 429s for exponential backoff
     let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
     let _429ReloadTimer = null;    // timer para auto-reload sob 429
     
+    let _isFocusedSession = false;
+
+    function getCurrentRoomCode() {
+        const match = window.location.href.match(/\/compra\/(\d+)/) || window.location.href.match(/\/disputar\/compra\/(\d+)/) || window.location.href.match(/\/compras\/(\d+)/) || window.location.href.match(/\/comprasnet-disputa\/v1\/compras\/(\d+)/);
+        return match ? match[1] : null;
+    }
+
+    function isDisputePage() {
+        const url = window.location.href;
+        return url.includes('/disputar/') || url.includes('/disputa/') || url.includes('/itens/em-disputa');
+    }
+
+    if (typeof ipcRenderer !== 'undefined') {
+        ipcRenderer.on('polaryon-focused-state', (event, { focused }) => {
+            const wasFocused = _isFocusedSession;
+            _isFocusedSession = focused;
+            console.log(`%c[POLARYON] 👁️ Estado de foco da página alterado para: ${focused}`, 'color:#3b82f6;font-weight:bold;');
+            
+            if (focused && !wasFocused) {
+                const roomCode = getCurrentRoomCode();
+                console.log(`%c[POLARYON RANKING QUEUE] 🎯 Sessão focada (compra: ${roomCode})! Priorizando e re-enfileirando todos os itens ativos para atualização instantânea...`, 'color:#10b981;font-weight:bold;');
+                if (shared.sessionToken) {
+                    activeRankingItems.forEach(target => {
+                        if (!roomCode || target.purchaseId === roomCode) {
+                            target.lastRefreshAt = 0; // Força atualização imediata
+                            enqueueRankingFetch(target, true);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
     // --- POOL DE hCAPTCHA ---
     const _hcaptchaPool = [];      // { token, ts }
     const HCAPTCHA_POOL_MAX = 8;
@@ -609,6 +642,9 @@
     function enqueueRankingFetch(target, priority = false) {
         const alreadyQueued = _rankingQueue.some(q => q.purchaseId === target.purchaseId && q.itemId === target.itemId);
         if (alreadyQueued) return;
+        
+        target.lastRefreshAt = Date.now(); // Marca o envio para o scheduler inteligente
+        
         const entry = { purchaseId: target.purchaseId, itemId: target.itemId, timerSeconds: target.timerSeconds ?? -1, priority };
         if (priority) {
             _rankingQueue.unshift(entry);
@@ -679,16 +715,30 @@
         processRankingQueue();
     }, 500);
 
-    // 🔁 REFRESH PERIÓDICO: a cada 45s re-enfileira todos os itens ativos (no final da fila)
+    // 🔁 REFRESH INTELIGENTE E PRIORITÁRIO:
+    //   - Itens da compra focada: atualizados a cada 6 segundos
+    //   - Outros itens (background): atualizados a cada 45 segundos
     setInterval(() => {
         if (!shared.sessionToken || activeRankingItems.length === 0) return;
         if (_rankingSuppressRefresh || Date.now() < _rankingBackoffUntil) {
-            console.log(`%c[POLARYON RANKING QUEUE] ⏸️ Refresh suprimido (backoff 429 ativo)`, 'color:#f59e0b;font-size:9px;');
             return;
         }
-        console.log(`%c[POLARYON RANKING QUEUE] 🔁 Re-enfileirando ${activeRankingItems.length} itens para refresh periódico`, 'color:#a855f7;font-size:9px;');
-        activeRankingItems.forEach(target => enqueueRankingFetch(target, false));
-    }, 45000);
+        
+        const now = Date.now();
+        const roomCode = getCurrentRoomCode();
+        
+        activeRankingItems.forEach(target => {
+            const isCurrentRoom = roomCode && target.purchaseId === roomCode;
+            const interval = isCurrentRoom ? 6000 : 45000;
+            const lastRef = target.lastRefreshAt || 0;
+            
+            if (now - lastRef >= interval) {
+                // Prioridade maior se for da sala focada e timer crítico (<=30s)
+                const priority = isCurrentRoom && (target.timerSeconds >= 0 && target.timerSeconds <= 30);
+                enqueueRankingFetch(target, priority);
+            }
+        });
+    }, 2000);
 
     function processSerproData(data, url, status, ok, dateHeader, tStart, tEnd) {
         if (typeof data === 'string') {
@@ -930,7 +980,7 @@
                             : -1);
                     const alreadyTracked = activeRankingItems.some(r => r.purchaseId === roomCode && r.itemId === itemIdStr);
                     if (!alreadyTracked) {
-                        const newTarget = { purchaseId: roomCode, itemId: itemIdStr, timerSeconds };
+                        const newTarget = { purchaseId: roomCode, itemId: itemIdStr, timerSeconds, lastRefreshAt: Date.now() };
                         activeRankingItems.push(newTarget);
                         console.log(`%c[POLARYON RANKING QUEUE] ➕ Item ${itemIdStr} (compra: ${roomCode}) timer=${timerSeconds}s enfileirado com prioridade. Fila: ${_rankingQueue.length + 1}`, 'color: #6366f1; font-weight: bold; font-size: 11px;');
                         // 🚀 Prioridade: coloca na FRENTE da fila → será o próximo processado (sem burst)
@@ -1157,7 +1207,11 @@
                         console.log('%c[POLARYON] 🚨 429 na lista de participações detectado! Agendando reload em ' + backoffSec + 's para auto-recuperação...', 'color:#f59e0b;font-weight:bold;');
                         _429ReloadTimer = setTimeout(() => {
                             _429ReloadTimer = null;
-                            window.location.reload();
+                            if (isDisputePage()) {
+                                console.warn('[POLARYON] 🚨 Evitando reload por 429 da lista em página de disputa.');
+                            } else {
+                                window.location.reload();
+                            }
                         }, backoffSec * 1000);
                     }
                 }
@@ -1180,7 +1234,11 @@
                         console.log('%c[POLARYON] 🚨 Agendando reload em ' + backoffSec + 's por rate-limit (429)...', 'color:#f59e0b;font-weight:bold;');
                         _429ReloadTimer = setTimeout(() => {
                             _429ReloadTimer = null;
-                            window.location.reload();
+                            if (isDisputePage()) {
+                                console.warn('[POLARYON] 🚨 Evitando reload por 429 em página de disputa.');
+                            } else {
+                                window.location.reload();
+                            }
                         }, backoffSec * 1000);
                     }
                 } else {
@@ -1188,7 +1246,11 @@
                         console.log('%c[POLARYON] 🚨 Agendando reload em 6s para auto-recuperar a lista...', 'color:#f59e0b;font-weight:bold;');
                         _429ReloadTimer = setTimeout(() => {
                             _429ReloadTimer = null;
-                            window.location.reload();
+                            if (isDisputePage()) {
+                                console.warn('[POLARYON] 🚨 Evitando reload por erro na lista em página de disputa.');
+                            } else {
+                                window.location.reload();
+                            }
                         }, 6000);
                     }
                 }
@@ -2655,7 +2717,11 @@
                     setSerproBlocked(res.status === 429 ? '429 Rate Limit repetido' : 'Status HTTP 0 (bloqueio)');
                     if (res.status === 0) {
                         console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida (Status 0). Recarregando o portal...', 'color:#ef4444;font-weight:bold;');
-                        window.location.reload();
+                        if (isDisputePage()) {
+                            console.warn('[POLARYON HEARTBEAT] 🚫 Evitando reload por status 0 em página de disputa.');
+                        } else {
+                            window.location.reload();
+                        }
                     }
                 }
             } else {
@@ -2670,7 +2736,11 @@
                 if (_blockedNetworkErrCount >= 3) {
                     setSerproBlocked('Erro de rede consistente (' + err.message + ')');
                     console.log('%c[POLARYON HEARTBEAT] 🔄 Conexão perdida ou erro de rede consistente. Recarregando o portal...', 'color:#ef4444;font-weight:bold;');
-                    window.location.reload();
+                    if (isDisputePage()) {
+                        console.warn('[POLARYON HEARTBEAT] 🚫 Evitando reload por erro de rede consistente em página de disputa.');
+                    } else {
+                        window.location.reload();
+                    }
                 }
             }
         }
@@ -2764,7 +2834,11 @@
         // Se nenhum botão for encontrado, recarrega a página inteira como último recurso
         console.log('%c[POLARYON AUTOMATION] Botão de recarregar não encontrado no DOM. Fazendo reload da página...', 'color:#f59e0b;');
         _lastPortalRefreshClick = Date.now();
-        window.location.reload();
+        if (isDisputePage()) {
+            console.warn('[POLARYON AUTOMATION] 🚫 Evitando reload por botão de refresh ausente em página de disputa.');
+        } else {
+            window.location.reload();
+        }
         return true;
     }
 
@@ -2870,9 +2944,16 @@
         // LAYER 3: Recarregamento completo da página do compras (Fallback Final)
         const currentTtl = shared.sessionToken ? getTokenTtl(shared.sessionToken) : 0;
         if (force || currentTtl < 15) {
-            console.log('%c[POLARYON HEARTBEAT] 🔄 [LAYER 3] Todos os métodos silenciosos falharam. Recarregando a página do compras para reautenticação...', 'color:#ef4444;font-weight:bold;font-size:12px;');
-            _isRefreshingJwt = false;
-            window.location.reload();
+            if (isDisputePage()) {
+                console.warn('%c[POLARYON HEARTBEAT] 🚫 Evitando reload nuclear em página de disputa! Tentando manter o leilão vivo...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+                _isRefreshingJwt = false;
+                if (_proactiveRenewalTimer) clearTimeout(_proactiveRenewalTimer);
+                _proactiveRenewalTimer = setTimeout(function() { refreshTokenViaIframe(true); }, 8000);
+            } else {
+                console.log('%c[POLARYON HEARTBEAT] 🔄 [LAYER 3] Todos os métodos silenciosos falharam. Recarregando a página do compras para reautenticação...', 'color:#ef4444;font-weight:bold;font-size:12px;');
+                _isRefreshingJwt = false;
+                window.location.reload();
+            }
         } else {
             console.warn(`%c[POLARYON HEARTBEAT] ⚠️ [LAYER 3] Métodos silenciosos falharam, mas o token ainda é válido por ${Math.floor(currentTtl)}s. Evitando reload nuclear.`, 'color:#f59e0b;font-weight:bold;');
             _isRefreshingJwt = false;

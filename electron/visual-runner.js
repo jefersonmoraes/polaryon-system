@@ -191,6 +191,17 @@ class VisualRunner {
             show: true
         });
  
+        win.on('focus', () => {
+            try {
+                win.webContents.send('polaryon-focused-state', { focused: true });
+            } catch (e) {}
+        });
+        win.on('blur', () => {
+            try {
+                win.webContents.send('polaryon-focused-state', { focused: false });
+            } catch (e) {}
+        });
+
         logConsole(win, 'PRINCIPAL');
  
         const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";

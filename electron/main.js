@@ -338,6 +338,24 @@ ipcMain.on('set-focused-session', (event, sessionId) => {
   if (biddingRunner) biddingRunner.focusedSessionId = sessionId;
   if (global.biddingRunner) global.biddingRunner.focusedSessionId = sessionId;
   console.log(`[POLARYON] 🎯 Sessão focada definida: ${sessionId}`);
+  
+  // Propaga foco para o visual runner correspondente (v3.8.312)
+  if (visualRunner && visualRunner.sessions) {
+    const session = visualRunner.sessions.get(sessionId);
+    if (session && session.window && !session.window.isDestroyed()) {
+      try {
+        session.window.webContents.send('polaryon-focused-state', { focused: true });
+      } catch (e) {}
+    }
+    // E desativa foco nas outras sessões
+    for (const [sId, s] of visualRunner.sessions.entries()) {
+      if (sId !== sessionId && s.window && !s.window.isDestroyed()) {
+        try {
+          s.window.webContents.send('polaryon-focused-state', { focused: false });
+        } catch (e) {}
+      }
+    }
+  }
 });
 
 // VISUAL AUTOMATION IPC HANDLERS (Siga Pregão Mode)
