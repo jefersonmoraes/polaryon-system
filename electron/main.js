@@ -885,6 +885,38 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
       }
     });
 
+    let handshakeDone = false;
+    let lastRedirectUrl = '';
+    const handleHiddenLegacyRedirect = (event, url) => {
+      if (!url || hiddenWin.isDestroyed()) return;
+      if (url === lastRedirectUrl) return;
+      
+      const lowerUrl = url.toLowerCase();
+      const isLegacyPortal = url.includes('main.asp') || 
+                             url.includes('main2.asp') || 
+                             url.includes('indexgov.asp') || 
+                             url.includes('analise_amigavel.asp') || 
+                             lowerUrl.includes('acessonaoautorizado') || 
+                             url.includes('popup.asp') ||
+                             url.includes('index.html');
+                             
+      if (isLegacyPortal) {
+        lastRedirectUrl = url;
+        if (event && typeof event.preventDefault === 'function') {
+          event.preventDefault();
+        }
+        
+        if (!handshakeDone) {
+          handshakeDone = true;
+          sendDiag(`[MAIN] 🚫 Interceptado legado/erro na janela oculta: ${url}. Redirecionando para handshake seguro...`);
+          hiddenWin.loadURL('https://www.comprasnet.gov.br/assinadas/dispensa_eletronica.asp').catch(() => {});
+        } else {
+          sendDiag(`[MAIN] 🔄 Handshake concluído na janela oculta. Retornando para o SPA: ${targetUrl}`);
+          hiddenWin.loadURL(targetUrl).catch(() => {});
+        }
+      }
+    };
+
     // Define User-Agent moderno para evitar detecção e bloqueio de automação
     const modernUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     hiddenWin.webContents.setUserAgent(modernUserAgent);
@@ -897,12 +929,15 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     // Diagnóstico de Navegação em tempo real para o console do DevTools do usuário
     hiddenWin.webContents.on('did-start-navigation', (e, url) => {
       sendDiag(`[MAIN] 🧭 Navegação iniciada: ${url}`);
+      handleHiddenLegacyRedirect(e, url);
     });
     hiddenWin.webContents.on('did-redirect-navigation', (e, url) => {
       sendDiag(`[MAIN] 🔀 Redirecionamento: ${url}`);
+      handleHiddenLegacyRedirect(e, url);
     });
     hiddenWin.webContents.on('did-navigate', (e, url) => {
       sendDiag(`[MAIN] 📍 Navegado para: ${url}`);
+      handleHiddenLegacyRedirect(null, url);
     });
 
     // Auto-close timeout (55s)
@@ -975,7 +1010,14 @@ ipcMain.handle('refresh-jwt-via-hidden-page', async (event) => {
     }
 
     if (foundToken) {
+      global.serproToken = foundToken;
       sendDiag(`[MAIN] ✅ SUCESSO! Token len=${foundToken.length}`);
+      broadcastToken(foundToken);
+      const runners = [biddingRunner, global.biddingRunner].filter(Boolean);
+      for (const r of runners) {
+          if (r && typeof r.setToken === 'function') r.setToken(foundToken);
+          else if (r) r.serproToken = foundToken;
+      }
       return foundToken;
     }
 
