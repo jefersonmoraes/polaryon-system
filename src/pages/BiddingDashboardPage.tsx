@@ -1484,6 +1484,7 @@ export default function BiddingDashboardPage() {
                             let posicaoFinal = minhaPosicao > 0
                                 ? String(minhaPosicao)
                                 : (realPosicao || it.posicao);
+                            let finalGanhador = it.ganhador || 'Outro';
 
                             // Determinar meu lance e menor lance geral do ranking
                             let finalMeuValor = it.meuValor;
