@@ -573,6 +573,7 @@
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _ranking429Count = 0;      // consecutive 429s for exponential backoff
     let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
+    let _429ReloadTimer = null;    // timer para auto-reload sob 429
     let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
     const RANKING_RATE_MS = 3000;  // Delay entre batches de compras distintas (~20 req/min) — Anti-429
     const RANKING_BATCH_MAX = 4;    // Máximo de itens por batch (evita rajada de 10 req simultâneos que causa 429)
@@ -1107,12 +1108,26 @@
             } else if (type === '429-error') {
                 _ranking429Count = (_ranking429Count || 0) + 1;
                 const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180); // 20s, 40s, 80s, max 180s
-                console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's...', 'color:#ef4444;font-weight:bold;font-size:11px;');
+                const failedUrl = url || '';
+                console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's... URL=' + failedUrl, 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                 _rankingQueue = [];
                 shared.pendingRankingTargets = [];
                 _rankingSuppressRefresh = true;
                 setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
+
+                // Se a URL que falhou for a lista de participações, agenda reload após o backoff para auto-recuperação
+                if (failedUrl && (failedUrl.includes('/compras/participacoes') || failedUrl.includes('/compras/list') || failedUrl.includes('fornecedor/compras') || failedUrl.includes('/compras?filtro='))) {
+                    if (!_429ReloadTimer) {
+                        console.log('%c[POLARYON] 🚨 429 na lista de participações detectado! Agendando reload em ' + backoffSec + 's para auto-recuperação...', 'color:#f59e0b;font-weight:bold;');
+                        _429ReloadTimer = setTimeout(() => {
+                            _429ReloadTimer = null;
+                            window.location.reload();
+                        }, backoffSec * 1000);
+                    } else {
+                        console.log('%c[POLARYON] ⏳ Reload por 429 já agendado. Ignorando chamada duplicada.', 'color:#94a3b8;font-size:10px;');
+                    }
+                }
             } else if (type === 'session-expired') {
                 console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Renovando via janela oculta...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
@@ -1792,7 +1807,8 @@
                         window.postMessage({
                             source: 'polaryon-injector',
                             type: '429-error',
-                            status: response.status
+                            status: response.status,
+                            url: url
                         }, '*');
                     }
                 }
@@ -1906,7 +1922,8 @@
                             window.postMessage({
                                 source: 'polaryon-injector',
                                 type: '429-error',
-                                status: this.status
+                                status: this.status,
+                                url: this._url
                             }, '*');
                         }
                         const dateHeader = this.getResponseHeader('Date') || this.getResponseHeader('date') || '';
@@ -1948,7 +1965,7 @@
                     if (res.status === 403) {
                         window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: res.status }, '*');
                     } else if (res.status === 429) {
-                        window.postMessage({ source: 'polaryon-injector', type: '429-error', status: res.status }, '*');
+                        window.postMessage({ source: 'polaryon-injector', type: '429-error', status: res.status, url: url }, '*');
                     } else if (res.status === 401) {
                         window.postMessage({ source: 'polaryon-injector', type: 'session-expired', status: res.status }, '*');
                     }
