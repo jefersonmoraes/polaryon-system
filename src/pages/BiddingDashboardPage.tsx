@@ -103,6 +103,7 @@ export default function BiddingDashboardPage() {
     const { currentUser: authUser } = useAuthStore();
     const [searchParams] = useSearchParams();
     
+    const [fastBidTick, setFastBidTick] = useState(0);
     const [uasg, setUasg] = useState('');
     const [numeroPregao, setNumeroPregao] = useState('');
     const [anoPregao, setAnoPregao] = useState(new Date().getFullYear().toString());
@@ -1280,22 +1281,31 @@ export default function BiddingDashboardPage() {
                 }));
             }
 
-            // ⚡ RAIO DIRETO: atualiza display instantâneo sem React state batching
+            // ⚡ RAIO DIRETO: atualiza display instantâneo sem React state batching pesado,
+            // mas força re-render imediato e eficiente apenas se houver mudanças nos lances.
             if ((window as any).electronAPI.onWsFastBid) {
                 unsubs.push((window as any).electronAPI.onWsFastBid((data: any) => {
                     if (!data || !data.codigo || !Array.isArray(data.items)) return;
                     const { codigo, items } = data;
                     const updated = { ...wsFastBidsRef.current };
+                    let changed = false;
                     for (const item of items) {
                         const key = `${codigo}_${item.itemId}`;
-                        updated[key] = {
-                            meuValor: item.meuValor,
-                            valorAtual: item.valorAtual,
-                            posicao: item.posicao,
-                            ganhador: item.ganhador
-                        };
+                        const prev = updated[key];
+                        if (!prev || prev.meuValor !== item.meuValor || prev.valorAtual !== item.valorAtual || prev.posicao !== item.posicao || prev.ganhador !== item.ganhador) {
+                            updated[key] = {
+                                meuValor: item.meuValor,
+                                valorAtual: item.valorAtual,
+                                posicao: item.posicao,
+                                ganhador: item.ganhador
+                            };
+                            changed = true;
+                        }
                     }
-                    wsFastBidsRef.current = updated;
+                    if (changed) {
+                        wsFastBidsRef.current = updated;
+                        setFastBidTick(t => t + 1);
+                    }
                 }));
             }
 
@@ -2393,6 +2403,8 @@ export default function BiddingDashboardPage() {
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
                                                     timerOverrideRef={timerOverrideRef}
+                                                    lastFiredBidRef={lastFiredBidRef}
+                                                    fastBidTick={fastBidTick}
                                                 />
                                             ))}
                                                                     </div>
@@ -2415,6 +2427,8 @@ export default function BiddingDashboardPage() {
                                                         clockSkew={clockSkewRef.current}
                                                         wsFastBidsRef={wsFastBidsRef}
                                                         timerOverrideRef={timerOverrideRef}
+                                                        lastFiredBidRef={lastFiredBidRef}
+                                                        fastBidTick={fastBidTick}
                                                     />
                                                 ))];
                                             }
@@ -2432,6 +2446,8 @@ export default function BiddingDashboardPage() {
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
                                                     timerOverrideRef={timerOverrideRef}
+                                                    lastFiredBidRef={lastFiredBidRef}
+                                                    fastBidTick={fastBidTick}
                                                 />
                                             ));
                                         })()
@@ -2531,7 +2547,7 @@ export default function BiddingDashboardPage() {
     );
 }
 
-function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest }: any) {
+function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest, lastFiredBidRef, fastBidTick }: any) {
     const groupedItems = useMemo(() => {
         const groups: Record<string, any[]> = {};
         const safeItems = Array.isArray(items) ? items : [];
@@ -2546,13 +2562,13 @@ function BiddingSigaView({ items, sessions, onSaveStrategy, onQuickBid, onStopRa
     return (
         <div className="space-y-8 pb-12">
             {Object.entries(sessions || {}).map(([sid, session]: [string, any]) => (
-                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" serverTime={serverTime} getStrategy={getStrategy} onStartSniperTest={onStartSniperTest} />
+                <ProcessCard key={sid} sid={sid} session={session} items={groupedItems[sid] || []} onSaveStrategy={onSaveStrategy} onQuickBid={onQuickBid} onStopRadar={() => onStopRadar(sid)} appVersion="3.6.1" serverTime={serverTime} getStrategy={getStrategy} onStartSniperTest={onStartSniperTest} lastFiredBidRef={lastFiredBidRef} fastBidTick={fastBidTick} />
             ))}
         </div>
     );
 }
 
-function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest }: any) {
+function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRadar, serverTime, getStrategy, onStartSniperTest, lastFiredBidRef, fastBidTick }: any) {
     const [isExpanded, setIsExpanded] = useState(true);
     const [tab, setTab] = useState<'WAIT' | 'DISPUTE' | 'CLOSED'>('DISPUTE');
     
@@ -2599,7 +2615,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} timerOverrideRef={timerOverrideRef} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} timerOverrideRef={timerOverrideRef} lastFiredBidRef={lastFiredBidRef} fastBidTick={fastBidTick} />
                         ))}
                     </div>
                 </CardContent>
@@ -2628,7 +2644,19 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     ranking: { participante: string; valor: number; origem: string; data: string; eMeuLance: boolean }[];
     minhaPosicao: number;
 } {
-    if (!Array.isArray(lancesRaw) || lancesRaw.length === 0) return { ranking: [], minhaPosicao: 0 };
+    if (!Array.isArray(lancesRaw) || lancesRaw.length === 0) {
+        if (meuValor && meuValor > 0) {
+            const ranking = [{
+                participante: '__EU__',
+                valor: meuValor,
+                origem: 'Você',
+                data: new Date().toLocaleString('pt-BR'),
+                eMeuLance: true
+            }];
+            return { ranking, minhaPosicao: 1 };
+        }
+        return { ranking: [], minhaPosicao: 0 };
+    }
 
     // Agrupa pelo identificador do participante (fornecedorId, cnpj, ou 'EU' se eMeuLance)
     const mapaParticipantes = new Map<string, { valor: number; origem: string; data: string; eMeuLance: boolean }>();
@@ -2656,31 +2684,34 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
         }
     });
 
-    // Se o meuValor veio do item mas não havia nenhum lance marcado como "meu", tenta encontrar por valor ou injeta
-    if (!mapaParticipantes.has('__EU__') && meuValor && meuValor > 0) {
-        let matchingKey = null;
-        for (const [key, d] of mapaParticipantes.entries()) {
-            if (Math.abs(d.valor - meuValor) < 0.001) {
-                matchingKey = key;
-                break;
+    // Garante que o meuValor (seja do item, wsFastData ou optimistic update) está refletido como menor lance de Você
+    if (meuValor && meuValor > 0) {
+        const existenteEU = mapaParticipantes.get('__EU__');
+        if (!existenteEU || meuValor < existenteEU.valor) {
+            let matchingKey = null;
+            for (const [key, d] of mapaParticipantes.entries()) {
+                if (key !== '__EU__' && Math.abs(d.valor - meuValor) < 0.001) {
+                    matchingKey = key;
+                    break;
+                }
             }
-        }
-        if (matchingKey) {
-            const d = mapaParticipantes.get(matchingKey);
-            if (d) {
+            if (matchingKey) {
+                const d = mapaParticipantes.get(matchingKey);
                 mapaParticipantes.delete(matchingKey);
                 mapaParticipantes.set('__EU__', {
-                    ...d,
+                    valor: meuValor,
+                    origem: d?.origem || 'Lance (Você)',
+                    data: d?.data || new Date().toLocaleString('pt-BR'),
+                    eMeuLance: true
+                });
+            } else {
+                mapaParticipantes.set('__EU__', {
+                    valor: meuValor,
+                    origem: existenteEU?.origem || 'Lance (Você)',
+                    data: existenteEU?.data || new Date().toLocaleString('pt-BR'),
                     eMeuLance: true
                 });
             }
-        } else {
-            mapaParticipantes.set('__EU__', {
-                valor: meuValor,
-                origem: 'Lance (Você)',
-                data: new Date().toLocaleString('pt-BR'),
-                eMeuLance: true
-            });
         }
     }
 
@@ -2695,32 +2726,88 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, timerOverrideRef }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, timerOverrideRef, lastFiredBidRef, fastBidTick }: any) {
     if (!item) return null;
+
+    // Helper local para obter o lance recente disparado
+    const getRecentFiredBidLocal = (itemId: string): { value: number; timestamp: number } | null => {
+        if (!lastFiredBidRef?.current) return null;
+        let bestMatch: { value: number; timestamp: number } | null = null;
+        const now = Date.now();
+        const itemIdStr = String(itemId);
+        
+        for (const [k, fired] of Object.entries(lastFiredBidRef.current)) {
+            if ((k === itemIdStr || k.endsWith(`_${itemIdStr}`)) && (now - fired.timestamp) < 15000) {
+                if (!bestMatch || fired.timestamp > bestMatch.timestamp) {
+                    bestMatch = fired as any;
+                }
+            }
+        }
+        return bestMatch;
+    };
+
     // ⚡ SOBRESCRITA INSTANTÂNEA VIA WEBSOCKET DIRETO (RAIO DIRETO): usa dados do wsFastBidsRef
-    // para meuValor, valorAtual, posicao SEMPRE que disponíveis (mais recentes que o item prop)
-    const wsFastKey = sid ? `${sid}_${item.itemId || item.numero}` : `${item.itemId || item.numero}`;
-    const wsFastData = wsFastBidsRef?.current?.[wsFastKey];
+    // extraindo o compraId limpo (sem prefixos) para bater perfeitamente com a chave do WS.
+    const wsFastKey = (() => {
+        const itemIdStr = String(item.itemId || item.numero || '');
+        if (!itemIdStr) return null;
+        let compraId = sid;
+        if (sid) {
+            compraId = sid.replace(/^(GLOBAL_|virtual_|HYBRID_)/, '');
+        }
+        if (item.purchaseId) {
+            compraId = String(item.purchaseId).replace(/^(GLOBAL_|virtual_|HYBRID_)/, '');
+        }
+        return compraId ? `${compraId}_${itemIdStr}` : itemIdStr;
+    })();
+    const wsFastData = wsFastKey ? wsFastBidsRef?.current?.[wsFastKey] : null;
+
+    const lastFired = getRecentFiredBidLocal(item.itemId);
+
+    // ⚡ Usa wsFastData quando disponível (frescor do WebSocket em tempo real), ou lance recente disparado localmente
+    const meuValorDisplay = (() => {
+        if (wsFastData?.meuValor !== undefined && wsFastData.meuValor > 0) {
+            return wsFastData.meuValor;
+        }
+        if (lastFired && (Date.now() - lastFired.timestamp) < 3000) {
+            return lastFired.value;
+        }
+        return safeParseNumber(item.meuValor);
+    })();
+
+    const rawValorAtual = (() => {
+        if (wsFastData?.valorAtual !== undefined && wsFastData.valorAtual > 0) {
+            return wsFastData.valorAtual;
+        }
+        const baseVal = safeParseNumber(item.valorAtual);
+        if (lastFired && (Date.now() - lastFired.timestamp) < 3000) {
+            if (baseVal <= 0 || lastFired.value < baseVal) {
+                return lastFired.value;
+            }
+        }
+        return baseVal;
+    })();
     
-    // RANKING CORRETO: monta por participante (melhor lance de cada um)
+    // RANKING CORRETO: monta por participante (melhor lance de cada um) utilizando o valor de exibição instantâneo
     const { ranking: rankingComputado, minhaPosicao: posicaoComputada } = useMemo(() => {
-        return buildRankingPorParticipante(item.rankingLances || [], item.meuValor);
-    }, [item.rankingLances, item.meuValor]);
+        return buildRankingPorParticipante(item.rankingLances || [], meuValorDisplay);
+    }, [item.rankingLances, meuValorDisplay]);
 
     // Posição real: usa wsFastData se disponível, senão computada, senão item.posicao
     const posicaoReal = wsFastData?.posicao 
         ? wsFastData.posicao 
         : (posicaoComputada > 0 ? String(posicaoComputada) : (item.posicao || '?'));
 
-    // ⚡ Usa wsFastData quando disponível (frescor do WebSocket em tempo real)
-    const meuValorDisplay = wsFastData?.meuValor ?? safeParseNumber(item.meuValor);
-    const rawValorAtual = wsFastData?.valorAtual ?? safeParseNumber(item.valorAtual);
     const lowestRankingBid = (rankingComputado && rankingComputado.length > 0 && rankingComputado[0])
         ? rankingComputado[0].valor
         : 0;
-    const valorAtualDisplay = (lowestRankingBid > 0 && lowestRankingBid < rawValorAtual)
-        ? lowestRankingBid
-        : (rawValorAtual > 0 ? rawValorAtual : lowestRankingBid);
+
+    // O valor atual (Melhor Lance) é o menor valor válido entre o ranking e o rawValorAtual (incluindo wsFastData e optimistic updates)
+    const valorAtualDisplay = (() => {
+        const candidates = [rawValorAtual, lowestRankingBid].filter(v => v > 0);
+        return candidates.length > 0 ? Math.min(...candidates) : 0;
+    })();
+
     const ganhadorDisplay = wsFastData?.ganhador || item.ganhador || 'Outro';
 
     const myBidVal = meuValorDisplay;
