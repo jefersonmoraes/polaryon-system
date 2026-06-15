@@ -1124,8 +1124,35 @@
                             _429ReloadTimer = null;
                             window.location.reload();
                         }, backoffSec * 1000);
-                    } else {
-                        console.log('%c[POLARYON] ⏳ Reload por 429 já agendado. Ignorando chamada duplicada.', 'color:#94a3b8;font-size:10px;');
+                }
+            } else if (type === 'portal-list-error') {
+                const failedUrl = url || '';
+                const errStatus = status || 500;
+                console.log('%c[POLARYON] 🚨 Falha na lista de participações! Status=' + errStatus + ' URL=' + failedUrl, 'color:#ef4444;font-weight:bold;font-size:11px;');
+                
+                if (errStatus === 429) {
+                    _ranking429Count = (_ranking429Count || 0) + 1;
+                    const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180);
+                    _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
+                    _rankingQueue = [];
+                    shared.pendingRankingTargets = [];
+                    _rankingSuppressRefresh = true;
+                    setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
+
+                    if (!_429ReloadTimer) {
+                        console.log('%c[POLARYON] 🚨 Agendando reload em ' + backoffSec + 's por rate-limit (429)...', 'color:#f59e0b;font-weight:bold;');
+                        _429ReloadTimer = setTimeout(() => {
+                            _429ReloadTimer = null;
+                            window.location.reload();
+                        }, backoffSec * 1000);
+                    }
+                } else {
+                    if (!_429ReloadTimer) {
+                        console.log('%c[POLARYON] 🚨 Agendando reload em 6s para auto-recuperar a lista...', 'color:#f59e0b;font-weight:bold;');
+                        _429ReloadTimer = setTimeout(() => {
+                            _429ReloadTimer = null;
+                            window.location.reload();
+                        }, 6000);
                     }
                 }
             } else if (type === 'session-expired') {
@@ -1811,6 +1838,14 @@
                             url: url
                         }, '*');
                     }
+                    if (!response.ok && url && (url.includes('/compras/participacoes') || url.includes('/compras/list') || url.includes('/compras?filtro='))) {
+                        window.postMessage({
+                            source: 'polaryon-injector',
+                            type: 'portal-list-error',
+                            status: response.status,
+                            url: url
+                        }, '*');
+                    }
                 }
                 return response;
             };
@@ -1922,6 +1957,14 @@
                             window.postMessage({
                                 source: 'polaryon-injector',
                                 type: '429-error',
+                                status: this.status,
+                                url: this._url
+                            }, '*');
+                        }
+                        if (this.status >= 400 && this._url && (this._url.includes('/compras/participacoes') || this._url.includes('/compras/list') || this._url.includes('/compras?filtro='))) {
+                            window.postMessage({
+                                source: 'polaryon-injector',
+                                type: 'portal-list-error',
                                 status: this.status,
                                 url: this._url
                             }, '*');
