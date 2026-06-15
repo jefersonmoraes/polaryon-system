@@ -1124,6 +1124,7 @@
                             _429ReloadTimer = null;
                             window.location.reload();
                         }, backoffSec * 1000);
+                    }
                 }
             } else if (type === 'portal-list-error') {
                 const failedUrl = url || '';
