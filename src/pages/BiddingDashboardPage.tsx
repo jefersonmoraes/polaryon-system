@@ -452,6 +452,7 @@ export default function BiddingDashboardPage() {
                                 // Se o líder não é batível, procuramos no ranking o melhor concorrente (menor valor)
                                 // que conseguimos bater respeitando o nosso mínimo (myMin).
                                 let targetCompetitorBid = null;
+                                let isTieBid = false;
                                 
                                 // 🛡️ GUARDA INTERMEDIÁRIO (v4.1.1): se acabamos de disparar um bid intermediário,
                                 // aguardamos a propagação da API para não cobrir o próprio lance (tempo reduzido ou nulo na reta final/kamikaze)
@@ -498,7 +499,7 @@ export default function BiddingDashboardPage() {
                                     // Antes: competidor batível se cBid - margin >= myMin
                                     // Agora: se lowestAllowed < cBid (consigo ir abaixo dele) E beatingBid >= myMin
                                     // v3.8.XXX: Também considera empate (candidateBid == cBid == myMin)
-                                    let isTieBid = false;
+                                    isTieBid = false;
                                     for (const cBid of competitorBids) {
                                         const beatingBid = cBid - beatingAmount;
                                         const candidateBid = Math.max(myMin, Math.min(beatingBid, serproLowestAllowed));
