@@ -963,7 +963,7 @@ export default function BiddingDashboardPage() {
                                 mergedPosicao = String(minhaPosicao);
                                 mergedGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
                             }
-                            if (ranking && ranking.length > 0) {
+                            if (ranking && ranking.length > 0 && ranking[0]) {
                                 const lowestVal = ranking[0].valor;
                                 if (lowestVal > 0 && (mergedValorAtual <= 0 || lowestVal < mergedValorAtual)) {
                                     mergedValorAtual = lowestVal;
@@ -1176,7 +1176,7 @@ export default function BiddingDashboardPage() {
                                     mergedPosicao = String(minhaPosicao);
                                     mergedGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
                                 }
-                                if (ranking && ranking.length > 0) {
+                                if (ranking && ranking.length > 0 && ranking[0]) {
                                     const lowestVal = ranking[0].valor;
                                     if (lowestVal > 0 && (mergedValorAtual <= 0 || lowestVal < mergedValorAtual)) {
                                         mergedValorAtual = lowestVal;
@@ -1491,7 +1491,7 @@ export default function BiddingDashboardPage() {
                             }
 
                             let finalValorAtual = it.valorAtual;
-                            if (ranking && ranking.length > 0) {
+                            if (ranking && ranking.length > 0 && ranking[0]) {
                                 finalValorAtual = ranking[0].valor;
                             }
                             if (finalMeuValor && finalMeuValor > 0 && (!finalValorAtual || finalMeuValor < finalValorAtual)) {
@@ -1671,7 +1671,7 @@ export default function BiddingDashboardPage() {
                             const finalGanhador = minhaPosicao === 1 ? 'Você' : 'Outro';
 
                             let finalValorAtual = it.valorAtual;
-                            if (ranking && ranking.length > 0) {
+                            if (ranking && ranking.length > 0 && ranking[0]) {
                                 const lowestVal = ranking[0].valor;
                                 if (lowestVal > 0 && (finalValorAtual <= 0 || lowestVal < finalValorAtual)) {
                                     finalValorAtual = lowestVal;
@@ -2628,12 +2628,13 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     ranking: { participante: string; valor: number; origem: string; data: string; eMeuLance: boolean }[];
     minhaPosicao: number;
 } {
-    if (!lancesRaw || lancesRaw.length === 0) return { ranking: [], minhaPosicao: 0 };
+    if (!Array.isArray(lancesRaw) || lancesRaw.length === 0) return { ranking: [], minhaPosicao: 0 };
 
     // Agrupa pelo identificador do participante (fornecedorId, cnpj, ou 'EU' se eMeuLance)
     const mapaParticipantes = new Map<string, { valor: number; origem: string; data: string; eMeuLance: boolean }>();
 
     lancesRaw.forEach((lance: any) => {
+        if (!lance) return;
         const valor = safeParseNumber(lance.valor || lance.valorInformado || lance.valorCalculado || 0);
         if (valor <= 0) return;
 
@@ -2695,6 +2696,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
 }
 
 function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, timerOverrideRef }: any) {
+    if (!item) return null;
     // ⚡ SOBRESCRITA INSTANTÂNEA VIA WEBSOCKET DIRETO (RAIO DIRETO): usa dados do wsFastBidsRef
     // para meuValor, valorAtual, posicao SEMPRE que disponíveis (mais recentes que o item prop)
     const wsFastKey = sid ? `${sid}_${item.itemId || item.numero}` : `${item.itemId || item.numero}`;
@@ -2713,7 +2715,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     // ⚡ Usa wsFastData quando disponível (frescor do WebSocket em tempo real)
     const meuValorDisplay = wsFastData?.meuValor ?? safeParseNumber(item.meuValor);
     const rawValorAtual = wsFastData?.valorAtual ?? safeParseNumber(item.valorAtual);
-    const lowestRankingBid = (rankingComputado && rankingComputado.length > 0)
+    const lowestRankingBid = (rankingComputado && rankingComputado.length > 0 && rankingComputado[0])
         ? rankingComputado[0].valor
         : 0;
     const valorAtualDisplay = (lowestRankingBid > 0 && lowestRankingBid < rawValorAtual)
