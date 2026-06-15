@@ -562,11 +562,11 @@
         return true;
     }
 
-    // 🔄 LOOP DE RANKING COM FILA INTELIGENTE:
+    // 🔄 LOOP DE RANKING COM NOVO POOL DE hCAPTCHA (v3.8.310):
     //   - Fila ordenada por timer: item com menos tempo restante é processado primeiro
-    //   - Rate-limit de 1 req/2s → sem 429
-    //   - Item novo → inserido no INÍCIO da fila (prioridade, carga instantânea)
-    //   - 429 → backoff de 15s automático antes de continuar
+    //   - Mantém um pool pré-resolvido de tokens hCaptcha em background
+    //   - Carga instantânea (0ms) no primeiro item, com delay de 400ms entre itens subsequentes do mesmo lote
+    //   - 429 → backoff automático exponencial antes de continuar
     //   - Refresh periódico de todos os itens a cada 45s (re-enfileira no final)
     const activeRankingItems = []; // { purchaseId, itemId, timerSeconds }
     let _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
@@ -574,9 +574,36 @@
     let _ranking429Count = 0;      // consecutive 429s for exponential backoff
     let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
     let _429ReloadTimer = null;    // timer para auto-reload sob 429
-    let _lastRankingFetchTs = 0;   // timestamp do último fetch disparado
-    const RANKING_RATE_MS = 3000;  // Delay entre batches de compras distintas (~20 req/min) — Anti-429
-    const RANKING_BATCH_MAX = 4;    // Máximo de itens por batch (evita rajada de 10 req simultâneos que causa 429)
+    
+    // --- POOL DE hCAPTCHA ---
+    const _hcaptchaPool = [];      // { token, ts }
+    const HCAPTCHA_POOL_MAX = 8;
+    const HCAPTCHA_TTL = 100000;   // 100s
+    let _hcaptchaPrefetchInProgress = 0;
+    let _lastHcaptchaTriggerTime = 0;
+
+    function prefetchHcaptcha() {
+        if (_serproBlocked) return;
+        const now = Date.now();
+        // Limpa tokens expirados do pool
+        while (_hcaptchaPool.length > 0 && (now - _hcaptchaPool[0].ts) > HCAPTCHA_TTL) {
+            _hcaptchaPool.shift();
+        }
+        
+        // Se hCaptcha está travado em prefetch por mais de 15 segundos, resetamos o flag
+        if (_hcaptchaPrefetchInProgress > 0 && (now - _lastHcaptchaTriggerTime) > 15000) {
+            console.warn('%c[POLARYON HCAPTCHA] ⚠️ Prefetch de hCaptcha estagnado (>15s). Resetando estado.', 'color:#f59e0b;font-size:9px;');
+            _hcaptchaPrefetchInProgress = 0;
+        }
+        
+        const activeCount = _hcaptchaPool.length + _hcaptchaPrefetchInProgress;
+        if (activeCount < HCAPTCHA_POOL_MAX && _hcaptchaPrefetchInProgress === 0) {
+            _hcaptchaPrefetchInProgress = 1;
+            _lastHcaptchaTriggerTime = now;
+            console.log(`%c[POLARYON HCAPTCHA] 🔍 Disparando prefetch de hCaptcha (Pool: ${_hcaptchaPool.length}/${HCAPTCHA_POOL_MAX})`, 'color:#6366f1;font-size:9px;');
+            document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
+        }
+    }
 
     // Enfileira item de ranking. priority=true coloca na frente da fila.
     function enqueueRankingFetch(target, priority = false) {
@@ -588,61 +615,68 @@
         } else {
             _rankingQueue.push(entry);
         }
+        // Dispara processamento imediato ao enfileirar se o pool tiver tokens
+        processRankingQueue();
     }
 
-    // Dispara o fetch de um item: só aciona o captcha — o fetch REAL é feito pelo handler fresh-captcha
-    // (a requisição sem captcha SEMPRE retorna 204, então eliminamos o desperdício)
-    function triggerRankingFetch(target) {
-        target._addedAt = Date.now();
-        shared.pendingRankingTargets.push(target);
-        document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
+    let _isProcessingQueue = false;
+    async function processRankingQueue() {
+        if (_isProcessingQueue) return;
+        _isProcessingQueue = true;
+        
+        try {
+            while (_rankingQueue.length > 0) {
+                if (_serproBlocked) break;
+                if (Date.now() < _rankingBackoffUntil) break;
+                
+                // Limpa tokens expirados do pool
+                const now = Date.now();
+                while (_hcaptchaPool.length > 0 && (now - _hcaptchaPool[0].ts) > HCAPTCHA_TTL) {
+                    _hcaptchaPool.shift();
+                }
+                
+                // Se o pool estiver vazio, dispara o prefetch e aguarda
+                if (_hcaptchaPool.length === 0) {
+                    prefetchHcaptcha();
+                    break;
+                }
+                
+                // Ordena a fila: prioridades primeiro, depois timer ASC (mais urgente primeiro)
+                _rankingQueue.sort((a, b) => {
+                    if (a.priority && !b.priority) return -1;
+                    if (!a.priority && b.priority) return 1;
+                    const aTimer = a.timerSeconds >= 0 ? a.timerSeconds : Infinity;
+                    const bTimer = b.timerSeconds >= 0 ? b.timerSeconds : Infinity;
+                    return aTimer - bTimer;
+                });
+                
+                const target = _rankingQueue.shift();
+                const tokenEntry = _hcaptchaPool.shift();
+                
+                const encoded = encodeURIComponent(tokenEntry.token);
+                const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
+                
+                console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch para item ${target.itemId} (Fila: ${_rankingQueue.length} | Pool restante: ${_hcaptchaPool.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
+                
+                document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
+                    detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
+                }));
+                
+                // Delay curto de 400ms entre requisições de classificação para evitar 429 do Serpro
+                await new Promise(resolve => setTimeout(resolve, 400));
+            }
+        } catch (err) {
+            console.error('[POLARYON RANKING QUEUE] Erro no processamento:', err);
+        } finally {
+            _isProcessingQueue = false;
+        }
     }
 
-    // 🚦 PROCESSADOR DE FILA: a cada 500ms verifica se pode disparar o próximo BATCH
-    // Os itens são agrupados por purchaseId e cada item do batch processa SEQUENCIALMENTE:
-    //   1 captcha próprio → 800ms delay → fetch ranking → próximo captcha → ...
-    // Um item por vez evita 429 do Serpro e desperdício de captcha.
-    const RANKING_CAPTCHA_TIMEOUT = 15000; // 15s p/ captcha resolver antes de considerar órfão
+    // 🚦 PROCESSADOR DE FILA PERIÓDICO E PREFETCH WORKER
     setInterval(() => {
         if (!shared.sessionToken) return;
-        const now = Date.now();
-        
-        // 🧹 Limpa targets órfãos (captcha não resolveu em 15s) — descarta em vez de re-enfileirar (evita loop eterno)
-        if (shared.pendingRankingTargets.length > 0) {
-            const stale = shared.pendingRankingTargets.filter(t => (now - t._addedAt) >= RANKING_CAPTCHA_TIMEOUT);
-            if (stale.length > 0) {
-                console.warn(`%c[POLARYON RANKING QUEUE] ⚠️ ${stale.length} targets estagnados (>15s sem captcha). DESCATANDO para evitar loop.`, 'color:#f59e0b;font-size:9px;');
-                shared.pendingRankingTargets = shared.pendingRankingTargets.filter(t => (now - t._addedAt) < RANKING_CAPTCHA_TIMEOUT);
-            }
-        }
-        if (_rankingQueue.length === 0) return;
-        if (now < _rankingBackoffUntil) return;           // 429 backoff ativo
-        if (now - _lastRankingFetchTs < RANKING_RATE_MS) return; // rate-limit entre batches
-        
-        // Ordena a fila: priority items primeiro, depois por timer ASC (mais urgente primeiro)
-        _rankingQueue.sort((a, b) => {
-            if (a.priority && !b.priority) return -1;
-            if (!a.priority && b.priority) return 1;
-            const aTimer = a.timerSeconds >= 0 ? a.timerSeconds : Infinity;
-            const bTimer = b.timerSeconds >= 0 ? b.timerSeconds : Infinity;
-            return aTimer - bTimer;
-        });
-        
-        // ⚡ BATCH: pega no máximo RANKING_BATCH_MAX itens da MESMA compra para evitar 429
-        const firstPurchaseId = _rankingQueue[0].purchaseId;
-        const allForPurchase = _rankingQueue.filter(item => item.purchaseId === firstPurchaseId);
-        const batch = allForPurchase.slice(0, RANKING_BATCH_MAX);
-        // Mantém na fila os itens que não entraram neste batch (serão processados nos próximos ciclos)
-        const leftover = allForPurchase.slice(RANKING_BATCH_MAX);
-        _rankingQueue = [...leftover, ..._rankingQueue.filter(item => item.purchaseId !== firstPurchaseId)];
-        
-        _lastRankingFetchTs = now;
-        const leftoverInfo = leftover.length > 0 ? ` (+${leftover.length} aguardando)` : '';
-        console.log(`%c[POLARYON RANKING QUEUE] ▶️ BATCH de ${batch.length} itens (Compra: ${firstPurchaseId}) timer=${batch[0].timerSeconds}s | Fila: ${_rankingQueue.length}${leftoverInfo}`, 'color:#6366f1;font-size:9px;');
-        
-        // 🔥 Dispara captchas do batch em SEQUÊNCIA: 1 captcha → 1 fetch → próximo captcha → ...
-        // (o encadeamento é feito no handler fresh-captcha com delay de 1500ms entre fetches)
-        batch.forEach(target => triggerRankingFetch(target));
+        prefetchHcaptcha();
+        processRankingQueue();
     }, 500);
 
     // 🔁 REFRESH PERIÓDICO: a cada 45s re-enfileira todos os itens ativos (no final da fila)
@@ -1112,6 +1146,7 @@
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's... URL=' + failedUrl, 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                 _rankingQueue = [];
+                _hcaptchaPool.length = 0; // Clear captcha pool on 429
                 shared.pendingRankingTargets = [];
                 _rankingSuppressRefresh = true;
                 setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
@@ -1136,6 +1171,7 @@
                     const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180);
                     _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                     _rankingQueue = [];
+                    _hcaptchaPool.length = 0; // Clear captcha pool on 429
                     shared.pendingRankingTargets = [];
                     _rankingSuppressRefresh = true;
                     setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);
@@ -1160,6 +1196,7 @@
                 console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Renovando via janela oculta...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
+                _hcaptchaPool.length = 0; // Clear captcha pool on session expired
                 // v3.8.280: janela oculta (SEM botão de recarregar) — não mexe no portal.
                 refreshTokenViaIframe(true);
             } else if (type === 'siga-timer') {
@@ -1193,33 +1230,19 @@
                     serverTimeReceivedAt: shared.serverTimeReceivedAt,
                     clockSkew: shared.clockSkew
                 });
-                } else if (type === 'fresh-captcha') {
+            } else if (type === 'fresh-captcha') {
                 // 🔑 Token FRESCO: interceptado antes do Angular ou gerado sob demanda por nós
                 if (token && token.startsWith('P1_')) {
-                    console.log('%c[POLARYON] 🔑 Token FRESCO recebido!', 'color:#10b981;font-weight:bold;font-size:11px;');
+                    console.log('%c[POLARYON] 🔑 Token hCaptcha FRESCO recebido!', 'color:#10b981;font-weight:bold;font-size:11px;');
                     
-                    if (shared.pendingRankingTargets.length > 0) {
-                        const target = shared.pendingRankingTargets.shift(); // consome um target do batch
-                        
-                        const encoded = encodeURIComponent(token);
-                        const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
-                        console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch com token fresco para item ${target.itemId} (batch restante: ${shared.pendingRankingTargets.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
-                        
-                        // ⏳ Delay de 1500ms entre items do mesmo batch para evitar 429
-                        const delay = shared.pendingRankingTargets.length > 0 ? 1500 : 0;
-                        setTimeout(() => {
-                            document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                                detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
-                            }));
-                            // 🔁 Se ainda há mais targets, encadeia outro captcha para o próximo item
-                            if (shared.pendingRankingTargets.length > 0) {
-                                document.dispatchEvent(new CustomEvent('polaryon-trigger-hcaptcha'));
-                            }
-                        }, delay);
-                    } else {
-                        // Fallback: armazena
-                        shared.captchaToken = token;
+                    if (_hcaptchaPrefetchInProgress > 0) {
+                        _hcaptchaPrefetchInProgress--;
                     }
+                    _hcaptchaPool.push({ token, ts: Date.now() });
+                    shared.captchaToken = token; // Fallback legível por outras partes
+                    
+                    // Aciona processamento da fila imediatamente
+                    processRankingQueue();
                 }
             } else if (type === 'ws-diagnostic') {
                 console.log(`%c[WS DIAG] ${event.data.message}`, 'color:#f59e0b;font-weight:bold;font-size:10px;');
