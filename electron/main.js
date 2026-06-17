@@ -90,11 +90,11 @@ function createWindow() {
       }
     });
     
-    // A cada 8s verifica novamente — atualização quase instantânea
+    // A cada 5min verifica novamente — checagem a cada 8s era spam
     setInterval(() => {
         retryCount = 0;
         doCheck();
-    }, 8 * 1000);
+    }, 5 * 60 * 1000);
   }
 }
 
