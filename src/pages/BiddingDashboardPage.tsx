@@ -221,7 +221,7 @@ export default function BiddingDashboardPage() {
 
         for (const [k, inter] of Object.entries(lastIntermediateBidRef.current)) {
             if ((k === itemIdStr || k.endsWith(`_${itemIdStr}`))) {
-                const duration = inter.duration !== undefined ? inter.duration : 30000;
+                const duration = inter.duration !== undefined ? inter.duration : 3000;
                 if ((now - inter.timestamp) < duration) {
                     if (!bestMatch || inter.timestamp > bestMatch.timestamp) {
                         bestMatch = inter;
@@ -458,7 +458,7 @@ export default function BiddingDashboardPage() {
                                 // aguardamos a propagação da API para não cobrir o próprio lance (tempo reduzido ou nulo na reta final/kamikaze)
                                 const lastInter = getRecentIntermediateBid(item.itemId);
                                 if (lastInter) {
-                                    const currentDuration = lastInter.duration !== undefined ? lastInter.duration : 30000;
+                                    const currentDuration = lastInter.duration !== undefined ? lastInter.duration : 3000;
                                     if ((Date.now() - lastInter.timestamp) < currentDuration) {
                                         // 🔇 Throttle de log: só loga 1x por segundo por item para evitar spam no console
                                         const lastFreezeLog = lastLogRef.current[`freeze_${sId}`] || 0;
@@ -592,9 +592,9 @@ export default function BiddingDashboardPage() {
                                 // 🔒 Grava o lock TTL ANTES de enviar para bloquear reenvios imediatos
                                 const lockSessionId = itemSid || sessionId;
                                 lastFiredBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now() };
-                                // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 30s
+                                // 🛡️ Se este é um lance intermediário (líder imbatível), congela o item por 3s
                                 if (!isLeaderBeatable) {
-                                    const freezeDuration = (isKamikaze || currentTimeLeft <= 15 || isRetaFinal) ? 0 : 30000;
+                                    const freezeDuration = (isKamikaze || currentTimeLeft <= 15 || isRetaFinal) ? 0 : 3000;
                                     lastIntermediateBidRef.current[`${lockSessionId}_${item.itemId}`] = { value: nextBid, timestamp: Date.now(), duration: freezeDuration };
                                 }
                                 handleSendBid(item.purchaseId, sId, item.bidId, nextBid, isKamikaze, allow4);

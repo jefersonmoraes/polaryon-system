@@ -824,4 +824,16 @@ Isso afeta APENAS `handleToggle` com `snipeDelaySeconds === 0` (dropdown "Inicia
 
 **Impacto:** O robô agora empata com qualquer concorrente cujo valor seja igual ao `myMin`, em vez de queimar margem contra posições inferiores. Prioridade: 1º bater líder → 2º empatar (match myMin) → 3º bater concorrente no ranking → 4º gap reduction.
 
+## Implementado (v3.8.320)
+
+### 1. Redução de 30s para 3s no congelamento após lances intermediários (BiddingDashboardPage.tsx)
+**Problema:** O robô demorava muito para enviar lances subsequentes após o primeiro lance intermediário, fazendo com que itens em disputa fossem perdidos por falta de reatividade durante fases cruciais.
+**Causa:** Um mecanismo de salvaguarda ("Guarda Intermediário") congelava a reavaliação de lances do item por 30 segundos (`30000ms`) após disparar um lance intermediário, com o objetivo de aguardar a API atualizar o ranking. Esse tempo era excessivamente longo e inadequado para disputas ativas.
+**Arquivos:**
+- `src/pages/BiddingDashboardPage.tsx`
+**Solução:**
+- Reduzido o tempo padrão de bloqueio temporário (cooldown de propagação) de `30000ms` para `3000ms` (3 segundos).
+- Isso permite que o robô reavalie e envie novos lances de forma agressiva após apenas 3 segundos, mantendo a proteção contra auto-cobertura/duplicidade, mas agilizando drasticamente o tempo de resposta nas disputas.
+
+
 
