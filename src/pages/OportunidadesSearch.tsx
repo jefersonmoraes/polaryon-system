@@ -24,91 +24,101 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
 // --- Captcha Manager for PNCP Portal Endpoint ---
-// Token cache: hCaptcha tokens are valid for ~2 minutes, cache for 60s to avoid rate limits
+// Token cache: hCaptcha tokens are valid for ~2 minutes, cache for 120s to avoid rate limits
 let cachedCaptchaToken: string | null = null;
 let cachedCaptchaExpiry = 0;
+let captchaWidgetId: string | null = null;
+let captchaReady = false;
+let captchaInitPromise: Promise<void> | null = null;
+let captchaResolve: ((token: string) => void) | null = null;
 
-const getFreshCaptchaToken = async (): Promise<string> => {
-    const config = await axios.get('https://pncp.gov.br/api/pncp/v1/captcha/configuracao', {
-        headers: { 'Accept': 'application/json' },
-        timeout: 10000
-    });
-    const { hcaptchaSiteKey, hcaptchaHabilitado } = config.data;
+const ensureCaptchaLoaded = async (): Promise<void> => {
+    if (captchaReady) return;
+    if (captchaInitPromise) return captchaInitPromise;
 
-    if (!hcaptchaHabilitado || !hcaptchaSiteKey) {
-        throw new Error('hCaptcha not available');
-    }
-
-    if (typeof (window as any).hcaptcha === 'undefined') {
-        await new Promise<void>((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = `https://js.hcaptcha.com/1/api.js?render=explicit&hl=pt`;
-            script.async = true;
-            script.defer = true;
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load hCaptcha'));
-            document.head.appendChild(script);
+    captchaInitPromise = (async () => {
+        const config = await axios.get('https://pncp.gov.br/api/pncp/v1/captcha/configuracao', {
+            headers: { 'Accept': 'application/json' },
+            timeout: 10000
         });
-        await new Promise(r => setTimeout(r, 1000));
+        const data = config.data;
+        if (!data.hcaptchaHabilitado || !data.hcaptchaSiteKey) {
+            throw new Error('hCaptcha not available');
+        }
+
+        if (typeof (window as any).hcaptcha === 'undefined') {
+            await new Promise<void>((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = `https://js.hcaptcha.com/1/api.js?render=explicit&hl=pt`;
+                script.async = true;
+                script.defer = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load hCaptcha'));
+                document.head.appendChild(script);
+            });
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        const container = document.createElement('div');
+        container.id = 'pncp-hcaptcha-global';
+        container.style.position = 'fixed';
+        container.style.left = '-9999px';
+        container.style.top = '-9999px';
+        document.body.appendChild(container);
+
+        captchaWidgetId = (window as any).hcaptcha.render(container.id, {
+            sitekey: data.hcaptchaSiteKey,
+            size: 'invisible',
+            callback: (token: string) => {
+                cachedCaptchaToken = token;
+                cachedCaptchaExpiry = Date.now() + 120000;
+                if (captchaResolve) {
+                    captchaResolve(token);
+                    captchaResolve = null;
+                }
+            }
+        });
+        captchaReady = true;
+    })();
+
+    return captchaInitPromise;
+};
+
+const getCaptchaToken = async (): Promise<string> => {
+    await ensureCaptchaLoaded();
+
+    if (cachedCaptchaToken && Date.now() < cachedCaptchaExpiry) {
+        return cachedCaptchaToken;
     }
 
-    const container = document.createElement('div');
-    container.id = 'pncp-hcaptcha-container-' + Date.now();
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '-9999px';
-    document.body.appendChild(container);
-
+    // Executa o widget singleton — callback resolve a Promise
     return new Promise<string>((resolve, reject) => {
         const timeout = setTimeout(() => {
-            cleanup();
+            captchaResolve = null;
             reject(new Error('hCaptcha timeout'));
         }, 30000);
 
-        const cleanup = () => {
+        captchaResolve = (token: string) => {
             clearTimeout(timeout);
-            try { document.body.removeChild(container); } catch {}
+            resolve(token);
         };
 
         try {
-            const widgetId = (window as any).hcaptcha.render(container.id, {
-                sitekey: hcaptchaSiteKey,
-                size: 'invisible',
-                callback: (token: string) => {
-                    cleanup();
-                    resolve(token);
-                },
-                'expired-callback': () => {
-                    cleanup();
-                    reject(new Error('hCaptcha expired'));
-                },
-                'error-callback': () => {
-                    cleanup();
-                    reject(new Error('hCaptcha error'));
-                }
-            });
-            (window as any).hcaptcha.execute(widgetId);
+            (window as any).hcaptcha.execute(captchaWidgetId);
         } catch (e: any) {
-            cleanup();
-            reject(e);
+            clearTimeout(timeout);
+            captchaResolve = null;
+            if (cachedCaptchaToken) {
+                console.warn('[CAPTCHA] execute falhou, reutilizando cache:', e.message);
+                resolve(cachedCaptchaToken);
+            } else {
+                reject(e);
+            }
         }
     });
 };
 
-const getCaptchaToken = async (): Promise<string> => {
-    // Reuse cached token for 60s to avoid hCaptcha rate limits (429)
-    const now = Date.now();
-    if (cachedCaptchaToken && now < cachedCaptchaExpiry) {
-        return cachedCaptchaToken;
-    }
-    const token = await getFreshCaptchaToken();
-    cachedCaptchaToken = token;
-    cachedCaptchaExpiry = now + 60000; // 60s TTL
-    return token;
-};
-
 const invalidateCaptchaToken = () => {
-    cachedCaptchaToken = null;
     cachedCaptchaExpiry = 0;
 };
 
@@ -2669,12 +2679,12 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                         <span className="text-sm font-medium">
                                                             {loadingPortal ? (
                                                                 <Loader2 className="h-3 w-3 animate-spin inline-block" />
-                                                            ) : portalData?.linkSistemaOrigem ? (
-                                                                <a href={portalData.linkSistemaOrigem} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80 truncate block max-w-[250px]">
-                                                                    {new URL(portalData.linkSistemaOrigem).hostname}
+                                                            ) : (portalData?.linkSistemaOrigem || itemDetail?.linkSistemaOrigem) ? (
+                                                                <a href={portalData?.linkSistemaOrigem || itemDetail?.linkSistemaOrigem} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80 truncate block max-w-[250px]">
+                                                                    {new URL(portalData?.linkSistemaOrigem || itemDetail?.linkSistemaOrigem).hostname}
                                                                 </a>
-                                                            ) : portalData?.usuarioNome ? (
-                                                                <span className="text-muted-foreground">{portalData.usuarioNome}</span>
+                                                            ) : (portalData?.usuarioNome || itemDetail?.usuarioNome) ? (
+                                                                <span className="text-muted-foreground">{portalData?.usuarioNome || itemDetail?.usuarioNome}</span>
                                                             ) : (
                                                                 <span className="text-muted-foreground">{selectedItem.fonte_dados || 'PNCP'}</span>
                                                             )}
