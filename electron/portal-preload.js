@@ -1588,6 +1588,12 @@
                                 }
                             }
                         }
+                        // 🟡 Catch-all: se chegou aqui, nenhum formato conhecido matchou
+                        // Loga os primeiros 200 chars para diagnóstico
+                        if (typeof data === 'string' && data.length > 0) {
+                            console.log('%c[WS RAW] FORMATO DESCONHECIDO (len=' + data.length + '): "' + data.substring(0, 200) + '"', 'color:#ff6b6b;font-weight:bold;font-size:10px;');
+                            postDiag('RAW UNMATCHED: len=' + data.length + ' start="' + data.substring(0, 120) + '"');
+                        }
                     } catch(e) {}
                 }
             })();
