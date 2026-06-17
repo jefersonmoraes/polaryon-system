@@ -305,6 +305,10 @@ class RoomRunner {
             // 🎯 Se temos dados frescos do WebSocket (< 60s), usa direto sem HTTP fetch (v3.8.181)
             // Dados WS NÃO são limpos após uso — persistem até expirar o TTL ou chegar novos dados WS
             const wsAge = this.realtimeItems ? (Date.now() - this.realtimeItemsAt) : Infinity;
+            if (!this._wsStatusLogged) {
+                console.log(`[WS DIAG] 🏠 ${this.idCompra}: WS=${this.realtimeItems ? 'disponível (' + Math.round(wsAge/1000) + 's idade)' : 'NÃO DISPONÍVEL'} — ${this.realtimeItems ? '✅ usando WS em tempo real' : '⏳ aguardando WebSocket...'}`);
+                this._wsStatusLogged = true;
+            }
             if (this.realtimeItems && wsAge < 60000) {
                 itemsList = this.realtimeItems;
                 
@@ -1400,9 +1404,34 @@ class BiddingRunner {
      * 🎯 Injeta dados de itens em tempo real (WebSocket) em TODOS os RoomRunners ativos
      */
     injectRealtimeItems(codigo, items) {
+        const codigoStr = String(codigo).trim();
+        let matched = false;
+        // 1. Match exato (string)
         for (const [sessionId, runner] of this.activeRunners) {
-            if (runner.active && runner.idCompra === String(codigo)) {
+            if (runner.active && runner.idCompra === codigoStr) {
+                console.log(`[WS DIAG] injectRealtimeItems: match exato para codigo=${codigoStr} (session=${sessionId})`);
                 runner.injectRealtimeItems(items);
+                matched = true;
+            }
+        }
+        // 2. Fallback: prefix match (codigo do WS pode ter perdido precisão nos últimos dígitos)
+        if (!matched) {
+            for (const [sessionId, runner] of this.activeRunners) {
+                if (runner.active) {
+                    const runnerId = runner.idCompra || '';
+                    const minLen = Math.min(codigoStr.length, runnerId.length);
+                    if (minLen >= 14 && codigoStr.substring(0, 14) === runnerId.substring(0, 14)) {
+                        console.log(`[WS DIAG] injectRealtimeItems: PREFIX MATCH codigo=${codigoStr} → runner=${runnerId} (session=${sessionId})`);
+                        runner.injectRealtimeItems(items);
+                        matched = true;
+                    }
+                }
+            }
+        }
+        if (!matched) {
+            console.warn(`[WS DIAG] injectRealtimeItems: NENHUM match para codigo=${codigoStr} (activeRunners=${this.activeRunners.size})`);
+            for (const [sessionId, runner] of this.activeRunners) {
+                console.warn(`[WS DIAG]   runner: session=${sessionId} active=${runner.active} idCompra=${runner.idCompra}`);
             }
         }
     }

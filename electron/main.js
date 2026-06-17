@@ -388,6 +388,7 @@ ipcMain.on('portal-detected-room', (event, data) => {
 // [BRIDGE DIRETA] RELAY DE DADOS DO NAVEGADOR PARA O DASHBOARD (v3.6.27)
 ipcMain.on('send-portal-data', (event, data) => {
     if (data && data.type === 'ws-item-data' && data.codigo && Array.isArray(data.items)) {
+        console.log(`[WS DIAG] 📡 send-portal-data recebido: codigo=${data.codigo} items=${data.items.length}`);
         if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
             biddingRunner.injectRealtimeItems(data.codigo, data.items);
         }
@@ -415,6 +416,7 @@ ipcMain.on('send-portal-data', (event, data) => {
 
 // 🔄 FALLBACK VIA INVOKE: ipcMain.handle usa mecanismo diferente de on (v3.8.197)
 ipcMain.handle('ws-item-data-invoke', (event, { codigo, items }) => {
+    console.log(`[WS DIAG] 📡 invoke recebido: codigo=${codigo} items=${Array.isArray(items) ? items.length : 'N/A'}`);
     if (codigo && Array.isArray(items)) {
         let routed = 0;
         if (biddingRunner && typeof biddingRunner.injectRealtimeItems === 'function') {
@@ -425,6 +427,7 @@ ipcMain.handle('ws-item-data-invoke', (event, { codigo, items }) => {
             global.biddingRunner.injectRealtimeItems(codigo, items);
             routed++;
         }
+        console.log(`[WS DIAG] ✅ invoke roteado para ${routed} BiddingRunner(s)`);
     }
     return { ok: true };
 });

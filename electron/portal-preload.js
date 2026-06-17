@@ -1523,13 +1523,17 @@
                         }
                         if (parsed && typeof parsed === 'object') {
                             // 🎯 Atualização de itens em tempo real via WebSocket do Siga
+                            // 🔧 FIX v3.8.315: codigo de 17 dígitos PERDE PRECISÃO no JSON.parse (Number.MAX_SAFE_INTEGER = 16 dígitos)
+                            // Extraímos o valor BRUTO do JSON como string via regex ANTES do parse
                             if (parsed.tipo === 'att_itens_ws' && parsed.codigo && Array.isArray(parsed.data)) {
-                                postDiag('WS ITENS OK: codigo=' + parsed.codigo + ' tipo=' + parsed.tipo + ' qtd=' + parsed.data.length + ' ws=' + parsed.websocket);
-                                console.log('%c[WS ITENS] ' + parsed.codigo + ' (' + parsed.data.length + ' itens, ws=' + parsed.websocket + ')', 'color:#22c55e;font-weight:bold;font-size:10px;');
+                                var codigoPrecisionFix = body.match(/"codigo"\s*:\s*(\d+)/);
+                                var codigoStr = codigoPrecisionFix ? codigoPrecisionFix[1] : String(parsed.codigo);
+                                postDiag('WS ITENS OK: codigo=' + codigoStr + ' (raw=' + (codigoPrecisionFix ? codigoPrecisionFix[1] : 'N/A') + ') tipo=' + parsed.tipo + ' qtd=' + parsed.data.length + ' ws=' + parsed.websocket);
+                                console.log('%c[WS ITENS] ' + codigoStr + ' (' + parsed.data.length + ' itens, ws=' + parsed.websocket + ')', 'color:#22c55e;font-weight:bold;font-size:10px;');
                                 window.postMessage({
                                     source: 'polaryon-injector',
                                     type: 'ws-item-update',
-                                    codigo: String(parsed.codigo),
+                                    codigo: codigoStr,
                                     data: parsed.data,
                                     timestamp: Date.now()
                                 }, '*');
