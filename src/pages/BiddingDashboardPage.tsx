@@ -297,6 +297,11 @@ export default function BiddingDashboardPage() {
                 const strat = configs[`${itemSid}_${sId}`] || configs[`${sesId}_${sId}`] || configs[sId] || configs[item.itemId] || {};
                 const isActive = strat.active || false;
                 
+                // 🏠 Backend RoomRunner já está gerenciando — frontend sniper desligado (v3.8.175)
+                if (backendActiveRef.current) {
+                    return;
+                }
+                
                 if (!isActive) {
                     if ((lastLogRef.current[`inactive_${sId}`] || 0) < Date.now() - 10000) {
                         console.log(`[SNIPER] ⏹️ Item ${sId}: sniper INATIVO (botão desligado).`);

@@ -195,6 +195,7 @@ class RoomRunner {
         this._429windowStart = Date.now(); // 🚦 Início da janela de contagem de 429
         this._429backoffMs = 0;          // 🚦 Backoff preventivo extra por excesso de 429
         this.lastKnownItems = new Map();  // 🕒 Cache de dados de itens (preserva dataHoraFimContagem do HTTP/REST)
+        this._lastLogTimestamps = new Map(); // 🕒 Cooldown de logs para evitar flood no console
     }
 
     injectRealtimeItems(items) {
@@ -941,7 +942,11 @@ class RoomRunner {
                                         // Reduzir não adianta se todos estão abaixo do mínimo (só queima captcha)
                                         shouldBid = false;
                                         if (!(myCurrentBid !== 999999999 && myCurrentBid <= myMin)) {
-                                            console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Preservando R$ ${myCurrentBid}.`);
+                                            const _ll = this._lastLogTimestamps.get(`nobeat3_${sId}`) || 0;
+                                            if (Date.now() - _ll >= 2000) {
+                                                console.log(`[BACKEND SNIPER] Item ${sId}: Ranking - Nenhum concorrente batível (todos abaixo do mínimo R$ ${myMin}). Preservando R$ ${myCurrentBid}.`);
+                                                this._lastLogTimestamps.set(`nobeat3_${sId}`, Date.now());
+                                            }
                                         }
                                     }
                                 } else {
@@ -963,7 +968,11 @@ class RoomRunner {
                                             // Sem dados do líder — manter onde está
                                             shouldBid = false;
                                             if (!isGanhando) {
-                                                console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder — mantendo R$ ${myCurrentBid}.`);
+                                                const _ll2 = this._lastLogTimestamps.get(`noleader_${sId}`) || 0;
+                                                if (Date.now() - _ll2 >= 2000) {
+                                                    console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK sem líder — mantendo R$ ${myCurrentBid}.`);
+                                                    this._lastLogTimestamps.set(`noleader_${sId}`, Date.now());
+                                                }
                                             }
                                         } else {
                                                 const isSecondPlace = (posicao === '2' || posicao === '2º' || posicao === '2°');
@@ -979,7 +988,11 @@ class RoomRunner {
                                                     console.log(`[BACKEND SNIPER] Item ${sId}: GANHANDO no fallback → reduzindo R$ ${myCurrentBid} -> R$ ${nextBid} (degrau R$ ${decrementStep}).`);
                                                 } else {
                                                     shouldBid = false;
-                                                    console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder R$ ${currentBest} não batível. myCurrentBid=${myCurrentBid} myMin=${myMin}. Mantendo.`);
+                                                    const _ll3 = this._lastLogTimestamps.get(`unbeatable_${sId}`) || 0;
+                                                    if (Date.now() - _ll3 >= 2000) {
+                                                        console.log(`[BACKEND SNIPER] Item ${sId}: FALLBACK - Líder R$ ${currentBest} não batível. myCurrentBid=${myCurrentBid} myMin=${myMin}. Mantendo.`);
+                                                        this._lastLogTimestamps.set(`unbeatable_${sId}`, Date.now());
+                                                    }
                                                 }
                                             } // fim else currentBest > 0
                                     } // fim else !isLeaderBeatable
