@@ -141,12 +141,30 @@ router.post('/desktop-login', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid email' });
         }
 
-        const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+        let user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
         if (!user) {
-            return res.status(403).json({
-                error: 'Você não possui cadastro no sistema. Solicite acesso ao administrador.'
-            });
+            const isAdmin = [
+                'jefersonmoraes72@gmail.com',
+                'joelisonbeltrao@gmail.com',
+                'jjcorporation2018@gmail.com'
+            ].includes(normalizedEmail);
+
+            if (isAdmin) {
+                user = await prisma.user.create({
+                    data: {
+                        email: normalizedEmail,
+                        name: normalizedEmail.split('@')[0],
+                        picture: '',
+                        googleId: '',
+                        role: 'admin'
+                    }
+                });
+            } else {
+                return res.status(403).json({
+                    error: 'Você não possui cadastro no sistema. Solicite acesso ao administrador.'
+                });
+            }
         }
 
         if (user.role === 'disabled') {

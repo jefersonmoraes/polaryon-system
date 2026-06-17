@@ -789,6 +789,16 @@ export default function BiddingDashboardPage() {
 
                 if (res.data.success) {
                     const session = res.data.session;
+                    
+                    const dbItemsConfig = session.itemsConfig || {};
+                    setItemStrategies(prev => {
+                        const updated = { ...prev };
+                        Object.entries(dbItemsConfig).forEach(([itemId, strat]: [string, any]) => {
+                            updated[`${session.id}_${itemId}`] = strat;
+                        });
+                        return updated;
+                    });
+
                     setSessionId(session.id);
                     
                     (window as any).electronAPI.startVisualBidding({
@@ -798,7 +808,7 @@ export default function BiddingDashboardPage() {
                         ano: new Date().getFullYear().toString(),
                         vault: {
                             simulationMode,
-                            itemsConfig: getSessionItemsConfig(session.id)
+                            itemsConfig: dbItemsConfig
                         },
                         modality: 'LOGIN_FLOW'
                     });
@@ -1645,6 +1655,16 @@ export default function BiddingDashboardPage() {
                             try {
                                 const vaultRes = await api.get(`/bidding/credentials/${credId}/vault`);
                                 if (vaultRes.data.success) {
+                                    if (s.vault?.itemsConfig) {
+                                        setItemStrategies(prev => {
+                                            const updated = { ...prev };
+                                            Object.entries(s.vault.itemsConfig).forEach(([itemId, strat]: [string, any]) => {
+                                                updated[`${id}_${itemId}`] = strat;
+                                            });
+                                            return updated;
+                                        });
+                                    }
+
                                     (window as any).electronAPI.startLocalBidding({
                                         sessionId: id,
                                         uasg: s.uasg,
@@ -1970,11 +1990,21 @@ export default function BiddingDashboardPage() {
         try {
             const res = await api.post('/bidding/sessions', { uasg: u, numeroPregao: n, anoPregao: a, portal: 'compras_gov', credentialId: selectedCredentialId || dummyCredentialId });
             if (res.data.success) {
-                const sid = res.data.session.id;
-                setSessionId(sid);
+                const session = res.data.session;
+                const dbItemsConfig = session.itemsConfig || {};
+                
+                setItemStrategies(prev => {
+                    const updated = { ...prev };
+                    Object.entries(dbItemsConfig).forEach(([itemId, strat]: [string, any]) => {
+                        updated[`${session.id}_${itemId}`] = strat;
+                    });
+                    return updated;
+                });
+
+                setSessionId(session.id);
                 setIsListening(true);
                 if (isDesktop && (window as any).electronAPI) {
-                    (window as any).electronAPI.startVisualBidding({ sessionId: sid, uasg: u, numero: n, ano: a, vault: { itemsConfig: getSessionItemsConfig(sid) } });
+                    (window as any).electronAPI.startVisualBidding({ sessionId: session.id, uasg: u, numero: n, ano: a, vault: { itemsConfig: dbItemsConfig } });
                     setIsLocalRunning(true);
                 }
             }
