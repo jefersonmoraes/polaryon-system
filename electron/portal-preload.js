@@ -1562,6 +1562,54 @@
                                     return;
                                 }
                             }
+                            // Phoenix Channels: array format [joinRef, msgRef, topic, event, payload]
+                            // Serpro usa Phoenix (não STOMP) — URL termina em /socket/websocket
+                            if (Array.isArray(parsed) && parsed.length >= 4) {
+                                var phxEvent = parsed[3];
+                                var phxPayload = parsed.length >= 5 ? parsed[4] : null;
+                                var phxTopic = parsed[2] || '';
+                                var phxRef = parsed[1] || null;
+                                // Log para diagnóstico de TODAS as mensagens Phoenix
+                                console.log('%c[PHOENIX WS] event=' + phxEvent + ' ref=' + phxRef + ' topic=' + phxTopic + ' payload=' + (phxPayload ? typeof phxPayload + (Array.isArray(phxPayload) ? '[' + phxPayload.length + ']' : '') + ' keys=' + (typeof phxPayload === 'object' && !Array.isArray(phxPayload) ? Object.keys(phxPayload).join(',') : 'N/A') : 'null'), 'color:#a855f7;font-weight:bold;font-size:10px;');
+                                postDiag('PHOENIX: event="' + phxEvent + '" topic="' + phxTopic + '"');
+                                // Tenta extrair dados de itens do payload (Phoenix transporta o mesmo objeto att_itens_ws)
+                                var phxData = null;
+                                var phxCodigo = '';
+                                // Caso 1: payload.data é array de itens (ex: {data: [...], codigo: "..."})
+                                if (phxPayload && phxPayload.data && Array.isArray(phxPayload.data)) {
+                                    phxData = phxPayload.data;
+                                    phxCodigo = String(phxPayload.codigo || phxPayload.idCompra || '');
+                                    // Fix precisão: extrai codigo do JSON bruto se presente como número
+                                    var rawCodigoMatch = body.match(/"codigo"\s*:\s*(\d+)/);
+                                    if (rawCodigoMatch) phxCodigo = rawCodigoMatch[1];
+                                }
+                                // Caso 2: payload é array direto de itens
+                                if (!phxData && Array.isArray(phxPayload) && phxPayload.length > 0 && phxPayload[0] && (phxPayload[0].identificador || phxPayload[0].melhorValorGeral)) {
+                                    phxData = phxPayload;
+                                    var topicMatch = phxTopic.match(/:(\d+)/);
+                                    phxCodigo = topicMatch ? topicMatch[1] : '';
+                                }
+                                // Caso 3: payload é um único item
+                                if (!phxData && phxPayload && phxPayload.identificador) {
+                                    phxData = [phxPayload];
+                                    var rawCodigo2 = body.match(/"codigo"\s*:\s*(\d+)/);
+                                    phxCodigo = rawCodigo2 ? rawCodigo2[1] : String(phxPayload.codigo || phxPayload.idCompra || '');
+                                }
+                                // Se encontrou itens, posta como ws-item-update
+                                if (phxData && phxData.length > 0) {
+                                    console.log('%c[WS ITENS VIA PHOENIX] codigo=' + phxCodigo + ' (' + phxData.length + ' itens, event=' + phxEvent + ')', 'color:#22c55e;font-weight:bold;font-size:10px;');
+                                    window.postMessage({
+                                        source: 'polaryon-injector',
+                                        type: 'ws-item-update',
+                                        codigo: phxCodigo,
+                                        data: phxData,
+                                        timestamp: Date.now()
+                                    }, '*');
+                                    return;
+                                }
+                                // Se não encontrou itens, mesmo assim sai (já logamos PHOENIX WS, não precisa do catch-all)
+                                return;
+                            }
                         } else if (data.indexOf('/topic/dataHoraBrasilia') !== -1) {
                             // STOMP frame sem JSON parseável — fallback regex
                             var tsStr = null;
