@@ -731,6 +731,20 @@ ipcMain.handle('scan-cookies', async () => {
   }
 });
 
+// 🌐 Renew GovBr session cookies via main process (no CSP restriction)
+ipcMain.handle('renew-govbr-session', async () => {
+  try {
+    await fetch('https://www.comprasnet.gov.br/main.asp', {
+      method: 'GET',
+      credentials: 'include',
+      signal: AbortSignal.timeout(10000)
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+});
+
 // 🔄 JWT REFRESH VIA HIDDEN BROWSERWINDOW (v3.8.279):
 // Cria uma janela Electron oculta que navega para o SPA do ComprasNet.
 // Como sessionStorage é por aba (não compartilhada entre janelas mesmo com same partition),
