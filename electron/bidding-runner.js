@@ -554,96 +554,45 @@ class RoomRunner {
                             ...(cookieStr ? { 'Cookie': cookieStr } : {})
                         };
 
-                        // ⚡ v3.8.324: Ranking SEM captcha PRIMEIRO + paralelo
-                        // 1º tenta sem captcha (200ms), 2º captcha do pool em paralelo
-                        const noCaptchaUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
-                        const noCaptchaClassifUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/classificacao`;
-
                         // Cache de ranking: se dados frescos (<5s), retorna cache
                         const cacheKey = `${this.idCompra}_${itemToCheck.itemId}`;
                         const cachedRanking = this._rankingCache && this._rankingCache.get(cacheKey);
                         if (cachedRanking && (Date.now() - cachedRanking.ts) < 5000) {
                             // Usa cache — pula fetch completo
                         } else {
-                            // v3.8.325: SEM captcha primeiro, mas verifica se retornou dados de verdade
+                            // v3.8.326: Captcha é OBRIGATÓRIO — Serpro retorna 204 vazio sem captcha
                             let lancesRes = null;
-                            let noCaptchaDataEmpty = false;
 
-                            // Fase 1: Tenta SEM CAPTCHA (rápido, ~50-80ms)
-                            try {
-                                const tempRes = await axios.get(noCaptchaUrl, {
-                                    httpsAgent: this.agent, timeout: 3000, headers: baseHeaders
-                                });
-                                const body = tempRes.data;
-                                const isEmpty = body === null || body === undefined || body === '' ||
-                                    (typeof body === 'string' && body.trim().length === 0) ||
-                                    (Array.isArray(body) && body.length === 0) ||
-                                    (typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length === 0) ||
-                                    (typeof body === 'object' && body.itens && Array.isArray(body.itens) && body.itens.length === 0) ||
-                                    (typeof body === 'object' && body.lances && Array.isArray(body.lances) && body.lances.length === 0) ||
-                                    (typeof body === 'object' && body.listaLances && Array.isArray(body.listaLances) && body.listaLances.length === 0);
-                                if (isEmpty) {
-                                    noCaptchaDataEmpty = true;
-                                    console.log(`[POLARYON RANKING] ⚠️ SEM CAPTCHA retornou 200 mas dados vazios — tentando com captcha`);
+                            const poolTokens = await captchaManager.getTokens().catch(() => ({}));
+                            const freshToken = await captchaManager.getFreshToken().catch(() => '');
+                            const hasCaptcha = poolTokens.captcha1 || freshToken;
+
+                            if (hasCaptcha) {
+                                const captchaUrls = [
+                                    poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null,
+                                    freshToken && freshToken !== poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${freshToken}&tamanhoPagina=50&pagina=0` : null,
+                                    poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/classificacao?captcha=${poolTokens.captcha1}` : null,
+                                ].filter(Boolean);
+
+                                const attempts = captchaUrls.map(url =>
+                                    axios.get(url, { httpsAgent: this.agent, timeout: 3000, headers: baseHeaders })
+                                        .then(res => ({ ok: true, data: res, url }))
+                                        .catch(err => ({ ok: false, err, url }))
+                                );
+                                const results = await Promise.allSettled(attempts);
+                                for (const r of results) {
+                                    if (r.status === 'fulfilled' && r.value.ok) {
+                                        lancesRes = r.value.data;
+                                        break;
+                                    }
+                                }
+                                if (lancesRes) {
+                                    console.log(`[POLARYON RANKING] ✅ Captcha OK! (${lancesRes.status}) item=${itemToCheck.itemId}`);
                                 } else {
-                                    lancesRes = tempRes;
-                                    console.log(`[POLARYON RANKING] ✅ SEM CAPTCHA com dados! (${lancesRes.status})`);
+                                    console.warn(`[POLARYON RANKING] ❌ ${attempts.length} variações de captcha falharam item=${itemToCheck.itemId}`);
                                 }
-                            } catch (e1) {
-                                noCaptchaDataEmpty = true;
-                            }
-
-                            // Fase 2: Se sem captcha retornou vazio ou falhou, tenta classificação sem captcha
-                            if (!lancesRes) {
-                                try {
-                                    const tempRes2 = await axios.get(noCaptchaClassifUrl, {
-                                        httpsAgent: this.agent, timeout: 3000, headers: baseHeaders
-                                    });
-                                    const body2 = tempRes2.data;
-                                    const isEmpty2 = body2 === null || body2 === undefined || body2 === '' ||
-                                        (typeof body2 === 'string' && body2.trim().length === 0) ||
-                                        (Array.isArray(body2) && body2.length === 0) ||
-                                        (typeof body2 === 'object' && !Array.isArray(body2) && Object.keys(body2).length === 0);
-                                    if (isEmpty2) {
-                                        console.log(`[POLARYON RANKING] ⚠️ /classificacao sem captcha também vazia — precisa de captcha`);
-                                    } else {
-                                        lancesRes = tempRes2;
-                                        console.log(`[POLARYON RANKING] ✅ /classificacao sem captcha com dados! (${lancesRes.status})`);
-                                    }
-                                } catch (e2) {
-                                    // Vazio — captcha necessário
-                                }
-                            }
-
-                            // Fase 3: Se ainda sem dados, captcha necessário — busca em paralelo
-                            if (!lancesRes) {
-                                    const poolTokens = await captchaManager.getTokens().catch(() => ({}));
-                                    const freshToken = await captchaManager.getFreshToken().catch(() => '');
-                                    console.log(`[POLARYON RANKING] 🎫 Captcha necessário — tentando ${poolTokens.captcha1 ? 'pool' : 'fresh'}...`);
-
-                                    const captchaUrls = [
-                                        poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${poolTokens.captcha1}&tamanhoPagina=50&pagina=0` : null,
-                                        freshToken ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/lances/por-participante?captcha=${freshToken}&tamanhoPagina=50&pagina=0` : null,
-                                        poolTokens.captcha1 ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${this.idCompra}/itens/${itemToCheck.itemId}/classificacao?captcha=${poolTokens.captcha1}` : null,
-                                    ].filter(Boolean);
-
-                                    // ⚡ Todas as variações em paralelo — primeira que responder vence
-                                    const attempts = captchaUrls.map(url =>
-                                        axios.get(url, { httpsAgent: this.agent, timeout: 3000, headers: baseHeaders })
-                                            .then(res => ({ ok: true, data: res, url }))
-                                            .catch(err => ({ ok: false, err, url }))
-                                    );
-                                    const results = await Promise.allSettled(attempts);
-                                    for (const r of results) {
-                                        if (r.status === 'fulfilled' && r.value.ok) {
-                                            lancesRes = r.value.data;
-                                            console.log(`[POLARYON RANKING] ✅ Captcha paralelo funcionou! (${lancesRes.status})`);
-                                            break;
-                                        }
-                                    }
-                                    if (!lancesRes) {
-                                        console.warn(`[POLARYON RANKING] ❌ Todas as ${attempts.length} variações falharam`);
-                                    }
+                            } else {
+                                console.warn(`[POLARYON RANKING] ⚠️ Sem captcha disponível item=${itemToCheck.itemId}`);
                             }
 
                             // Salva no cache

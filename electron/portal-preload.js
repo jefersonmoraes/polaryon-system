@@ -698,14 +698,19 @@
                 }
                 _rankingFetchCache.set(cacheKey, Date.now());
 
-                const noCaptchaUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
-                const noCaptchaClassifUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/classificacao`;
+                // v3.8.326: Sempre usa captcha — Serpro retorna 204 vazio sem captcha
+                const token = _hcaptchaPool.length > 0 ? _hcaptchaPool.shift().token : '';
+                if (!token) {
+                    // Sem tokens no pool — re-enfileira no final e espera prefetch
+                    _rankingQueue.push(target);
+                    break;
+                }
+                const rankingUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${token}&tamanhoPagina=50&pagina=0`;
 
-                console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch item ${target.itemId} SEM CAPTCHA (Fila: ${_rankingQueue.length})`, 'color:#10b981;font-weight:bold;font-size:11px;');
+                console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch item ${target.itemId} COM CAPTCHA (Fila: ${_rankingQueue.length}, Pool: ${_hcaptchaPool.length})`, 'color:#10b981;font-weight:bold;font-size:11px;');
 
-                // Tenta sem captcha — se funcionar, ganho de ~100-200ms por item
                 document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                    detail: { url: noCaptchaUrl, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken, tryNoCaptcha: true, fallbackUrl: noCaptchaClassifUrl }
+                    detail: { url: rankingUrl, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
                 }));
                 
                 // ⚡ v3.8.323: delay 200ms entre ranking fetches (antes 400ms)
