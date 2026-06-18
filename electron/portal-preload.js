@@ -2165,16 +2165,30 @@
             };
 
             try {
-                // ⚡ v3.8.324: Tenta SEM CAPTCHA primeiro
+                // ⚡ v3.8.325: Tenta SEM CAPTCHA primeiro, fallback COM CAPTCHA quando vazio/204
                 let result = await doFetch(url, 'Ranking SEM CAPTCHA');
                 let data;
                 try { data = JSON.parse(result.body); } catch(err) { data = result.body; }
 
-                if (!result.res.ok && tryNoCaptcha && fallbackUrl) {
-                    // Sem captcha falhou — tenta classificação sem captcha
-                    console.log('%c[POLARYON INJECTED] ⚡ Sem captcha falhou (' + result.res.status + ') — tentando classificação...', 'color:#f59e0b;font-size:10px;');
-                    result = await doFetch(fallbackUrl, 'Classificação SEM CAPTCHA');
-                    try { data = JSON.parse(result.body); } catch(err) { data = result.body; }
+                const isEmptyBody = !result.body || result.body.trim().length === 0 || result.body.trim() === '""';
+                const is204 = result.res.status === 204;
+                const noCaptchaFailed = !result.res.ok || is204 || isEmptyBody;
+
+                if (noCaptchaFailed && tryNoCaptcha && fallbackUrl) {
+                    // Sem captcha falhou ou retornou vazio — tenta classificação sem captcha
+                    console.log('%c[POLARYON INJECTED] ⚡ Sem captcha sem dados (' + result.res.status + ', ' + result.body.length + 'B) — tentando classificação...', 'color:#f59e0b;font-size:10px;');
+                    const fallbackResult = await doFetch(fallbackUrl, 'Classificação SEM CAPTCHA');
+                    let fallbackData;
+                    try { fallbackData = JSON.parse(fallbackResult.body); } catch(err) { fallbackData = fallbackResult.body; }
+                    const fallbackIsEmpty = !fallbackResult.body || fallbackResult.body.trim().length === 0 || fallbackResult.body.trim() === '""';
+
+                    if (fallbackResult.res.ok && !fallbackIsEmpty && !fallbackResult.body.includes('"listaLances":[]') && !fallbackResult.body.includes('"listaVazia"')) {
+                        result = fallbackResult;
+                        data = fallbackData;
+                        console.log('%c[POLARYON INJECTED] ✅ Classificação sem captcha retornou dados!', 'color:#10b981;font-size:10px;');
+                    } else {
+                        console.log('%c[POLARYON INJECTED] ⚠️ Classificação sem captcha também vazia (' + fallbackResult.res.status + ', ' + fallbackResult.body.length + 'B) — dados indisponíveis sem captcha', 'color:#f59e0b;font-size:10px;');
+                    }
                 }
 
                 if (!result.res.ok) {

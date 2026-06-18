@@ -565,22 +565,58 @@ class RoomRunner {
                         if (cachedRanking && (Date.now() - cachedRanking.ts) < 5000) {
                             // Usa cache — pula fetch completo
                         } else {
-                            // Fase 1: Tenta SEM CAPTCHA (rápido, ~50-80ms)
+                            // v3.8.325: SEM captcha primeiro, mas verifica se retornou dados de verdade
                             let lancesRes = null;
+                            let noCaptchaDataEmpty = false;
+
+                            // Fase 1: Tenta SEM CAPTCHA (rápido, ~50-80ms)
                             try {
-                                lancesRes = await axios.get(noCaptchaUrl, {
+                                const tempRes = await axios.get(noCaptchaUrl, {
                                     httpsAgent: this.agent, timeout: 3000, headers: baseHeaders
                                 });
-                                console.log(`[POLARYON RANKING] ✅ SEM CAPTCHA funcionou! (${lancesRes.status}) — zero latência captcha`);
+                                const body = tempRes.data;
+                                const isEmpty = body === null || body === undefined || body === '' ||
+                                    (typeof body === 'string' && body.trim().length === 0) ||
+                                    (Array.isArray(body) && body.length === 0) ||
+                                    (typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length === 0) ||
+                                    (typeof body === 'object' && body.itens && Array.isArray(body.itens) && body.itens.length === 0) ||
+                                    (typeof body === 'object' && body.lances && Array.isArray(body.lances) && body.lances.length === 0) ||
+                                    (typeof body === 'object' && body.listaLances && Array.isArray(body.listaLances) && body.listaLances.length === 0);
+                                if (isEmpty) {
+                                    noCaptchaDataEmpty = true;
+                                    console.log(`[POLARYON RANKING] ⚠️ SEM CAPTCHA retornou 200 mas dados vazios — tentando com captcha`);
+                                } else {
+                                    lancesRes = tempRes;
+                                    console.log(`[POLARYON RANKING] ✅ SEM CAPTCHA com dados! (${lancesRes.status})`);
+                                }
                             } catch (e1) {
-                                // Fase 2: Tenta classificação sem captcha
+                                noCaptchaDataEmpty = true;
+                            }
+
+                            // Fase 2: Se sem captcha retornou vazio ou falhou, tenta classificação sem captcha
+                            if (!lancesRes) {
                                 try {
-                                    lancesRes = await axios.get(noCaptchaClassifUrl, {
+                                    const tempRes2 = await axios.get(noCaptchaClassifUrl, {
                                         httpsAgent: this.agent, timeout: 3000, headers: baseHeaders
                                     });
-                                    console.log(`[POLARYON RANKING] ✅ /classificacao sem captcha! (${lancesRes.status})`);
+                                    const body2 = tempRes2.data;
+                                    const isEmpty2 = body2 === null || body2 === undefined || body2 === '' ||
+                                        (typeof body2 === 'string' && body2.trim().length === 0) ||
+                                        (Array.isArray(body2) && body2.length === 0) ||
+                                        (typeof body2 === 'object' && !Array.isArray(body2) && Object.keys(body2).length === 0);
+                                    if (isEmpty2) {
+                                        console.log(`[POLARYON RANKING] ⚠️ /classificacao sem captcha também vazia — precisa de captcha`);
+                                    } else {
+                                        lancesRes = tempRes2;
+                                        console.log(`[POLARYON RANKING] ✅ /classificacao sem captcha com dados! (${lancesRes.status})`);
+                                    }
                                 } catch (e2) {
-                                    // Fase 3: Captcha necessário — busca em paralelo
+                                    // Vazio — captcha necessário
+                                }
+                            }
+
+                            // Fase 3: Se ainda sem dados, captcha necessário — busca em paralelo
+                            if (!lancesRes) {
                                     const poolTokens = await captchaManager.getTokens().catch(() => ({}));
                                     const freshToken = await captchaManager.getFreshToken().catch(() => '');
                                     console.log(`[POLARYON RANKING] 🎫 Captcha necessário — tentando ${poolTokens.captcha1 ? 'pool' : 'fresh'}...`);
