@@ -83,7 +83,7 @@
     // ⚡ CACHE ROTATIVO DE CAPTCHAS (v3.8.85)
     // Worker agressivo que mantém pool cheio para disparos sem espera.
     const captchaPool = [];
-    const CAP_POOL_MAX = 16;
+    const CAP_POOL_MAX = 24; // ⚡ v3.8.323: de 16→24 para manter pool sempre cheia
     const CAP_HEADERS = {
         'origin': 'https://disputas.sigapregao.com.br',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) SIGAClient/0.7.2'
@@ -92,20 +92,35 @@
     async function prefetchCaptchaPair() {
         if (captchaPool.length >= CAP_POOL_MAX) return;
         try {
-            const [c1, c2] = await Promise.all([
-                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
-                fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+            // ⚡ v3.8.323: 2 pares simultâneos para encher pool mais rápido
+            const results = await Promise.all([
+                (async () => {
+                    const [a, b] = await Promise.all([
+                        fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
+                        fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+                    ]);
+                    return a && b ? { c1: a, c2: b, ts: Date.now() } : null;
+                })(),
+                (async () => {
+                    const [a, b] = await Promise.all([
+                        fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => ''),
+                        fetch('https://capgen.sigapregao.com.br/capgen/captcha-dispensas-2', { headers: CAP_HEADERS }).then(r => r.text()).catch(() => '')
+                    ]);
+                    return a && b ? { c1: a, c2: b, ts: Date.now() } : null;
+                })()
             ]);
-            if (c1 && c2) {
-                captchaPool.push({ c1, c2, ts: Date.now() });
+            for (const pair of results) {
+                if (pair && captchaPool.length < CAP_POOL_MAX) {
+                    captchaPool.push(pair);
+                }
             }
         } catch(e) { /* silencioso */ }
     }
 
-    // Inicia o worker de pré-busca assim que o token de sessão for disponível
+    // ⚡ v3.8.323: worker 100ms (antes 150ms) para manter pool sempre quente
     setInterval(() => {
         if (shared.sessionToken) prefetchCaptchaPair();
-    }, 150);
+    }, 100);
 
     async function getNextCaptcha() {
         // Descarta captchas com mais de 10s (expiram no Serpro — segurança maior)
@@ -610,7 +625,7 @@
 
     // --- POOL DE hCAPTCHA ---
     const _hcaptchaPool = [];      // { token, ts }
-    const HCAPTCHA_POOL_MAX = 8;
+    const HCAPTCHA_POOL_MAX = 12;  // ⚡ v3.8.323: de 8→12 para mais tokens quentes
     const HCAPTCHA_TTL = 100000;   // 100s
     let _hcaptchaPrefetchInProgress = 0;
     let _lastHcaptchaTriggerTime = 0;
@@ -623,9 +638,9 @@
             _hcaptchaPool.shift();
         }
         
-        // Se hCaptcha está travado em prefetch por mais de 15 segundos, resetamos o flag
-        if (_hcaptchaPrefetchInProgress > 0 && (now - _lastHcaptchaTriggerTime) > 15000) {
-            console.warn('%c[POLARYON HCAPTCHA] ⚠️ Prefetch de hCaptcha estagnado (>15s). Resetando estado.', 'color:#f59e0b;font-size:9px;');
+        // ⚡ v3.8.323: reset mais rápido (10s antes 15s) — recupera mais depressa de stale states
+        if (_hcaptchaPrefetchInProgress > 0 && (now - _lastHcaptchaTriggerTime) > 10000) {
+            console.warn('%c[POLARYON HCAPTCHA] ⚠️ Prefetch de hCaptcha estagnado (>10s). Resetando estado.', 'color:#f59e0b;font-size:9px;');
             _hcaptchaPrefetchInProgress = 0;
         }
         
@@ -698,8 +713,8 @@
                     detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
                 }));
                 
-                // Delay curto de 400ms entre requisições de classificação para evitar 429 do Serpro
-                await new Promise(resolve => setTimeout(resolve, 400));
+                // ⚡ v3.8.323: delay 200ms entre ranking fetches (antes 400ms)
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
         } catch (err) {
             console.error('[POLARYON RANKING QUEUE] Erro no processamento:', err);
@@ -708,12 +723,12 @@
         }
     }
 
-    // 🚦 PROCESSADOR DE FILA PERIÓDICO E PREFETCH WORKER
+    // ⚡ v3.8.323: worker 300ms (antes 500ms) para hCaptcha + ranking queue
     setInterval(() => {
         if (!shared.sessionToken) return;
         prefetchHcaptcha();
         processRankingQueue();
-    }, 500);
+    }, 300);
 
     // 🔁 REFRESH INTELIGENTE E PRIORITÁRIO:
     //   - Itens da compra focada: atualizados a cada 6 segundos

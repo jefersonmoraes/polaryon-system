@@ -39,7 +39,7 @@ class CaptchaManager {
 
     async getTokens() {
         const now = Date.now();
-        if (now - this.lastFetch > 15000) { // Renova a cada 15s (captchas expiram rápido no Serpro — cenário agressivo)
+        if (now - this.lastFetch > 8000) { // ⚡ v3.8.323: renova a cada 8s (antes 15s) — captcha sempre fresco
             if (!this.fetchPromise) {
                 this.fetchPromise = this._fetchTokens().finally(() => {
                     this.fetchPromise = null;
@@ -860,7 +860,7 @@ class RoomRunner {
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 1;
-                            const cooldown = isInWarMode ? 200 : 500;
+                            const cooldown = isInWarMode ? 200 : 300; // ⚡ v3.8.323: 500→300ms no modo normal
                             if (isInWarMode && Math.random() < 0.05) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
@@ -1071,8 +1071,8 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO (v3.8.275 - Agressivo c/ Anti-Bloqueio)
-            // GUERRA 30ms | Reta <30s 300ms | Reta <60s 500ms | Ativo 800ms | Passivo 10s
+            // ⚡ POLLING ADAPTATIVO (v3.8.323 - Ultra-agressivo)
+            // GUERRA 20ms | Reta <30s 300ms | Reta <60s 500ms | Ativo 800ms | Passivo 10s
             let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
 
@@ -1102,7 +1102,7 @@ class RoomRunner {
                 nextInterval = 5000; // Heartbeat 5s — WS faz tempo real
             } else if (isBiddingActive) {
                 if (anyItemInWar) {
-                    nextInterval = 30; // 💢 GUERRA 30ms
+                    nextInterval = 20; // 💢 GUERRA 20ms — v3.8.323: mais agressivo
                     if (this._429backoffMs > 0) {
                         nextInterval += this._429backoffMs;
                     }
@@ -1350,7 +1350,7 @@ class BiddingRunner {
             keepAliveMsecs: 600000, // 10min — evita que socket esfrie entre lances
             scheduling: 'lifo'      // FIFO distribui, LIFO reusa socket quente com mais frequência
         });
-        // 🔥 Mantém socket do bidAgent aquecido — ping a cada 15s no REAL endpoint de lances
+        // ⚡ v3.8.323: Mantém socket do bidAgent aquecido — ping a cada 10s
         // Usa /participacoes (endpoint confirmado) + /compras/{id}/itens/{id}/lances (socket do mesmo server)
         if (!this._bidKeepaliveTimers) this._bidKeepaliveTimers = [];
         this._bidKeepaliveTimers.push(setInterval(() => {
@@ -1367,13 +1367,13 @@ class BiddingRunner {
                 req.on('error', () => {});
                 req.end();
             }
-        }, 15000));
+        }, 10000)); // ⚡ v3.8.323: ping a cada 10s (antes 15s) — socket nunca esfria
 
-        // 🔄 Pre-fetch de captcha contínuo: mantém tokens SEMPRE frescos (refresca a cada 12s, antes do TTL de 15s)
+        // ⚡ v3.8.323: pre-fetch a cada 8s (antes 12s) — captcha sempre fresco
         if (!this._captchaPrefetchTimer) {
             this._captchaPrefetchTimer = setInterval(() => {
                 captchaManager.getTokens().catch(() => {});
-            }, 12000);
+            }, 8000);
         }
 
         // Repassa this (BiddingRunner) para o RoomRunner conseguir ler as configs de lances ativos
@@ -1629,10 +1629,10 @@ class BiddingRunner {
         const itemKey = String(itemId);
         const dedupKey = `${purchaseId}_${itemId}`;
 
-        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 500ms? (v3.8.175 — reduzido de 1000ms, mutex protege)
+        // 🛡️ DEDUP GLOBAL: qualquer lance p/ mesmo item nos últimos 300ms? (v3.8.323 — reduzido de 500ms, mutex protege)
         const recent = this.recentBids.get(dedupKey);
-        if (recent && (now - recent.timestamp) < 500) {
-            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 500ms, mutex ativo).`);
+        if (recent && (now - recent.timestamp) < 300) {
+            console.log(`[KAMIKAZE SNIPER] 🛡️ Dedup temporal: R$ ${value} ignorado para Item ${itemId} — último lance foi há ${(now-recent.timestamp)/1000}s (mínimo 300ms, mutex ativo).`);
             return;
         }
         this.recentBids.set(dedupKey, { value, timestamp: now });
