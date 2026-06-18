@@ -587,6 +587,7 @@
     let _rankingQueue = [];      // { purchaseId, itemId, timerSeconds, priority }
     let _rankingBackoffUntil = 0;  // timestamp para respeitar 429
     let _ranking429Count = 0;      // consecutive 429s for exponential backoff
+    const _rankingFetchCache = new Map(); // ⚡ v3.8.324: cache "já busquei" por 5s
     let _rankingSuppressRefresh = false; // suppress 45s refresh during backoff
     let _429ReloadTimer = null;    // timer para auto-reload sob 429
     
@@ -686,31 +687,25 @@
                     _hcaptchaPool.shift();
                 }
                 
-                // Se o pool estiver vazio, dispara o prefetch e aguarda
-                if (_hcaptchaPool.length === 0) {
-                    prefetchHcaptcha();
-                    break;
-                }
-                
-                // Ordena a fila: prioridades primeiro, depois timer ASC (mais urgente primeiro)
-                _rankingQueue.sort((a, b) => {
-                    if (a.priority && !b.priority) return -1;
-                    if (!a.priority && b.priority) return 1;
-                    const aTimer = a.timerSeconds >= 0 ? a.timerSeconds : Infinity;
-                    const bTimer = b.timerSeconds >= 0 ? b.timerSeconds : Infinity;
-                    return aTimer - bTimer;
-                });
-                
+                // ⚡ v3.8.324: Ranking SEM captcha PRIMEIRO — tenta sem token, sem bloquear fila
                 const target = _rankingQueue.shift();
-                const tokenEntry = _hcaptchaPool.shift();
-                
-                const encoded = encodeURIComponent(tokenEntry.token);
-                const urlCaptcha = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?captcha=${encoded}&tamanhoPagina=50&pagina=0`;
-                
-                console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch para item ${target.itemId} (Fila: ${_rankingQueue.length} | Pool restante: ${_hcaptchaPool.length})`, 'color:#a855f7;font-weight:bold;font-size:11px;');
-                
+
+                // Cache: se buscou este item nos últimos 5s, pula
+                const cacheKey = `${target.purchaseId}_${target.itemId}`;
+                const lastFetch = _rankingFetchCache.get(cacheKey) || 0;
+                if (Date.now() - lastFetch < 5000) {
+                    continue; // Dados ainda frescos, não precisa buscar
+                }
+                _rankingFetchCache.set(cacheKey, Date.now());
+
+                const noCaptchaUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/lances/por-participante?tamanhoPagina=50&pagina=0`;
+                const noCaptchaClassifUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-disputa/v1/compras/${target.purchaseId}/itens/${target.itemId}/classificacao`;
+
+                console.log(`%c[POLARYON RANKING LOOP] 🚀 Fetch item ${target.itemId} SEM CAPTCHA (Fila: ${_rankingQueue.length})`, 'color:#10b981;font-weight:bold;font-size:11px;');
+
+                // Tenta sem captcha — se funcionar, ganho de ~100-200ms por item
                 document.dispatchEvent(new CustomEvent('polaryon-fetch-ranking', {
-                    detail: { url: urlCaptcha, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken }
+                    detail: { url: noCaptchaUrl, purchaseId: target.purchaseId, itemId: target.itemId, sessionToken: shared.sessionToken, tryNoCaptcha: true, fallbackUrl: noCaptchaClassifUrl }
                 }));
                 
                 // ⚡ v3.8.323: delay 200ms entre ranking fetches (antes 400ms)
@@ -1211,6 +1206,7 @@
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's... URL=' + failedUrl, 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                 _rankingQueue = [];
+                _rankingFetchCache.clear();
                 _hcaptchaPool.length = 0; // Clear captcha pool on 429
                 shared.pendingRankingTargets = [];
                 _rankingSuppressRefresh = true;
@@ -1240,6 +1236,7 @@
                     const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180);
                     _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                     _rankingQueue = [];
+                    _rankingFetchCache.clear();
                     _hcaptchaPool.length = 0; // Clear captcha pool on 429
                     shared.pendingRankingTargets = [];
                     _rankingSuppressRefresh = true;
@@ -1273,6 +1270,7 @@
                 console.warn('%c[POLARYON SESSION] 🔴 Sessão expirada detectada! Renovando via janela oculta...', 'color:#ef4444;font-weight:bold;font-size:11px;');
                 shared.pendingRankingTargets = [];
                 _rankingQueue = [];
+                _rankingFetchCache.clear();
                 _hcaptchaPool.length = 0; // Clear captcha pool on session expired
                 // v3.8.280: janela oculta (SEM botão de recarregar) — não mexe no portal.
                 refreshTokenViaIframe(true);
@@ -2140,16 +2138,17 @@
                 return send.apply(this, arguments);
             };
         document.addEventListener('polaryon-fetch-ranking', async (e) => {
-            const { url, sessionToken: tokenFromPreload } = e.detail || {};
+            const { url, sessionToken: tokenFromPreload, tryNoCaptcha, fallbackUrl } = e.detail || {};
             if (!url) return;
             if (tokenFromPreload && tokenFromPreload.startsWith('Bearer ') && tokenFromPreload !== sessionToken) {
                 sessionToken = tokenFromPreload;
             }
-            try {
+
+            const doFetch = async (fetchUrl, label) => {
                 const xsrfCookie = document.cookie.split('; ').find(c => c.startsWith('XSRF-TOKEN='));
                 const xsrfToken = xsrfCookie ? xsrfCookie.split('=')[1] : '';
-                console.log('%c[POLARYON INJECTED] 🌐 Fetch ranking (page context): ' + url.substring(0,100) + '...', 'color:#888;font-size:10px;');
-                const res = await originalFetch(url, {
+                console.log('%c[POLARYON INJECTED] 🌐 ' + label + ': ' + fetchUrl.substring(0,120) + '...', 'color:#888;font-size:10px;');
+                const res = await originalFetch(fetchUrl, {
                     credentials: 'include',
                     headers: {
                         'Accept': 'application/json',
@@ -2161,25 +2160,37 @@
                     }
                 });
                 const body = await res.text();
-                console.log('%c[POLARYON INJECTED] ✅ Ranking response: status=' + res.status + ' body(' + body.length + 'B)', 'color:' + (res.ok ? '#10b981' : '#f59e0b') + ';font-size:10px;');
-                
-                if (!res.ok) {
-                    if (res.status === 403) {
-                        window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: res.status }, '*');
-                    } else if (res.status === 429) {
-                        window.postMessage({ source: 'polaryon-injector', type: '429-error', status: res.status, url: url }, '*');
-                    } else if (res.status === 401) {
-                        window.postMessage({ source: 'polaryon-injector', type: 'session-expired', status: res.status }, '*');
+                console.log('%c[POLARYON INJECTED] ✅ ' + label + ': status=' + res.status + ' body(' + body.length + 'B)', 'color:' + (res.ok ? '#10b981' : '#f59e0b') + ';font-size:10px;');
+                return { res, body };
+            };
+
+            try {
+                // ⚡ v3.8.324: Tenta SEM CAPTCHA primeiro
+                let result = await doFetch(url, 'Ranking SEM CAPTCHA');
+                let data;
+                try { data = JSON.parse(result.body); } catch(err) { data = result.body; }
+
+                if (!result.res.ok && tryNoCaptcha && fallbackUrl) {
+                    // Sem captcha falhou — tenta classificação sem captcha
+                    console.log('%c[POLARYON INJECTED] ⚡ Sem captcha falhou (' + result.res.status + ') — tentando classificação...', 'color:#f59e0b;font-size:10px;');
+                    result = await doFetch(fallbackUrl, 'Classificação SEM CAPTCHA');
+                    try { data = JSON.parse(result.body); } catch(err) { data = result.body; }
+                }
+
+                if (!result.res.ok) {
+                    if (result.res.status === 403) {
+                        window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', status: result.res.status, needsCaptcha: true }, '*');
+                    } else if (result.res.status === 429) {
+                        window.postMessage({ source: 'polaryon-injector', type: '429-error', status: result.res.status, url }, '*');
+                    } else if (result.res.status === 401) {
+                        window.postMessage({ source: 'polaryon-injector', type: 'session-expired', status: result.res.status }, '*');
                     }
                 }
 
-                let data;
-                try { data = JSON.parse(body); } catch(err) { data = body; }
-                // Extrai segundosParaEncerramento antes de postar (ranking loop não passa pelo fetch override)
                 if (typeof data === 'object' && data !== null) {
                     extractEndTime(data);
                 }
-                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url, status: res.status, ok: res.ok, savedSegundos: savedSegundos, savedTimestamp: savedTimestamp }, '*');
+                window.postMessage({ source: 'polaryon-injector', type: 'serpro-data', data, url, status: result.res.status, ok: result.res.ok, savedSegundos, savedTimestamp }, '*');
             } catch(err) {
                 console.error('[POLARYON INJECTED] ❌ Ranking fetch error:', err);
                 window.postMessage({ source: 'polaryon-injector', type: 'captcha-error', error: err.message }, '*');
@@ -2734,6 +2745,7 @@
         // Limpa filas de ranking para não acumular pendências
         try { shared.pendingRankingTargets = []; } catch(e) {}
         try { _rankingQueue = []; } catch(e) {}
+        try { _rankingFetchCache.clear(); } catch(e) {}
     }
 
     function clearSerproBlocked() {
