@@ -313,7 +313,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         marginPercent?: number,
         itemType?: BudgetType,
         installmentsCost: number = 0, // Stubbing backwards compatibility
-        marginMaxPercent?: number
+        marginMaxPercent?: number,
+        includeEntryDifal?: boolean
     ) => {
         const productsTotal = currentItems.reduce((sum: number, sub: any) => sum + (sub.totalPrice || 0), 0);
         
@@ -340,7 +341,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         if (adminCompany) {
             // --- DIFAL DE ENTRADA (ANTECIPAÇÃO ICMS) ---
             // Baseado SOMENTE no valor dos produtos (frete não incrementa a base do DIFAL)
-            if (supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
+            // Só inclui se includeEntryDifal estiver marcado (checkbox)
+            if (includeEntryDifal !== false && supplierCompany?.uf && adminCompany.state && supplierCompany.uf !== adminCompany.state) {
                 const entryDifalDetails = calculateDifalDetailed(supplierCompany.uf, adminCompany.state);
                 if (entryDifalDetails && entryDifalDetails.percent > 0) {
                     entryDifalPercent = entryDifalDetails.percent;
@@ -465,7 +467,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             0, // margin = 0
             item.type,
             0,
-            0
+            0,
+            item.includeEntryDifal
         );
 
         const rawProductsTotal = (item.items || []).reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0);
@@ -518,10 +521,11 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         destState: string | undefined,
         margin: number | undefined,
         itemType: BudgetType | undefined,
-        marginMax: number | undefined
+        marginMax: number | undefined,
+        includeEntryDifal?: boolean
     ) => {
         const result = recalculateTotal(
-            subItems, freight, discountValue, discountOpt, adminId, destState, margin, itemType, 0, marginMax
+            subItems, freight, discountValue, discountOpt, adminId, destState, margin, itemType, 0, marginMax, includeEntryDifal
         );
 
         // Batch update all calculated fields at once
@@ -554,7 +558,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
             item.destinationState,
             item.profitMargin,
             item.type,
-            item.profitMarginMax
+            item.profitMarginMax,
+            item.includeEntryDifal
         );
     }, [
         item.items,
@@ -566,6 +571,7 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         item.profitMargin,
         item.profitMarginMax,
         item.type,
+        item.includeEntryDifal,
         flushRecalculation
     ]);
 
@@ -835,8 +841,21 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             )}
                         </div>
 
+                        {supplierParams?.uf && selectedAdmin?.state && supplierParams.uf !== selectedAdmin.state && (
+                            <label className="flex items-center gap-1.5 text-[10px] font-medium text-blue-600 cursor-pointer select-none mt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={!!item.includeEntryDifal}
+                                    disabled={!canEdit}
+                                    onChange={e => handleFieldChangeImpactingTotal('includeEntryDifal', e.target.checked)}
+                                    className="h-3 w-3 rounded border-blue-400 text-blue-600 focus:ring-blue-500/30 accent-blue-600"
+                                />
+                                <span>Antecipação DIFAL</span>
+                            </label>
+                        )}
+
                         <div className="space-y-1 flex flex-col justify-end h-full relative">
-                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center justify-between text-primary">
+                            <label className="text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 text-primary">
                                 <span className="flex items-center gap-1"><Percent className="h-3 w-3" /> MARGEM</span>
                             </label>
                             <div className="grid grid-cols-2 gap-1.5">

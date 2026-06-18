@@ -78,6 +78,7 @@ export interface BudgetItem {
   profitMargin?: number; // Margem de Lucro percentual desejada (Markup divisor)
   profitMarginMax?: number; // Margem de Lucro Máxima percentual simulada
   difalValue?: number; // Valor nominal somado de DIFAL
+  includeEntryDifal?: boolean; // Se true, inclui antecipação DIFAL de entrada no cálculo
   taxValue?: number; // Valor nominal somado TOTAL de impostos (para legados)
 
   // Tax Detalhamento Individual (Fase 4 Pricing)
