@@ -644,7 +644,6 @@ class RoomRunner {
                                     if (!lancesRes) {
                                         console.warn(`[POLARYON RANKING] ❌ Todas as ${attempts.length} variações falharam`);
                                     }
-                                }
                             }
 
                             // Salva no cache
