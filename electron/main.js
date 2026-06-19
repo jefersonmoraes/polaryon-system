@@ -677,7 +677,6 @@ if ($installer) {
             // ⚡ app.exit() é SÍNCRONO — mata o processo imediatamente
             app.exit(0);
         }, 10000);
-    }
     new Notification({
         title: 'Polaryon - Atualização Pronta',
         body: 'O robô será reiniciado em 10 segundos para aplicar a v' + info.version
