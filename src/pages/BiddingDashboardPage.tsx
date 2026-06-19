@@ -193,8 +193,7 @@ export default function BiddingDashboardPage() {
     const wsFastBidsRef = useRef<Record<string, { meuValor: number; valorAtual: number; posicao: string; ganhador: string }>>({});
     // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
     const backendActiveRef = useRef(false);
-    // ⏱ TIMER OVERRIDE: força cronômetro para 40s fazendo sniper entender que está na reta final (v3.8.242)
-    const timerOverrideRef = useRef<Record<string, number>>({});
+    // ⏱ REMOVIDO: timerOverrideRef (botão Forçar removido — sniper automático 30s)
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -310,14 +309,6 @@ export default function BiddingDashboardPage() {
                     return;
                 }
 
-                // ⏱ TIMER OVERRIDE: se ativo (timestamp < 40s atrás), força o sniper a rodar com cronômetro em 40s (v3.8.242)
-                const overrideTs = timerOverrideRef.current[`${itemSid}_${sId}`] || timerOverrideRef.current[`${sesId}_${sId}`] || timerOverrideRef.current[sId] || 0;
-                const isTimerOverridden = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
-                if (!isTimerOverridden && overrideTs > 0) {
-                    timerOverrideRef.current[`${itemSid}_${sId}`] = 0;
-                    timerOverrideRef.current[`${sesId}_${sId}`] = 0;
-                    timerOverrideRef.current[sId] = 0;
-                }
 
                 // 🏠 Backend ativo NÃO bloqueia itens com config do usuário (v3.8.277)
                 // Backend GLOBAL_ runner não tem as strategy configs; dedup cuida de duplicatas.
@@ -329,24 +320,20 @@ export default function BiddingDashboardPage() {
 
                 // 🔥 Tempo restante: clockSkew ajusta dataHoraFimContagem para o relógio local
                 let currentTimeLeft: number;
-                // ⏱ Se override ativo, força timer para 40s (sniper entende que está na reta final)
-                if (isTimerOverridden) {
-                    currentTimeLeft = 40;
-                } else {
-                    const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
-                    if (endTimeStr) {
-                        const endTime = new Date(endTimeStr).getTime();
-                        if (!isNaN(endTime)) {
-                            currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
-                        } else {
-                            currentTimeLeft = -1;
-                        }
+                const endTimeStr = item.portalDataHoraFimContagem || item.dataHoraFimContagem;
+                if (endTimeStr) {
+                    const endTime = new Date(endTimeStr).getTime();
+                    if (!isNaN(endTime)) {
+                        currentTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000 + clockSkewRef.current));
                     } else {
-                        // Fallback: timer do DOM geral da sala
-                        const sts = sigaTimerSecondsRef.current;
-                        const sta = sigaTimerReceivedAtRef.current;
-                        if (sts !== undefined && sts >= 0 && sta > 0) {
-                            currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
+                        currentTimeLeft = -1;
+                    }
+                } else {
+                    // Fallback: timer do DOM geral da sala
+                    const sts = sigaTimerSecondsRef.current;
+                    const sta = sigaTimerReceivedAtRef.current;
+                    if (sts !== undefined && sts >= 0 && sta > 0) {
+                        currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
                         } else {
                             currentTimeLeft = -1;
                         }
@@ -354,10 +341,9 @@ export default function BiddingDashboardPage() {
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
 
-                // ⏳ SNIPER COM RETARDO: espera o timer chegar no limite (v3.8.130)
-                // ⏱ Se override ativo, ignora snipeDelay — o botão forçar 40s já significa "vai agora" (v3.8.246)
-                const snipeDelay = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 0);
-                if (snipeDelay > 0 && currentTimeLeft >= 0 && currentTimeLeft > snipeDelay && !isTimerOverridden) {
+                // ⏳ SNIPER AUTOMÁTICO: inicia quando timer chegar a 30s (hardcoded)
+                const snipeDelay = 30;
+                if (currentTimeLeft >= 0 && currentTimeLeft > snipeDelay) {
                     if ((lastLogRef.current[`delay_${sId}`] || 0) < Date.now() - 5000) {
                         console.log(`[SNIPER] ⏳ Item ${sId}: Aguardando snipeDelay (timer=${currentTimeLeft}s > snipeDelay=${snipeDelay}s).`);
                         lastLogRef.current[`delay_${sId}`] = Date.now();
@@ -392,15 +378,7 @@ export default function BiddingDashboardPage() {
                     // 🔥 LÓGICA DE DISPARO ULTRA-AGRESSIVA (Se a posição ou o valor indica perda, atira! Evita congelamento por falso positivo na posição)
                     const isLosing = isLosingPos || (bestBid > 0 && activeMyBid > bestBid) || (!isWinningByValue && item.posicao === '?');
                     
-                    // ⏱ Se override ativo, dispara mesmo se estiver ganhando — usuário quer forçar redução AGORA (v3.8.247)
-                    if (isTimerOverridden && !isLosing) {
-                        console.log(`[OVERRIDE] 🔵 Item ${sId}: Override ativo — forçando sniper mesmo em posição vencedora (pos=${pos}, myBid=${activeMyBid}, best=${bestBid}).`);
-                    }
-                    
-                    if (isLosing || isTimerOverridden) {
-                        if (isTimerOverridden && !isLosing) {
-                            console.log(`[OVERRIDE] 🔵 Item ${sId}: Override ativo — forçando sniper em posição vencedora. Procurando alvo...`);
-                        }
+                    if (isLosing) {
                         const myMin = Number(strat.minPrice || 0);
                         if (myMin <= 0) {
                             console.debug(`[SNIPER] Item ${sId}: BLOQUEADO - Valor mínimo não configurado.`);
@@ -2919,17 +2897,8 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
     const [kamikazeMode, setKamikazeMode] = useState(
         currentStrat.kamikazeMode !== undefined ? currentStrat.kamikazeMode : (item.kamikazeMode || false)
     );
-    const [snipeDelaySeconds, setSnipeDelaySeconds] = useState<number>(
-        currentStrat.snipeDelaySeconds !== undefined ? currentStrat.snipeDelaySeconds : 0
-    );
     const [directBidValue, setDirectBidValue] = useState<string>('');
     const [showRankingModal, setShowRankingModal] = useState(false);
-    // 🔄 TICK PARA COUNTDOWN DO TIMER OVERRIDE: força re-render a cada 1s para atualizar o display regressivo (v3.8.246)
-    const [overrideTick, setOverrideTick] = useState(0);
-    useEffect(() => {
-        const interval = setInterval(() => setOverrideTick(t => t + 1), 1000);
-        return () => clearInterval(interval);
-    }, []);
 
     // Sincronizar com strategyConfig dinâmico
     useEffect(() => {
@@ -2948,7 +2917,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             if (strategyConfig.active !== undefined) setActive(strategyConfig.active);
             if (strategyConfig.useFourDecimals !== undefined) setUseFourDecimals(strategyConfig.useFourDecimals);
             if (strategyConfig.kamikazeMode !== undefined) setKamikazeMode(strategyConfig.kamikazeMode);
-            if (strategyConfig.snipeDelaySeconds !== undefined) setSnipeDelaySeconds(strategyConfig.snipeDelaySeconds);
         }
     }, [strategyConfig]);
 
@@ -3021,7 +2989,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
             active: nextActive,
             useFourDecimals,
             kamikazeMode,
-            snipeDelaySeconds,
+            snipeDelaySeconds: 30,
             ...extraParams
         });
     };
@@ -3037,65 +3005,7 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
         handleSave({ active: newState });
         
         if (newState) {
-            toast.success(`ITEM ${item.numero || item.itemId} ATIVO`);
-            // Se kamikaze ou 0s, dispara imediatamente (v3.8.249 — sempre, mesmo ganhando)
-            if (kamikazeMode || snipeDelaySeconds === 0) {
-                const currentBest = valorAtualDisplay;
-                const numMin = numMinPrice;
-                const beatingAmt = useFourDecimals ? 0.0001 : 0.01;
-                const myCurrentBid = Number(item.meuValor || 0);
-                
-                // Margem obrigatória do Serpro
-                const officialMarginVal = Number(item.officialMargin || 0);
-                const officialMarginType = item.officialMarginType || 'V';
-                const mandatorySerproMargin = officialMarginType === 'P' ? currentBest * (officialMarginVal / 100) : officialMarginVal;
-                const serproLowestAllowed = myCurrentBid > 0 ? myCurrentBid - Math.max(mandatorySerproMargin, 0) : 999999999;
-                
-                let fireVal = 0;
-                
-                // 1) Tentar bater o líder
-                if (currentBest > 0) {
-                    const beatingBid = currentBest - beatingAmt;
-                    const candidateBid = Math.max(numMin, Math.min(beatingBid, serproLowestAllowed));
-                    if (candidateBid < currentBest && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
-                        fireVal = candidateBid;
-                    }
-                }
-                
-                // 2) Líder não batível (abaixo do mínimo) → procurar no ranking
-                if (fireVal <= 0 && item.rankingLances && item.rankingLances.length > 0) {
-                    const competitorBids = item.rankingLances
-                        .filter(r => !r.eMeuLance)
-                        .map(r => safeParseNumber(r.valor))
-                        .filter(val => val > 0)
-                        .sort((a, b) => a - b);
-                    
-                    for (const cBid of competitorBids) {
-                        const beatingBid = cBid - beatingAmt;
-                        const candidateBid = Math.max(numMin, Math.min(beatingBid, serproLowestAllowed));
-                        const canBeat = candidateBid < cBid;
-                        const canTie = !canBeat && candidateBid === cBid && cBid === numMin && (myCurrentBid <= 0 || candidateBid < myCurrentBid);
-                        if ((canBeat || canTie) && (myCurrentBid <= 0 || candidateBid < myCurrentBid)) {
-                            fireVal = canTie ? numMin : candidateBid;
-                            break;
-                        }
-                    }
-                }
-                
-                // 3) Nada batível → usa mínimo
-                if (fireVal <= 0) {
-                    fireVal = numMin;
-                }
-                
-                const myBid = meuValorDisplay;
-                if (myBid <= 0 || fireVal < myBid) {
-                    setTimeout(() => {
-                        onManualBid(item.purchaseId, item.itemId, item.bidId, fireVal);
-                        const mode = kamikazeMode ? 'KAMIKAZE' : 'SNIPER 0s';
-                        toast.info(`💥 [${mode}] Disparando R$ ${fireVal.toFixed(4)} no Item ${item.numero || item.itemId}!`);
-                    }, 500);
-                }
-            }
+            toast.success(`ITEM ${item.numero || item.itemId} ATIVO — sniper inicia automaticamente aos 30s`);
         } else {
             toast.warning(`ITEM ${item.numero || item.itemId} PAUSADO`);
         }
@@ -3339,53 +3249,13 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                 </div>
 
                 <div className="col-span-1 md:col-span-3 flex flex-wrap md:flex-nowrap items-center justify-between md:justify-end gap-3 md:gap-5 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0">
-                    {/* ⏱ TIMER DISPLAY: mostra countdown regressivo quando override ativo (v3.8.246) */}
-                    {(() => {
-                        const itemSid = sid || item.sid || '';
-                        const overrideKey = `${itemSid}_${item.itemId || item.numero}`;
-                        const overrideTs = timerOverrideRef?.current?.[overrideKey] || 0;
-                        const overrideLeft = overrideTs > 0 ? Math.max(0, 40 - Math.floor((Date.now() - overrideTs) / 1000)) : 0;
-                        if (overrideLeft <= 0 && overrideTs > 0) { timerOverrideRef.current[overrideKey] = 0; }
-                        const displaySeconds = overrideLeft > 0 ? overrideLeft : timeLeft;
-                        return (
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                                displaySeconds < 60 && displaySeconds > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
-                            }`}>
-                                <Clock className="w-4 h-4" />
-                                <span className="text-sm font-bold font-mono">{formatTime(displaySeconds)}</span>
-                                {overrideLeft > 0 && overrideLeft <= 10 && (
-                                    <span className="text-[10px] font-black text-red-500 animate-ping">!</span>
-                                )}
-                            </div>
-                        );
-                    })()}
-                    
-                    {/* ⏱ Botão forçar 40s com countdown regressivo (v3.8.242) */}
-                    {(() => {
-                        const itemSid = sid || item.sid || '';
-                        const key = `${itemSid}_${item.itemId || item.numero}`;
-                        const overrideTs = timerOverrideRef?.current?.[key] || 0;
-                        const overrideActive = overrideTs > 0 && (Date.now() - overrideTs) < 40000;
-                        const overrideLeft = overrideActive ? Math.max(0, 40 - Math.floor((Date.now() - overrideTs) / 1000)) : 0;
-                        return (
-                            <button
-                                onClick={() => {
-                                    timerOverrideRef.current[key] = overrideActive ? 0 : Date.now();
-                                }}
-                                className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${
-                                    overrideActive
-                                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200'
-                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                                }`}
-                                title={overrideActive ? `Timer forçado — ${overrideLeft}s restantes` : 'Forçar timer para 40s (sniper dispara na reta final)'}
-                            >
-                                <span>⏱</span>
-                                <span>{overrideActive ? `${overrideLeft}s` : 'Forçar'}</span>
-                            </button>
-                        );
-                    })()}
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                        timeLeft < 60 && timeLeft > 0 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-600'
+                    }`}>
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-bold font-mono">{formatTime(timeLeft)}</span>
+                    </div>
 
-                    
                     <button 
                         onClick={handleToggle}
                         className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
@@ -3420,23 +3290,6 @@ function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strat
                             onCheckedChange={(val) => { setKamikazeMode(!!val); handleSave({ kamikazeMode: !!val }); }}
                         />
                         <label htmlFor={`kamikaze-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer hover:text-slate-600 transition-colors">Modo Kamikaze (Sem Espera)</label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <label htmlFor={`snipeDelay-${item.itemId}`} className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">Iniciar em</label>
-                        <select
-                            id={`snipeDelay-${item.itemId}`}
-                            value={snipeDelaySeconds}
-                            onChange={(e) => { const val = Number(e.target.value); setSnipeDelaySeconds(val); handleSave({ snipeDelaySeconds: val }); }}
-                            className="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        >
-                            <option value={0}>0s (imediato)</option>
-                            <option value={15}>15s</option>
-                            <option value={30}>30s</option>
-                            <option value={45}>45s</option>
-                            <option value={60}>60s</option>
-                            <option value={90}>90s</option>
-                            <option value={120}>120s</option>
-                        </select>
                     </div>
                 </div>
             </div>

@@ -731,8 +731,9 @@
     }, 300);
 
     // 🔁 REFRESH INTELIGENTE E PRIORITÁRIO:
-    //   - Itens da compra focada: atualizados a cada 6 segundos
-    //   - Outros itens (background): atualizados a cada 45 segundos
+    //   - Itens da compra focada: atualizados a cada 10 segundos
+    //   - Outros itens (background): atualizados a cada 60 segundos
+    //   - Reduzido para evitar 429 com múltiplas salas (7+ rooms × 3+ items)
     setInterval(() => {
         if (!shared.sessionToken || activeRankingItems.length === 0) return;
         if (_rankingSuppressRefresh || Date.now() < _rankingBackoffUntil) {
@@ -744,7 +745,7 @@
         
         activeRankingItems.forEach(target => {
             const isCurrentRoom = roomCode && target.purchaseId === roomCode;
-            const interval = isCurrentRoom ? 6000 : 45000;
+            const interval = isCurrentRoom ? 10000 : 60000;
             const lastRef = target.lastRefreshAt || 0;
             
             if (now - lastRef >= interval) {
@@ -1206,13 +1207,12 @@
                 shared.captchaToken = null;
             } else if (type === '429-error') {
                 _ranking429Count = (_ranking429Count || 0) + 1;
-                const backoffSec = Math.min(20 * Math.pow(2, _ranking429Count - 1), 180); // 20s, 40s, 80s, max 180s
+                const backoffSec = Math.min(30 * Math.pow(2, _ranking429Count - 1), 240); // 30s, 60s, 120s, max 240s
                 const failedUrl = url || '';
                 console.log('%c[POLARYON] 🚨 429 Too Many Requests (#' + _ranking429Count + ')! Backoff de ' + backoffSec + 's... URL=' + failedUrl, 'color:#ef4444;font-weight:bold;font-size:11px;');
                 _rankingBackoffUntil = Date.now() + (backoffSec * 1000);
                 _rankingQueue = [];
                 _rankingFetchCache.clear();
-                _hcaptchaPool.length = 0; // Clear captcha pool on 429
                 shared.pendingRankingTargets = [];
                 _rankingSuppressRefresh = true;
                 setTimeout(() => { _rankingSuppressRefresh = false; }, (backoffSec * 1000) + 5000);

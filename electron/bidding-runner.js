@@ -844,11 +844,9 @@ class RoomRunner {
                             const tSeconds = Number(mappedItem.timerSeconds);
                             const isKamikaze = strat.kamikazeMode || false;
                             const isTimerActive = (tSeconds >= 0);
-                            const snipeDelaySeconds = Number(strat.snipeDelaySeconds !== undefined ? strat.snipeDelaySeconds : 0);
+                            const snipeDelaySeconds = 30; // Hardcoded: sniper inicia automaticamente aos 30s
 
-                            // ⏳ SNIPER COM RETARDO: espera até o timer chegar no limite configurado
-                            // snipeDelaySeconds = 30 → espera faltar 30s para começar (estilo concorrente)
-                            // snipeDelaySeconds = 0 → dispara imediatamente (comportamento antigo)
+                            // ⏳ SNIPER AUTOMÁTICO: espera até o timer chegar em 30s
                             if (snipeDelaySeconds > 0 && isTimerActive && tSeconds > snipeDelaySeconds) {
                                 if (this._snipeLogTimers && (this._snipeLogTimers.get(sId) || 0) < Date.now() - 5000) {
                                     console.log(`[BACKEND SNIPER] Item ${sId}: AGUARDANDO (timer=${tSeconds}s > snipeDelay=${snipeDelaySeconds}s).`);
