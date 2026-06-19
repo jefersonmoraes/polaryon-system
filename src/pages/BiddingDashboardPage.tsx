@@ -334,9 +334,8 @@ export default function BiddingDashboardPage() {
                     const sta = sigaTimerReceivedAtRef.current;
                     if (sts !== undefined && sts >= 0 && sta > 0) {
                         currentTimeLeft = Math.max(0, Math.floor(sts - (Date.now() - sta) / 1000));
-                        } else {
-                            currentTimeLeft = -1;
-                        }
+                    } else {
+                        currentTimeLeft = -1;
                     }
                 }
                 const isRetaFinal = currentTimeLeft >= 0 && currentTimeLeft <= 30;
