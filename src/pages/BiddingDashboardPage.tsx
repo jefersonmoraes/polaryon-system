@@ -193,8 +193,6 @@ export default function BiddingDashboardPage() {
     const wsFastBidsRef = useRef<Record<string, { meuValor: number; valorAtual: number; posicao: string; ganhador: string }>>({});
     // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
     const backendActiveRef = useRef(false);
-    // ⏱ REMOVIDO: timerOverrideRef (botão Forçar removido — sniper automático 30s)
-    const timerOverrideRef = useRef<Record<string, number>>({});
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
@@ -2437,7 +2435,6 @@ export default function BiddingDashboardPage() {
                                                     simulationMode={session.simulationMode}
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
-                                                    timerOverrideRef={timerOverrideRef}
                                                     lastFiredBidRef={lastFiredBidRef}
                                                     fastBidTick={fastBidTick}
                                                 />
@@ -2461,7 +2458,6 @@ export default function BiddingDashboardPage() {
                                                         simulationMode={session.simulationMode}
                                                         clockSkew={clockSkewRef.current}
                                                         wsFastBidsRef={wsFastBidsRef}
-                                                        timerOverrideRef={timerOverrideRef}
                                                         lastFiredBidRef={lastFiredBidRef}
                                                         fastBidTick={fastBidTick}
                                                     />
@@ -2480,7 +2476,6 @@ export default function BiddingDashboardPage() {
                                                     simulationMode={session.simulationMode}
                                                     clockSkew={clockSkewRef.current}
                                                     wsFastBidsRef={wsFastBidsRef}
-                                                    timerOverrideRef={timerOverrideRef}
                                                     lastFiredBidRef={lastFiredBidRef}
                                                     fastBidTick={fastBidTick}
                                                 />
@@ -2650,7 +2645,7 @@ function ProcessCard({ sid, session, items, onSaveStrategy, onQuickBid, onStopRa
                     </div>
                     <div className="space-y-4">
                         {filteredItems.length === 0 ? <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl"><Search className="w-10 h-10 text-slate-200 mx-auto mb-4" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum item nesta categoria.</p></div> : filteredItems.map((item: any) => (
-                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} timerOverrideRef={timerOverrideRef} lastFiredBidRef={lastFiredBidRef} fastBidTick={fastBidTick} />
+                            <SigaItemRow key={item.itemId || item.numero} item={item} sid={sid} onSaveStrategy={onSaveStrategy} onManualBid={handleManualBid} serverTime={serverTime} strategyConfig={getStrategy ? getStrategy(sid, item.itemId || item.numero) : {}} onStartSniperTest={onStartSniperTest} simulationMode={session.simulationMode} clockSkew={clockSkewRef.current} wsFastBidsRef={wsFastBidsRef} lastFiredBidRef={lastFiredBidRef} fastBidTick={fastBidTick} />
                         ))}
                     </div>
                 </CardContent>
@@ -2761,7 +2756,7 @@ function buildRankingPorParticipante(lancesRaw: any[], meuValor?: number): {
     return { ranking, minhaPosicao };
 }
 
-function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, timerOverrideRef, lastFiredBidRef, fastBidTick }: any) {
+function SigaItemRow({ item, sid, onSaveStrategy, onManualBid, serverTime, strategyConfig, onStartSniperTest, simulationMode, clockSkew, wsFastBidsRef, lastFiredBidRef, fastBidTick }: any) {
     if (!item) return null;
 
     // Helper local para obter o lance recente disparado
