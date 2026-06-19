@@ -602,3 +602,105 @@ model BiddingAction {
   reason    String?  @db.Text
   timestamp DateTime @default(now())
 }
+
+// ==========================================
+// COMPETITIVE INTELLIGENCE MODELS
+// ==========================================
+
+model BidHistory {
+  id              String   @id @default(uuid())
+  purchaseId      String   // ID da compra (ex: 98763506000082026)
+  itemId          String   // ID do item dentro da compra
+  participantId   String   // ID do participante (CNPJ ou hash anônimo)
+  participantName String?  // Nome exibido (se disponível)
+  value           Float    // Valor do lance
+  position        Int?     // Posição no ranking (1=lider, 2, 3...)
+  isOurBid        Boolean  @default(false) // true = nosso lance, false = concorrente
+  observedAt      DateTime @default(now()) // Quando observamos este lance
+  source          String   @default("ranking") // ranking, ws, manual
+
+  @@index([purchaseId, itemId])
+  @@index([participantId])
+  @@index([observedAt])
+  @@unique([purchaseId, itemId, participantId, value]) // Dedup
+}
+
+model CompetitorProfile {
+  id              String   @id @default(uuid())
+  participantId   String   @unique // CNPJ ou hash anônimo do concorrente
+  participantName String?  // Nome fantasia (se disponível)
+
+  // Métricas agregadas (atualizadas a cada lance observado)
+  totalBids               Int      @default(0) // Total de lances observados
+  avgReductionPerBid      Float    @default(0) // Redução média por lance (R$)
+  medianReductionPerBid   Float    @default(0) // Mediana de redução (mais estável que média)
+  avgTimeBetweenBids      Float    @default(0) // Tempo médio entre lances (ms)
+  bidCountLast10min       Int      @default(0) // Lances nos últimos 10min (atividade recente)
+  maxSingleReduction      Float    @default(0) // Maior redução de uma vez
+  aggressiveScore         Float    @default(0) // 0-100: quão agressivo é (reduções grandes + rápido)
+
+  // Padrões temporais
+  preferredBidHours       String?  // JSON array [0-23]: horas que mais bidou
+  lastBidAt               DateTime? // Último lance observado
+  firstSeenAt             DateTime @default(now())
+  lastUpdatedAt           DateTime @updatedAt
+
+  // Conquistas
+  timesWon                Int      @default(0)
+  timesLostToUs           Int      @default(0)
+  timesWeLostToThem       Int      @default(0)
+}
+
+model AuctionRound {
+  id              String   @id @default(uuid())
+  purchaseId      String
+  itemId          String
+  roundNumber     Int      // Número da rodada (1, 2, 3...)
+  leaderId        String?  // Quem era líder nesta rodada
+  leaderValue     Float?   // Valor do líder
+  secondValue     Float?   // Valor do segundo colocado
+  totalBids       Int      @default(0) // Total de lances nesta rodada
+  priceDroppedBy  Float    @default(0) // Quanto o preço caiu desde rodada anterior
+  durationMs      Float?   // Duração da rodada em ms
+  wasWarRound     Boolean  @default(false) // Se houve guerra (mudanças rápidas)
+  observedAt      DateTime @default(now())
+
+  @@index([purchaseId, itemId])
+  @@unique([purchaseId, itemId, roundNumber])
+}
+
+model AuctionResult {
+  id              String   @id @default(uuid())
+  purchaseId      String
+  itemId          String
+  itemDescription String?
+  winnerId        String?  // CNPJ do vencedor
+  winnerName      String?
+  finalPrice      Float    // Preço final vencedor
+  ourBestBid      Float?   // Nosso melhor lance
+  ourMinPrice     Float?   // Nosso preço mínimo configurado
+  startingPrice   Float?   // Preço inicial da disputa
+  totalRounds     Int      @default(0) // Total de rodadas de lances
+  totalCompetitors Int     @default(0) // Total de concorrentes
+  warCycles       Int      @default(0) // Ciclos de guerra detectados
+  durationMinutes Float?   // Duração total em minutos
+  result          String   // won, lost, no_bid, expired
+  strategy        String?  // Estratégia utilizada (sniper, follower, etc)
+  createdAt       DateTime @default(now())
+
+  @@index([purchaseId])
+  @@unique([purchaseId, itemId])
+}
+
+model RateLimitModel {
+  id              String   @id @default(uuid())
+  endpoint        String   // URL do endpoint
+  windowStart     DateTime // Início da janela de rate limit
+  windowEnd       DateTime // Fim da janela
+  requestCount    Int      @default(0) // Requisições na janela
+  hit429          Boolean  @default(false) // Se bateu 429
+  avgResponseMs   Float    @default(0) // Latência média
+  observedAt      DateTime @default(now())
+
+  @@index([endpoint, windowStart])
+}

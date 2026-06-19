@@ -2,6 +2,9 @@ const axios = require('axios');
 const https = require('https');
 const http2 = require('http2');
 const { ipcMain, session } = require('electron');
+const { CompetitorProfiler } = require('./competitor-profiler');
+const { PredictiveEngine } = require('./predictive-engine');
+const { RoomPriorityScorer, WarEscalationEngine } = require('./room-priority');
 
 function formatBidValueString(value) {
     const num = Number(value);
@@ -126,6 +129,12 @@ class CaptchaManager {
 
 const captchaManager = new CaptchaManager();
 
+// 🧠 Inteligência Competitiva — singletons compartilhados entre todas as salas
+const competitorProfiler = new CompetitorProfiler();
+const predictiveEngine = new PredictiveEngine(competitorProfiler);
+const roomPriorityScorer = new RoomPriorityScorer();
+const warEscalationEngine = new WarEscalationEngine();
+
 /**
  * ClockSync - Sincronizador de Relógio Atômico v3
  * Prioriza o HTTP Date header (autoritativo) sobre segundosParaEncerramento (inteiro truncado).
@@ -196,6 +205,9 @@ class RoomRunner {
         this._429backoffMs = 0;          // 🚦 Backoff preventivo extra por excesso de 429
         this.lastKnownItems = new Map();  // 🕒 Cache de dados de itens (preserva dataHoraFimContagem do HTTP/REST)
         this._lastLogTimestamps = new Map(); // 🕒 Cooldown de logs para evitar flood no console
+        // 🧠 Inteligência Competitiva
+        this._profiler = competitorProfiler;
+        this._predictor = predictiveEngine;
     }
 
     injectRealtimeItems(items) {
@@ -768,6 +780,17 @@ class RoomRunner {
                                 updatedAt: Date.now()
                             });
 
+                            // 🧠 Feed ranking data to CompetitorProfiler
+                            try {
+                                for (const rl of rankingLances) {
+                                    this._profiler.recordBid(
+                                        this.idCompra, itemToCheck.itemId,
+                                        rl.participanteId, rl.valor, rl.posicao,
+                                        rl.eMeuLance, 'ranking'
+                                    );
+                                }
+                            } catch (_e) { /* profiler non-critical */ }
+
                             if (!this.webContents.isDestroyed()) {
                                 this.webContents.send('bidding-ranking-update', {
                                     sessionId: this.sessionId,
@@ -860,8 +883,28 @@ class RoomRunner {
                             const now = Date.now();
                             const itemWarCycles = this.warModeCycles.get(sId) || 0;
                             const isInWarMode = itemWarCycles >= 1;
-                            const cooldown = isInWarMode ? 200 : 300; // ⚡ v3.8.323: 500→300ms no modo normal
-                            if (isInWarMode && Math.random() < 0.05) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA (${itemWarCycles} rajadas) | cooldown=${cooldown}ms`);
+
+                            // 🧠 War Escalation Engine — avaliação inteligente de agressividade
+                            const marginHeadroom = myCurrentBid !== 999999999 && myMin > 0 ? myCurrentBid - myMin : 0;
+                            const activeCompetitorCount = this.itemRankingsMap.has(sId)
+                                ? (this.itemRankingsMap.get(sId).rankingLances || []).filter(r => !r.eMeuLance).length
+                                : 0;
+                            const warEval = warEscalationEngine.evaluate(this.sessionId, {
+                                warModeCycles: itemWarCycles,
+                                recentBidCount: itemWarCycles,
+                                margin: marginHeadroom,
+                                isWinning: isGanhando,
+                                competitorAggression: 0,
+                                timeRemainingSec: tSeconds,
+                                bidCount: this.lastBidValues.has(sId) ? 1 : 0,
+                                captchaConsumed: 0
+                            });
+                            const warLevelConfig = warEval.config;
+
+                            const cooldown = isInWarMode
+                                ? Math.max(100, Math.round(300 * warLevelConfig.pollingMultiplier))
+                                : 300;
+                            if (isInWarMode && Math.random() < 0.05) console.log(`[BACKEND SNIPER] ⚔️ Item ${sId}: MODO GUERRA LVL${warEval.level} (${itemWarCycles} rajadas, ${warLevelConfig.name}) | cooldown=${cooldown}ms`);
                             const lastBidAt = this.lastBidTimes.get(sId) || 0;
                             if (now - lastBidAt < cooldown) continue;
 
@@ -1001,6 +1044,30 @@ class RoomRunner {
 
                             if (!shouldBid) continue;
 
+                            // 🧠 Predictive Engine — log de recomendação (não substitui decisão, apenas informa)
+                            try {
+                                const prediction = this._predictor.predict(
+                                    this.idCompra, sId, myCurrentBid, myMin, tSeconds
+                                );
+                                if (prediction && Math.random() < 0.05) {
+                                    console.log(
+                                        `%c[PREDICTIVE] Item ${sId}: ação=${prediction.recommendedAction} ` +
+                                        `urgência=${prediction.urgencyScore}/100 ` +
+                                        `concorrentes=${prediction.competitorCount} ` +
+                                        `guerraEst=${prediction.estimatedWarCost?.estimatedBids || 0} lances`,
+                                        'color:#6366f1;font-size:9px;'
+                                    );
+                                }
+                                // Se o predictive recomenda 'preemptive_strike' e o nextBid atual é mais caro,
+                                // ajusta para o valor recomendado (só se for mais baixo)
+                                if (prediction?.recommendedAction === 'preemptive_strike'
+                                    && prediction.recommendedBid < nextBid
+                                    && prediction.recommendedBid >= myMin) {
+                                    nextBid = prediction.recommendedBid;
+                                    if (Math.random() < 0.1) console.log(`[PREDITIVE] Item ${sId}: Overridden para preventivo R$ ${nextBid}`);
+                                }
+                            } catch (_e) { /* predictive non-critical */ }
+
                             if (nextBid < myMin) nextBid = myMin;
                             nextBid = allow4
                                 ? Math.floor(nextBid * 10000) / 10000
@@ -1071,10 +1138,35 @@ class RoomRunner {
                 }
             }
 
-            // ⚡ POLLING ADAPTATIVO (v3.8.323 - Ultra-agressivo)
-            // GUERRA 20ms | Reta <30s 300ms | Reta <60s 500ms | Ativo 800ms | Passivo 10s
+            // ⚡ POLLING ADAPTATIVO (v3.8.323 - Ultra-agressivo) + Priority Scorer
+            // Priority scorer determina alocação de recursos; war escalation ajusta agressividade
             let nextInterval = 10000;
             const isBiddingActive = this.biddingRunner && this.biddingRunner.isSessionActive(this.sessionId);
+
+            // 🧠 Room Priority Scorer — calcula score e alocação de recursos
+            let priorityAllocation = 'normal';
+            try {
+                const anyWinning = mappedItems.some(mi => {
+                    const pos = String(mi.posicao || '').toUpperCase().trim();
+                    return pos === '1' || pos === '1º' || pos === '1°' || pos === 'G' || pos === 'V' || pos === 'GANHANDO' || pos === 'VENCEDOR';
+                });
+                const sessionScore = roomPriorityScorer.score({
+                    sessionId: this.sessionId,
+                    timeRemainingSec: minTimer === Infinity ? 9999 : minTimer,
+                    myCurrentBid: mappedItems.length > 0 ? Number(mappedItems[0].meuValor || 0) : 0,
+                    myMin: (() => { const cfg = this.biddingRunner?.configs?.get(this.sessionId); const items = cfg?.itemsConfig || {}; const first = Object.values(items)[0]; return first ? Number(first.minPrice || 0) : 0; })(),
+                    isWinning: anyWinning,
+                    competitorCount: mappedItems.reduce((sum, mi) => {
+                        const cached = this.itemRankingsMap.get(String(mi.itemId));
+                        return sum + (cached?.rankingLances || []).filter(r => !r.eMeuLance).length;
+                    }, 0),
+                    isWarMode: anyItemInWar,
+                    itemCount: mappedItems.length,
+                    totalValue: 0,
+                    hasRankingData: this.itemRankingsMap.size > 0
+                });
+                priorityAllocation = sessionScore.allocation;
+            } catch (_e) { /* scorer non-critical */ }
 
             // 🚦 ANTI-429: Se recebemos 429 recentemente, aumenta intervalo preventivamente
             if (this._429count > 0 && Date.now() - this._429windowStart < 30000) {
@@ -1098,6 +1190,9 @@ class RoomRunner {
             // 🌐 Se WS está fresco (< 60s), POLLING ZERO — dados reais chegam via WebSocket
             const wsFresh = this.realtimeItems && (Date.now() - this.realtimeItemsAt) < 60000;
 
+            // 🧠 Priority Scorer polling config — sobrescreve intervalos padrão para critical/high
+            const priorityPollCfg = roomPriorityScorer.getPollingConfig(priorityAllocation);
+
             if (wsFresh) {
                 nextInterval = 5000; // Heartbeat 5s — WS faz tempo real
             } else if (isBiddingActive) {
@@ -1114,6 +1209,11 @@ class RoomRunner {
                     if (this._429backoffMs > 0) nextInterval += this._429backoffMs;
                 } else {
                     nextInterval = 800; // Ativo estável 800ms
+                }
+
+                // 🧠 Para salas critical/high, usa o intervalo do priority scorer se menor
+                if (priorityAllocation === 'critical' || priorityAllocation === 'high') {
+                    nextInterval = Math.min(nextInterval, priorityPollCfg.pollIntervalMs);
                 }
             }
 
@@ -1652,6 +1752,11 @@ class BiddingRunner {
             return;
         }
         this.recentBids.set(dedupKey, { value, timestamp: now });
+
+        // 🧠 Feed bid observation to profiler
+        try {
+            competitorProfiler.recordBid(purchaseId, itemId, '__OUR_BID__', value, null, true, 'sendBid');
+        } catch (_e) { /* profiler non-critical */ }
 
         // 🔒 Mutex: marca item com bid em andamento (impede RoomRunner de disparar concorrente)
         this.bidsInProgress.set(itemKey, now);
