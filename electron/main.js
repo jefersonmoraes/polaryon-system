@@ -221,6 +221,7 @@ app.whenReady().then(async () => {
   // 🌐 Rastreia compras-id (session UUID) em TODAS as janelas, incluindo child windows do portal Serpro
   app.on('web-contents-created', (event, contents) => {
     contents.on('did-navigate', (event, url) => {
+      if (contents.isDestroyed()) return;
       const m = url.match(/[?&]compras-id=([a-f0-9-]+)/i);
       if (m && m[1]) {
         globalComprasId = m[1];
@@ -228,6 +229,7 @@ app.whenReady().then(async () => {
       }
     });
     contents.on('did-navigate-in-page', (event, url) => {
+      if (contents.isDestroyed()) return;
       const m = url.match(/[?&]compras-id=([a-f0-9-]+)/i);
       if (m && m[1]) {
         globalComprasId = m[1];
@@ -246,7 +248,13 @@ app.whenReady().then(async () => {
   const { globalShortcut } = require('electron');
   globalShortcut.register('F12', () => {
     const wins = BrowserWindow.getAllWindows();
-    wins.forEach(w => w.webContents.toggleDevTools());
+    wins.forEach(w => {
+      try {
+        if (w && !w.isDestroyed() && w.webContents && !w.webContents.isDestroyed()) {
+          w.webContents.toggleDevTools();
+        }
+      } catch(e) {}
+    });
   });
 
   app.on('activate', () => {
@@ -342,16 +350,16 @@ ipcMain.on('set-focused-session', (event, sessionId) => {
   // Propaga foco para o visual runner correspondente (v3.8.312)
   if (visualRunner && visualRunner.sessions) {
     const session = visualRunner.sessions.get(sessionId);
-    if (session && session.window && !session.window.isDestroyed()) {
+    if (session && session.window) {
       try {
-        session.window.webContents.send('polaryon-focused-state', { focused: true });
+        safeSend(session.window, 'polaryon-focused-state', { focused: true });
       } catch (e) {}
     }
     // E desativa foco nas outras sessões
     for (const [sId, s] of visualRunner.sessions.entries()) {
-      if (sId !== sessionId && s.window && !s.window.isDestroyed()) {
+      if (sId !== sessionId && s.window) {
         try {
-          s.window.webContents.send('polaryon-focused-state', { focused: false });
+          safeSend(s.window, 'polaryon-focused-state', { focused: false });
         } catch (e) {}
       }
     }
@@ -381,7 +389,7 @@ ipcMain.on('start-visual-bidding', async (event, { sessionId, uasg, numero, ano,
 // [SIGA AUTO-DETECTION] RELAY PARA O DASHBOARD
 ipcMain.on('portal-detected-room', (event, data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('bidding-detected-room', data);
+        safeSend(mainWindow, 'bidding-detected-room', data);
     }
 });
 
@@ -408,9 +416,7 @@ ipcMain.on('send-portal-data', (event, data) => {
             else if (r) r.serproToken = freshToken;
         }
     } else {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('portal-data-update', data);
-        }
+        safeSend(mainWindow, 'portal-data-update', data);
     }
 });
 
@@ -459,9 +465,7 @@ ipcMain.on('ws-ping', (event, data) => {
 
 // ⚡ RAIO DIRETO: dados mínimos do WebSocket para display instantâneo no frontend
 ipcMain.on('ws-fast-bid', (event, data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ws-fast-bid', data);
-    }
+    safeSend(mainWindow, 'ws-fast-bid', data);
 });
 
 // 🎯 NOTIFICAÇÃO DE LANCE ENVIADO PELO FRONTEND → atualiza cooldown do backend (v3.8.130)
@@ -554,17 +558,13 @@ ipcMain.handle('get-restored-sessions', () => {
 // AUTO-UPDATER EVENTS
 autoUpdater.on('checking-for-update', () => {
     console.log('[POLARYON-UPDATE] Verificando se há atualizações...');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('bidding-update-log', '🔎 Verificando servidores da Polaryon...');
-    }
+    safeSend(mainWindow, 'bidding-update-log', '🔎 Verificando servidores da Polaryon...');
 });
 
 autoUpdater.on('update-available', (info) => {
     console.log('[POLARYON-UPDATE] Atualização disponível v' + info.version);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-available', info);
-        mainWindow.webContents.send('bidding-update-log', `✅ Nova versão v${info.version} encontrada! Iniciando download...`);
-    }
+    safeSend(mainWindow, 'update-available', info);
+    safeSend(mainWindow, 'bidding-update-log', `✅ Nova versão v${info.version} encontrada! Iniciando download...`);
     new Notification({
         title: 'Polaryon - Atualização detectada',
         body: 'Uma nova versão (' + info.version + ') está sendo baixada automaticamente.'
@@ -573,10 +573,8 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', (info) => {
     console.log('[POLARYON-UPDATE] Nenhuma atualização pendente (v' + app.getVersion() + ')');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-not-available', info);
-        mainWindow.webContents.send('bidding-update-log', '👌 Você já está na versão mais recente (v' + app.getVersion() + ')');
-    }
+    safeSend(mainWindow, 'update-not-available', info);
+    safeSend(mainWindow, 'bidding-update-log', '👌 Você já está na versão mais recente (v' + app.getVersion() + ')');
 });
 
 autoUpdater.on('error', (err) => {
@@ -585,32 +583,25 @@ autoUpdater.on('error', (err) => {
     // 🛡️ TRATAMENTO EBUSY: Se o Windows travar o arquivo, tentamos avisar e limpar
     if (err.message.includes('EBUSY') || err.message.includes('locked')) {
         console.log('[POLARYON-UPDATE] Detectado recurso travado. Sugerindo limpeza manual.');
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('bidding-update-log', '⚠️ O Windows travou o instalador. Por favor, reinicie o computador ou feche o app e tente novamente.');
-        }
+        safeSend(mainWindow, 'bidding-update-log', '⚠️ O Windows travou o instalador. Por favor, reinicie o computador ou feche o app e tente novamente.');
     }
 
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-error', err.message);
-        mainWindow.webContents.send('bidding-update-log', '❌ Erro na atualização: ' + (err.message || 'Falha de rede'));
-    }
+    safeSend(mainWindow, 'update-error', err.message);
+    safeSend(mainWindow, 'bidding-update-log', '❌ Erro na atualização: ' + (err.message || 'Falha de rede'));
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
     console.log(`[POLARYON-UPDATE] Baixando: ${Math.round(progressObj.percent)}%`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('download-progress', progressObj);
-        mainWindow.webContents.send('bidding-update-log', `⏳ Baixando: ${Math.round(progressObj.percent)}% (${Math.round(progressObj.bytesPerSecond / 1024)} KB/s)`);
-    }
+    safeSend(mainWindow, 'download-progress', progressObj);
+    safeSend(mainWindow, 'bidding-update-log', `⏳ Baixando: ${Math.round(progressObj.percent)}% (${Math.round(progressObj.bytesPerSecond / 1024)} KB/s)`);
 });
 
 autoUpdater.on('update-downloaded', (info) => {
     console.log('[POLARYON-UPDATE] Atualização v' + info.version + ' baixada.');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-downloaded', info);
-        mainWindow.webContents.send('bidding-update-log', `🚀 v${info.version} PRONTA! Reiniciando em 10s para aplicar...`);
-        
-        setTimeout(() => {
+    safeSend(mainWindow, 'update-downloaded', info);
+    safeSend(mainWindow, 'bidding-update-log', `🚀 v${info.version} PRONTA! Reiniciando em 10s para aplicar...`);
+    
+    setTimeout(() => {
             console.log('[POLARYON-UPDATE] Destruindo todas as janelas...');
             BrowserWindow.getAllWindows().forEach(function(w) {
                 try { if (!w.isDestroyed()) w.destroy(); } catch(e) {}
@@ -776,17 +767,25 @@ function sendDiag(msg) {
   console.log(msg);
   try {
     BrowserWindow.getAllWindows().forEach(win => {
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
         win.webContents.send('main-diag', msg);
       }
     });
   } catch(e) {}
 }
 
+function safeSend(win, channel, data) {
+  try {
+    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
+  } catch(e) {}
+}
+
 function broadcastToken(token) {
   try {
     BrowserWindow.getAllWindows().forEach(win => {
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
         win.webContents.send('force-token-injection', { token });
         win.webContents.send('portal-data-update', { type: 'session-token', token });
       }
