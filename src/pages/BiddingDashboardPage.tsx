@@ -194,6 +194,7 @@ export default function BiddingDashboardPage() {
     // 🏠 BACKEND ATIVO: quando backend RoomRunner está gerenciando bids (v3.8.175), frontend sniper não dispara
     const backendActiveRef = useRef(false);
     // ⏱ REMOVIDO: timerOverrideRef (botão Forçar removido — sniper automático 30s)
+    const timerOverrideRef = useRef<Record<string, number>>({});
 
     // 🏆 HELPERS DE SEGURANÇA E PROTEÇÃO CONTRA LAG DE REDE (v4.4.3)
     // Permitem buscar os locks de disparos recentes de forma flexível pelo itemId (sufixo),
