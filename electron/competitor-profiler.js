@@ -7,12 +7,17 @@
  * v3.8.326 — Competitor Profiling + Predictive Bidding
  */
 
-const path = require('path');
-const { PrismaClient } = require(path.join(__dirname, '..', 'backend', 'node_modules', '@prisma', 'client'));
+let PrismaClient = null;
+try {
+    const path = require('path');
+    ({ PrismaClient } = require(path.join(__dirname, '..', 'backend', 'node_modules', '@prisma', 'client')));
+} catch (_e) {
+    // No packaged Electron (asar), @prisma/client is unavailable — memory-only mode
+}
 
 class CompetitorProfiler {
     constructor() {
-        this.prisma = new PrismaClient({ log: ['error'] });
+        this.prisma = PrismaClient ? new PrismaClient({ log: ['error'] }) : null;
         
         // Cache em memória para acesso rápido (persiste via Prisma)
         this.bidHistory = new Map();       // key: `${purchaseId}_${itemId}` → BidRecord[]
@@ -103,6 +108,7 @@ class CompetitorProfiler {
      * Registra resultado final de uma disputa
      */
     async recordAuctionResult(result) {
+        if (!this.prisma) return;
         try {
             await this.prisma.auctionResult.upsert({
                 where: {
@@ -445,6 +451,7 @@ class CompetitorProfiler {
      * Persiste dados acumulados no banco (batch)
      */
     async _flushToDb() {
+        if (!this.prisma) return;
         try {
             // Persiste BidHistory em batch (últimos 30s não persistidos)
             const allBids = [];
@@ -535,7 +542,7 @@ class CompetitorProfiler {
     async destroy() {
         clearInterval(this._flushTimer);
         await this._flushToDb();
-        await this.prisma.$disconnect();
+        if (this.prisma) await this.prisma.$disconnect();
     }
 }
 
