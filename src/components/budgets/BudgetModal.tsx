@@ -391,17 +391,25 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         const productsEntryTax = discountedProducts * (entryDifalPercent / 100);
         const freightEntryTax = 0;
 
-        // Preço Produtos = (Custo + I.Entrada) / (1 - (I.Venda + Margem))
-        let finalPriceProducts = (discountedProducts + productsEntryTax);
+        // Preço Produtos = (Custo / (1 - I.Venda - Margem)) + (I.Entrada / (1 - I.Venda)) -> SEM MARGEM NO IMPOSTO!
+        let finalPriceProducts = discountedProducts;
         const productDivisor = (1 - (salesTaxRate + fixedRate + (marginPercent || 0)) / 100);
+        const taxDivisor = (1 - (salesTaxRate + fixedRate) / 100);
+
         if (productDivisor > 0 && productDivisor <= 1) {
-            finalPriceProducts = (discountedProducts + productsEntryTax) / productDivisor;
+            finalPriceProducts = discountedProducts / productDivisor;
+        }
+        if (productsEntryTax > 0 && taxDivisor > 0 && taxDivisor <= 1) {
+            finalPriceProducts += productsEntryTax / taxDivisor;
         }
 
-        let finalPriceProductsMax = (discountedProducts + productsEntryTax);
+        let finalPriceProductsMax = discountedProducts;
         const productDivisorMax = (1 - (salesTaxRate + fixedRate + (marginMaxPercent || 0)) / 100);
         if (productDivisorMax > 0 && productDivisorMax <= 1) {
-            finalPriceProductsMax = (discountedProducts + productsEntryTax) / productDivisorMax;
+            finalPriceProductsMax = discountedProducts / productDivisorMax;
+        }
+        if (productsEntryTax > 0 && taxDivisor > 0 && taxDivisor <= 1) {
+            finalPriceProductsMax += productsEntryTax / taxDivisor;
         }
 
         // Preço Frete = (Custo + I.Entrada) / (1 - I.Venda) -> SEM MARGEM!
@@ -484,21 +492,23 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
 
         // 4. Identificar a carga tributária de saída (T)
         // No nosso divisor, o markup fixo é (1 - T - M). Com M=0, divisor é (1 - T).
-        // Logo, T = 1 - (CustoEfetivoProdutos / PreçoProdutosComMargemZero)
-        // Mas podemos pegar sim.salesTaxRate diretamente se retornarmos no result.
         const T = sim.salesTaxRate / 100;
-        const A = sim.productsEffectiveCost; // Custo de aquisição + Antecipação dos produtos
+        
+        // Com a correção de DIFAL de Entrada sem margem:
+        // targetProductsSell = (Custo / (1 - T - M)) + (DIFAL / (1 - T))
+        // targetProductsSellNet = targetProductsSell - (DIFAL / (1 - T))
+        // M = 1 - T - (Custo / targetProductsSellNet)
+        const taxDivisor = 1 - T;
+        const entryTaxResale = taxDivisor > 0 ? sim.entryDifalValue / taxDivisor : sim.entryDifalValue;
+        const targetProductsSellNet = targetProductsSell - entryTaxResale;
 
-        if (targetProductsSell <= A) {
+        if (targetProductsSellNet <= sim.supplierCost) {
             updateItem(item.id, 'profitMargin', 0);
             return;
         }
 
         // 5. Resolver para M (Margem):
-        // targetProductsSell = A / (1 - T - M)
-        // (1 - T - M) = A / targetProductsSell
-        // M = 1 - T - (A / targetProductsSell)
-        const requiredMargin = (1 - T - (A / targetProductsSell)) * 100;
+        const requiredMargin = (1 - T - (sim.supplierCost / targetProductsSellNet)) * 100;
 
         let newMargin = Math.max(0, requiredMargin);
         if (newMargin > 99.99) newMargin = 99.99; // Cap para evitar divisão por zero no recalculate
