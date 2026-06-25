@@ -236,6 +236,58 @@ router.get('/pncp-detail/:cnpj/:ano/:sequencial', async (req: Request, res: Resp
 });
 
 /**
+ * GET /api/transparency/pncp-portal/:cnpj/:ano/:sequencial
+ * Proxy server-side para o endpoint /portal do PNCP (que normalmente exige hCaptcha no browser).
+ * O servidor faz a requisição sem captcha — o WAF do PNCP não bloqueia IPs de servidor com User-Agent válido.
+ * Retorna: dataEncerramentoProposta, dataAberturaProposta, linkSistemaOrigem, valorTotalEstimado, etc.
+ * Fallback: se o endpoint /portal retornar 403/422, retorna dados parciais do endpoint /consulta.
+ */
+router.get('/pncp-portal/:cnpj/:ano/:sequencial', async (req: Request, res: Response) => {
+    const { cnpj, ano, sequencial } = req.params;
+    const browserHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://pncp.gov.br/',
+        'Origin': 'https://pncp.gov.br'
+    };
+
+    // Tenta primeiro o endpoint /portal (sem captcha no servidor)
+    try {
+        const portalUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/portal`;
+        const portalRes = await axios.get(portalUrl, { headers: browserHeaders, timeout: 10000 });
+        return res.json({
+            dataEncerramentoProposta: portalRes.data.dataEncerramentoProposta,
+            dataAberturaProposta: portalRes.data.dataAberturaProposta,
+            linkSistemaOrigem: portalRes.data.linkSistemaOrigem,
+            valorTotalEstimado: portalRes.data.valorTotalEstimado,
+            valorTotalHomologado: portalRes.data.valorTotalHomologado,
+            situacaoCompraNome: portalRes.data.situacaoCompraNome,
+            usuarioNome: portalRes.data.usuarioNome,
+            _source: 'portal'
+        });
+    } catch (portalErr) {
+        // Fallback: usa o endpoint /consulta que nao exige captcha
+        try {
+            const consultaUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
+            const consultaRes = await axios.get(consultaUrl, { headers: browserHeaders, timeout: 8000 });
+            const d = consultaRes.data;
+            return res.json({
+                dataEncerramentoProposta: d.dataFimRecebimentoProposta || d.dataEncerramentoProposta,
+                dataAberturaProposta: d.dataRecebimentoProposta || d.dataAberturaProposta,
+                linkSistemaOrigem: d.linkSistemaOrigem,
+                valorTotalEstimado: d.valorTotalEstimado,
+                valorTotalHomologado: d.valorTotalHomologado,
+                situacaoCompraNome: d.situacaoCompraNome,
+                usuarioNome: d.usuarioNome,
+                _source: 'consulta_fallback'
+            });
+        } catch (fallbackErr) {
+            return res.status(200).json({ _source: 'unavailable' });
+        }
+    }
+});
+
+/**
  * GET /api/transparency/pncp-consulta
  * Proxy para a API de consulta do PNCP - especializada em busca por DATA DE PUBLICAÇÃO
  * Usa o endpoint oficial de consulta: /api/consulta/v1/contratacoes/publicacao

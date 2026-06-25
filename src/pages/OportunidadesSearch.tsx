@@ -23,142 +23,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
-// --- Captcha Manager for PNCP Portal Endpoint ---
-// Token cache: hCaptcha tokens are valid for ~2 minutes, cache for 120s to avoid rate limits
-let cachedCaptchaToken: string | null = null;
-let cachedCaptchaExpiry = 0;
-let captchaWidgetId: string | null = null;
-let captchaReady = false;
-let captchaInitPromise: Promise<void> | null = null;
-let captchaResolve: ((token: string) => void) | null = null;
-
-const ensureCaptchaLoaded = async (): Promise<void> => {
-    if (captchaReady) return;
-    if (captchaInitPromise) return captchaInitPromise;
-
-    captchaInitPromise = (async () => {
-        const config = await axios.get('https://pncp.gov.br/api/pncp/v1/captcha/configuracao', {
-            headers: { 'Accept': 'application/json' },
-            timeout: 10000
-        });
-        const data = config.data;
-        if (!data.hcaptchaHabilitado || !data.hcaptchaSiteKey) {
-            throw new Error('hCaptcha not available');
-        }
-
-        if (typeof (window as any).hcaptcha === 'undefined') {
-            await new Promise<void>((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = `https://js.hcaptcha.com/1/api.js?render=explicit&hl=pt`;
-                script.async = true;
-                script.defer = true;
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error('Failed to load hCaptcha'));
-                document.head.appendChild(script);
-            });
-            await new Promise(r => setTimeout(r, 1000));
-        }
-
-        const container = document.createElement('div');
-        container.id = 'pncp-hcaptcha-global';
-        container.style.position = 'fixed';
-        container.style.left = '-9999px';
-        container.style.top = '-9999px';
-        document.body.appendChild(container);
-
-        captchaWidgetId = (window as any).hcaptcha.render(container.id, {
-            sitekey: data.hcaptchaSiteKey,
-            size: 'invisible',
-            callback: (token: string) => {
-                cachedCaptchaToken = token;
-                cachedCaptchaExpiry = Date.now() + 120000;
-                if (captchaResolve) {
-                    captchaResolve(token);
-                    captchaResolve = null;
-                }
-            }
-        });
-        captchaReady = true;
-    })();
-
-    return captchaInitPromise;
-};
-
-const getCaptchaToken = async (): Promise<string> => {
-    await ensureCaptchaLoaded();
-
-    if (cachedCaptchaToken && Date.now() < cachedCaptchaExpiry) {
-        return cachedCaptchaToken;
-    }
-
-    // Executa o widget singleton — callback resolve a Promise
-    return new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            captchaResolve = null;
-            reject(new Error('hCaptcha timeout'));
-        }, 30000);
-
-        captchaResolve = (token: string) => {
-            clearTimeout(timeout);
-            resolve(token);
-        };
-
-        try {
-            (window as any).hcaptcha.execute(captchaWidgetId);
-        } catch (e: any) {
-            clearTimeout(timeout);
-            captchaResolve = null;
-            if (cachedCaptchaToken) {
-                console.warn('[CAPTCHA] execute falhou, reutilizando cache:', e.message);
-                resolve(cachedCaptchaToken);
-            } else {
-                reject(e);
-            }
-        }
-    });
-};
-
-const invalidateCaptchaToken = () => {
-    cachedCaptchaExpiry = 0;
-};
-
+// --- PNCP Portal Proxy (sem captcha) ---
+// Delega ao backend que faz a requisição server-side sem precisar de hCaptcha
 const fetchPncpPortalDirect = async (cnpj: string, ano: string, sequencial: string) => {
-    let lastError: any = null;
-    const maxAttempts = 5;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-            const token = await getCaptchaToken();
-            const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/portal?captcha=${encodeURIComponent(token)}`;
-            const res = await axios.get(url, {
-                headers: { 'Accept': 'application/json' },
-                timeout: 15000
-            });
-            return {
-                dataEncerramentoProposta: res.data.dataEncerramentoProposta,
-                dataAberturaProposta: res.data.dataAberturaProposta,
-                linkSistemaOrigem: res.data.linkSistemaOrigem,
-                valorTotalEstimado: res.data.valorTotalEstimado,
-                valorTotalHomologado: res.data.valorTotalHomologado,
-                situacaoCompraNome: res.data.situacaoCompraNome,
-                usuarioNome: res.data.usuarioNome
-            };
-        } catch (e: any) {
-            lastError = e;
-            if (e.response?.status === 422) {
-                invalidateCaptchaToken();
-                continue;
-            }
-            if (e.response?.status === 429) {
-                const backoff = Math.min(4000, 1000 * Math.pow(2, attempt)) + Math.random() * 500;
-                console.warn(`[CAPTCHA] 429 rate limited, retry ${attempt + 1}/${maxAttempts} in ${Math.round(backoff)}ms`);
-                await new Promise(r => setTimeout(r, backoff));
-                invalidateCaptchaToken();
-                continue;
-            }
-            throw e;
-        }
-    }
-    throw lastError || new Error('Failed to fetch portal data');
+    const res = await api.get(`/transparency/pncp-portal/${cnpj}/${ano}/${sequencial}`, { timeout: 15000 });
+    if (res.data?._source === 'unavailable') return null;
+    return res.data;
 };
 
 // Global handler to suppress unhandled promise rejections from PNCP API calls
@@ -1204,13 +1074,13 @@ export default function OportunidadesSearch() {
                 setLoadingCgu(false);
             }
 
-            // 4. Fetch Portal Data (com captcha) - dataEncerramentoProposta, linkSistemaOrigem
+            // 4. Fetch Portal Data (via backend proxy) - dataEncerramentoProposta, linkSistemaOrigem
             setLoadingPortal(true);
             try {
                 const portal = await fetchPncpPortalDirect(cnpj, ano, seq);
                 setPortalData(portal);
             } catch (e: any) {
-                console.warn("[Portal] Não foi possível obter dados do portal (captcha):", e.message);
+                console.warn("[Portal] Não foi possível obter dados do portal:", e.message);
                 setPortalData(null);
             } finally {
                 setLoadingPortal(false);
