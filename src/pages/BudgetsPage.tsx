@@ -8,7 +8,7 @@ import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 import {
     Calculator, Plus, Search, Filter, MoreVertical,
     Trash2, Edit, Building2, Calendar, FileText, FolderOpen,
-    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign, Zap, TrendingUp
+    Clock, FileSearch, CheckCircle2, XCircle, ArrowUpDown, Link as LinkIcon, Archive, Truck, DollarSign, Zap, TrendingUp, Percent
 } from 'lucide-react';
 import BudgetModal from '@/components/budgets/BudgetModal';
 import GlobalBudgetAutomationModal from '@/components/budgets/GlobalBudgetAutomationModal';
@@ -105,21 +105,25 @@ const BudgetsPage = () => {
 
     const approvedSummary = useMemo(() => {
         const approved = budgets.filter(b => b.status === 'Aprovado' && !b.trashed && !b.archived);
+        let totalSupplierCost = 0;
         let totalFinalPrice = 0;
         let totalProfit = 0;
         for (const budget of approved) {
-            const favorites = (budget.items || []).filter(i => i.isFavorite);
-            const quotationList = favorites.length > 0 ? favorites : budget.items || [];
+            if (!budget.items || budget.items.length === 0) continue;
+            const favorites = budget.items.filter(i => i.isFavorite);
+            const quotationList = favorites.length > 0 ? favorites : budget.items;
             for (const q of quotationList) {
                 const sell = q.finalSellingPrice || q.totalPrice || 0;
-                const cost = q.totalPrice || 0;
+                const cost = q.supplierCost || q.totalPrice || 0;
                 const tax = q.taxValue || 0;
                 const difal = q.difalValue || 0;
+                totalSupplierCost += cost;
                 totalFinalPrice += sell;
                 totalProfit += (sell - cost - tax - difal);
             }
         }
-        return { totalFinalPrice, totalProfit, count: approved.length };
+        const marginPercent = totalSupplierCost > 0 ? (totalProfit / totalSupplierCost) * 100 : 0;
+        return { totalSupplierCost, totalFinalPrice, totalProfit, marginPercent, count: approved.length };
     }, [budgets]);
 
     const handleEdit = (budget: Budget) => {
@@ -174,25 +178,45 @@ const BudgetsPage = () => {
 
                 {/* Approved Budgets Summary Cards */}
                 {approvedSummary.count > 0 && (
-                    <div className="flex gap-3 mb-4">
-                        <div className="flex-1 bg-green-500/5 border border-green-500/20 rounded-xl p-4 flex items-center gap-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/10 rounded-lg">
+                                <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Preço Final Aprovados</p>
+                                <p className="text-lg font-bold text-blue-700 dark:text-blue-300 truncate">{formatCurrency(approvedSummary.totalSupplierCost)}</p>
+                                <p className="text-[10px] text-muted-foreground">{approvedSummary.count} orçamento{approvedSummary.count > 1 ? 's' : ''}</p>
+                            </div>
+                        </div>
+                        <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 flex items-center gap-3">
                             <div className="p-2 bg-green-500/10 rounded-lg">
                                 <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                             </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Preço Final Aprovados</p>
-                                <p className="text-lg font-bold text-green-700 dark:text-green-300">{formatCurrency(approvedSummary.totalFinalPrice)}</p>
-                                <p className="text-[10px] text-muted-foreground">{approvedSummary.count} orçamento{approvedSummary.count > 1 ? 's' : ''} aprovado{approvedSummary.count > 1 ? 's' : ''}</p>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Preço Final Faturado</p>
+                                <p className="text-lg font-bold text-green-700 dark:text-green-300 truncate">{formatCurrency(approvedSummary.totalFinalPrice)}</p>
+                                <p className="text-[10px] text-muted-foreground">Cotações selecionadas</p>
                             </div>
                         </div>
-                        <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3">
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3">
                             <div className="p-2 bg-emerald-500/10 rounded-lg">
                                 <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Lucro Total Aprovados</p>
-                                <p className={cn("text-lg font-bold", approvedSummary.totalProfit >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300")}>{formatCurrency(approvedSummary.totalProfit)}</p>
+                                <p className={cn("text-lg font-bold truncate", approvedSummary.totalProfit >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300")}>{formatCurrency(approvedSummary.totalProfit)}</p>
                                 <p className="text-[10px] text-muted-foreground">Margem agregada</p>
+                            </div>
+                        </div>
+                        <div className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-4 flex items-center gap-3">
+                            <div className="p-2 bg-violet-500/10 rounded-lg">
+                                <Percent className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider">Margem % Aprovados</p>
+                                <p className={cn("text-lg font-bold truncate", approvedSummary.marginPercent >= 0 ? "text-violet-700 dark:text-violet-300" : "text-red-700 dark:text-red-300")}>{approvedSummary.marginPercent.toFixed(1)}%</p>
+                                <p className="text-[10px] text-muted-foreground">Lucro sobre custo</p>
                             </div>
                         </div>
                     </div>
