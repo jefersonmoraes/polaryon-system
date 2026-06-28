@@ -108,18 +108,27 @@ const BudgetsPage = () => {
         let totalSupplierCost = 0;
         let totalFinalPrice = 0;
         let totalProfit = 0;
+
         for (const budget of approved) {
             if (!budget.items || budget.items.length === 0) continue;
             const favorites = budget.items.filter(i => i.isFavorite);
-            const quotationList = favorites.length > 0 ? favorites : budget.items;
-            for (const q of quotationList) {
+
+            if (favorites.length > 0) {
+                // FAVORITOS: soma de TODOS os favoritos
+                for (const q of favorites) {
+                    const sell = q.finalSellingPrice || q.totalPrice || 0;
+                    totalSupplierCost += (q.supplierCost || q.totalPrice || 0);
+                    totalFinalPrice += sell;
+                    // Lucro exato da miniatura: sell - totalPrice - tax - difal
+                    totalProfit += sell - (q.totalPrice || 0) - (q.taxValue || 0) - (q.difalValue || 0);
+                }
+            } else {
+                // SEM FAVORITO: pega APENAS a primeira cotação (selecionada)
+                const q = budget.items[0];
                 const sell = q.finalSellingPrice || q.totalPrice || 0;
-                const cost = q.supplierCost || q.totalPrice || 0;
-                const tax = q.taxValue || 0;
-                const difal = q.difalValue || 0;
-                totalSupplierCost += cost;
+                totalSupplierCost += (q.supplierCost || q.totalPrice || 0);
                 totalFinalPrice += sell;
-                totalProfit += (sell - cost - tax - difal);
+                totalProfit += sell - (q.totalPrice || 0) - (q.taxValue || 0) - (q.difalValue || 0);
             }
         }
         const marginPercent = totalSupplierCost > 0 ? (totalProfit / totalSupplierCost) * 100 : 0;
