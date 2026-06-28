@@ -104,6 +104,7 @@ const BudgetsPage = () => {
     };
 
     const approvedSummary = useMemo(() => {
+        // v2 - cache bust: pega supplierCost dos favoritos ou 1a cotacao
         const approved = budgets.filter(b => b.status === 'Aprovado' && !b.trashed && !b.archived);
         let totalSupplierCost = 0;
         let totalFinalPrice = 0;
