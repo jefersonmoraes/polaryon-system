@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+cd /var/www/polaryon
 echo "=== [0/5] Limpando versões antigas de instaladores ==="
 CURRENT_VERSION=$(node -e "console.log(require('./package.json').version)")
 echo "Versão atual: $CURRENT_VERSION"
@@ -13,7 +14,6 @@ if [ -d "/var/www/polaryon/storage/download" ]; then
 fi
 
 echo "=== [1/5] Atualizando Código (Git) ==="
-cd /var/www/polaryon
 git fetch origin main
 git reset --hard origin/main
 
