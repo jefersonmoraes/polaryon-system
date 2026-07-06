@@ -18,31 +18,37 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "=== [2/5] Build Frontend Atômico ==="
-# vite.config.ts tem outDir: "dist_electron" — build sempre sai em dist_electron
-# Removemos dist_electron antigo ANTES do build para garantir build limpo
-rm -rf dist_electron_new
-npm install --no-audit --no-fund
-npm run build
-# Renomear para dist_electron_new para operação atômica
-mv dist_electron dist_electron_new
+# Remover symlink dist_electron antes do build (vite não consegue buildar para um symlink)
+[ -L dist_electron ] && unlink dist_electron || true
+# Remover diretório dist_electron anterior (caso exista)
+rm -rf dist_electron_build_tmp
 
-if [ -d "dist_electron_new" ]; then
-    rm -rf dist_electron_old
-    [ -d "dist" ] && mv -T dist dist_electron_old || true
-    mv -T dist_electron_new dist
+npm install --no-audit --no-fund
+# vite.config.ts tem outDir: "dist_electron" — build sempre sai nesse diretório
+npm run build
+
+# Agora dist_electron é um diretório real com o build novo
+# Fazer swap atômico: dist_electron_build_tmp como destino intermediário
+mv dist_electron dist_electron_build_tmp
+
+if [ -d "dist_electron_build_tmp" ]; then
+    # Remover dist antigo (pode ser symlink ou diretório)
+    [ -L dist ] && unlink dist || rm -rf dist_old
+    [ -d "dist" ] && mv dist dist_old || true
+    mv dist_electron_build_tmp dist
+    rm -rf dist_old
 
     # GARANTE O LINK DE DOWNLOAD (Sempre em cada deploy)
     mkdir -p /var/www/polaryon/storage/download
     [ -L /var/www/polaryon/dist/download ] && unlink /var/www/polaryon/dist/download || rm -rf /var/www/polaryon/dist/download || true
     ln -sf /var/www/polaryon/storage/download /var/www/polaryon/dist/download
 
-    rm -rf dist_electron_old
-    # Sincroniza symlink para Nginx (root aponta para dist_electron)
+    # Sincroniza symlink para Nginx (Nginx root aponta para dist_electron)
     rm -f dist_electron
     ln -s dist dist_electron
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
-    echo "❌ FALHA CRÍTICA: dist_electron_new não encontrada."
+    echo "❌ FALHA CRÍTICA: dist_electron_build_tmp não encontrada."
     exit 1
 fi
 
