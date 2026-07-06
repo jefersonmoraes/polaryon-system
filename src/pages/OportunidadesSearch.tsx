@@ -502,20 +502,52 @@ const MAPA_USUARIO_PORTAL: Record<string, string> = {
     'bll compras': 'BLL Compras',
 };
 
-// Componente reativo para badge de portal — usa fonte_dados já identificado no item
-// fonte_dados é definido em fetchOportunidades com toda a lógica de identificação de portal
+// Componente reativo para badge de portal — usa cache reativo de detalhes
 const PortalBadge = memo(({ item }: { item: any }) => {
-    // fonte_dados já está resolvido no item (mapeado na etapa de busca)
-    // Usa sistema_origem_nome como fallback adicional se disponível
-    const rawNome = (item as any).fonte_dados
-        || (item as any).sistema_origem_nome
-        || 'PNCP';
+    const parts = item.numero_controle_pncp?.split('-');
+    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
+    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
+    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
+    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
 
+    const [usuarioNome, setUsuarioNome] = useState<string | null>(() => {
+        const cached = pncpDetailCache[cacheKey]?.data;
+        const raw = cached?.usuarioNome || null;
+        if (raw && raw !== 'undefined') return raw;
+        return null;
+    });
+
+    // Auto-fetch se cache vazio
+    useEffect(() => {
+        if (!pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+            queuePncpFetch(item).catch(() => {});
+        }
+    }, [cacheKey, item]);
+
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ce = e as CustomEvent;
+            if (ce.detail?.cacheKey === cacheKey) {
+                const cached = pncpDetailCache[cacheKey]?.data;
+                const raw = cached?.usuarioNome || null;
+                if (raw && raw !== 'undefined') {
+                    setUsuarioNome(raw);
+                }
+            }
+        };
+        window.addEventListener('pncp-cache-updated', handler);
+        return () => window.removeEventListener('pncp-cache-updated', handler);
+    }, [cacheKey]);
+
+    const isFetching = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
+
+    // Aplica mapeamento de nomes conhecidos
+    const rawNome = usuarioNome || (item as any).fonte_dados || (item as any).sistema_origem_nome || 'PNCP';
     const mappedNome = MAPA_USUARIO_PORTAL[rawNome.toLowerCase().trim()] || rawNome;
     const pair = getPortalStyle(mappedNome);
     return (
-        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
-            {pair.label}
+        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${isFetching ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' : pair.style}`}>
+            {isFetching ? '...' : pair.label}
         </span>
     );
 });
@@ -1397,13 +1429,23 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             };
 
             const MAPA_FONTE_Q: Record<string, string> = {
-                'bll': 'Bolsa Licitações',
+                'comprasnet': 'compras.gov.br',
                 'licitacoese': 'Licitações-e',
+                'pcp': '[Portal de Compras Públicas]',
+                'bll': 'Bolsa Licitações',
+                'bnc': 'Bolsa Nacional de Compras',
+                'bbmnet': 'BBMNET Licitações',
+                'licitanet': 'Licitanet',
                 'siga': 'SIGA',
                 'compras-rs': 'Compras RS',
-                'pcp': '[Portal de Compras Públicas]',
-                'bnc': 'Bolsa Nacional de Compras',
+                'ipm': 'IPM Sistemas',
+                'betha': 'Betha Sistemas',
                 'ecustomize': 'ECustomize',
+                'brconectado': 'BR Conectado',
+                'governancabrasil': 'Governança Brasil',
+                'licitamais': 'Licita + Brasil',
+                'centi': 'CENTI',
+                'systemdesenv': 'System Desenvolvimento',
             };
 
             const isAll = fonteFilter.includes('unificado');
@@ -1422,16 +1464,18 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             if (isAll) {
                 activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
             } else {
-                const NEW_PORTAL_IDS = new Set(['ipm', 'betha', 'bbmnet', 'licitanet', 'brconectado', 'governancabrasil', 'licitamais', 'centi', 'systemdesenv', 'pncp', 'comprasnet']);
-                if (fonteFilter.includes('comprasnet') || fonteFilter.includes('pncp') || fonteFilter.some(f => NEW_PORTAL_IDS.has(f))) {
+                if (fonteFilter.includes('pncp')) {
                     activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
                 }
+                
                 // Para portais específicos, usa keyword injection + filtragem client-side
                 for (const f of fonteFilter) {
-                    if (f === 'unificado' || f === 'pncp' || f === 'comprasnet') continue;
+                    if (f === 'unificado' || f === 'pncp') continue;
                     const qExtra = MAPA_FONTE_Q[f];
                     if (qExtra) {
                         activeQueries.push({ key: f, type: 'pncp-search', q_extra: qExtra });
+                    } else {
+                        activeQueries.push({ key: f, type: 'pncp-search' });
                     }
                 }
             }
@@ -1458,10 +1502,37 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                 const itemsData = res.data?.items || [];
                                 const totalVal = res.data?.total || 0;
                                 
+                                // Map the source portal for items returned from specific queries
+                                const mappedItems = itemsData.map((item: any) => {
+                                    if (qInfo.key !== 'pncp_geral') {
+                                        const keyToFonte: Record<string, string> = {
+                                            'comprasnet': 'Compras.gov.br',
+                                            'licitacoese': 'Licitações-e',
+                                            'pcp': 'Portal de Compras Públicas',
+                                            'bll': 'BLL Compras',
+                                            'bnc': 'Bolsa Nacional de Compras',
+                                            'bbmnet': 'BBMNET Licitações',
+                                            'licitanet': 'Licitanet',
+                                            'siga': 'SIGA',
+                                            'compras-rs': 'Compras RS',
+                                            'ipm': 'IPM Sistemas',
+                                            'betha': 'Betha Sistemas',
+                                            'ecustomize': 'ECustomize',
+                                            'brconectado': 'BR Conectado',
+                                            'governancabrasil': 'Governança Brasil',
+                                            'licitamais': 'Licita + Brasil',
+                                            'centi': 'CENTI',
+                                            'systemdesenv': 'System Desenvolvimento',
+                                        };
+                                        return { ...item, fonte_dados: keyToFonte[qInfo.key] || 'PNCP' };
+                                    }
+                                    return item;
+                                });
+                                
                                 return {
                                     key: qInfo.key,
                                     page: p,
-                                    items: itemsData,
+                                    items: mappedItems,
                                     total: totalVal
                                 };
                             })
@@ -1528,12 +1599,11 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 } catch {}
                 
                 // Portal identification:
-                // 1. sistema_origem_id
-                // 2. Domain mapping from item_url
-                // 3. URL/orgão heuristics
-                // 4. Fallback: PNCP
+                // 1. Pre-mapped from query (i.fonte_dados)
+                // 2. sistema_origem_id
+                // 3. Domain mapping from item_url
                 let sid = i.sistema_origem_id || i.id_sistema_origem;
-                let fonteLabel = (sid && MAPA_SISTEMA_ORIGEM_NOMES[sid]) || null;
+                let fonteLabel = i.fonte_dados || (sid && MAPA_SISTEMA_ORIGEM_NOMES[sid]) || null;
                 
                 // Domain → portal name mapping
                 const DOMAIN_PORTAL_MAP: Record<string, string> = {
