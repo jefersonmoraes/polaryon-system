@@ -14,49 +14,42 @@ if [ -d "/var/www/polaryon/storage/download" ]; then
 fi
 
 echo "=== [1/5] Atualizando Código (Git) ==="
+git remote prune origin 2>/dev/null || true
+rm -f .git/refs/remotes/origin/main
 git fetch origin main
 git reset --hard origin/main
 
 echo "=== [2/5] Build Frontend Atômico ==="
-# dist_electron pode ser um symlink (de deploy anterior) ou um diretório
-# Se for symlink, removemos para o vite poder criar o diretório real
-[ -L dist_electron ] && unlink dist_electron && echo "Removed dist_electron symlink"
-# Remove build temporário anterior se existir
+# Garante que dist_electron não é um symlink para evitar que o build escreva direto em dist
+[ -L dist_electron ] && unlink dist_electron || rm -rf dist_electron
 rm -rf dist_electron_build_tmp
 
 npm install --no-audit --no-fund
-# vite.config.ts tem outDir: "dist_electron" — build sempre sai nesse diretório
 npm run build
 
-# Agora dist_electron é um diretório real com o novo build
+# Agora dist_electron é um diretório real com o novo build. Movemos para o tmp.
 mv dist_electron dist_electron_build_tmp
 
 if [ -d "dist_electron_build_tmp" ]; then
-    # Remove dist anterior (diretório ou symlink)
-    [ -L dist ] && unlink dist || rm -rf dist
+    # Remove dist anterior de forma segura (seja link ou dir)
+    [ -L dist ] && rm -f dist || true
     rm -rf dist_old
+    [ -d dist ] && mv dist dist_old || true
 
     # Ativar novo build
     mv dist_electron_build_tmp dist
+    rm -rf dist_old
 
-    # Symlink dist_electron -> dist para Nginx
+    # Symlink dist_electron -> dist para compatibilidade
     rm -f dist_electron
     ln -s dist dist_electron
 
-    # GARANTE O LINK DE DOWNLOAD usando python3 (sem seguir symlinks)
+    # Garante o diretório de download real
     mkdir -p /var/www/polaryon/storage/download
-    python3 -c "
-import os, sys
-p = '/var/www/polaryon/dist/download'
-if os.path.islink(p):
-    os.unlink(p)
-    print('Removed old download symlink')
-elif os.path.exists(p):
-    import shutil; shutil.rmtree(p)
-    print('Removed old download dir')
-os.symlink('/var/www/polaryon/storage/download', p)
-print('Created download symlink OK')
-"
+
+    # Cria o symlink dist/download -> storage/download
+    rm -rf dist/download
+    ln -sf /var/www/polaryon/storage/download dist/download
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
