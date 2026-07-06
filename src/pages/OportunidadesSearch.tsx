@@ -502,53 +502,20 @@ const MAPA_USUARIO_PORTAL: Record<string, string> = {
     'bll compras': 'BLL Compras',
 };
 
-// Componente reativo para badge de portal — auto-fetch + atualiza pelo cache
+// Componente reativo para badge de portal — usa fonte_dados já identificado no item
+// fonte_dados é definido em fetchOportunidades com toda a lógica de identificação de portal
 const PortalBadge = memo(({ item }: { item: any }) => {
-    const parts = item.numero_controle_pncp?.split('-');
-    const orgaoCnpj = item.orgao_cnpj || parts?.[0];
-    const ano = (item as any).ano_compra || (item as any).ano || parts?.[1];
-    const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
-    const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
+    // fonte_dados já está resolvido no item (mapeado na etapa de busca)
+    // Usa sistema_origem_nome como fallback adicional se disponível
+    const rawNome = (item as any).fonte_dados
+        || (item as any).sistema_origem_nome
+        || 'PNCP';
 
-    const [usuarioNome, setUsuarioNome] = useState<string | null>(() => {
-        const cached = pncpDetailCache[cacheKey]?.data;
-        const raw = cached?.usuarioNome || null;
-        if (raw && raw !== 'undefined') return raw;
-        return null;
-    });
-
-    // Auto-fetch se cache vazio
-    useEffect(() => {
-        if (!pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
-            queuePncpFetch(item).catch(() => {});
-        }
-    }, [cacheKey]);
-
-    useEffect(() => {
-        const handler = (e: Event) => {
-            const ce = e as CustomEvent;
-            if (ce.detail?.cacheKey === cacheKey) {
-                const cached = pncpDetailCache[cacheKey]?.data;
-                const raw = cached?.usuarioNome || null;
-                if (raw && raw !== 'undefined') {
-                    console.log(`[PORTAL BADGE] Atualizado: "${raw}"`);
-                    setUsuarioNome(raw);
-                }
-            }
-        };
-        window.addEventListener('pncp-cache-updated', handler);
-        return () => window.removeEventListener('pncp-cache-updated', handler);
-    }, [cacheKey]);
-
-    const isFetching = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
-
-    // Aplica mapeamento de nomes conhecidos
-    const rawNome = usuarioNome || (item as any).fonte_dados || 'PNCP';
     const mappedNome = MAPA_USUARIO_PORTAL[rawNome.toLowerCase().trim()] || rawNome;
     const pair = getPortalStyle(mappedNome);
     return (
-        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${isFetching ? 'animate-pulse bg-gray-100 text-gray-400 border-gray-200' : pair.style}`}>
-            {isFetching ? '...' : pair.label}
+        <span title={rawNome} className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border uppercase ${pair.style}`}>
+            {pair.label}
         </span>
     );
 });
@@ -1561,7 +1528,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 } catch {}
                 
                 // Portal identification:
-                // 1. sistema_origem_id (always empty in search API, but keep for future)
+                // 1. sistema_origem_id
                 // 2. Domain mapping from item_url
                 // 3. URL/orgão heuristics
                 // 4. Fallback: PNCP
@@ -1601,7 +1568,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         fonteLabel = 'Portal de Compras Públicas';
                     } else if (urlLower.includes('bll')) {
                         fonteLabel = 'BLL Compras';
-                    } else if (urlLower.includes('licitacoes-e')) {
+                    } else if (urlLower.includes('licitacoes-e') || urlLower.includes('bb.com.br')) {
                         fonteLabel = 'Licitações-e';
                     } else if (urlLower.includes('siga.pr') || urlLower.includes('siga.df')) {
                         fonteLabel = 'SIGA';
@@ -1621,6 +1588,26 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                         fonteLabel = 'Compras BA';
                     } else if (urlLower.includes('compras.pe')) {
                         fonteLabel = 'Compras PE';
+                    } else if (urlLower.includes('bnc.org') || urlLower.includes('bnclicitacoes')) {
+                        fonteLabel = 'BNC';
+                    } else if (urlLower.includes('bbmnet')) {
+                        fonteLabel = 'BBMNET Licitações';
+                    } else if (urlLower.includes('licitanet')) {
+                        fonteLabel = 'Licitanet';
+                    } else if (urlLower.includes('betha') || urlLower.includes('e-publico')) {
+                        fonteLabel = 'Betha';
+                    } else if (urlLower.includes('ipm.')) {
+                        fonteLabel = 'IPM';
+                    } else if (urlLower.includes('ecustomize') || urlLower.includes('customize')) {
+                        fonteLabel = 'ECustomize';
+                    } else if (urlLower.includes('centi.')) {
+                        fonteLabel = 'CENTI';
+                    } else if (urlLower.includes('brconectado') || urlLower.includes('br-conectado')) {
+                        fonteLabel = 'BR Conectado';
+                    } else if (urlLower.includes('governancabrasil') || urlLower.includes('governança')) {
+                        fonteLabel = 'Governança Brasil';
+                    } else if (urlLower.includes('licitamais') || urlLower.includes('licita+')) {
+                        fonteLabel = 'Licita + Brasil';
                     } else if (i.sistema_origem_nome && i.sistema_origem_nome !== 'PNCP') {
                         fonteLabel = i.sistema_origem_nome;
                     }
@@ -1636,10 +1623,38 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 return { ...i, fonte_dados: fonteLabel || 'PNCP' };
             });
 
-            // A API do PNCP não suporta filtragem por portal de origem.
-            // Usamos keyword injection como dica, mas a filtragem real é feita pelas heurísticas
-            // de identificação (sistema_origem_id do numero_controle_pncp, URL, texto).
-            // Todos os itens são mantidos com seus labels identificados.
+            // Filtro client-side de portais (fonteFilter)
+            if (fonteFilter && !fonteFilter.includes('unificado')) {
+                const idToNormal: Record<string, string[]> = {
+                    'comprasnet': ['compras.gov.br'],
+                    'licitacoese': ['licitações-e', 'licitacoes-e', 'banco do brasil'],
+                    'pcp': ['portal de compras públicas', 'portal de compras publicas'],
+                    'bll': ['bll compras'],
+                    'bnc': ['bnc', 'bolsa nacional de compras'],
+                    'bbmnet': ['bbmnet licitações', 'bbmnet licitacoes'],
+                    'licitanet': ['licitanet'],
+                    'siga': ['siga'],
+                    'compras-rs': ['compras rs'],
+                    'ipm': ['ipm'],
+                    'betha': ['betha'],
+                    'ecustomize': ['ecustomize'],
+                    'brconectado': ['br conectado'],
+                    'governancabrasil': ['governança brasil', 'governanca brasil'],
+                    'licitamais': ['licita + brasil'],
+                    'centi': ['centi'],
+                    'systemdesenv': ['system'],
+                    'pncp': ['pncp', 'portal municipal']
+                };
+
+                items = items.filter((i: any) => {
+                    const fd = (i.fonte_dados || '').toLowerCase();
+                    return fonteFilter.some(filterId => {
+                        const targets = idToNormal[filterId];
+                        if (!targets) return false;
+                        return targets.some(target => fd.includes(target));
+                    });
+                });
+            }
 
             if (ufFilter) items = items.filter((i: any) => (i?.uf || '').toUpperCase() === ufFilter.toUpperCase());
             
