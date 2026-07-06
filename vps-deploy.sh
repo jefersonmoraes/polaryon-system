@@ -18,34 +18,42 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "=== [2/5] Build Frontend Atômico ==="
-# Remover symlink dist_electron antes do build (vite não consegue buildar para um symlink)
-[ -L dist_electron ] && unlink dist_electron || true
-# Remover diretório dist_electron anterior (caso exista)
+# dist_electron pode ser um symlink (de deploy anterior) ou um diretório
+# Se for symlink, removemos para o vite poder criar o diretório real
+[ -L dist_electron ] && unlink dist_electron && echo "Removed dist_electron symlink"
+# Remove build temporário anterior se existir
 rm -rf dist_electron_build_tmp
 
 npm install --no-audit --no-fund
 # vite.config.ts tem outDir: "dist_electron" — build sempre sai nesse diretório
 npm run build
 
-# Agora dist_electron é um diretório real com o build novo
-# Fazer swap atômico: dist_electron_build_tmp como destino intermediário
+# Agora dist_electron é um diretório real com o novo build
 mv dist_electron dist_electron_build_tmp
 
 if [ -d "dist_electron_build_tmp" ]; then
-    # Remover dist antigo (pode ser symlink ou diretório)
-    [ -L dist ] && unlink dist || rm -rf dist_old
+    # Salvar dist atual como fallback
+    rm -rf dist_old
     [ -d "dist" ] && mv dist dist_old || true
+
+    # Ativar novo build
     mv dist_electron_build_tmp dist
     rm -rf dist_old
 
-    # GARANTE O LINK DE DOWNLOAD (Sempre em cada deploy)
-    mkdir -p /var/www/polaryon/storage/download
-    [ -L /var/www/polaryon/dist/download ] && unlink /var/www/polaryon/dist/download || rm -rf /var/www/polaryon/dist/download || true
-    ln -sf /var/www/polaryon/storage/download /var/www/polaryon/dist/download
-
-    # Sincroniza symlink para Nginx (Nginx root aponta para dist_electron)
+    # Symlink dist_electron -> dist para Nginx
     rm -f dist_electron
     ln -s dist dist_electron
+
+    # GARANTE O LINK DE DOWNLOAD
+    mkdir -p /var/www/polaryon/storage/download
+    # Remove link anterior (se for symlink, usa unlink; se for diretório, usa rm -rf)
+    if [ -L /var/www/polaryon/dist/download ]; then
+        unlink /var/www/polaryon/dist/download
+    elif [ -d /var/www/polaryon/dist/download ]; then
+        rm -rf /var/www/polaryon/dist/download
+    fi
+    ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
+
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
     echo "❌ FALHA CRÍTICA: dist_electron_build_tmp não encontrada."
