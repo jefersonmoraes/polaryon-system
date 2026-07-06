@@ -33,8 +33,8 @@ if [ -d "dist_electron_new" ]; then
 
     # GARANTE O LINK DE DOWNLOAD (Sempre em cada deploy)
     mkdir -p /var/www/polaryon/storage/download
-    rm -rf /var/www/polaryon/dist/download
-    ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
+    [ -L /var/www/polaryon/dist/download ] && unlink /var/www/polaryon/dist/download || rm -rf /var/www/polaryon/dist/download || true
+    ln -sf /var/www/polaryon/storage/download /var/www/polaryon/dist/download
 
     rm -rf dist_electron_old
     # Sincroniza symlink para Nginx (root aponta para dist_electron)
