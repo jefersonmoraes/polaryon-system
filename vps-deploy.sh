@@ -18,33 +18,36 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "=== [2/5] Build Frontend Atômico ==="
-rm -rf dist_new
+# vite.config.ts tem outDir: "dist_electron" — build sempre sai em dist_electron
+# Removemos dist_electron antigo ANTES do build para garantir build limpo
+rm -rf dist_electron_new
 npm install --no-audit --no-fund
-npm run build -- --outDir dist_new
+npm run build
+# Renomear para dist_electron_new para operação atômica
+mv dist_electron dist_electron_new
 
-if [ -d "dist_new" ]; then
-    rm -rf dist_old
-    [ -d "dist" ] && mv -T dist dist_old || true
-    mv -T dist_new dist
-    
+if [ -d "dist_electron_new" ]; then
+    rm -rf dist_electron_old
+    [ -d "dist" ] && mv -T dist dist_electron_old || true
+    mv -T dist_electron_new dist
+
     # GARANTE O LINK DE DOWNLOAD (Sempre em cada deploy)
     mkdir -p /var/www/polaryon/storage/download
     rm -rf /var/www/polaryon/dist/download
     ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
-    
-    rm -rf dist_old
+
+    rm -rf dist_electron_old
     # Sincroniza symlink para Nginx (root aponta para dist_electron)
-    rm -rf dist_electron
+    rm -f dist_electron
     ln -s dist dist_electron
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
-    echo "❌ FALHA CRÍTICA: dist_new não encontrada."
+    echo "❌ FALHA CRÍTICA: dist_electron_new não encontrada."
     exit 1
 fi
 
 echo "=== [3/5] Build Backend Atômico ==="
 cd backend
-rm -rf dist_new
 npm install --no-audit --no-fund
 npx prisma generate
 # tsc ignora --outDir via CLI quando tsconfig.json define outDir; compilamos para dist e renomeamos
@@ -65,4 +68,4 @@ echo "=== [4/5] Reiniciando Servidor (PM2) ==="
 pm2 restart polaryon-backend || pm2 start dist_prod/server.js --name polaryon-backend
 pm2 save
 
-echo "=== [5/5] DEPLOY CONCLUÍDO (ESTABILIDADE TOTAL v3.3.5) ==="
+echo "=== [5/5] DEPLOY CONCLUÍDO ==="
