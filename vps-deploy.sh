@@ -47,7 +47,8 @@ cd backend
 rm -rf dist_new
 npm install --no-audit --no-fund
 npx prisma generate
-npm run build -- --outDir dist_new || (npm run build && mv dist dist_new)
+# tsc ignora --outDir via CLI quando tsconfig.json define outDir; compilamos para dist e renomeamos
+npm run build && mv dist dist_new
 
 if [ -d "dist_new" ]; then
     rm -rf dist_old_backend
