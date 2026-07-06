@@ -32,13 +32,12 @@ npm run build
 mv dist_electron dist_electron_build_tmp
 
 if [ -d "dist_electron_build_tmp" ]; then
-    # Salvar dist atual como fallback
+    # Remove dist anterior (diretório ou symlink)
+    [ -L dist ] && unlink dist || rm -rf dist
     rm -rf dist_old
-    [ -d "dist" ] && mv dist dist_old || true
 
     # Ativar novo build
     mv dist_electron_build_tmp dist
-    rm -rf dist_old
 
     # Symlink dist_electron -> dist para Nginx
     rm -f dist_electron
