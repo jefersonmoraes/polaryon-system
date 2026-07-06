@@ -43,16 +43,20 @@ if [ -d "dist_electron_build_tmp" ]; then
     rm -f dist_electron
     ln -s dist dist_electron
 
-    # GARANTE O LINK DE DOWNLOAD
+    # GARANTE O LINK DE DOWNLOAD usando python3 (sem seguir symlinks)
     mkdir -p /var/www/polaryon/storage/download
-    # Usa find para checar sem seguir symlinks (evita erro "too many levels")
-    DOWNLOAD_PATH="/var/www/polaryon/dist/download"
-    if find "$DOWNLOAD_PATH" -maxdepth 0 -type l 2>/dev/null | grep -q .; then
-        unlink "$DOWNLOAD_PATH"
-    elif find "$DOWNLOAD_PATH" -maxdepth 0 -type d 2>/dev/null | grep -q .; then
-        rm -rf "$DOWNLOAD_PATH"
-    fi
-    ln -s /var/www/polaryon/storage/download "$DOWNLOAD_PATH"
+    python3 -c "
+import os, sys
+p = '/var/www/polaryon/dist/download'
+if os.path.islink(p):
+    os.unlink(p)
+    print('Removed old download symlink')
+elif os.path.exists(p):
+    import shutil; shutil.rmtree(p)
+    print('Removed old download dir')
+os.symlink('/var/www/polaryon/storage/download', p)
+print('Created download symlink OK')
+"
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
