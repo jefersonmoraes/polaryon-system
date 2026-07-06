@@ -46,13 +46,14 @@ if [ -d "dist_electron_build_tmp" ]; then
 
     # GARANTE O LINK DE DOWNLOAD
     mkdir -p /var/www/polaryon/storage/download
-    # Remove link anterior (se for symlink, usa unlink; se for diretório, usa rm -rf)
-    if [ -L /var/www/polaryon/dist/download ]; then
-        unlink /var/www/polaryon/dist/download
-    elif [ -d /var/www/polaryon/dist/download ]; then
-        rm -rf /var/www/polaryon/dist/download
+    # Usa find para checar sem seguir symlinks (evita erro "too many levels")
+    DOWNLOAD_PATH="/var/www/polaryon/dist/download"
+    if find "$DOWNLOAD_PATH" -maxdepth 0 -type l 2>/dev/null | grep -q .; then
+        unlink "$DOWNLOAD_PATH"
+    elif find "$DOWNLOAD_PATH" -maxdepth 0 -type d 2>/dev/null | grep -q .; then
+        rm -rf "$DOWNLOAD_PATH"
     fi
-    ln -s /var/www/polaryon/storage/download /var/www/polaryon/dist/download
+    ln -s /var/www/polaryon/storage/download "$DOWNLOAD_PATH"
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
