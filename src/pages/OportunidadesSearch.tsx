@@ -166,21 +166,29 @@ const MAPA_SISTEMA_ORIGEM_NOMES: Record<number, string> = {
 const fetchPncpDetailDirect = async (cnpj: string, ano: string, sequencial: string) => {
     if ((window as any).electronAPI?.isDesktop) {
         const url = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}`;
-        const res = await axios.get(url, {
-            headers: {
-                'Accept': 'application/json, text/plain, */*',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-            },
-            timeout: 8000
-        });
+        const portalUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/portal`;
+        const headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        };
+
+        const [res, portalRes] = await Promise.allSettled([
+            axios.get(url, { headers, timeout: 8000 }),
+            axios.get(portalUrl, { headers, timeout: 8000 })
+        ]);
+
+        const detailData = res.status === 'fulfilled' ? res.value.data : {};
+        const portalData = portalRes.status === 'fulfilled' ? portalRes.value.data : {};
+
         return {
             data: {
-                ...res.data,
-                itemCount: res.data.quantidadeItens || 0,
+                ...detailData,
+                itemCount: detailData.quantidadeItens || 0,
                 hasMeEppBenefit: false,
                 minItemValue: 0,
                 maxItemValue: 0,
-                items: []
+                items: [],
+                usuarioNome: portalData.usuarioNome || detailData.usuarioNome || null
             }
         };
     }
@@ -421,6 +429,10 @@ async function processPncpQueue() {
             return true;
         } catch (e: any) {
             if (e.response?.status === 404 || e.message?.includes('Missing keys')) {
+                if (pncpDetailCache[cacheKey]) {
+                    pncpDetailCache[cacheKey].data = null;
+                }
+                window.dispatchEvent(new CustomEvent('pncp-cache-updated', { detail: { cacheKey } }));
                 origResolve(null);
                 return true;
             }
@@ -433,6 +445,10 @@ async function processPncpQueue() {
                     processPncpQueue();
                 }, backoff);
             } else {
+                if (pncpDetailCache[cacheKey]) {
+                    pncpDetailCache[cacheKey].data = { error: true };
+                }
+                window.dispatchEvent(new CustomEvent('pncp-cache-updated', { detail: { cacheKey } }));
                 origReject(e);
                 return true;
             }
@@ -510,16 +526,18 @@ const PortalBadge = memo(({ item }: { item: any }) => {
     const seq = (item as any).numero_compra || (item as any).numero_sequencial || parts?.[2];
     const cacheKey = `${orgaoCnpj}-${ano}-${seq}`;
 
-    const [usuarioNome, setUsuarioNome] = useState<string | null>(() => {
+    const [usuarioNome, setUsuarioNome] = useState<string | null>(null);
+    const [isFetching, setIsFetching] = useState<boolean>(true);
+
+    // Sincroniza e dispara busca se necessário
+    useEffect(() => {
         const cached = pncpDetailCache[cacheKey]?.data;
         const raw = cached?.usuarioNome || null;
-        if (raw && raw !== 'undefined') return raw;
-        return null;
-    });
+        setUsuarioNome(raw && raw !== 'undefined' ? raw : null);
+        setIsFetching(!cached && !!pncpDetailCache[cacheKey]?.promise);
 
-    // Auto-fetch se cache vazio
-    useEffect(() => {
-        if (!pncpDetailCache[cacheKey]?.data && !pncpDetailCache[cacheKey]?.promise) {
+        if (!cached && !pncpDetailCache[cacheKey]?.promise) {
+            setIsFetching(true);
             queuePncpFetch(item).catch(() => {});
         }
     }, [cacheKey, item]);
@@ -530,16 +548,13 @@ const PortalBadge = memo(({ item }: { item: any }) => {
             if (ce.detail?.cacheKey === cacheKey) {
                 const cached = pncpDetailCache[cacheKey]?.data;
                 const raw = cached?.usuarioNome || null;
-                if (raw && raw !== 'undefined') {
-                    setUsuarioNome(raw);
-                }
+                setUsuarioNome(raw && raw !== 'undefined' ? raw : null);
+                setIsFetching(false);
             }
         };
         window.addEventListener('pncp-cache-updated', handler);
         return () => window.removeEventListener('pncp-cache-updated', handler);
     }, [cacheKey]);
-
-    const isFetching = !pncpDetailCache[cacheKey]?.data && !!pncpDetailCache[cacheKey]?.promise;
 
     // Aplica mapeamento de nomes conhecidos
     const rawNome = usuarioNome || (item as any).fonte_dados || (item as any).sistema_origem_nome || 'PNCP';
