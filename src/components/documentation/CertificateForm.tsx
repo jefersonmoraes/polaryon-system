@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useCertificateStore, CapacityCertificate, CertificateAttachment } from '@/store/certificate-store';
 import { X, Upload, FileText, AlertCircle, Building2, AlignLeft, Calendar, FileBadge, CheckCircle, Search, Paperclip, Trash2, ExternalLink } from 'lucide-react';
 import { cn, compressImage, openFileInNewTab } from '@/lib/utils';
@@ -6,6 +6,7 @@ import { FilePreviewModal } from '../ui/FilePreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useKanbanStore } from '@/store/kanban-store';
+import api from '@/lib/api';
 
 interface CertificateFormProps {
     onClose: () => void;
@@ -64,11 +65,30 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
         const initialMap: FileState = {};
         if (editingCert?.attachments) {
             editingCert.attachments.forEach(att => {
-                initialMap[att.fileSlot] = att;
+                initialMap[att.fileSlot] = { ...att, fileData: att.fileData || '' };
             });
         }
         return initialMap;
     });
+
+    // Lazy-load fileData for existing attachments when editing
+    useEffect(() => {
+        if (!editingCert?.attachments) return;
+        editingCert.attachments.forEach(async (att) => {
+            if (att.fileData) return;
+            try {
+                const res = await api.get(`/certificates/attachment/${att.id}`);
+                if (res.data?.fileData) {
+                    setAttachments(prev => ({
+                        ...prev,
+                        [att.fileSlot]: { ...att, fileData: res.data.fileData }
+                    }));
+                }
+            } catch (e) {
+                // Attachment fileData not available, leave empty
+            }
+        });
+    }, [editingCert]);
 
     const [previewData, setPreviewData] = useState<{ isOpen: boolean; url: string; name: string; type?: string }>({
         isOpen: false,
@@ -418,7 +438,7 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                                 {attachment ? (
                                                     <div className="flex flex-col gap-2">
                                                         <div className="flex items-center gap-2 overflow-hidden bg-background p-1.5 rounded border border-border/50">
-                                                            {attachment.fileData.startsWith('data:image') ? (
+                                                            {(attachment.fileData || '').startsWith('data:image') ? (
                                                                 <img src={attachment.fileData} className="w-5 h-5 rounded object-cover shrink-0" alt="" />
                                                             ) : (
                                                                 <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -431,8 +451,8 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    const isImage = attachment.fileData.startsWith('data:image');
-                                                                    const isPdf = attachment.fileData.startsWith('data:application/pdf');
+                                                                    const isImage = (attachment.fileData || '').startsWith('data:image');
+                                                                    const isPdf = (attachment.fileData || '').startsWith('data:application/pdf');
                                                                     setPreviewData({
                                                                         isOpen: true,
                                                                         url: attachment.fileData,
@@ -446,7 +466,7 @@ const CertificateForm = ({ onClose, editingCert }: CertificateFormProps) => {
                                                             </button>
                                                             <button 
                                                                 type="button"
-                                                                onClick={() => openFileInNewTab(attachment.fileData, attachment.fileName)} 
+                                                                onClick={() => attachment.fileData && openFileInNewTab(attachment.fileData, attachment.fileName)}
                                                                 className="px-2 text-primary hover:bg-primary/10 py-1 rounded border border-primary/20 transition-all flex items-center justify-center"
                                                                 title="Abrir em Nova Aba"
                                                             >

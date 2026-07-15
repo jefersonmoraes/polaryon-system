@@ -170,7 +170,7 @@ const CapacityCertificatesPage = () => {
                                                     <td className="px-6 py-4">
                                                         <div className="font-semibold text-foreground flex items-center gap-2">
                                                             {cert.issuingAgency}
-                                                            {(cert.type || []).map(t => (
+                                                            {(cert.type || []).filter(Boolean).map(t => (
                                                                 <span key={t} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold uppercase shrink-0">
                                                                     {t}
                                                                 </span>
@@ -305,7 +305,7 @@ const CapacityCertificatesPage = () => {
                                             <div className="flex justify-between items-start">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex flex-wrap gap-1">
-                                                        {(cert.type || []).map(t => (
+                                                        {(cert.type || []).filter(Boolean).map(t => (
                                                             <span key={t} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-[4px] text-[10px] font-bold uppercase">
                                                                 {t}
                                                             </span>
