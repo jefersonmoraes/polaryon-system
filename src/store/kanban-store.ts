@@ -28,6 +28,7 @@ interface KanbanState {
   companies: Company[];
   routes: Route[];
   budgets: Budget[];
+  budgetsLoaded: boolean;
   notifications: Notification[];
 
   addNotification: (title: string, message: string, link?: string, type?: 'info' | 'success' | 'warning', targetUserId?: string) => void;
@@ -147,6 +148,7 @@ export const useKanbanStore = create<KanbanState>()(
       companies: [],
       routes: [],
       budgets: [],
+      budgetsLoaded: false,
       googleEvents: [],
       notifications: [],
       undoAction: null,
@@ -365,6 +367,7 @@ export const useKanbanStore = create<KanbanState>()(
               mainCompanies: res.data.mainCompanies || [],
               routes: res.data.routes || [],
               budgets: finalBudgets,
+              budgetsLoaded: true,
               notifications: res.data.notifications || [],
               lastSyncTime: Date.now(),
             });
@@ -513,7 +516,7 @@ export const useKanbanStore = create<KanbanState>()(
               return { ...safeDefaults, ...sb };
             });
 
-            set({ budgets: finalBudgets });
+            set({ budgets: finalBudgets, budgetsLoaded: true });
           }
         } catch (error) {
           console.error("Failed to fetch budgets:", error);
@@ -1150,6 +1153,7 @@ export const useKanbanStore = create<KanbanState>()(
           })
         }));
         socketService.emit('system_action', { store: 'KANBAN', type: 'REORDER_LISTS', payload: { boardId, listIds } });
+        api.post('/kanban/lists/reorder', { boardId, listIds }).catch(console.error);
       },
 
       // Cards

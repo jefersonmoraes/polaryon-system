@@ -35,7 +35,7 @@ const typeStyles: Record<BudgetType, string> = {
 };
 
 const BudgetsPage = () => {
-    const { budgets, companies, cards, lists, boards, folders, deleteBudget, updateBudget, fetchBudgets, fetchCompanies } = useKanbanStore();
+    const { budgets, budgetsLoaded, companies, cards, lists, boards, folders, deleteBudget, updateBudget, fetchBudgets, fetchCompanies } = useKanbanStore();
 
     // Auto-fetch data on mount
     useEffect(() => {
@@ -68,9 +68,17 @@ const BudgetsPage = () => {
 
     const filteredBudgets = useMemo(() => {
         return budgets
-            .filter(b => !b.trashed && !b.archived)
+            .filter(b => !b.trashed)
+            .filter(b => {
+                if (statusFilter === 'Todos') {
+                    return !b.archived && (b.status === 'Aguardando' || b.status === 'Cotado' || b.status === 'Aprovado');
+                }
+                if (statusFilter === 'Recusado') {
+                    return b.status === 'Recusado' || b.archived;
+                }
+                return !b.archived && b.status === statusFilter;
+            })
             .filter(b => typeFilter === 'Todos' || b.type === typeFilter)
-            .filter(b => statusFilter === 'Todos' || b.status === statusFilter)
             .filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 b.items?.some(i => {
                     const comp = companies.find(c => c.id === i.companyId);
@@ -282,7 +290,11 @@ const BudgetsPage = () => {
 
             {/* Main Content (Grid) */}
             <div className="flex-1 overflow-y-auto p-6 bg-secondary/20 custom-scrollbar">
-                {filteredBudgets.length === 0 ? (
+                {!budgetsLoaded ? (
+                    <div className="h-full flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                ) : filteredBudgets.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto">
                         <div className="p-4 bg-primary/5 rounded-full mb-4">
                             <Calculator className="h-10 w-10 text-primary opacity-50" />

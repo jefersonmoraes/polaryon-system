@@ -197,6 +197,9 @@ router.post('/lists', async (req: Request, res: Response) => {
 router.put('/lists/:id', async (req: Request, res: Response) => {
     try {
         const { cards, id, createdAt, updatedAt, ...data } = req.body;
+        if (data.automations !== undefined) {
+            data.automations = data.automations || [];
+        }
         const list = await prisma.kanbanList.update({ where: { id: req.params.id as string }, data });
         res.json(list);
     } catch (e: any) {
@@ -771,23 +774,27 @@ router.put('/cards/:id', async (req: Request, res: Response) => {
 router.post('/cards/reorder', async (req: Request, res: Response) => {
     try {
         const { listId, cardIds } = req.body;
-        if (!listId || !Array.isArray(cardIds)) {
-            return res.status(400).json({ error: 'listId and cardIds array are required' });
-        }
-
-        // Use transaction to ensure all positions are updated correctly
         await prisma.$transaction(
-            cardIds.map((id, index) =>
-                prisma.card.update({
-                    where: { id },
-                    data: { listId, position: index }
-                })
+            cardIds.map((id: string, index: number) =>
+                prisma.card.update({ where: { id }, data: { listId, position: index } })
             )
         );
-
         res.json({ success: true });
     } catch (e: any) {
-        console.error("Card Reorder Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/lists/reorder', async (req: Request, res: Response) => {
+    try {
+        const { boardId, listIds } = req.body;
+        await prisma.$transaction(
+            listIds.map((id: string, index: number) =>
+                prisma.kanbanList.update({ where: { id }, data: { position: index } })
+            )
+        );
+        res.json({ success: true });
+    } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
 });
