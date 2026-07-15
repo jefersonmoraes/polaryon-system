@@ -39,9 +39,9 @@ const CapacityCertificatesPage = () => {
 
         const matchesSearch = cert.issuingAgency.toLowerCase().includes(searchQuery.toLowerCase()) ||
             cert.suppliedItems.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            cert.type.join(' ').toLowerCase().includes(searchQuery.toLowerCase());
+            (cert.type || []).join(' ').toLowerCase().includes(searchQuery.toLowerCase());
 
-        const matchesType = selectedType === 'Todos' || cert.type.includes(selectedType as 'Produto' | 'Serviço');
+        const matchesType = selectedType === 'Todos' || (cert.type || []).includes(selectedType as 'Produto' | 'Serviço');
 
         return matchesSearch && matchesType;
     });
@@ -64,9 +64,9 @@ const CapacityCertificatesPage = () => {
             `"${cert.suppliedItems.replace(/"/g, '""')}"`,
             cert.suppliedQuantity || '',
             `"${(cert.description || '').replace(/"/g, '""')}"`,
-            `"${cert.type.join(', ')}"`,
+            `"${(cert.type || []).join(', ')}"`,
             format(new Date(cert.executionDate), 'dd/MM/yyyy'),
-            cert.attachments.length > 0 ? 'Sim' : 'Não'
+            (cert.attachments || []).length > 0 ? 'Sim' : 'Não'
         ]);
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -170,7 +170,7 @@ const CapacityCertificatesPage = () => {
                                                     <td className="px-6 py-4">
                                                         <div className="font-semibold text-foreground flex items-center gap-2">
                                                             {cert.issuingAgency}
-                                                            {cert.type.map(t => (
+                                                            {(cert.type || []).map(t => (
                                                                 <span key={t} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold uppercase shrink-0">
                                                                     {t}
                                                                 </span>
@@ -305,7 +305,7 @@ const CapacityCertificatesPage = () => {
                                             <div className="flex justify-between items-start">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex flex-wrap gap-1">
-                                                        {cert.type.map(t => (
+                                                        {(cert.type || []).map(t => (
                                                             <span key={t} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded-[4px] text-[10px] font-bold uppercase">
                                                                 {t}
                                                             </span>
@@ -337,8 +337,8 @@ const CapacityCertificatesPage = () => {
 
                                             <div className="flex items-center justify-between pt-2 border-t border-border/10 gap-4">
                                                 <div className="flex flex-wrap gap-1">
-                                                    {cert.attachments.length > 0 ? (
-                                                        cert.attachments.map(att => (
+                                                    {(cert.attachments || []).length > 0 ? (
+                                                        (cert.attachments || []).map(att => (
                                                             <button 
                                                                 key={att.id}
                                                                 onClick={() => { /* same logic as above */ }}
