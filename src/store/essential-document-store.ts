@@ -65,7 +65,13 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
 
             setModels: (models) => {
                 console.log('essentialDocumentStore - Setting Models:', models);
-                set({ models });
+                const seen = new Set<string>();
+                const deduped = models.filter(m => {
+                    if (seen.has(m.title)) return false;
+                    seen.add(m.title);
+                    return true;
+                });
+                set({ models: deduped });
             },
 
             addModel: async (model) => {
@@ -162,6 +168,9 @@ export const useEssentialDocumentStore = create<EssentialDocumentStore>()(
                     const response = await api.get('/documents/essential');
                     if (response.data) {
                         get().setModels(response.data);
+                        if (response.data.length === 0) {
+                            get().initializeDefaultModels();
+                        }
                     }
                 } catch (error) {
                     console.error('Failed to fetch essential document models:', error);

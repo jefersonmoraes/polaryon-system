@@ -10,7 +10,6 @@ const EssentialDocumentModelsPage = () => {
     const canEdit = currentUser?.permissions?.canEdit ?? false;
     const models = useEssentialDocumentStore(state => state.models);
     const trashModel = useEssentialDocumentStore(state => state.trashModel);
-    const initializeDefaultModels = useEssentialDocumentStore(state => state.initializeDefaultModels);
     const fetchModels = useEssentialDocumentStore(state => state.fetchModels);
     const [searchQuery, setSearchQuery] = useState('');
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -18,8 +17,7 @@ const EssentialDocumentModelsPage = () => {
 
     useEffect(() => {
         fetchModels();
-        initializeDefaultModels();
-    }, [fetchModels, initializeDefaultModels]);
+    }, [fetchModels]);
 
     const filteredModels = models.filter(model => {
         if (model.trashed) return false;
