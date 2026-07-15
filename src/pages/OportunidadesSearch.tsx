@@ -1474,7 +1474,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
             const startPage = hasDateFilter ? (currentPage - 1) * 10 + 1 : (currentPage - 1) * 2 + 1;
 
             // Determinar quais consultas fazemos
-            const activeQueries: { key: string; type: 'pcp' | 'pncp-search'; q_extra?: string }[] = [];
+            const activeQueries: { key: string; type: 'pcp' | 'pncp-search' | 'pcp-direct'; q_extra?: string }[] = [];
 
             if (isAll) {
                 activeQueries.push({ key: 'pncp_geral', type: 'pncp-search' });
@@ -1486,6 +1486,10 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                 // Para portais específicos, usa keyword injection + filtragem client-side
                 for (const f of fonteFilter) {
                     if (f === 'unificado' || f === 'pncp') continue;
+                    if (f === 'pcp_direct') {
+                        activeQueries.push({ key: 'pcp_direct', type: 'pcp-direct' });
+                        continue;
+                    }
                     const qExtra = MAPA_FONTE_Q[f];
                     if (qExtra) {
                         activeQueries.push({ key: f, type: 'pncp-search', q_extra: qExtra });
@@ -1503,6 +1507,48 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
 
                 activeQueries.forEach(qInfo => {
                     for (let p = startPage; p < startPage + numPages; p++) {
+                        // PCP Direto: busca via backend proxy (API propia do PCP)
+                        if (qInfo.type === 'pcp-direct') {
+                            const hoje = new Date();
+                            const dataInicio = dataInicialFilter || `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+                            const dataFim = dataFinalFilter || `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+                            
+                            const promise = api.get('/transparency/pcp-listar', {
+                                params: { cdSituacao: '1', dataInicio, dataFim, pagina: p }
+                            }).then(res => {
+                                const dados = res.data?.dadosLicitacoes || [];
+                                const mappedItems = dados.map((item: any) => ({
+                                    numero_controle_pncp: `pcp-${item.codLicitacao}`,
+                                    titulo: item.identificacao || item.numero,
+                                    descricao: item.observacoes || '',
+                                    orgao_cnpj: '',
+                                    data_publicacao: item.dataInicioPropostas,
+                                    data_encerramento: item.dataFinalPropostas,
+                                    valor_total_estimado: 0,
+                                    modalidade_nome: 'Pregão Eletrônico',
+                                    situacao_compra_nome: 'Aberto',
+                                    fonte_dados: 'Portal de Compras Públicas',
+                                    fonte_sistema: 'PCP_DIRETO',
+                                    url_original: item.url ? `https://www.portaldecompraspublicas.com.br${item.url}` : '',
+                                    cod_licitacao: item.codLicitacao,
+                                    pcp_data: item
+                                }));
+                                return {
+                                    key: qInfo.key,
+                                    page: p,
+                                    items: mappedItems,
+                                    total: res.data?.quantidadeTotal || mappedItems.length
+                                };
+                            }).catch(() => ({
+                                key: qInfo.key,
+                                page: p,
+                                items: [],
+                                total: 0
+                            }));
+                            fetchPromises.push(promise);
+                            continue;
+                        }
+
                         const params: any = { ...searchParams, pagina: p, tam_pagina: 50 };
                         
                         if (qInfo.q_extra) {
@@ -1933,6 +1979,7 @@ ${finalFiles.length > 0 ? finalFiles.map((f: any) => `- [${f.titulo} (${f.tipoDo
                                                 { id: 'comprasnet', label: 'Compras.gov.br (Federal)', color: 'text-blue-500' },
                                                 { id: 'licitacoese', label: 'Licitações-e (BB)', color: 'text-yellow-600' },
                                                 { id: 'pcp', label: 'Portal de Compras Públicas', color: 'text-blue-500' },
+                                                { id: 'pcp_direct', label: 'PCP Direto (API Própria)', color: 'text-emerald-500' },
                                                 { id: 'bll', label: 'BLL Compras', color: 'text-orange-600' },
                                                 { id: 'bnc', label: 'Bolsa Nacional de Compras', color: 'text-purple-600' },
                                                 { id: 'bbmnet', label: 'BBMNET Licitações', color: 'text-cyan-600' },

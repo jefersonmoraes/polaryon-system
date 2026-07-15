@@ -52,7 +52,7 @@ export class PncpRadarService {
 
     private async scan() {
         try {
-            console.log('📡 [RADAR] Varrendo PNCP por novas oportunidades de nicho...');
+            console.log('📡 [RADAR] Varrendo PNCP e PCP por novas oportunidades de nicho...');
             
             // 1. Get Keywords and States from Main Company Profile
             const profile = await prisma.mainCompanyProfile.findFirst({ where: { isDefault: true } });
@@ -132,7 +132,51 @@ export class PncpRadarService {
                 }
             }
 
-            // 3. Notify Online Users via Socket
+            // 3. Scan PCP (Portal de Compras Públicas) if PUBLIC_KEY is configured
+            const pcpPublicKey = process.env.PCP_PUBLIC_KEY;
+            if (pcpPublicKey) {
+                try {
+                    const hoje = new Date();
+                    const dataInicio = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+                    const dataFim = dataInicio;
+                    
+                    const pcpResponse = await axios.get('https://apipcp.portaldecompraspublicas.com.br/Licitacoes/DataInicio/1/20', {
+                        params: { publicKey: pcpPublicKey, dataInicio, dataFim },
+                        headers: { 'Accept': 'application/json' },
+                        timeout: 15000
+                    });
+                    
+                    const pcpItems = pcpResponse.data?.dadosLicitacoes || [];
+                    for (const item of pcpItems) {
+                        const desc = (item.identificacao || item.numero || '').toLowerCase();
+                        const pcpId = `pcp-${item.codLicitacao}`;
+                        
+                        if (this.seenIds.has(pcpId)) continue;
+                        
+                        const isMatch = keywords.some(kw => desc.includes(kw.toLowerCase()));
+                        if (isMatch) {
+                            const opp: PncpOpportunity = {
+                                id: pcpId,
+                                description: item.identificacao || item.numero || '',
+                                orgao: item.nomeOrgao || '',
+                                cnpjOrgao: item.cpfCnpjOrgao || '',
+                                ano: '',
+                                sequencial: item.codLicitacao || '',
+                                valorEstimado: 0,
+                                dataPublicacao: item.dataInicioPropostas || '',
+                                link: item.url ? `https://www.portaldecompraspublicas.com.br${item.url}` : ''
+                            };
+                            matches.push(opp);
+                            this.seenIds.add(pcpId);
+                        }
+                    }
+                    console.log(`📡 [RADAR] PCP: ${pcpItems.length} licitações verificadas`);
+                } catch (pcpError: any) {
+                    console.error('⚠️ [RADAR] Erro ao consultar PCP:', pcpError.message);
+                }
+            }
+
+            // 4. Notify Online Users via Socket
             if (matches.length > 0) {
                 console.log(`🎯 [RADAR] Encontradas ${matches.length} novas oportunidades de nicho!`);
                 const io = getIO();
