@@ -20,41 +20,36 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "=== [2/5] Build Frontend Atômico ==="
-# Garante que dist_electron não é um symlink para evitar que o build escreva direto em dist
-[ -L dist_electron ] && unlink dist_electron || rm -rf dist_electron
-rm -rf dist_electron_build_tmp
+# Remove symlink/diretório dist_electron para Vite gerar a pasta limpa
+rm -rf dist_electron dist_electron_build_tmp
 
 npm install --no-audit --no-fund
 npm run build
 
-# Agora dist_electron é um diretório real com o novo build. Movemos para o tmp.
-mv dist_electron dist_electron_build_tmp
+# Vite compila para dist_electron (conforme vite.config.ts)
+if [ -d "dist_electron" ]; then
+    # Move a compilação recém-criada para pasta temporária
+    mv dist_electron dist_electron_build_tmp
 
-if [ -d "dist_electron_build_tmp" ]; then
-    # Remove dist anterior de forma segura (seja link ou dir)
-    [ -L dist ] && rm -f dist || true
+    # Remove qualquer dist ou symlink antigo de dist
     rm -rf dist_old
-    [ -d dist ] && mv dist dist_old || true
+    rm -rf dist
 
-    # Ativar novo build
+    # Ativa o novo build como pasta dist real
     mv dist_electron_build_tmp dist
-    rm -rf dist_old
 
-    # Symlink dist_electron -> dist (caminho absoluto para evitar loops circulares)
-    rm -f dist_electron
+    # Symlink dist_electron -> /var/www/polaryon/dist (caminho absoluto)
+    rm -rf dist_electron
     ln -sfn /var/www/polaryon/dist dist_electron
 
-    # Garante o diretório de download real
+    # Garante o diretório de download real e cria o symlink dist/download
     mkdir -p /var/www/polaryon/storage/download
-
-    # Cria o symlink dist/download -> storage/download
-    # Usa rm -rf para remover seja symlink ou pasta real (dist é pasta real, sem risco de loop)
-    rm -rf dist/download || rm -f dist/download || true
+    rm -rf dist/download
     ln -sf /var/www/polaryon/storage/download dist/download
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
 else
-    echo "❌ FALHA CRÍTICA: dist_electron_build_tmp não encontrada."
+    echo "❌ FALHA CRÍTICA: Build do frontend falhou (dist_electron não gerado)."
     exit 1
 fi
 
