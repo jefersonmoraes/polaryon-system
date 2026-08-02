@@ -48,8 +48,8 @@ if [ -d "dist_electron_build_tmp" ]; then
     mkdir -p /var/www/polaryon/storage/download
 
     # Cria o symlink dist/download -> storage/download
-    # Usa rm -f (não -rf) para remover o symlink sem seguir seus destinos
-    rm -f dist/download
+    # Usa rm -rf para remover seja symlink ou pasta real (dist é pasta real, sem risco de loop)
+    rm -rf dist/download || rm -f dist/download || true
     ln -sf /var/www/polaryon/storage/download dist/download
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
