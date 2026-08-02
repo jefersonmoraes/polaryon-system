@@ -40,15 +40,16 @@ if [ -d "dist_electron_build_tmp" ]; then
     mv dist_electron_build_tmp dist
     rm -rf dist_old
 
-    # Symlink dist_electron -> dist para compatibilidade
+    # Symlink dist_electron -> dist (caminho absoluto para evitar loops circulares)
     rm -f dist_electron
-    ln -s dist dist_electron
+    ln -sfn /var/www/polaryon/dist dist_electron
 
     # Garante o diretório de download real
     mkdir -p /var/www/polaryon/storage/download
 
     # Cria o symlink dist/download -> storage/download
-    rm -rf dist/download
+    # Usa rm -f (não -rf) para remover o symlink sem seguir seus destinos
+    rm -f dist/download
     ln -sf /var/www/polaryon/storage/download dist/download
 
     echo "✔ Frontend (Web & Desktop) atualizado com sucesso."
