@@ -391,25 +391,22 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         const productsEntryTax = discountedProducts * (entryDifalPercent / 100);
         const freightEntryTax = 0;
 
-        // Preço Produtos = (Custo / (1 - I.Venda - Margem)) + (I.Entrada / (1 - I.Venda)) -> SEM MARGEM NO IMPOSTO!
-        let finalPriceProducts = discountedProducts;
+        // Custo Total de Aquisição de Produtos (fornecedor + antecipação DIFAL entrada)
+        // A antecipação é um custo de aquisição — a margem de lucro DEVE ser aplicada sobre ela.
+        // Fórmula: PreçoProdutos = (CustoFornecedor + AntecipaçãoDIFAL) / (1 - I.Venda - Margem)
+        const totalProductAcquisitionCost = discountedProducts + productsEntryTax;
+        let finalPriceProducts = totalProductAcquisitionCost;
         const productDivisor = (1 - (salesTaxRate + fixedRate + (marginPercent || 0)) / 100);
         const taxDivisor = (1 - (salesTaxRate + fixedRate) / 100);
 
         if (productDivisor > 0 && productDivisor <= 1) {
-            finalPriceProducts = discountedProducts / productDivisor;
-        }
-        if (productsEntryTax > 0 && taxDivisor > 0 && taxDivisor <= 1) {
-            finalPriceProducts += productsEntryTax / taxDivisor;
+            finalPriceProducts = totalProductAcquisitionCost / productDivisor;
         }
 
-        let finalPriceProductsMax = discountedProducts;
+        let finalPriceProductsMax = totalProductAcquisitionCost;
         const productDivisorMax = (1 - (salesTaxRate + fixedRate + (marginMaxPercent || 0)) / 100);
         if (productDivisorMax > 0 && productDivisorMax <= 1) {
-            finalPriceProductsMax = discountedProducts / productDivisorMax;
-        }
-        if (productsEntryTax > 0 && taxDivisor > 0 && taxDivisor <= 1) {
-            finalPriceProductsMax += productsEntryTax / taxDivisor;
+            finalPriceProductsMax = totalProductAcquisitionCost / productDivisorMax;
         }
 
         // Preço Frete = (Custo + I.Entrada) / (1 - I.Venda) -> SEM MARGEM!
@@ -494,21 +491,18 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
         // No nosso divisor, o markup fixo é (1 - T - M). Com M=0, divisor é (1 - T).
         const T = sim.salesTaxRate / 100;
         
-        // Com a correção de DIFAL de Entrada sem margem:
-        // targetProductsSell = (Custo / (1 - T - M)) + (DIFAL / (1 - T))
-        // targetProductsSellNet = targetProductsSell - (DIFAL / (1 - T))
-        // M = 1 - T - (Custo / targetProductsSellNet)
-        const taxDivisor = 1 - T;
-        const entryTaxResale = taxDivisor > 0 ? sim.entryDifalValue / taxDivisor : sim.entryDifalValue;
-        const targetProductsSellNet = targetProductsSell - entryTaxResale;
+        // Com a correção: DIFAL de Entrada é custo de aquisição, incluído no divisor com margem.
+        // targetProductsSell = (CustoFornecedor + AntecipaçãoDIFAL) / (1 - T - M)
+        // M = 1 - T - ((CustoFornecedor + AntecipaçãoDIFAL) / targetProductsSell)
+        const totalProductAcquisitionCost = sim.supplierCost + sim.entryDifalValue;
 
-        if (targetProductsSellNet <= sim.supplierCost) {
+        if (targetProductsSell <= totalProductAcquisitionCost) {
             updateItem(item.id, 'profitMargin', 0);
             return;
         }
 
         // 5. Resolver para M (Margem):
-        const requiredMargin = (1 - T - (sim.supplierCost / targetProductsSellNet)) * 100;
+        const requiredMargin = (1 - T - (totalProductAcquisitionCost / targetProductsSell)) * 100;
 
         let newMargin = Math.max(0, requiredMargin);
         if (newMargin > 99.99) newMargin = 99.99; // Cap para evitar divisão por zero no recalculate
@@ -975,8 +969,8 @@ const QuotationItemCard: React.FC<QuotationItemCardProps> = ({ item, budgetType,
                             {/* DIFAL de Entrada (Antecipação ICMS) */}
                             {(item.entryDifalValue || 0) > 0 && (
                                 <div className="w-full relative group/entry">
-                                    <div className="text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded w-full text-right cursor-help border border-blue-500/20" title="Antecipação de ICMS (Compra Interestadual)">
-                                        + Antecipação DF: {formatCurrency(item.entryDifalValue || 0)}
+                                    <div className="text-[10px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded w-full text-right cursor-help border border-blue-500/20" title={`Antecipação de ICMS (Compra Interestadual — ${supplierParams?.uf || '?'} → ${selectedAdmin?.state || 'Destino'})`}>
+                                        + Antecipação {selectedAdmin?.state || 'ICMS'}: {formatCurrency(item.entryDifalValue || 0)}
                                     </div>
                                 </div>
                             )}
