@@ -23,6 +23,7 @@ import LoginPage from "./pages/LoginPage";
 import { useAccountingStore } from '@/store/accounting-store';
 import { useEssentialDocumentStore } from '@/store/essential-document-store';
 import { useCertificateStore } from '@/store/certificate-store';
+import { fetchCnpjUnified } from '@/utils/cnpj';
 
 // Lazy Loading V5.1 Turbo
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
@@ -300,38 +301,27 @@ const AppContent = () => {
         try {
           const cleanCnpj = needsCheck.cnpj.replace(/\D/g, '');
           if (cleanCnpj.length === 14) {
-            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
-            if (response.ok) {
-              const data = await response.json();
-              const invalidStatuses = ['BAIXADA', 'INAPTA', 'SUSPENSA', 'NULA'];
-              const currentStatus = data.descricao_situacao_cadastral?.toUpperCase();
+            const data = await fetchCnpjUnified(cleanCnpj);
+            const invalidStatuses = ['BAIXADA', 'INAPTA', 'SUSPENSA', 'NULA'];
+            const currentStatus = data.descricao_situacao_cadastral?.toUpperCase();
 
-              if (invalidStatuses.includes(currentStatus)) {
-                store.updateCompany(needsCheck.id, { 
-                  descricao_situacao_cadastral: currentStatus,
-                  lastCnpjCheck: new Date().toISOString() 
-                });
-                
-                useKanbanStore.getState().addNotification(
-                  '⚠️ ALERTA: Empresa Inativa Detectada',
-                  `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) consta agora como "${currentStatus}" na Receita Federal.`,
-                  `/suppliers-list?id=${needsCheck.id}`,
-                  'warning'
-                );
-              } else {
-                store.updateCompany(needsCheck.id, { 
-                  descricao_situacao_cadastral: currentStatus || needsCheck.descricao_situacao_cadastral,
-                  lastCnpjCheck: new Date().toISOString() 
-                });
-              }
-            } else if (response.status === 404) {
-                useKanbanStore.getState().addNotification(
-                  '⚠️ ALERTA: CNPJ Não Encontrado',
-                  `O CNPJ ${needsCheck.cnpj} não foi retornado pela API.`,
-                  undefined,
-                  'warning'
-                );
-                store.updateCompany(needsCheck.id, { lastCnpjCheck: new Date().toISOString() });
+            if (invalidStatuses.includes(currentStatus)) {
+              store.updateCompany(needsCheck.id, { 
+                descricao_situacao_cadastral: currentStatus,
+                lastCnpjCheck: new Date().toISOString() 
+              });
+              
+              useKanbanStore.getState().addNotification(
+                '⚠️ ALERTA: Empresa Inativa Detectada',
+                `O CNPJ ${needsCheck.cnpj} (${needsCheck.nome_fantasia || needsCheck.razao_social}) consta agora como "${currentStatus}" na Receita Federal.`,
+                `/suppliers-list?id=${needsCheck.id}`,
+                'warning'
+              );
+            } else {
+              store.updateCompany(needsCheck.id, { 
+                descricao_situacao_cadastral: currentStatus || needsCheck.descricao_situacao_cadastral,
+                lastCnpjCheck: new Date().toISOString() 
+              });
             }
           }
         } catch (error) {

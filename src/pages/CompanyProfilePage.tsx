@@ -3,6 +3,7 @@ import { useKanbanStore } from '@/store/kanban-store';
 import { useUserPrefsStore } from '@/store/user-prefs-store';
 import { Building2, Save, Calculator, MapPin, Percent, Search } from 'lucide-react';
 import { STATES, calculateDifal, SIMPLES_NACIONAL_RATES, PRESUMIDO_RATES, REAL_RATES, inferAnnexFromCnae } from '@/utils/taxData';
+import { fetchCnpjUnified } from '@/utils/cnpj';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -175,13 +176,11 @@ export default function CompanyProfilePage() {
 
         setIsFetching(true);
         try {
-            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
-            if (!response.ok) throw new Error('Falha ao buscar CNPJ');
-            const data = await response.json();
+            const data = await fetchCnpjUnified(cleanCnpj);
 
             // Format CNAEs
-            const cnaes = [];
-            if (data.cnae_fiscal) cnaes.push({ code: data.cnae_fiscal.toString(), description: data.cnae_fiscal_descricao });
+            const cnaes: Array<{ code: string; description: string }> = [];
+            if (data.cnae_fiscal) cnaes.push({ code: data.cnae_fiscal.toString(), description: data.cnae_fiscal_descricao || '' });
             if (data.cnaes_secundarios) {
                 data.cnaes_secundarios.forEach((cnae: any) => {
                     cnaes.push({ code: cnae.codigo.toString(), description: cnae.descricao });
@@ -201,8 +200,6 @@ export default function CompanyProfilePage() {
                 else if (data.porte && data.porte.includes('EMPRESA DE PEQUENO PORTE')) porte = 'EPP';
                 else porte = 'Médio';
             } else {
-                // If not Simples, safely assume Presumido for standard cases or let user fill if needed, 
-                // but the prompt asked for automatic, so we'll guess Presumido.
                 newRegime = 'Lucro Presumido';
                 if (data.porte && data.porte.includes('DEMAIS')) porte = 'Médio';
             }
@@ -234,13 +231,13 @@ export default function CompanyProfilePage() {
                     bairro: data.bairro || prev.bairro,
                     municipio: data.municipio || prev.municipio,
                     telefone: data.ddd_telefone_1 || prev.telefone,
-                    email: data.email || data.correio_eletronico || data.correioEletronico || prev.email,
+                    email: data.email || prev.email,
                     cnaes: cnaes,
                     porte: porte,
                     taxRegime: newRegime,
                     simplesAnnexes: newAnnexes,
                     lastSynced: new Date().toISOString(),
-                    dataSource: 'Brasil API',
+                    dataSource: data.dataSource || 'Receita Federal',
                 };
 
                 // If we added a new annex automatically, let's trigger the annex change logic
@@ -259,95 +256,10 @@ export default function CompanyProfilePage() {
                 return newData;
             });
 
-            toast.success('Dados da empresa atualizados com sucesso!');
-        } catch (error) {
-            console.warn("Brasil API falhou, tentando CNPJ.ws fallback...", error);
-            try {
-                const fbResponse = await fetch(`https://publica.cnpj.ws/cnpj/${cleanCnpj}`);
-                if (!fbResponse.ok) throw new Error('Falha no fallback CNPJ.ws');
-                const fbData = await fbResponse.json();
-
-                let porte = formData.porte;
-                if (fbData.estabelecimento?.porte) {
-                    const p = parseInt(fbData.estabelecimento.porte.id);
-                    if (p === 1) porte = 'ME';
-                    else if (p === 3) porte = 'EPP';
-                    else porte = 'Médio';
-                }
-
-                let newRegime = formData.taxRegime;
-                if (fbData.simples?.mei === 'Sim') {
-                    porte = 'MEI';
-                    newRegime = 'Simples Nacional';
-                } else if (fbData.simples?.simples === 'Sim') {
-                    newRegime = 'Simples Nacional';
-                } else {
-                    newRegime = 'Lucro Presumido';
-                }
-
-                const fbCnaes: any[] = [];
-                if (fbData.estabelecimento?.atividade_principal) {
-                    fbCnaes.push({ code: fbData.estabelecimento.atividade_principal.id, description: fbData.estabelecimento.atividade_principal.descricao });
-                }
-                if (fbData.estabelecimento?.atividades_secundarias) {
-                    fbData.estabelecimento.atividades_secundarias.forEach((cnae: any) => {
-                        fbCnaes.push({ code: cnae.id, description: cnae.descricao });
-                    });
-                }
-
-                let newAnnexes: string[] = [];
-                if (fbCnaes.length > 0 && newRegime === 'Simples Nacional') {
-                    const inferredAnnex = inferAnnexFromCnae(fbCnaes[0].code);
-                    if (inferredAnnex) {
-                        newAnnexes.push(inferredAnnex);
-                        toast.success(`Regime e Anexo (${inferredAnnex}) configurados automaticamente via Receita Federal (CNPJ.ws).`);
-                    }
-                }
-
-                if (checkAndApplyMeiOverride(fbCnaes.length)) return;
-
-                setFormData(prev => {
-                    let newData = {
-                        ...prev,
-                        razaoSocial: fbData.razao_social || prev.razaoSocial,
-                        nomeFantasia: fbData.estabelecimento?.nome_fantasia || prev.nomeFantasia,
-                        state: fbData.estabelecimento?.estado?.sigla || prev.state,
-                        naturezaJuridica: fbData.natureza_juridica?.descricao || prev.naturezaJuridica,
-                        cep: fbData.estabelecimento?.cep ? fbData.estabelecimento.cep.replace(/([\d]{5})([\d]{3})/, '$1-$2') : prev.cep,
-                        logradouro: fbData.estabelecimento?.logradouro || prev.logradouro,
-                        numero: fbData.estabelecimento?.numero || prev.numero,
-                        complemento: fbData.estabelecimento?.complemento || prev.complemento,
-                        bairro: fbData.estabelecimento?.bairro || prev.bairro,
-                        municipio: fbData.estabelecimento?.cidade?.nome || prev.municipio,
-                        telefone: fbData.estabelecimento?.telefone1 || prev.telefone,
-                        email: fbData.estabelecimento?.email || prev.email,
-                        cnaes: fbCnaes.length > 0 ? fbCnaes : prev.cnaes,
-                        porte,
-                        taxRegime: newRegime,
-                        simplesAnnexes: newAnnexes,
-                        lastSynced: new Date().toISOString(),
-                        dataSource: 'CNPJ.ws (Fallback)',
-                    };
-
-                    if (newRegime === 'Simples Nacional' && newAnnexes.length > 0) {
-                        const primaryAnnex = newAnnexes[0] as keyof typeof SIMPLES_NACIONAL_RATES;
-                        newData = { ...newData, ...SIMPLES_NACIONAL_RATES[primaryAnnex] } as any;
-                        newData.annexRates = {
-                            [primaryAnnex]: { ...SIMPLES_NACIONAL_RATES[primaryAnnex] }
-                        };
-                    } else if (newRegime === 'Lucro Presumido') {
-                        newData = { ...newData, ...PRESUMIDO_RATES, simplesAnnexes: [], annexRates: {} } as any;
-                    } else if (newRegime === 'Lucro Real') {
-                        newData = { ...newData, ...REAL_RATES, simplesAnnexes: [], annexRates: {} } as any;
-                    }
-
-                    return newData;
-                });
-                toast.success('Dados preenchidos via API Secundária (CNPJ.ws)!');
-            } catch (fbErr) {
-                console.error("Ambas as APIs falharam", fbErr);
-                toast.error('Erro ao buscar dados do CNPJ em todas as APIs. Verifique se o CNPJ é válido.');
-            }
+            toast.success(`Dados da empresa atualizados via ${data.dataSource || 'Receita Federal'}!`);
+        } catch (error: any) {
+            console.error("Consulta de CNPJ falhou:", error);
+            toast.error(error?.message || 'Erro ao buscar dados do CNPJ em todas as APIs. Verifique se o CNPJ é válido.');
         } finally {
             setIsFetching(false);
         }

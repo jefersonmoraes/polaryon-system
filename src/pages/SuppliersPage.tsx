@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
 import { CompanyFavicon } from '@/components/ui/CompanyFavicon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { fetchCnpjUnified } from '@/utils/cnpj';
 
 interface CnpjResult {
     cnpj: string;
@@ -91,19 +92,11 @@ const SuppliersPage = () => {
         setResult(null);
 
         try {
-            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
-            if (!response.ok) throw new Error('Falha ao buscar CNPJ');
-            const data = await response.json();
-            
-            // Normalize data - ensure email is captured from different possible fields
-            const normalizedData = {
-                ...data,
-                email: data.email || data.correio_eletronico || data.correioEletronico || ''
-            };
-            
-            setResult(normalizedData);
-            toast.success('Empresa encontrada!');
-        } catch {
+            const data = await fetchCnpjUnified(cleanCnpj);
+            setResult(data as any);
+            toast.success(`Empresa encontrada via ${data.dataSource || 'Receita Federal'}!`);
+        } catch (err: any) {
+            console.error('Erro na busca por CNPJ:', err);
             toast.error('Erro ao consultar CNPJ. Verifique se o número está correto.');
         } finally {
             setLoading(false);
